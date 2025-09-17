@@ -1,0 +1,517 @@
+/* ======= Body and Container ======= */
+body, html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow-y: auto;
+}
+
+
+.form-container {
+  background: white;
+  max-width: 1150px;
+  margin: auto;
+  padding: 40px 50px;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.06);
+}
+
+/* ======= Header ======= */
+.title {
+  text-align: center;
+  font-size: 26px;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  text-align: center;
+  font-size: 17px;
+  color: #555;
+  margin-bottom: 30px;
+}
+
+/* ======= Form Fields Layout ======= */
+.form-top {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 30px;
+  gap: 30px;
+}
+
+.left, .right {
+  flex: 1;
+  min-width: 320px;
+}
+
+label {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: #333;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="date"],
+select,
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  margin-bottom: 18px;
+  box-sizing: border-box;
+}
+
+/* ======= Table ======= */
+.order-table {
+  overflow-x: auto;
+  margin-top: 10px;
+}
+
+.order-table table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+}
+
+.order-table th,
+.order-table td {
+  border: 1px solid #999;
+  padding: 10px 8px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.order-table thead {
+  background-color: #007bff;
+  color: white;
+}
+
+/* ======= Notes & Delivery Info ======= */
+.note-section textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.delivery-payment {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-top: 25px;
+  gap: 30px;
+}
+
+.delivery,
+.payment,
+.amount {
+  flex: 1;
+  min-width: 300px;
+}
+
+/* ======= Buttons ======= */
+.button-group {
+  display: flex;
+  gap: 12px;
+  margin-top: 25px;
+  flex-wrap: wrap;
+}
+
+.add-row-button,
+.submit-row-button,
+.view-row-button {
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: bold;
+  border-radius: 6px;
+  cursor: pointer;
+  border: none;
+  color: white;
+  transition: 0.3s ease;
+}
+
+.add-row-button {
+  background-color: #007bff;
+}
+
+.submit-row-button {
+  background-color: #28a745;
+}
+
+.view-row-button {
+  background-color: #17a2b8;
+}
+
+.add-row-button:hover {
+  background-color: #0056b3;
+}
+
+.submit-row-button:hover {
+  background-color: #1e7e34;
+}
+
+.view-row-button:hover {
+  background-color: #117a8b;
+}
+
+/* ======= Footer Signature ======= */
+.footer-signatures {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 60px;
+  font-weight: 600;
+}
+
+.footer-signatures p {
+  text-align: center;
+  flex: 1;
+}
+
+/* ======= Excel Section ======= */
+.excel-container {
+  background-color: #f8f9fa;
+  padding: 30px;
+  margin-top: 40px;
+  border-radius: 8px;
+}
+
+.excel-title {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.excel-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+.excel-table thead {
+  background-color: #0078d7;
+  color: white;
+}
+
+.excel-table th,
+.excel-table td {
+  border: 1px solid #ccc;
+  padding: 10px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.excel-table tbody tr:nth-child(even) {
+  background-color: #f1f1f1;
+}
+
+.excel-table tbody tr:hover {
+  background-color: #e3f2fd;
+}
+
+/* ======= Row Actions ======= */
+.btn-action-group {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.btn-delete {
+  background-color: #dc3545;
+  color: white;
+  padding: 6px 12px;
+  font-size: 13px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-delete:hover {
+  background-color: #c82333;
+}
+
+.btn-status {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-status.paid {
+  background-color: #28a745;
+}
+
+.btn-status.pending {
+  background-color: #ffc107;
+  color: #333;
+}
+
+.btn-status:hover {
+  opacity: 0.9;
+}
+
+/* ======= Excel Download Button ======= */
+.btn-export {
+  background-color: #0069d9;
+  color: white;
+  font-weight: 600;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  margin-top: 25px;
+  cursor: pointer;
+}
+
+.btn-export:hover {
+  background-color: #005cbf;
+}
+
+/* ======= Search Field on View Page ======= */
+.search-section {
+  margin-bottom: 20px;
+}
+
+.search-label {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.search-input {
+  padding: 8px 12px;
+  width: 250px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+/* ======= View Orders Modal/Table Container ======= */
+.view-orders-section {
+  margin-top: 40px;
+  padding: 25px 30px;
+  background-color: #fefefe;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+/* Scrollbar for overflow */
+.view-orders-section::-webkit-scrollbar {
+  width: 8px;
+}
+
+.view-orders-section::-webkit-scrollbar-thumb {
+  background-color: #ccc;
+  border-radius: 6px;
+}
+
+.view-orders-section h2 {
+  font-size: 20px;
+  margin-bottom: 20px;
+  color: #333;
+  text-align: center;
+}
+
+/* Inside table should be full width but not overflow container */
+.view-orders-section table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.view-orders-section th,
+.view-orders-section td {
+  border: 1px solid #999;
+  padding: 10px 8px;
+  font-size: 14px;
+  text-align: center;
+  word-wrap: break-word;
+}
+
+.view-orders-section thead {
+  background-color: #007bff;
+  color: white;
+}
+.btn-back {
+  background-color: #4caf50;
+  color: white;
+  padding: 10px 16px;
+  border: none;
+  margin-left: 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.btn-back:hover {
+  background-color: #45a049;
+}
+/* Styling for the navbar */
+.navbar {
+  background-color: #002c77; /* Dark blue background */
+  padding: 20px;
+  text-align: center;
+  color: white;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.order-form-container {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Add form styling below for a clean and professional look */
+.form-container {
+  max-width: 1200px;
+  margin: 40px auto;
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Button styles */
+button {
+  background-color: #4CAF50;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #45a049;
+}
+
+/* Success Modal */
+.success-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.success-modal {
+  background: white;
+  padding: 2rem;
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  animation: scaleUp 0.3s ease-out;
+}
+
+.success-checkmark {
+  font-size: 3rem;
+  color: #2ecc71;
+  margin-bottom: 1rem;
+  animation: checkmark 0.5s ease-in-out;
+}
+
+/* Animations */
+@keyframes scaleUp {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes checkmark {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* Loading Spinner */
+.spinner {
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #3498db;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+@keyframes spin {
+  0% { transform: translateY(-50%) rotate(0deg); }
+  100% { transform: translateY(-50%) rotate(360deg); }
+}
+
+button.submitting {
+  background-color: #bdc3c7 !important;
+  cursor: not-allowed !important;
+  padding-right: 40px !important;
+}
+@keyframes blink {
+  0% { opacity: 1; }
+  50% { opacity: 0.3; }
+  100% { opacity: 1; }
+}
+/* src/pages/Appointments/Appointments.css */
+.appointments-container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.back-button {
+  padding: 0.5rem 1rem;
+  background: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.appointments-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.appointment-card {
+  padding: 1.5rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+}
+
+.appointment-details {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background: #1976d233;
+  color: #1976d2;
+}
