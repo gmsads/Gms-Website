@@ -253,6 +253,7 @@ const ExecutiveDashboard = () => {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const handleNotificationClick = () => {
     localStorage.setItem('lastSeenAppointmentCount', appointmentCount);
     setHasNewAppointments(false);
