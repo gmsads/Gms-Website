@@ -5,7 +5,8 @@ const Ledger = () => {
   const [allOrders, setAllOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [newPayments, setNewPayments] = useState({});
-  const [paymentSuccess, setPaymentSuccess] = useState(null); // Added for success message
+  const [paymentSuccess, setPaymentSuccess] = useState(null);
+
   useEffect(() => {
     fetch('/api/orders')
       .then(res => res.json())
@@ -25,7 +26,9 @@ const Ledger = () => {
     const filtered = allOrders.filter(order =>
       order.business?.toLowerCase().includes(term) ||
       order.orderNo?.toLowerCase().includes(term) ||
-      order.clientType?.toLowerCase().includes(term)
+      order.clientType?.toLowerCase().includes(term) ||
+      order.contactPerson?.toLowerCase().includes(term) || // Using contactPerson instead of customer
+      order.phone?.toLowerCase().includes(term)           // Using phone instead of contact
     );
     setFilteredOrders(filtered);
   };
@@ -36,13 +39,12 @@ const Ledger = () => {
       [orderId]: {
         ...(prev[orderId] || {}),
         [field]: value,
-        // Initialize date with today's date if not already set
         date: field === 'date' ? value : (prev[orderId]?.date || new Date().toISOString().split('T')[0])
       }
     }));
   };
 
- const applyPayment = async (orderId) => {
+  const applyPayment = async (orderId) => {
     const payment = newPayments[orderId];
     if (!payment?.amount || !payment.method) return alert("Please enter amount and method");
 
@@ -63,14 +65,12 @@ const Ledger = () => {
 
       const updatedOrder = await res.json();
       
-      // Set success message with remaining balance
       setPaymentSuccess({
         orderId,
         message: `Payment of ₹${payment.amount} added successfully!`,
         balance: updatedOrder.balance
       });
       
-      // Clear success message after 5 seconds
       setTimeout(() => setPaymentSuccess(null), 5000);
 
       const updateOrders = orders =>
@@ -105,7 +105,7 @@ const Ledger = () => {
           type="text"
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
-          placeholder="Search by Business, Order No or Client Type..."
+          placeholder="Search by Business, Order No, Client Type, Contact Person or Phone..."
           style={styles.searchInput}
         />
         <button type="submit" style={styles.searchButton}>Search Ledger</button>
@@ -127,6 +127,8 @@ const Ledger = () => {
                   <div style={styles.header}>
                     <p><strong>Order No:</strong> {order.orderNo}</p>
                     <p><strong>Date:</strong> {new Date(order.orderDate).toLocaleDateString()}</p>
+                    <p><strong>Contact Person:</strong> {order.contactPerson || 'N/A'}</p>
+                    <p><strong>Phone:</strong> {order.contactCode || '+91'} {order.phone || 'N/A'}</p>
                     <p><strong>Total Amount:</strong> ₹{orderTotal.toFixed(2)}</p>
                     <p><strong>Total Advance:</strong> ₹{order.advance || 0}</p>
                     <p><strong>Balance:</strong>{' '}
@@ -206,81 +208,81 @@ const Ledger = () => {
                   </div>
                 </div>
 
-               {order.balance > 0 && (
-  <div style={styles.paymentForm}>
-    <h4>Add Payment</h4>
-    <div style={styles.inputGroup}>
-      <input
-        type="number"
-        placeholder="Amount"
-        value={newPayments[order._id]?.amount ?? order.balance}
-        onChange={e => handlePaymentChange(order._id, 'amount', e.target.value)}
-        style={styles.inputSmall}
-      />
-      <select
-        value={newPayments[order._id]?.method || ''}
-        onChange={e => handlePaymentChange(order._id, 'method', e.target.value)}
-        style={styles.inputSmall}
-      >
-        <option value="">Method</option>
-        <option value="Cash">Cash</option>
-        <option value="UPI">UPI</option>
-        <option value="Cheque">Cheque</option>
-      </select>
-      
-      <input
-        type="date"
-        value={newPayments[order._id]?.date || new Date().toISOString().split('T')[0]}
-        onChange={e => handlePaymentChange(order._id, 'date', e.target.value)}
-        style={styles.inputSmall}
-      />
+                {order.balance > 0 && (
+                  <div style={styles.paymentForm}>
+                    <h4>Add Payment</h4>
+                    <div style={styles.inputGroup}>
+                      <input
+                        type="number"
+                        placeholder="Amount"
+                        value={newPayments[order._id]?.amount ?? order.balance}
+                        onChange={e => handlePaymentChange(order._id, 'amount', e.target.value)}
+                        style={styles.inputSmall}
+                      />
+                      <select
+                        value={newPayments[order._id]?.method || ''}
+                        onChange={e => handlePaymentChange(order._id, 'method', e.target.value)}
+                        style={styles.inputSmall}
+                      >
+                        <option value="">Method</option>
+                        <option value="Cash">Cash</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Cheque">Cheque</option>
+                      </select>
+                      
+                      <input
+                        type="date"
+                        value={newPayments[order._id]?.date || new Date().toISOString().split('T')[0]}
+                        onChange={e => handlePaymentChange(order._id, 'date', e.target.value)}
+                        style={styles.inputSmall}
+                      />
 
-      {newPayments[order._id]?.method === 'UPI' && (
-        <select
-          value={newPayments[order._id]?.upiNumber || ''}
-          onChange={e => handlePaymentChange(order._id, 'upiNumber', e.target.value)}
-          style={styles.inputSmall}
-        >
-          <option value="">Select UPI Number</option>
-          <option value="9985330008@Chary">9985330008@Chary</option>
-          <option value="9985330004@Swathi">9985330004@Swathi</option>
-          <option value="924642893@VenkatGupta">924642893@VenkatGupta</option>
-        </select>
-      )}
+                      {newPayments[order._id]?.method === 'UPI' && (
+                        <select
+                          value={newPayments[order._id]?.upiNumber || ''}
+                          onChange={e => handlePaymentChange(order._id, 'upiNumber', e.target.value)}
+                          style={styles.inputSmall}
+                        >
+                          <option value="">Select UPI Number</option>
+                          <option value="9985330008@Chary">9985330008@Chary</option>
+                          <option value="9985330004@Swathi">9985330004@Swathi</option>
+                          <option value="924642893@VenkatGupta">924642893@VenkatGupta</option>
+                        </select>
+                      )}
 
-      {newPayments[order._id]?.method === 'Cheque' && (
-        <input
-          type="text"
-          placeholder="Cheque Number"
-          maxLength={6}
-          value={newPayments[order._id]?.chequeNumber || ''}
-          onChange={e => handlePaymentChange(order._id, 'chequeNumber', e.target.value)}
-          style={styles.inputSmall}
-        />
-      )}
+                      {newPayments[order._id]?.method === 'Cheque' && (
+                        <input
+                          type="text"
+                          placeholder="Cheque Number"
+                          maxLength={6}
+                          value={newPayments[order._id]?.chequeNumber || ''}
+                          onChange={e => handlePaymentChange(order._id, 'chequeNumber', e.target.value)}
+                          style={styles.inputSmall}
+                        />
+                      )}
 
-      <button
-        onClick={() => applyPayment(order._id)}
-        style={styles.addButton}
-      >
-        Add Payment
-      </button>
-      {paymentSuccess?.orderId === order._id && (
-    <div style={styles.successMessage}>
-      <div>
-        {paymentSuccess.message} Remaining balance: ₹{paymentSuccess.balance}
-      </div>
-      <button 
-        style={styles.closeButton}
-        onClick={() => setPaymentSuccess(null)}
-      >
-        ×
-      </button>
-    </div>
-  )}
-    </div>
-  </div>
-)}
+                      <button
+                        onClick={() => applyPayment(order._id)}
+                        style={styles.addButton}
+                      >
+                        Add Payment
+                      </button>
+                      {paymentSuccess?.orderId === order._id && (
+                        <div style={styles.successMessage}>
+                          <div>
+                            {paymentSuccess.message} Remaining balance: ₹{paymentSuccess.balance}
+                          </div>
+                          <button 
+                            style={styles.closeButton}
+                            onClick={() => setPaymentSuccess(null)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

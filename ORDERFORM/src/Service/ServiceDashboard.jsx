@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Doughnut, Bar, Line } from 'react-chartjs-2';
 import {
@@ -759,6 +759,7 @@ const ServiceDashboard = () => {
   };
 
   // Get blink class for progress
+  // eslint-disable-next-line no-unused-vars
   const getBlinkClass = (percentage) => {
     return percentage < 100 ? "blink-progress" : "";
   };

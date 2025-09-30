@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-
+import { useNavigate } from 'react-router-dom';
 const styles = {
   container: {
     padding: '25px',
@@ -162,14 +162,14 @@ const styles = {
 };
 
 const statusColors = {
-  'New Lead': { bg: '#e3f2fd', text: '#1565c0' },
-  'Contacted': { bg: '#e8f5e9', text: '#2e7d32' },
-  'Interested': { bg: '#fff8e1', text: '#ff8f00' },
-  'Not Interested': { bg: '#ffebee', text: '#c62828' },
-  'Follow Up': { bg: '#f3e5f5', text: '#7b1fa2' },
-  'Negotiating': { bg: '#e0f7fa', text: '#00838f' },
-  'Converted': { bg: '#e8f5e9', text: '#2e7d32' },
-  'On Hold': { bg: '#fff3e0', text: '#e65100' },
+  'pending': { bg: '#e3f2fd', text: '#1565c0' },
+  'assigned': { bg: '#e8f5e9', text: '#2e7d32' },
+  'contacted': { bg: '#fff8e1', text: '#ff8f00' },
+  'in progress': { bg: '#f3e5f5', text: '#7b1fa2' },
+  'completed': { bg: '#e8f5e9', text: '#2e7d32' },
+  'cancelled': { bg: '#ffebee', text: '#c62828' },
+  'postponded': { bg: '#fff3e0', text: '#e65100' },
+  'sale closed': { bg: '#e0f7fa', text: '#00838f' },
 };
 
 const NewAppointments = () => {
@@ -179,6 +179,7 @@ const NewAppointments = () => {
   const [statuses, setStatuses] = useState({});
   const [sending, setSending] = useState({});
   const [success, setSuccess] = useState({});
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchAssignedAppointments = async () => {
@@ -207,7 +208,7 @@ const NewAppointments = () => {
 
         const initialStatuses = {};
         executiveAppointments.forEach(appt => {
-          initialStatuses[appt._id] = appt.status || 'New Lead';
+          initialStatuses[appt._id] = appt.status || 'pending';
         });
         setStatuses(initialStatuses);
       } catch (error) {
@@ -238,7 +239,7 @@ const NewAppointments = () => {
       
       const executiveName = localStorage.getItem('userName');
       const response = await axios.put(
-        `/api/appointments/appointments/${id}/status`, 
+        `/api/appointments/${id}/status`, 
         { 
           status: selectedStatus,
           executiveName 
@@ -252,12 +253,30 @@ const NewAppointments = () => {
 
       if (response.status === 200) {
         setSuccess(prev => ({ ...prev, [id]: true }));
-        setTimeout(() => setSuccess(prev => ({ ...prev, [id]: false })), 2000);
         
         const updatedAppointments = appointments.map(appt => 
           appt._id === id ? { ...appt, status: selectedStatus } : appt
         );
         setAppointments(updatedAppointments);
+
+        // Redirect to Admin component's order tab if status is "sale closed"
+        if (selectedStatus === 'sale closed') {
+          setTimeout(() => {
+            // Store appointment data to pass to the Admin component
+            const appointmentData = response.data.appointment || updatedAppointments.find(a => a._id === id);
+            localStorage.setItem('saleClosedAppointmentData', JSON.stringify(appointmentData));
+            
+            // Navigate to Admin component with order tab active
+            navigate('/order', { 
+              state: { 
+                activeTab: 'order',
+                appointmentData: appointmentData
+              } 
+            });
+          }, 1500); // Short delay to show success message
+        } else {
+          setTimeout(() => setSuccess(prev => ({ ...prev, [id]: false })), 2000);
+        }
       }
     } catch (error) {
       console.error('Update failed:', error);
@@ -369,15 +388,14 @@ const NewAppointments = () => {
                   style={styles.statusDropdown}
                 >
                   <option value="Select">Select Status</option>
-                  <option value="New Lead">New Lead</option>
-                  <option value="Contacted">Contacted</option>
-                  <option value="Interested">Interested</option>
-                  <option value="Not Interested">Not Interested</option>
-                  <option value="Follow Up">Follow Up</option>
-                  <option value="Negotiating">Negotiating</option>
-                  <option value="Converted">Converted</option>
-                  <option value="On Hold">On Hold</option>
-                   <option value="Completed">Completed</option>
+                  <option value="pending">Pending</option>
+                  <option value="assigned">Assigned</option>
+                  <option value="contacted">Contacted</option>
+                  <option value="in progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="postponded">Postponed</option>
+                  <option value="sale closed">Sale Closed</option>
                 </select>
 
                 <button
@@ -392,7 +410,11 @@ const NewAppointments = () => {
                 </button>
 
                 {success[appt._id] && (
-                  <div style={styles.successMessage}>✓ Status updated successfully!</div>
+                  <div style={styles.successMessage}>
+                    {statuses[appt._id] === 'sale closed' 
+                      ? '✓ Sale closed! Redirecting to order form...' 
+                      : '✓ Status updated successfully!'}
+                  </div>
                 )}
               </div>
             </div>

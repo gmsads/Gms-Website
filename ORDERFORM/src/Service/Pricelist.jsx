@@ -249,11 +249,16 @@ const PriceList = () => {
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this item?')) {
+      return;
+    }
+    
     setIsLoading(true);
     try {
-      await axios.delete(`/api/priceitems/${id}`);
+      // FIXED: Changed from '/api/priceitems' to '/api/price-items' to match other endpoints
+      await axios.delete(`/api/price-items/${id}`);
       
-      const response = await axios.get('/api/priceitems', {
+      const response = await axios.get('/api/price-items', {
         params: { listType: 'custom' }
       });
       const dataWithSlNo = response.data.map((item, index) => ({
@@ -275,6 +280,7 @@ const PriceList = () => {
       }
     } catch (err) {
       console.error('Error deleting price item:', err);
+      alert('Error deleting item. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -333,6 +339,7 @@ const PriceList = () => {
                                   borderRadius: '4px',
                                   cursor: 'pointer'
                                 }}
+                                disabled={isLoading}
                               >
                                 Edit
                               </button>
@@ -346,6 +353,7 @@ const PriceList = () => {
                                   borderRadius: '4px',
                                   cursor: 'pointer'
                                 }}
+                                disabled={isLoading}
                               >
                                 Delete
                               </button>
@@ -374,6 +382,7 @@ const PriceList = () => {
                             borderRadius: '4px',
                             cursor: 'pointer'
                           }}
+                          disabled={isLoading}
                         >
                           Edit
                         </button>
@@ -387,6 +396,7 @@ const PriceList = () => {
                             borderRadius: '4px',
                             cursor: 'pointer'
                           }}
+                          disabled={isLoading}
                         >
                           Delete
                         </button>
@@ -517,7 +527,7 @@ const PriceList = () => {
             border: 'none',
             borderRadius: '4px',
             fontSize: '16px',
-            cursor: 'pointer',
+            cursor: isLoading ? 'not-allowed' : 'pointer',
             marginTop: '10px',
             opacity: isLoading ? 0.7 : 1
           }}
@@ -547,7 +557,7 @@ const PriceList = () => {
               border: '1px solid #e74c3c',
               borderRadius: '4px',
               fontSize: '16px',
-              cursor: 'pointer',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
               marginTop: '10px',
               opacity: isLoading ? 0.7 : 1
             }}

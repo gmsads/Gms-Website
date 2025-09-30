@@ -17,7 +17,7 @@ const designerSchema = new mongoose.Schema({
   imageUrl: String, // to store uploaded image path
   resignationDate: String,
   resignationReason: String,
-  rejoinDate: String,
+  rejoinDate: String,
 });
 
 module.exports = mongoose.model('Designer', designerSchema);

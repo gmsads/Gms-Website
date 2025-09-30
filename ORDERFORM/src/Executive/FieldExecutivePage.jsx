@@ -94,9 +94,6 @@ const FieldExecutivePage = () => {
         }
     };
 
-    const handleBackToDashboard = () => {
-        navigate('/executive-dashboard');
-    };
 
     // Apply filters when they change
     useEffect(() => {

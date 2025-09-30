@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
+import  { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useLocation } from "react-router-dom";
 import { useReactToPrint } from "react-to-print";
 import Invoice from "./Invoice";
-import Select from 'react-select'; // Import React-Select
+import Select from 'react-select';
 
 function OrderForm({
   orderNumber,
@@ -169,14 +169,12 @@ function OrderForm({
     setIsCreatingNew(true);
     if (onNewOrder) onNewOrder();
   };
-
-  // NEW: Function to validate if advance is at least 50%
   // eslint-disable-next-line no-unused-vars
   const validateAdvance = (advanceAmount, totalAmount) => {
     const advanceNum = parseFloat(advanceAmount) || 0;
     const totalNum = parseFloat(totalAmount) || 0;
 
-    if (totalNum === 0) return true; // No validation needed if total is 0
+    if (totalNum === 0) return true; 
 
     const percentage = (advanceNum / totalNum) * 100;
     return percentage >= 50;
@@ -188,8 +186,6 @@ function OrderForm({
         setLoadingExecutives(true);
         const requirementsRes = await axios.get("/api/requirements");
         setRequirements([...requirementsRes.data].sort((a, b) => a.name.localeCompare(b.name)));
-
-        // Fetch executives for sale closed by dropdown
         const execsRes = await axios.get("/api/executives");
         const sortedExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
         setSaleClosedByExecutives(sortedExecs);
@@ -213,8 +209,6 @@ function OrderForm({
         setLoadingExecutives(false);
       }
     };
-
-    // Only populate with existing data if we're not creating a new order
     if (existingData && !isCreatingNew) {
       setSelectedExecutive(existingData.executive || (isAdmin ? "" : localStorage.getItem("userName") || ""));
       setBusiness(existingData.business || "");
@@ -252,6 +246,7 @@ function OrderForm({
     }
 
     fetchInitialData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingData, orderNumber, isAdmin, executives, routerLocation.state, isCreatingNew]);
 
   // Check if commission should be split
