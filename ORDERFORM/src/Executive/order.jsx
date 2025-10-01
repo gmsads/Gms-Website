@@ -13,7 +13,6 @@ import Record from "./Record";
 import ViewRecord from "./ViewRecord";
 import AutoLogout from "../mainpage/AutoLogout";
 import "../Executive/order.css";
-import "../app.css";
 
 function Admin() {
   // State for sidebar toggle
