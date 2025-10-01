@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { format, addDays } from 'date-fns';
 import { confirmAlert } from 'react-confirm-alert';
+import { useNavigate } from 'react-router-dom';
 import 'react-confirm-alert/src/react-confirm-alert.css';
 
 const ViewProspective = () => {
@@ -14,10 +15,14 @@ const ViewProspective = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
   const [currentClientId, setCurrentClientId] = useState(null);
+  const [sending, setSending] = useState({});
+  const [success, setSuccess] = useState({});
+  const [redirectId, setRedirectId] = useState(null);
 
   // Get user role from localStorage
   const role = localStorage.getItem('role');
   const isAdmin = role === 'Admin';
+  const navigate = useNavigate();
 
   // Fetch prospective clients data
   useEffect(() => {
@@ -51,6 +56,26 @@ const ViewProspective = () => {
 
     fetchProspectives();
   }, []);
+
+  // Handle redirect after sale closed
+  useEffect(() => {
+    if (redirectId) {
+      const timer = setTimeout(() => {
+        const prospectiveData = prospectives.find(p => p._id === redirectId);
+        if (prospectiveData) {
+          localStorage.setItem('saleClosedProspectiveData', JSON.stringify(prospectiveData));
+          navigate('/order', { 
+            state: { 
+              activeTab: 'order',
+              prospectiveData: prospectiveData
+            } 
+          });
+        }
+      }, 1500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [redirectId, navigate, prospectives]);
 
   // Filter prospectives based on search term
   useEffect(() => {
@@ -91,20 +116,58 @@ const ViewProspective = () => {
     }
   }, [searchTerm, prospectives]);
 
-  // Handle status change with special case for followup
+  // Handle status change with special case for followup and sale closed
   const handleStatusChange = (id, status) => {
     if (status === 'followup') {
       setCurrentClientId(id);
       setSelectedDate(format(addDays(new Date(), 3), 'yyyy-MM-dd'));
       setShowDatePicker(true);
+    } else if (status === 'sale closed') {
+      handleSaleClosed(id);
     } else {
       updateStatus(id, status);
     }
   };
 
-  // Update status in backend
+  // Handle sale closed status - redirect to order form
+  const handleSaleClosed = async (id) => {
+    try {
+      setSending(prev => ({ ...prev, [id]: true }));
+      setError(null);
+      
+      const executiveName = localStorage.getItem('userName');
+      const response = await axios.patch(`/api/prospective-clients/${id}`, {
+        status: 'sale closed',
+        executiveName
+      });
+      
+      if (response.status === 200) {
+        setSuccess(prev => ({ ...prev, [id]: true }));
+        
+        // Update local state
+        const updatedProspectives = prospectives.map(p => 
+          p._id === id ? { ...p, status: 'sale closed' } : p
+        );
+        
+        setProspectives(updatedProspectives);
+        setFilteredProspectives(updatedProspectives);
+        
+        // Set the ID to trigger redirect
+        setRedirectId(id);
+      }
+    } catch (err) {
+      console.error('Error updating to sale closed:', err);
+      setError('Failed to update status to sale closed');
+      setSending(prev => ({ ...prev, [id]: false }));
+    }
+  };
+
+  // Update status in backend for other statuses
   const updateStatus = async (id, status, date = null) => {
     try {
+      setSending(prev => ({ ...prev, [id]: true }));
+      setError(null);
+      
       await axios.patch(`/api/prospective-clients/${id}`, {
         status,
         ...(date && { followUpDate: date })
@@ -128,9 +191,15 @@ const ViewProspective = () => {
       setProspectives(sortedData);
       setFilteredProspectives(sortedData);
       setShowDatePicker(false);
+      setSuccess(prev => ({ ...prev, [id]: true }));
+      
+      // Clear success message after 2 seconds
+      setTimeout(() => setSuccess(prev => ({ ...prev, [id]: false })), 2000);
     } catch (err) {
       console.error('Error updating status:', err);
       setError('Failed to update status');
+    } finally {
+      setSending(prev => ({ ...prev, [id]: false }));
     }
   };
 
@@ -293,6 +362,7 @@ const ViewProspective = () => {
                       value=""
                       onChange={(e) => handleStatusChange(p._id, e.target.value)}
                       style={styles.select}
+                      disabled={sending[p._id]}
                     >
                       <option value="">Update Status</option>
                       <option value="sale closed">Sale Closed</option>
@@ -300,6 +370,21 @@ const ViewProspective = () => {
                       <option value="next month">Next Month</option>
                       <option value="followup">Follow Up</option>
                     </select>
+                    {sending[p._id] && (
+                      <div style={{fontSize: '12px', color: '#2e7d32', marginTop: '5px'}}>
+                        Updating...
+                      </div>
+                    )}
+                    {success[p._id] && p.status === 'sale closed' && (
+                      <div style={{fontSize: '12px', color: '#2e7d32', marginTop: '5px'}}>
+                        ✓ Sale closed! Redirecting to order form...
+                      </div>
+                    )}
+                    {success[p._id] && p.status !== 'sale closed' && (
+                      <div style={{fontSize: '12px', color: '#2e7d32', marginTop: '5px'}}>
+                        ✓ Status updated successfully!
+                      </div>
+                    )}
                   </td>
                   {isAdmin && (
                     <td style={styles.td}>

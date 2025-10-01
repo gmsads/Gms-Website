@@ -116,34 +116,101 @@ router.get('/appointments/assigned/:executiveName', async (req, res) => {
   }
 });
 
-// PUT - Assign an executive
-router.put('/:id/assign', async (req, res) => {
-  const { executiveName } = req.body;
-  console.log(`Attempting to assign appointment ${req.params.id} to ${executiveName}`);
-  
+// PUT - Update appointment status (maintains backward compatibility)
+router.put('/:id/status', async (req, res) => {
   try {
+    const { status, executiveName, closedBy } = req.body;
+    
+    if (!status) {
+      return res.status(400).json({ error: 'Status is required' });
+    }
+
+    // Support both frontend and backend status values
+    const statusMapping = {
+      // Frontend values → Backend values
+      'New Lead': 'pending',
+      'Contacted': 'contacted',
+      'Interested': 'in progress',
+      'Not Interested': 'cancelled',
+      'Follow Up': 'pending',
+      'Negotiating': 'in progress',
+      'Converted': 'sale closed',
+      'On Hold': 'postponded',
+      'Completed': 'completed',
+      
+      // Also accept backend values directly (for other parts of app)
+      'pending': 'pending',
+      'assigned': 'assigned',
+      'contacted': 'contacted',
+      'in progress': 'in progress',
+      'completed': 'completed',
+      'cancelled': 'cancelled',
+      'postponded': 'postponded',
+      'sale closed': 'sale closed'
+    };
+
+    const finalStatus = statusMapping[status] || status;
+    
+    // Validate the final status
+    const allowedStatuses = ['pending', 'assigned', 'contacted', 'in progress', 'completed', 'cancelled', 'postponded', 'sale closed'];
+    if (!allowedStatuses.includes(finalStatus)) {
+      return res.status(400).json({ 
+        error: 'Invalid status value',
+        details: `Received: ${status}, Valid values: ${allowedStatuses.join(', ')}`
+      });
+    }
+
+    const updateData = { status: finalStatus };
+    
+    // Handle closedBy for sale closed status (support both fields)
+    if (finalStatus === 'sale closed') {
+      const closerName = closedBy || executiveName;
+      if (!closerName || closerName.trim() === '') {
+        return res.status(400).json({ 
+          error: 'Executive/Closer name is required for sale closed status' 
+        });
+      }
+      updateData.closedBy = closerName;
+    }
+
     const updatedAppointment = await Appointment.findByIdAndUpdate(
       req.params.id,
-      { executiveName, status: 'assigned' },
-      { new: true }
+      updateData,
+      { new: true, runValidators: true }
     );
-    
+
     if (!updatedAppointment) {
-      console.log(`Appointment ${req.params.id} not found`);
       return res.status(404).json({ error: 'Appointment not found' });
     }
+
+    res.json({
+      success: true,
+      message: 'Status updated successfully',
+      appointment: updatedAppointment
+    });
     
-    console.log(`Successfully assigned appointment ${req.params.id}`);
-    res.json(updatedAppointment);
-  } catch (err) {
-    console.error('Error assigning executive:', err);
+  } catch (error) {
+    console.error('Error updating appointment status:', error);
+    
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        error: 'Validation Error',
+        details: error.message
+      });
+    }
+    
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        error: 'Invalid appointment ID'
+      });
+    }
+    
     res.status(500).json({ 
-      error: 'Server error',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+      error: 'Failed to update appointment status',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
-// PUT - Update appointment status
 // PUT - Update appointment status
 router.put('/appointments/:id/status', async (req, res) => {
   try {

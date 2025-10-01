@@ -33,7 +33,7 @@ const priceItemsRouter = require('./routes/priceItems');
 const designRoutes = require("./routes/designRequests");
 const expensesRoute = require('./routes/expenses');
 const fieldExecutiveRoutes = require('./routes/fieldExecutive');
-
+const designersRoutes = require('./routes/designers');
 // Initialize Express
 const app = express();
 runReminderCron();
@@ -64,7 +64,7 @@ app.use("/api/employee-uploads", employeeUploadRoutes);
 app.use("/api/logout-history", logoutHistoryRoutes);
 app.use("/api/design-requests", designRoutes);
 app.use('/api/field-executive', fieldExecutiveRoutes);
-
+app.use('/api/designers', designersRoutes);
 // AUTH ROUTES (contains add-field-executive)
 app.use("/api", authRoutes);
 

@@ -14,14 +14,23 @@ router.get('/', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
-// Route to get designer names
+
 router.get('/names', async (req, res) => {
   try {
-    const designers = await Designer.find({}, '_id name username');
-    res.status(200).json({ success: true, data: designers });
+    const designers = await Designer.find({ active: true })
+      .select('_id name username')
+      .sort({ name: 1 });
+    
+    res.json({
+      success: true,
+      data: designers
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: 'Server error' });
+    console.error("Error fetching designers:", err);
+    res.status(500).json({ 
+      message: "Server error fetching designers",
+      error: err.message 
+    });
   }
 });
 

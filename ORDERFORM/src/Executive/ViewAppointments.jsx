@@ -67,8 +67,28 @@ const styles = {
     color: '#008000',
     fontWeight: 'bold',
   },
+  statusContacted: {
+    color: '#0066CC',
+    fontWeight: 'bold',
+  },
+  statusInProgress: {
+    color: '#6633CC',
+    fontWeight: 'bold',
+  },
   statusCompleted: {
     color: '#003366',
+    fontWeight: 'bold',
+  },
+  statusCancelled: {
+    color: '#CC0000',
+    fontWeight: 'bold',
+  },
+  statusPostponed: {
+    color: '#663300',
+    fontWeight: 'bold',
+  },
+  statusSaleClosed: {
+    color: '#008080',
     fontWeight: 'bold',
   },
   executiveBadge: {
@@ -96,6 +116,40 @@ const styles = {
     borderRadius: '4px',
     cursor: 'pointer',
   },
+  statusSelect: {
+    padding: '8px',
+    borderRadius: '4px',
+    border: '1px solid #ccc',
+    width: '100%',
+    fontSize: '0.9rem',
+  },
+  updateButton: {
+    padding: '6px 12px',
+    backgroundColor: '#4CAF50',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    marginTop: '8px',
+    width: '100%',
+    fontSize: '0.85rem',
+  },
+  updating: {
+    opacity: 0.7,
+    pointerEvents: 'none',
+  },
+  successMessage: {
+    color: '#4CAF50',
+    fontSize: '0.8rem',
+    marginTop: '4px',
+    textAlign: 'center',
+  },
+  errorMessage: {
+    color: '#CC0000',
+    fontSize: '0.8rem',
+    marginTop: '4px',
+    textAlign: 'center',
+  },
 };
 
 const ViewAppointments = () => {
@@ -103,7 +157,22 @@ const ViewAppointments = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState({});
+  const [updating, setUpdating] = useState({});
+  const [updateSuccess, setUpdateSuccess] = useState({});
+  const [updateError, setUpdateError] = useState({});
   const currentUser = localStorage.getItem('userName');
+
+  const statusOptions = [
+    { value: 'pending', label: 'Pending' },
+    { value: 'assigned', label: 'Assigned' },
+    { value: 'contacted', label: 'Contacted' },
+    { value: 'in progress', label: 'In Progress' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'cancelled', label: 'Cancelled' },
+    { value: 'postponded', label: 'Postponed' },
+    { value: 'sale closed', label: 'Sale Closed' }
+  ];
 
   const fetchAppointments = async () => {
     setLoading(true);
@@ -115,6 +184,14 @@ const ViewAppointments = () => {
         .sort((a, b) => new Date(b.date) - new Date(a.date));
       
       setAppointments(filteredData);
+      
+      // Initialize selectedStatus with current statuses
+      const initialStatuses = {};
+      filteredData.forEach(appt => {
+        initialStatuses[appt._id] = appt.status;
+      });
+      setSelectedStatus(initialStatuses);
+      
       setError(null);
     } catch (err) {
       setError('Failed to fetch appointments');
@@ -128,15 +205,63 @@ const ViewAppointments = () => {
     fetchAppointments();
   }, [filter, currentUser]);
 
-  const handleStatusChange = async (id, newStatus) => {
+  const handleStatusChange = (id, newStatus) => {
+    setSelectedStatus(prev => ({ ...prev, [id]: newStatus }));
+    // Clear any previous error for this appointment
+    setUpdateError(prev => ({ ...prev, [id]: null }));
+  };
+
+  const updateStatus = async (id) => {
+    setUpdating(prev => ({ ...prev, [id]: true }));
+    setUpdateSuccess(prev => ({ ...prev, [id]: false }));
+    setUpdateError(prev => ({ ...prev, [id]: null }));
+    
     try {
+      // Get the executive name from localStorage
+      const executiveName = localStorage.getItem('userName');
+      
+      // Make the API request with the correct data structure
       await axios.put(`/api/appointments/${id}/status`, {
-        status: newStatus
+        status: selectedStatus[id],
+        executiveName: executiveName // Some APIs might require this field
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
-      fetchAppointments();
+      
+      // Update local state
+      setAppointments(prevAppointments => 
+        prevAppointments.map(appt => 
+          appt._id === id ? { ...appt, status: selectedStatus[id] } : appt
+        )
+      );
+      
+      setUpdateSuccess(prev => ({ ...prev, [id]: true }));
+      setTimeout(() => setUpdateSuccess(prev => ({ ...prev, [id]: false })), 2000);
     } catch (err) {
       console.error('Error updating status:', err);
-      setError('Failed to update status');
+      
+      let errorMessage = 'Failed to update status';
+      if (err.response) {
+        // Server responded with an error status
+        if (err.response.status === 400) {
+          errorMessage = 'Invalid request. Please check the status value.';
+        } else if (err.response.status === 404) {
+          errorMessage = 'Appointment not found.';
+        } else if (err.response.data && err.response.data.message) {
+          errorMessage = err.response.data.message;
+        } else {
+          errorMessage = `Server error: ${err.response.status}`;
+        }
+      } else if (err.request) {
+        // Request was made but no response received
+        errorMessage = 'No response from server. Please check your connection.';
+      }
+      
+      setUpdateError(prev => ({ ...prev, [id]: errorMessage }));
+    } finally {
+      setUpdating(prev => ({ ...prev, [id]: false }));
     }
   };
 
@@ -145,6 +270,20 @@ const ViewAppointments = () => {
       return format(parseISO(dateString), 'MMM dd, yyyy');
     } catch {
       return dateString;
+    }
+  };
+
+  const getStatusStyle = (status) => {
+    switch(status) {
+      case 'pending': return styles.statusPending;
+      case 'assigned': return styles.statusAssigned;
+      case 'contacted': return styles.statusContacted;
+      case 'in progress': return styles.statusInProgress;
+      case 'completed': return styles.statusCompleted;
+      case 'cancelled': return styles.statusCancelled;
+      case 'postponded': return styles.statusPostponed;
+      case 'sale closed': return styles.statusSaleClosed;
+      default: return {};
     }
   };
 
@@ -163,9 +302,11 @@ const ViewAppointments = () => {
             onChange={(e) => setFilter(e.target.value)}
           >
             <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="assigned">Assigned</option>
-            <option value="completed">Completed</option>
+            {statusOptions.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <button style={styles.refreshButton} onClick={fetchAppointments}>
             Refresh
@@ -185,7 +326,7 @@ const ViewAppointments = () => {
               <th style={styles.th}>Venue</th>
               <th style={styles.th}>Executive</th>
               <th style={styles.th}>Status</th>
-              <th style={styles.th}>Actions</th>
+              <th style={styles.th}>Update Status</th>
             </tr>
           </thead>
           <tbody>
@@ -205,29 +346,38 @@ const ViewAppointments = () => {
                   </td>
                   <td style={{
                     ...styles.td,
-                    ...(appt.status === 'pending' && styles.statusPending),
-                    ...(appt.status === 'assigned' && styles.statusAssigned),
-                    ...(appt.status === 'completed' && styles.statusCompleted),
+                    ...getStatusStyle(appt.status),
                   }}>
                     {appt.status}
                   </td>
                   <td style={styles.td}>
-                    {appt.status === 'pending' && (
-                      <button
-                        style={{ ...styles.button, backgroundColor: '#4CAF50' }}
-                        onClick={() => handleStatusChange(appt._id, 'assigned')}
+                    <div style={updating[appt._id] ? styles.updating : {}}>
+                      <select
+                        style={styles.statusSelect}
+                        value={selectedStatus[appt._id] || appt.status}
+                        onChange={(e) => handleStatusChange(appt._id, e.target.value)}
+                        disabled={updating[appt._id]}
                       >
-                        Assign
-                      </button>
-                    )}
-                    {appt.status === 'assigned' && (
+                        {statusOptions.map(option => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
                       <button
-                        style={{ ...styles.button, backgroundColor: '#003366' }}
-                        onClick={() => handleStatusChange(appt._id, 'completed')}
+                        style={styles.updateButton}
+                        onClick={() => updateStatus(appt._id)}
+                        disabled={updating[appt._id] || (selectedStatus[appt._id] === appt.status)}
                       >
-                        Complete
+                        {updating[appt._id] ? 'Updating...' : 'Update'}
                       </button>
-                    )}
+                      {updateSuccess[appt._id] && (
+                        <div style={styles.successMessage}>Status updated!</div>
+                      )}
+                      {updateError[appt._id] && (
+                        <div style={styles.errorMessage}>{updateError[appt._id]}</div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))

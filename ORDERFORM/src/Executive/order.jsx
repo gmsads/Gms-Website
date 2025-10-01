@@ -88,7 +88,42 @@ function Admin() {
       }
     };
   }, []);
-
+// In the Admin component, add this useEffect to handle the navigation state
+useEffect(() => {
+  // Check if there's appointment data from a sale closed redirect
+  const saleClosedData = localStorage.getItem('saleClosedAppointmentData');
+  if (saleClosedData) {
+    try {
+      const appointmentData = JSON.parse(saleClosedData);
+      setExistingOrderData(appointmentData);
+      setShowOrderForm(true);
+      setActiveTab('order');
+      
+      // Pre-fill the phone number if available
+      if (appointmentData.phoneNumber) {
+        setOrderNumber(appointmentData.phoneNumber);
+      }
+      
+      // Clear the stored data
+      localStorage.removeItem('saleClosedAppointmentData');
+    } catch (error) {
+      console.error('Error parsing appointment data:', error);
+    }
+  }
+  
+  // Also check for navigation state
+  if (location.state?.activeTab) {
+    setActiveTab(location.state.activeTab);
+    if (location.state.activeTab === 'order' && location.state.appointmentData) {
+      setExistingOrderData(location.state.appointmentData);
+      setShowOrderForm(true);
+      if (location.state.appointmentData.phoneNumber) {
+        setOrderNumber(location.state.appointmentData.phoneNumber);
+      }
+    }
+  }
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [location]);
   // Function to calculate and update duration
   const updateDuration = () => {
     const storedTime = localStorage.getItem('loginTime');

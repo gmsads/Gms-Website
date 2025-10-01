@@ -17,7 +17,6 @@ const ViewDesignRequests = () => {
   const [currentDesignId, setCurrentDesignId] = useState(null);
   const navigate = useNavigate();
 
-  // Fetch design requests and designers
   // In your useEffect where you fetch data:
   useEffect(() => {
     const fetchData = async () => {
@@ -70,6 +69,7 @@ const ViewDesignRequests = () => {
     }
   
     try {
+      // eslint-disable-next-line no-unused-vars
       const response = await axios.patch(
         `${DESIGN_REQUESTS}/${currentDesignId}`,
         {
@@ -204,7 +204,6 @@ const ViewDesignRequests = () => {
       <table style={styles.table}>
   <thead>
     <tr style={styles.tableHeadRow}>
-      <th style={{ ...styles.th, width: "10%" }}>Order No</th>
       <th style={{ ...styles.th, width: "12%" }}>Executive</th>
       <th style={{ ...styles.th, width: "12%" }}>Business</th>
       <th style={{ ...styles.th, width: "10%" }}>Contact</th>
@@ -220,7 +219,6 @@ const ViewDesignRequests = () => {
     {filteredDesigns.length > 0 ? (
       filteredDesigns.map((design) => (
         <tr key={design._id} style={styles.tableRow}>
-          <td style={styles.td}>{design.order?.orderNo || "N/A"}</td>
           <td style={styles.td}>{design.executive || "N/A"}</td>
           <td style={styles.td}>{design.businessName || "N/A"}</td>
           <td style={styles.td}>{design.contactPerson || "N/A"}</td>

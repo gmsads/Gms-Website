@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 function PendingPayment() {
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
   
   // Payment modal states
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -25,6 +26,7 @@ function PendingPayment() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'today', 'other'
   
   const monthLabels = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -39,13 +41,21 @@ function PendingPayment() {
   }
 
   useEffect(() => {
+    // Check for filter parameters from navigation
+    if (location.state?.filterType) {
+      if (location.state.filterType === 'today-delivery') {
+        setActiveFilter('today');
+      } else if (location.state.filterType === 'exclude-today') {
+        setActiveFilter('other');
+      }
+    }
     fetchOrders();
-  }, []);
+  }, [location]);
 
   useEffect(() => {
     applyFilters();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders, year, selectedMonth, searchTerm]);
+  }, [orders, year, selectedMonth, searchTerm, activeFilter]);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -55,8 +65,22 @@ function PendingPayment() {
           _: new Date().getTime() // Cache buster
         }
       });
-      const pendingPayments = res.data.filter(order => order && order.balance > 0);
-      setOrders(pendingPayments);
+      // Sort orders by orderDate descending (newest first) and then by createdAt descending
+      const sortedOrders = res.data
+        .filter(order => order && order.balance > 0)
+        .sort((a, b) => {
+          // First sort by orderDate (newest first)
+          const dateA = new Date(a.orderDate || a.createdAt || 0);
+          const dateB = new Date(b.orderDate || b.createdAt || 0);
+          if (dateB - dateA !== 0) {
+            return dateB - dateA;
+          }
+          // If orderDate is same, sort by createdAt (newest first)
+          const createdA = new Date(a.createdAt || 0);
+          const createdB = new Date(b.createdAt || 0);
+          return createdB - createdA;
+        });
+      setOrders(sortedOrders);
     } catch (err) {
       console.error('Error fetching orders:', err);
     } finally {
@@ -68,6 +92,14 @@ function PendingPayment() {
     if (!orders.length) return;
 
     let result = [...orders];
+
+    // Apply active filter (today/other)
+    if (activeFilter === 'today') {
+      result = result.filter(order => hasTodayDelivery(order));
+    } else if (activeFilter === 'other') {
+      result = result.filter(order => !hasTodayDelivery(order));
+    }
+    // If activeFilter is 'all', show all pending payments
 
     // Filter by year and month if they have orderDate
     result = result.filter(order => {
@@ -109,7 +141,39 @@ function PendingPayment() {
       });
     }
 
+    // Maintain the sorted order (newest first)
     setFilteredOrders(result);
+  };
+
+  // Function to check if order has delivery date today
+  const hasTodayDelivery = (order) => {
+    if (!order.rows || !order.rows.length) return false;
+    
+    const today = new Date();
+    const todayString = today.toISOString().split('T')[0];
+    
+    // Check if any row has delivery date today
+    return order.rows.some(row => {
+      if (!row.deliveryDate) return false;
+      const deliveryDate = new Date(row.deliveryDate);
+      const deliveryDateString = deliveryDate.toISOString().split('T')[0];
+      return deliveryDateString === todayString;
+    });
+  };
+
+  // Function to get delivery date from order rows
+  const getDeliveryDate = (order) => {
+    if (!order.rows || !order.rows.length) return 'N/A';
+    
+    // Find the earliest delivery date from all rows
+    const deliveryDates = order.rows
+      .filter(row => row.deliveryDate)
+      .map(row => new Date(row.deliveryDate))
+      .sort((a, b) => a - b);
+    
+    if (deliveryDates.length === 0) return 'Not Set';
+    
+    return deliveryDates[0].toLocaleDateString();
   };
 
   const handleRecordPayment = (order) => {
@@ -162,7 +226,7 @@ function PendingPayment() {
 
       await axios.post(`/api/orders/${currentOrder._id}/record-payment`, paymentPayload);
       
-      // Refresh the orders list
+      // Refresh the orders list to get updated data with proper sorting
       await fetchOrders();
       
       setShowPaymentModal(false);
@@ -184,7 +248,9 @@ function PendingPayment() {
       'Total': order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0) || 0,
       'Advance': order?.advance || 0,
       'Balance': order?.balance || 0,
+      'Delivery Date': getDeliveryDate(order),
       'Order Date': order?.orderDate ? new Date(order.orderDate).toLocaleDateString() : '',
+      'Created Date': order?.createdAt ? new Date(order.createdAt).toLocaleDateString() : '',
     }));
   
     const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -196,7 +262,20 @@ function PendingPayment() {
   // Calculate total pending amount with null checks
   const totalPendingAmount = filteredOrders.reduce((sum, order) => sum + (order?.balance || 0), 0);
 
-  // Updated styles with proper hover syntax
+  // Filter button styles
+  const filterButtonStyle = (filterType) => ({
+    padding: '8px 16px',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '600',
+    transition: 'all 0.2s',
+    backgroundColor: activeFilter === filterType ? '#3498db' : '#ecf0f1',
+    color: activeFilter === filterType ? 'white' : '#2c3e50',
+  });
+
+  // Updated styles with delivery date column
   const styles = {
     container: {
       padding: '20px',
@@ -301,9 +380,12 @@ function PendingPayment() {
       fontSize: '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
-      ':hover': {
-        backgroundColor: '#c0392b',
-      },
+    },
+    filterButtonsContainer: {
+      display: 'flex',
+      justifyContent: 'center',
+      gap: '10px',
+      marginBottom: '15px',
     },
     loading: {
       textAlign: 'center',
@@ -355,6 +437,10 @@ function PendingPayment() {
       color: '#e74c3c',
       fontWeight: '600',
     },
+    deliveryDateCell: {
+      color: '#27ae60',
+      fontWeight: '500',
+    },
     payButton: {
       backgroundColor: '#9b59b6',
       color: 'white',
@@ -365,9 +451,6 @@ function PendingPayment() {
       fontSize: '13px',
       fontWeight: '600',
       transition: 'all 0.2s',
-      ':hover': {
-        backgroundColor: '#8e44ad',
-      },
     },
     footerButtons: {
       display: 'flex',
@@ -385,9 +468,6 @@ function PendingPayment() {
       fontSize: '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
-      ':hover': {
-        backgroundColor: '#1abc9c',
-      },
     },
     backButton: {
       backgroundColor: '#7f8c8d',
@@ -399,9 +479,6 @@ function PendingPayment() {
       fontSize: '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
-      ':hover': {
-        backgroundColor: '#95a5a6',
-      },
     },
     // Payment modal styles
     paymentModal: {
@@ -480,10 +557,35 @@ function PendingPayment() {
     <div style={styles.container}>
       <h2 style={styles.title}>Pending Payments</h2>
 
+      {/* Filter Buttons */}
+      <div style={styles.filterButtonsContainer}>
+        <button 
+          style={filterButtonStyle('all')}
+          onClick={() => setActiveFilter('all')}
+        >
+          All Pending Payments
+        </button>
+        <button 
+          style={filterButtonStyle('today')}
+          onClick={() => setActiveFilter('today')}
+        >
+          Today's Delivery
+        </button>
+        <button 
+          style={filterButtonStyle('other')}
+          onClick={() => setActiveFilter('other')}
+        >
+          Other Pending
+        </button>
+      </div>
+
       {/* Compact Summary Box */}
       <div style={styles.summaryBox}>
         <div style={styles.summaryContent}>
-          <span style={styles.summaryLabel}>Total Pending:</span>
+          <span style={styles.summaryLabel}>
+            {activeFilter === 'today' ? "Today's Delivery Pending" : 
+             activeFilter === 'other' ? "Other Pending Payments" : "Total Pending"}:
+          </span>
           <span style={styles.summaryAmount}>₹{totalPendingAmount.toLocaleString()}</span>
           <span style={styles.summaryCount}>{filteredOrders.length} orders</span>
         </div>
@@ -563,7 +665,7 @@ function PendingPayment() {
           <table style={styles.table}>
             <thead style={styles.tableHeader}>
               <tr>
-                {['S.I', 'Executive', 'Business', 'Customer', 'Contact', 'Total', 'Advance', 'Balance', 'Action'].map((header) => (
+                {['S.I', 'Executive', 'Business', 'Customer', 'Contact', 'Total', 'Advance', 'Balance', 'Delivery Date', 'Action'].map((header) => (
                   <th key={header} style={styles.th}>{header}</th>
                 ))}
               </tr>
@@ -571,7 +673,7 @@ function PendingPayment() {
             <tbody>
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan="9" style={styles.noData}>
+                  <td colSpan="10" style={styles.noData}>
                     No pending payments found for the selected filters
                   </td>
                 </tr>
@@ -586,6 +688,9 @@ function PendingPayment() {
                     <td style={styles.td}>₹{(order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0)?.toLocaleString() || '0')}</td>
                     <td style={styles.td}>₹{(order?.advance || 0).toLocaleString()}</td>
                     <td style={{...styles.td, ...styles.balanceCell}}>₹{(order?.balance || 0).toLocaleString()}</td>
+                    <td style={{...styles.td, ...styles.deliveryDateCell}}>
+                      {getDeliveryDate(order)}
+                    </td>
                     <td style={styles.td}>
                       <button
                         onClick={() => handleRecordPayment(order)}

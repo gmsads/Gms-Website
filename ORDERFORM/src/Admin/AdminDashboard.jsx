@@ -199,27 +199,64 @@ function AdminDashboard() {
   };
 
   // Styles
-  const styles = {
-    container: {
-      display: 'flex',
-      minHeight: '100vh',
-      overflow: 'hidden',
-      position: 'relative',
-    },
-    sidebar: {
-      width: sidebarOpen ? '250px' : '0',
-      background: 'linear-gradient(to bottom, #001529, #003366)',
-      color: '#fff',
-      overflowX: 'hidden',
-      transition: 'width 0.3s',
-      position: 'fixed',
-      top: 0,
-      bottom: 0,
-      left: 0,
-      zIndex: 10,
-      height: '100vh',
-      boxShadow: '2px 0 5px rgba(0,0,0,0.1)',
-    },
+ const styles = {
+  container: {
+    display: 'flex',
+    height: '100vh',
+    overflow: 'hidden',
+  },
+  sidebar: {
+    width: sidebarOpen ? '250px' : '0',
+    background: 'linear-gradient(to bottom, #001529, #003366)',
+    color: '#fff',
+    overflowX: 'hidden',
+    transition: 'width 0.3s',
+    position: 'fixed',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 10,
+    height: '100vh',
+    boxShadow: '2px 0 5px rgba(0,0,0,0.1)',
+  },
+  content: {
+    flex: 1,
+    marginLeft: sidebarOpen ? '250px' : '0',
+    padding: '20px',
+    transition: 'margin-left 0.3s',
+    overflowY: 'auto',
+    background: 'linear-gradient(to bottom right, #f0f2f5, #e6e9ed)',
+    height: '100vh',
+    position: 'relative',
+  },
+  dashboardCards: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gap: '20px',
+    marginTop: '20px',
+    width: '100%',
+    height: 'auto',
+    minHeight: 'auto',
+  },
+  card: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: '10px',
+    boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    fontSize: '16px',
+    fontWeight: 'bold',
+    color: '#003366',
+    padding: '20px',
+    height: 'auto',
+    minHeight: '350px', // You can keep this or remove it
+    width: '100%',
+    boxSizing: 'border-box',
+  },
+
+  
     sidebarHeader: {
       padding: '20px',
       fontSize: '18px',
@@ -272,16 +309,7 @@ function AdminDashboard() {
       borderLeft: '3px solid #1890ff',
       fontWeight: '600',
     },
-    content: {
-      marginLeft: sidebarOpen ? '250px' : '0',
-      padding: '20px',
-      transition: 'margin-left 0.3s',
-      width: '100%',
-      minHeight: '100vh',
-      overflowY: 'auto',
-      background: 'linear-gradient(to bottom right, #f0f2f5, #e6e9ed)',
-      boxSizing: 'border-box',
-    },
+   
     burger: {
       fontSize: '24px',
       marginRight: '20px',
@@ -293,29 +321,8 @@ function AdminDashboard() {
       zIndex: 30,
       display: window.innerWidth <= 768 ? 'block' : 'none',
     },
-    dashboardCards: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-      gap: '20px',
-      marginTop: '20px',
-      width: '100%',
-    },
-    card: {
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      borderRadius: '10px',
-      boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      alignItems: 'center',
-      fontSize: '16px',
-      fontWeight: 'bold',
-      color: '#003366',
-      padding: '20px',
-      minHeight: '350px',
-      width: '100%',
-      boxSizing: 'border-box',
-    },
+    
+   
     number: {
       fontSize: '40px',
       color: '#002244',

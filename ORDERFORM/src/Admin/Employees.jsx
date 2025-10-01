@@ -25,7 +25,6 @@ export default function Employees() {
     showRejoinDate: false
   });
 
-
   const fetchEmployees = useCallback(async () => {
     try {
       setLoading(true);
@@ -46,7 +45,6 @@ export default function Employees() {
           phone: employee.phone || '',
           active: Boolean(employee.active),
           role: category,
-          image: employee.image || null,
           rejoinDate: employee.rejoinDate || ''
         }));
       });
@@ -62,12 +60,16 @@ export default function Employees() {
 
   useEffect(() => {
     fetchEmployees();
-    return () => {
-      if (editModal.isOpen && editModal.employee?.imageFile) {
-        URL.revokeObjectURL(editModal.employee.image);
-      }
-    };
   }, [fetchEmployees]);
+
+  const getInitials = useCallback((name) => {
+    if (!name) return 'NA';
+    return name
+      .split(' ')
+      .map(part => part.charAt(0).toUpperCase())
+      .join('')
+      .slice(0, 2);
+  }, []);
 
   const showPopup = useCallback((message, type = 'info') => {
     setPopupMessage({ show: true, message, type });
@@ -231,8 +233,6 @@ export default function Employees() {
         resignationDate: employee.resignationDate || '',
         resignationReason: employee.resignationReason || '',
         rejoinDate: employee.rejoinDate || '',
-        image: employee.image || null,
-        imageFile: null
       },
       currentCategory: category,
       originalCategory: category,
@@ -270,10 +270,6 @@ export default function Employees() {
       } else {
         formData.append('resignationDate', employee.resignationDate || '');
         formData.append('resignationReason', employee.resignationReason || '');
-      }
-
-      if (employee.imageFile) {
-        formData.append('image', employee.imageFile);
       }
 
       const response = await fetch('/api/employee-uploads/update-profile', {
@@ -323,12 +319,6 @@ export default function Employees() {
     XLSX.utils.book_append_sheet(wb, ws, "Employee");
     XLSX.writeFile(wb, `${employee.name}_data.xlsx`);
   }, [editModal.currentCategory]);
-
-  const getImageUrl = useCallback((imagePath) => {
-    if (!imagePath) return '/default-avatar.png';
-    if (imagePath.startsWith('http') || imagePath.startsWith('blob:')) return imagePath;
-    return `/uploads/${imagePath}`;
-  }, []);
 
   const toggleCategoryExpansion = useCallback((category) => {
     setExpanded(prev => ({
@@ -451,15 +441,9 @@ export default function Employees() {
                     className={`employee-item ${employee.active ? '' : 'inactive-employee'}`}
                   >
                     <div className="employee-image-name" onClick={() => handleEditClick(employee, category)}>
-                      <img
-                        src={getImageUrl(employee.image)}
-                        alt={employee.name}
-                        className="employee-thumbnail"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = '/default-avatar.png';
-                        }}
-                      />
+                      <div className="initials-avatar">
+                        {getInitials(employee.name)}
+                      </div>
                       <span className="employee-name">
                         {employee.name}
                         {!employee.active && <span className="inactive-badge"> (Inactive)</span>}
@@ -499,9 +483,6 @@ export default function Employees() {
               <button
                 className="close-button"
                 onClick={() => {
-                  if (editModal.employee?.imageFile) {
-                    URL.revokeObjectURL(editModal.employee.image);
-                  }
                   setEditModal({
                     isOpen: false,
                     employee: null,
@@ -517,17 +498,11 @@ export default function Employees() {
             <div className="form-container">
               <div className="form-section">
                 <div className="form-group">
-                  <label>Profile Photo</label>
-                  <div className="image-display-container">
-                    <img
-                      src={getImageUrl(editModal.employee.image)}
-                      alt={editModal.employee.name}
-                      className="employee-profile-photo"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = '/default-avatar.png';
-                      }}
-                    />
+                  <label>Profile Initials</label>
+                  <div className="initials-display-container">
+                    <div className="initials-avatar-large">
+                      {getInitials(editModal.employee.name)}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -811,9 +786,6 @@ export default function Employees() {
               <button
                 className="cancel-button"
                 onClick={() => {
-                  if (editModal.employee?.imageFile) {
-                    URL.revokeObjectURL(editModal.employee.image);
-                  }
                   setEditModal({
                     isOpen: false,
                     employee: null,
@@ -961,12 +933,32 @@ export default function Employees() {
           align-items: center;
           gap: 10px;
           flex: 1;
+          cursor: pointer;
         }
-        .employee-thumbnail {
+        .initials-avatar {
           width: 40px;
           height: 40px;
           border-radius: 50%;
-          object-fit: cover;
+          background-color: #003366;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
+          font-size: 14px;
+        }
+        .initials-avatar-large {
+          width: 100px;
+          height: 100px;
+          border-radius: 50%;
+          background-color: #003366;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
+          font-size: 32px;
+          margin: 0 auto;
         }
         .employee-name {
           cursor: pointer;
@@ -1237,17 +1229,10 @@ export default function Employees() {
           color: red;
           text-align: center;
         }
-        .image-display-container {
+        .initials-display-container {
           display: flex;
           justify-content: center;
           margin-top: 10px;
-        }
-        .employee-profile-photo {
-          width: 150px;
-          height: 150px;
-          border-radius: 50%;
-          object-fit: cover;
-          border: 3px solid #003366;
         }
           .popup-message {
   position: fixed;
