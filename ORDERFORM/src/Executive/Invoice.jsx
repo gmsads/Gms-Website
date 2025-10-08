@@ -1,12 +1,10 @@
-import React, { useRef } from "react";
-import { useReactToPrint } from "react-to-print";
+import React, { useRef, useState, useEffect } from "react";
 import html2pdf from "html2pdf.js";
-
+import axios from "axios"; // Add at top
 // Import your logo from assets (adjust the path as needed)
 import companyLogo from "../assets/logo.png";
 
 const Invoice = ({
-  orderNumber,
   business,
   contactPerson,
   clientLocation,
@@ -22,96 +20,270 @@ const Invoice = ({
   onClose,
 }) => {
   const invoiceRef = useRef();
-  
-  const handlePrint = useReactToPrint({
-    content: () => invoiceRef.current,
-  });
+  const [invoiceNumber, setInvoiceNumber] = useState("");
 
-  const downloadPDF = () => {
-    const invoice = invoiceRef.current;
-    const options = {
-      margin: 10,
-      filename: `invoice-${orderNumber || "new"}.pdf`,
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-    };
-    
-    html2pdf().set(options).from(invoice).save();
+  // Generate invoice number on component mount
+  useEffect(() => {
+    generateInvoiceNumber();
+  }, []);
+
+  const generateInvoiceNumber = () => {
+    // Get the last invoice number from localStorage or start from 0
+    const lastInvoiceNumber = parseInt(localStorage.getItem('lastInvoiceNumber') || '0');
+    const formattedNumber = `GMS ${lastInvoiceNumber.toString().padStart(3, '0')}`;
+    setInvoiceNumber(formattedNumber);
   };
 
+  const incrementInvoiceNumber = () => {
+    const lastInvoiceNumber = parseInt(localStorage.getItem('lastInvoiceNumber') || '0');
+    const newInvoiceNumber = lastInvoiceNumber + 1;
+    
+    // Update localStorage with the new invoice number
+    localStorage.setItem('lastInvoiceNumber', newInvoiceNumber.toString());
+    
+    // Format the invoice number as GMS 001, GMS 002, etc.
+    const formattedNumber = `GMS ${newInvoiceNumber.toString().padStart(3, '0')}`;
+    setInvoiceNumber(formattedNumber);
+  };
+
+  const handlePrint = () => {
+    const printContent = invoiceRef.current;
+    if (!printContent) {
+      console.error("No content to print");
+      alert("No content available for printing");
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    const printStyles = `
+      <style>
+        body { 
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          margin: 0;
+          padding: 10mm;
+          color: #333;
+          background: white;
+          font-size: 12px;
+        }
+        .invoice-container {
+          max-width: 190mm;
+          margin: 0 auto;
+          min-height: 277mm;
+        }
+        .no-print { display: none !important; }
+        table { 
+          width: 100%; 
+          border-collapse: collapse;
+          margin-bottom: 15px;
+          font-size: 11px;
+        }
+        th { 
+          background-color: #2c3e50; 
+          color: white; 
+          padding: 8px; 
+          text-align: left; 
+          font-weight: 600;
+          font-size: 11px;
+        }
+        td { 
+          padding: 8px; 
+          border-bottom: 1px solid #e9ecef;
+          font-size: 11px;
+        }
+        .even-row { background-color: #f8f9fa; }
+        .odd-row { background-color: white; }
+        .totals { width: 250px; margin-left: auto; }
+        .total-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 11px; }
+        .grand-total { border-top: 2px solid #2c3e50; border-bottom: 2px solid #2c3e50; padding: 8px 0; margin: 8px 0; }
+        .balance-due { padding: 8px 0; margin: 8px 0; }
+        .payment-info { 
+          display: flex; 
+          justify-content: space-between; 
+          margin-bottom: 15px; 
+          gap: 20px;
+          font-size: 11px;
+        }
+        .footer { margin-top: 20px; font-size: 11px; }
+        .signature { margin-top: 30px; font-size: 11px; }
+        
+        /* Compact styles for single page */
+        .header { margin-bottom: 15px; }
+        .logo { width: 60px; height: 60px; }
+        .company-name { font-size: 20px; }
+        .invoice-title { font-size: 22px; margin-bottom: 3px; }
+        .invoice-number { font-size: 14px; }
+        .divider { margin: 15px 0; }
+        .details-container { margin-bottom: 20px; }
+        .section-title { font-size: 14px; margin-bottom: 8px; }
+        .client-name { font-size: 16px; margin-bottom: 3px; }
+        
+        @media print {
+          body { 
+            margin: 0; 
+            padding: 10mm;
+            font-size: 12px;
+          }
+          .no-print { display: none !important; }
+          .invoice-container { 
+            max-width: 190mm;
+            min-height: 277mm;
+          }
+        }
+      </style>
+    `;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Invoice-${invoiceNumber}</title>
+          ${printStyles}
+        </head>
+        <body>
+          <div class="invoice-container">
+            ${printContent.innerHTML}
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(() => {
+                window.close();
+              }, 100);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+  
+const downloadPDF = async () => {
+  const invoice = invoiceRef.current;
+  if (!invoice) {
+    alert("No content available for PDF generation");
+    return;
+  }
+
+  try {
+    // Generate PDF blob without auto-downloading
+    const options = {
+      margin: 8,
+      filename: `invoice-${invoiceNumber}.pdf`,
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+    };
+
+    const pdf = await html2pdf().set(options).from(invoice).toPdf().get("pdf");
+    const blob = pdf.output("blob");
+
+    // Upload PDF to backend
+    const formData = new FormData();
+    formData.append("file", blob, `invoice-${invoiceNumber}.pdf`);
+
+    // Use dynamic backend URL
+    const backendURL =
+      import.meta.env.VITE_API_URL || window.location.origin; // default to current domain
+    const res = await axios.post(`${backendURL}/api/upload`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    const fileUrl = res.data.url;
+
+    // Increment invoice number after successful upload
+    incrementInvoiceNumber();
+
+    // Format WhatsApp number (India)
+    let phone = contactNumber.replace(/\D/g, "");
+    if (phone.length === 10) phone = "91" + phone;
+
+    // WhatsApp message
+    const message = `Hello ${contactPerson || business},\nHere is your invoice: ${fileUrl}`;
+    const whatsappURL = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+
+    // Open WhatsApp chat
+    window.open(whatsappURL, "_blank");
+
+    alert("Invoice uploaded successfully! WhatsApp will open now.");
+  } catch (error) {
+    console.error("Error generating/sending PDF:", error);
+    alert("Error sending invoice. Please try again.");
+  }
+};
+
+  // Compact styles for single page
   const styles = {
     invoiceContainer: {
       fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-      maxWidth: "210mm",
-      minHeight: "297mm",
+      maxWidth: "190mm",
+      minHeight: "277mm",
       margin: "0 auto",
-      padding: "20mm",
+      padding: "15mm",
       backgroundColor: "#fff",
       boxShadow: "0 0 20px rgba(0, 0, 0, 0.1)",
       color: "#333",
-      position: "relative"
+      position: "relative",
+      fontSize: "12px"
     },
     noPrint: {
-      marginBottom: "20px",
+      marginBottom: "15px",
       display: "flex",
-      gap: "10px",
+      gap: "8px",
       justifyContent: "center",
-      padding: "10px",
+      padding: "8px",
       backgroundColor: "#f8f9fa",
-      borderRadius: "8px"
+      borderRadius: "6px"
     },
     backButton: {
-      padding: "10px 20px",
+      padding: "8px 16px",
       backgroundColor: "#6c757d",
       color: "white",
       border: "none",
       borderRadius: "4px",
       cursor: "pointer",
       fontWeight: "500",
-      transition: "background-color 0.2s"
+      fontSize: "12px"
     },
     printButton: {
-      padding: "10px 20px",
+      padding: "8px 16px",
       backgroundColor: "#2c3e50",
       color: "white",
       border: "none",
       borderRadius: "4px",
       cursor: "pointer",
       fontWeight: "500",
-      transition: "background-color 0.2s",
-      margin: "0 5px"
+      fontSize: "12px",
+      margin: "0 4px"
     },
     downloadButton: {
-      padding: "10px 20px",
+      padding: "8px 16px",
       backgroundColor: "#28a745",
       color: "white",
       border: "none",
       borderRadius: "4px",
       cursor: "pointer",
       fontWeight: "500",
-      transition: "background-color 0.2s",
-      margin: "0 5px"
+      fontSize: "12px",
+      margin: "0 4px"
     },
     header: {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "flex-start",
-      marginBottom: "20px"
+      marginBottom: "15px"
     },
     logoContainer: {
       display: "flex",
       alignItems: "center",
-      gap: "15px"
+      gap: "12px"
     },
     logo: {
-      width: "80px",
-      height: "80px",
-      borderRadius: "8px",
+      width: "60px",
+      height: "60px",
+      borderRadius: "6px",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
       overflow: "hidden"
     },
     logoImg: {
@@ -124,70 +296,72 @@ const Invoice = ({
       flexDirection: "column"
     },
     companyName: {
-      fontSize: "24px",
+      fontSize: "20px",
       fontWeight: "bold",
       color: "#2c3e50",
       margin: "0"
     },
     companyTagline: {
-      fontSize: "14px",
+      fontSize: "12px",
       color: "#7f8c8d",
-      margin: "5px 0 0 0"
+      margin: "3px 0 0 0"
     },
     invoiceTitleContainer: {
       textAlign: "right"
     },
     invoiceTitle: {
-      fontSize: "28px",
+      fontSize: "22px",
       fontWeight: "bold",
       color: "#2c3e50",
-      margin: "0 0 5px 0"
+      margin: "0 0 3px 0"
     },
     invoiceNumber: {
-      fontSize: "16px",
+      fontSize: "14px",
       color: "#7f8c8d",
       fontWeight: "500"
     },
     divider: {
       height: "2px",
       background: "linear-gradient(90deg, #2c3e50, #3498db, #2c3e50)",
-      margin: "20px 0",
+      margin: "15px 0",
       borderRadius: "1px"
     },
     detailsContainer: {
       display: "flex",
       justifyContent: "space-between",
-      marginBottom: "30px"
+      marginBottom: "20px"
     },
     billTo: {
       flex: "1"
     },
     sectionTitle: {
-      fontSize: "16px",
+      fontSize: "14px",
       fontWeight: "600",
       color: "#2c3e50",
-      margin: "0 0 10px 0",
+      margin: "0 0 8px 0",
       borderBottom: "2px solid #3498db",
-      paddingBottom: "5px",
+      paddingBottom: "3px",
       width: "fit-content"
     },
     clientDetails: {
-      lineHeight: "1.6"
+      lineHeight: "1.5",
+      fontSize: "12px"
     },
     clientName: {
       fontWeight: "600",
-      fontSize: "18px",
+      fontSize: "16px",
       color: "#2c3e50",
-      marginBottom: "5px"
+      marginBottom: "3px"
     },
     invoiceDetails: {
-      textAlign: "right"
+      textAlign: "right",
+      fontSize: "12px"
     },
     detailRow: {
-      marginBottom: "8px",
+      marginBottom: "6px",
       display: "flex",
       justifyContent: "space-between",
-      width: "300px"
+      width: "250px"
     },
     detailLabel: {
       fontWeight: "600",
@@ -196,18 +370,19 @@ const Invoice = ({
     invoiceTable: {
       width: "100%",
       borderCollapse: "collapse",
-      marginBottom: "30px",
-      fontSize: "14px"
+      marginBottom: "20px",
+      fontSize: "11px"
     },
     tableHeader: {
       backgroundColor: "#2c3e50",
       color: "white",
-      padding: "12px",
+      padding: "8px",
       textAlign: "left",
-      fontWeight: "600"
+      fontWeight: "600",
+      fontSize: "11px"
     },
     descriptionColumn: {
-      width: "40%"
+      width: "35%"
     },
     evenRow: {
       backgroundColor: "#f8f9fa"
@@ -216,30 +391,33 @@ const Invoice = ({
       backgroundColor: "white"
     },
     tableCell: {
-      padding: "12px",
-      borderBottom: "1px solid #e9ecef"
+      padding: "8px",
+      borderBottom: "1px solid #e9ecef",
+      fontSize: "11px"
     },
     itemDescription: {
-      fontWeight: "500"
+      fontWeight: "500",
+      fontSize: "11px"
     },
     itemDetails: {
-      fontSize: "12px",
+      fontSize: "10px",
       color: "#6c757d",
-      marginTop: "5px"
+      marginTop: "3px"
     },
     totalsContainer: {
       display: "flex",
       justifyContent: "flex-end",
-      marginBottom: "30px"
+      marginBottom: "20px"
     },
     totals: {
-      width: "300px"
+      width: "250px"
     },
     totalRow: {
       display: "flex",
       justifyContent: "space-between",
-      marginBottom: "10px",
-      padding: "5px 0"
+      marginBottom: "8px",
+      padding: "4px 0",
+      fontSize: "11px"
     },
     totalLabel: {
       fontWeight: "500"
@@ -253,91 +431,91 @@ const Invoice = ({
     grandTotal: {
       borderTop: "2px solid #2c3e50",
       borderBottom: "2px solid #2c3e50",
-      padding: "10px 0",
-      margin: "10px 0"
+      padding: "8px 0",
+      margin: "8px 0"
     },
     grandTotalLabel: {
       fontWeight: "bold",
-      fontSize: "16px",
+      fontSize: "14px",
       color: "#2c3e50"
     },
     grandTotalValue: {
       fontWeight: "bold",
-      fontSize: "16px",
+      fontSize: "14px",
       color: "#2c3e50"
     },
     balanceDue: {
-      padding: "10px 0",
-      margin: "10px 0"
+      padding: "8px 0",
+      margin: "8px 0"
     },
     balanceLabel: {
       fontWeight: "bold",
-      fontSize: "16px",
+      fontSize: "14px",
       color: "#e74c3c"
     },
     balanceValue: {
       fontWeight: "bold",
-      fontSize: "16px",
+      fontSize: "14px",
       color: "#e74c3c"
     },
     paymentInfo: {
       display: "flex",
       justifyContent: "space-between",
-      marginBottom: "30px",
-      gap: "30px"
+      marginBottom: "20px",
+      gap: "20px",
+      fontSize: "11px"
     },
     paymentDetails: {
       flex: "1"
     },
     bankDetails: {
-      lineHeight: "1.8",
-      fontSize: "14px"
+      lineHeight: "1.6",
+      fontSize: "11px"
     },
     terms: {
       flex: "1"
     },
     termsList: {
-      paddingLeft: "20px",
-      fontSize: "14px",
-      lineHeight: "1.6"
+      paddingLeft: "15px",
+      fontSize: "11px",
+      lineHeight: "1.5",
+      margin: 0
     },
     footer: {
-      marginTop: "40px",
-      paddingTop: "20px",
+      marginTop: "20px",
+      paddingTop: "15px",
       borderTop: "1px solid #e9ecef",
-      textAlign: "center"
+      textAlign: "center",
+      fontSize: "11px"
     },
     footerContent: {
-      lineHeight: "1.6"
+      lineHeight: "1.5"
     },
     contactInfo: {
-      fontSize: "14px",
+      fontSize: "11px",
       color: "#6c757d",
-      margin: "10px 0"
-    },
-    gstin: {
-      fontWeight: "600",
-      color: "#2c3e50"
+      margin: "8px 0"
     },
     signature: {
-      marginTop: "60px",
-      textAlign: "right"
+      marginTop: "30px",
+      textAlign: "right",
+      fontSize: "11px"
     },
     signatureLine: {
-      width: "200px",
+      width: "150px",
       borderTop: "1px solid #2c3e50",
       marginLeft: "auto",
-      marginBottom: "5px"
+      marginBottom: "3px"
     },
     signatureLabel: {
-      fontSize: "14px",
+      fontSize: "11px",
       color: "#6c757d"
     }
   };
 
   return (
     <div>
-      <div style={styles.noPrint}>
+      <div style={styles.noPrint} className="no-print">
         <button onClick={onClose} style={styles.backButton}>
           <i className="fas fa-arrow-left"></i> Back to Form
         </button>
@@ -362,7 +540,7 @@ const Invoice = ({
           </div>
           <div style={styles.invoiceTitleContainer}>
             <h1 style={styles.invoiceTitle}>TAX INVOICE</h1>
-            <div style={styles.invoiceNumber}>INV-{orderNumber || "NEW"}</div>
+            <div style={styles.invoiceNumber}>{invoiceNumber}</div>
           </div>
         </div>
 
@@ -484,11 +662,13 @@ const Invoice = ({
               <div>GMS Advertising • 123 Business Street, City - 560001</div>
               <div>Phone: +91 9876543210 • Email: info@gmsads.com • Website: www.gmsads.com</div>
             </div>
-            <div style={styles.gstin}>GSTIN: 22AAAAA0000A1Z5</div>
           </div>
         </div>
 
-       
+        <div style={styles.signature}>
+          <div style={styles.signatureLine}></div>
+          <div style={styles.signatureLabel}>Authorized Signature</div>
+        </div>
       </div>
     </div>
   );

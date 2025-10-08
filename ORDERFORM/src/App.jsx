@@ -56,11 +56,31 @@ import Record from './Executive/Record';
 import StartDesign from './Designer/StartDesign';
 import DesignReport from './Admin/DesignReports';
 import FieldExecutivePage from './Executive/FieldExecutivePage';
+import UnitDashboard from './unit/UnitDashboard.jsx';
+import EmployeeFaceEnroll from './unit/EmployeeFaceEnroll.jsx';
+import EmployeeLogin from './unit/EmployeeLogin.jsx';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route
+          path="/unit-dashboard"
+          element={
+            <ProtectedRoute>
+              <UnitDashboard />
+            </ProtectedRoute>
+          }
+        >
+
+          <Route path="daily-report" element={<DailyReport />} /> 
+          <Route path="record" element={<Record />} />
+          <Route path="hour" element={<Hourrecord />} />
+          <Route path="hour-reeport" element={<HourReport />} />
+          <Route path="employee-face" element={<EmployeeFaceEnroll />} />
+          <Route path="employee-login" element={<EmployeeLogin/>} />
+      
+        </Route>
         <Route path="/" element={<LandingPage />} />
         <Route path="/order" element={<Order />} />
 
@@ -131,8 +151,8 @@ function App() {
           <Route path="price-list" element={<Pricelist />} />
           <Route path="inventory" element={<Inventory />} />
           <Route path="hour-reeport" element={<HourReport />} />
-           <Route path="design-report" element={<DesignReport/>} />
-          
+          <Route path="design-report" element={<DesignReport />} />
+
         </Route>
         <Route
           path="/service-manager-dashboard"
@@ -198,7 +218,7 @@ function App() {
           <Route path="anniversary-list" element={<AnniversaryList />} />
           <Route path="price-list" element={<Pricelist />} />
         </Route>
-        
+
         {/* Executive Dashboard Route */}
         <Route
           path="/executive-dashboard"
@@ -208,7 +228,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        
+
         {/* Field Executive Page Route - ADDED THIS SECTION */}
         <Route
           path="/field-executive"
@@ -218,7 +238,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        
+
         <Route
           path="/followup"
           element={
@@ -227,6 +247,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+
         <Route
           path="/pending-payment"
           element={
@@ -274,10 +296,12 @@ function App() {
           <Route path="price-list" element={<Pricelist />} />
           <Route path="expenses" element={<Expenses />} />
           <Route path="view-expenses" element={<ViewExpenses />} />
-            <Route path="hour" element={<Hourrecord />} />
+          <Route path="hour" element={<Hourrecord />} />
           <Route path="hour-reeport" element={<HourReport />} />
-           <Route path="daily-report" element={<DailyReport />} />
-            <Route path="daily-record" element={<Record />} />
+          <Route path="daily-report" element={<DailyReport />} />
+          <Route path="daily-record" element={<Record />} />
+          <Route path="inventory" element={<Inventory />} />
+
         </Route>
         <Route
           path="/designer-dashboard"
@@ -288,7 +312,7 @@ function App() {
           }
         >
           <Route path="assigned-designs" element={<AssignedDesigns />} />
-           <Route path="start-design" element={<StartDesign />} />
+          <Route path="start-design" element={<StartDesign />} />
         </Route>
         <Route
           path="/digital-dashboard"
@@ -318,6 +342,8 @@ function App() {
           <Route path="hour-reeport" element={<HourReport />} />
           <Route path="daily-record" element={<Record />} />
           <Route path="daily-report" element={<DailyReport />} />
+          <Route path="inventory" element={<Inventory />} />
+
         </Route>
       </Routes>
 

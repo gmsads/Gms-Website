@@ -180,6 +180,7 @@ router.get("/dashboard/chart-data", async (req, res) => {
   }
 });
 
+
 // ============================
 // GET all orders (with filtering)
 // ============================
@@ -187,7 +188,19 @@ router.get("/orders", async (req, res) => {
   try {
     let query = {};
 
-    // Filter by executive if specified
+    console.log('Query parameters:', req.query); // Debug log
+
+    // Filter by executive name if specified (for performance view)
+    if (req.query.executive) {
+      query.executive = req.query.executive;
+    }
+
+    // Filter by service executive if specified
+    if (req.query.serviceExecutive) {
+      query['rows.assignedExecutive'] = req.query.serviceExecutive;
+    }
+
+    // Filter by logged-in executive if role is Executive
     if (req.query.role === "Executive") {
       query.executive = req.query.name;
     }
@@ -210,7 +223,11 @@ router.get("/orders", async (req, res) => {
       };
     }
 
+    console.log('Final query:', query); // Debug log
+
     const orders = await Order.find(query);
+    console.log('Found orders:', orders.length); // Debug log
+    
     res.json(orders);
   } catch (err) {
     console.error("Error fetching orders:", err);
@@ -231,10 +248,7 @@ router.get("/orders/pending-payments", async (req, res) => {
   }
 });
 
-// ============================
-// GET orders with pending services
-// ============================
-// GET orders with pending services and executive assignments
+
 // ============================
 // GET orders with pending services
 // ============================

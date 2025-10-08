@@ -1055,6 +1055,7 @@ const ServiceDashboard = () => {
         >
           Dashboard
         </NavLink>
+        
         <NavLink
           to="/service-dashboard/expenses"
           style={({ isActive }) => ({
@@ -1160,7 +1161,27 @@ const ServiceDashboard = () => {
         >
         View Daily Report
         </NavLink>
-
+  <NavLink
+          to="/service-dashboard/inventory"
+          style={({ isActive }) => ({
+            padding: '15px 25px',
+            cursor: 'pointer',
+            borderBottom: '1px solid rgba(255,255,255,0.2)',
+            color: 'white',
+            textDecoration: 'none',
+            display: 'block',
+            transition: 'background-color 0.3s',
+            fontSize: '16px',
+            fontWeight: '500',
+            ...(isActive ? {
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              fontWeight: 'bold',
+              fontSize: '16px',
+            } : {})
+          })}
+        >
+        Office Inventory
+        </NavLink>
         <NavLink
           to="/service-dashboard/hour"
           style={({ isActive }) => ({
@@ -1329,6 +1350,7 @@ const ServiceDashboard = () => {
         >
           View Appointments
         </NavLink>
+         
         <NavLink
           to="/service-dashboard/prospects"
           style={({ isActive }) => ({

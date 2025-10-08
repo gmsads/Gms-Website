@@ -2,8 +2,13 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { saveAs } from 'file-saver';
+import { Document, Packer, Paragraph, Table, TableCell, TableRow, WidthType, AlignmentType, TextRun } from 'docx';
 
-function PendingPayment() {
+// Import jsPDF only (no jspdf-autotable)
+import jsPDF from 'jspdf';
+
+function PendingPayment({ executiveFilter = null }) {
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,6 +32,7 @@ function PendingPayment() {
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'today', 'other'
+  const [exportLoading, setExportLoading] = useState(false);
   
   const monthLabels = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -50,7 +56,7 @@ function PendingPayment() {
       }
     }
     fetchOrders();
-  }, [location]);
+  }, [location, executiveFilter]);
 
   useEffect(() => {
     applyFilters();
@@ -65,8 +71,17 @@ function PendingPayment() {
           _: new Date().getTime() // Cache buster
         }
       });
+      
+      // Filter orders by executive if executiveFilter is provided
+      let filteredData = res.data;
+      if (executiveFilter) {
+        filteredData = filteredData.filter(order => 
+          order?.executive?.toLowerCase() === executiveFilter.toLowerCase()
+        );
+      }
+      
       // Sort orders by orderDate descending (newest first) and then by createdAt descending
-      const sortedOrders = res.data
+      const sortedOrders = filteredData
         .filter(order => order && order.balance > 0)
         .sort((a, b) => {
           // First sort by orderDate (newest first)
@@ -238,6 +253,35 @@ function PendingPayment() {
     }
   };
 
+  // Get current filter description for export files
+  const getFilterDescription = () => {
+    let description = '';
+    
+    if (executiveFilter) {
+      description += `${executiveFilter}'s `;
+    }
+    
+    if (activeFilter === 'today') {
+      description += "Today's Delivery Orders";
+    } else if (activeFilter === 'other') {
+      description += "Other Pending Orders";
+    } else {
+      description += "All Pending Orders";
+    }
+    
+    if (selectedMonth !== null) {
+      description += ` - ${monthLabels[selectedMonth]} ${year}`;
+    } else if (year !== new Date().getFullYear()) {
+      description += ` - Year ${year}`;
+    }
+    
+    if (searchTerm) {
+      description += ` - Search: "${searchTerm}"`;
+    }
+    
+    return description;
+  };
+
   const handleExportToExcel = () => {
     const exportData = filteredOrders.map((order, orderIndex) => ({
       'S.No': orderIndex + 1,
@@ -256,7 +300,225 @@ function PendingPayment() {
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'PendingPayments');
-    XLSX.writeFile(workbook, 'pending_payments.xlsx');
+    
+    const fileName = `pending_payments_${getFilterDescription().replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
+
+  const handleExportToWord = async () => {
+    setExportLoading(true);
+    try {
+      // Table headers
+      const tableHeaders = [
+        'S.No',
+        'Executive',
+        'Business',
+        'Customer',
+        'Contact',
+        'Total',
+        'Advance',
+        'Balance',
+        'Delivery Date',
+        'Order Date'
+      ];
+
+      // Table rows
+      const tableRows = filteredOrders.map((order, index) => [
+        (index + 1).toString(),
+        order?.executive || '',
+        order?.business || '',
+        order?.contactPerson || '',
+        `${order?.contactCode || ''} ${order?.phone || ''}`.trim(),
+        `₹${(order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0) || 0).toLocaleString()}`,
+        `₹${(order?.advance || 0).toLocaleString()}`,
+        `₹${(order?.balance || 0).toLocaleString()}`,
+        getDeliveryDate(order),
+        order?.orderDate ? new Date(order.orderDate).toLocaleDateString() : ''
+      ]);
+
+      // Create table
+      const table = new Table({
+        width: {
+          size: 100,
+          type: WidthType.PERCENTAGE,
+        },
+        rows: [
+          // Header row
+          new TableRow({
+            children: tableHeaders.map(header => 
+              new TableCell({
+                children: [new Paragraph({
+                  children: [new TextRun({ text: header, bold: true })],
+                  alignment: AlignmentType.CENTER,
+                })],
+                shading: {
+                  fill: "4472C4",
+                },
+              })
+            ),
+          }),
+          // Data rows
+          ...tableRows.map(row => 
+            new TableRow({
+              children: row.map(cell => 
+                new TableCell({
+                  children: [new Paragraph({ text: cell })],
+                })
+              ),
+            })
+          ),
+        ],
+      });
+
+      // Create document
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({
+              children: [new TextRun({ text: "Pending Payments Report", bold: true, size: 32 })],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 400 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: `Filter: ${getFilterDescription()}`, bold: true, size: 24 })],
+              spacing: { after: 200 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: `Generated on: ${new Date().toLocaleDateString()}`, size: 20 })],
+              spacing: { after: 400 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: `Total Orders: ${filteredOrders.length} | Total Pending Amount: ₹${totalPendingAmount.toLocaleString()}`, bold: true, size: 22 })],
+              spacing: { after: 400 },
+            }),
+            table,
+          ],
+        }],
+      });
+
+      // Generate and download
+      const blob = await Packer.toBlob(doc);
+      const fileName = `pending_payments_${getFilterDescription().replace(/[^a-zA-Z0-9]/g, '_')}.docx`;
+      saveAs(blob, fileName);
+    } catch (error) {
+      console.error('Error generating Word document:', error);
+      alert('Error generating Word document. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleExportToPDF = () => {
+    setExportLoading(true);
+    try {
+      const doc = new jsPDF();
+      
+      // Title
+      doc.setFontSize(16);
+      doc.setTextColor(40);
+      doc.text('Pending Payments Report', 105, 15, { align: 'center' });
+      
+      // Filter info
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      
+      const filterDesc = `Filter: ${getFilterDescription()}`;
+      const generatedOn = `Generated on: ${new Date().toLocaleDateString()}`;
+      const summary = `Total Orders: ${filteredOrders.length} | Total Pending Amount: ₹${totalPendingAmount.toLocaleString()}`;
+      
+      doc.text(filterDesc, 14, 25);
+      doc.text(generatedOn, 14, 32);
+      doc.text(summary, 14, 39);
+      
+      // Create table manually
+      const headers = ['S.No', 'Executive', 'Business', 'Customer', 'Contact', 'Total', 'Advance', 'Balance', 'Delivery Date'];
+      const columnWidths = [15, 25, 30, 25, 30, 25, 25, 25, 25];
+      const startX = 10;
+      let startY = 50;
+      
+      // Table header
+      doc.setFillColor(68, 114, 196);
+      doc.setTextColor(255);
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'bold');
+      
+      let currentX = startX;
+      headers.forEach((header, index) => {
+        doc.rect(currentX, startY, columnWidths[index], 6, 'F');
+        doc.text(header, currentX + 2, startY + 4);
+        currentX += columnWidths[index];
+      });
+      
+      // Table rows
+      doc.setTextColor(0);
+      doc.setFont(undefined, 'normal');
+      startY += 6;
+      
+      filteredOrders.forEach((order, index) => {
+        if (startY > 270) { // Add new page if running out of space
+          doc.addPage();
+          startY = 20;
+        }
+        
+        const rowData = [
+          (index + 1).toString(),
+          order?.executive?.substring(0, 12) || '',
+          order?.business?.substring(0, 15) || '',
+          order?.contactPerson?.substring(0, 12) || '',
+          `${order?.contactCode || ''} ${order?.phone || ''}`.trim().substring(0, 15),
+          `₹${(order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0) || 0).toLocaleString()}`,
+          `₹${(order?.advance || 0).toLocaleString()}`,
+          `₹${(order?.balance || 0).toLocaleString()}`,
+          getDeliveryDate(order).substring(0, 10)
+        ];
+        
+        currentX = startX;
+        rowData.forEach((cell, cellIndex) => {
+          doc.text(cell, currentX + 2, startY + 4);
+          currentX += columnWidths[cellIndex];
+        });
+        
+        // Add horizontal line
+        doc.setDrawColor(200, 200, 200);
+        doc.line(startX, startY + 6, startX + columnWidths.reduce((a, b) => a + b, 0), startY + 6);
+        
+        startY += 6;
+      });
+      
+      const fileName = `pending_payments_${getFilterDescription().replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      doc.save(fileName);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      
+      // Ultra simple fallback
+      try {
+        const doc = new jsPDF();
+        doc.text('Pending Payments Report', 20, 20);
+        doc.text(`Filter: ${getFilterDescription()}`, 20, 30);
+        doc.text(`Total Orders: ${filteredOrders.length}`, 20, 40);
+        doc.text(`Total Pending Amount: ₹${totalPendingAmount.toLocaleString()}`, 20, 50);
+        doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 60);
+        
+        let yPos = 80;
+        filteredOrders.forEach((order, index) => {
+          if (yPos > 270) {
+            doc.addPage();
+            yPos = 20;
+          }
+          doc.text(`${index + 1}. ${order?.business || 'N/A'} - ₹${order?.balance || 0}`, 20, yPos);
+          yPos += 10;
+        });
+        
+        const fileName = `pending_payments_${getFilterDescription().replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+        doc.save(fileName);
+      } catch (fallbackError) {
+        console.error('Fallback PDF generation failed:', fallbackError);
+        alert('Error generating PDF. Please try exporting to Excel or Word instead.');
+      }
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   // Calculate total pending amount with null checks
@@ -275,7 +537,7 @@ function PendingPayment() {
     color: activeFilter === filterType ? 'white' : '#2c3e50',
   });
 
-  // Updated styles with delivery date column
+  // Updated styles with export buttons
   const styles = {
     container: {
       padding: '20px',
@@ -457,9 +719,32 @@ function PendingPayment() {
       justifyContent: 'center',
       gap: '15px',
       marginTop: '20px',
+      flexWrap: 'wrap',
     },
     excelButton: {
       backgroundColor: '#16a085',
+      color: 'white',
+      border: 'none',
+      padding: '10px 20px',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: '14px',
+      fontWeight: '600',
+      transition: 'all 0.2s',
+    },
+    wordButton: {
+      backgroundColor: '#2c5fa3',
+      color: 'white',
+      border: 'none',
+      padding: '10px 20px',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: '14px',
+      fontWeight: '600',
+      transition: 'all 0.2s',
+    },
+    pdfButton: {
+      backgroundColor: '#e74c3c',
       color: 'white',
       border: 'none',
       padding: '10px 20px',
@@ -555,7 +840,9 @@ function PendingPayment() {
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.title}>Pending Payments</h2>
+      <h2 style={styles.title}>
+        {executiveFilter ? `${executiveFilter}'s Pending Payments` : 'Pending Payments'}
+      </h2>
 
       {/* Filter Buttons */}
       <div style={styles.filterButtonsContainer}>
@@ -709,8 +996,26 @@ function PendingPayment() {
       )}
 
       <div style={styles.footerButtons}>
-        <button onClick={handleExportToExcel} style={styles.excelButton}>
-          Export to Excel
+        <button 
+          onClick={handleExportToExcel} 
+          style={styles.excelButton}
+          disabled={exportLoading || filteredOrders.length === 0}
+        >
+          {exportLoading ? 'Exporting...' : 'Export to Excel'}
+        </button>
+        <button 
+          onClick={handleExportToWord} 
+          style={styles.wordButton}
+          disabled={exportLoading || filteredOrders.length === 0}
+        >
+          {exportLoading ? 'Exporting...' : 'Export to Word'}
+        </button>
+        <button 
+          onClick={handleExportToPDF} 
+          style={styles.pdfButton}
+          disabled={exportLoading || filteredOrders.length === 0}
+        >
+          {exportLoading ? 'Exporting...' : 'Export to PDF'}
         </button>
         <button onClick={() => navigate(-1)} style={styles.backButton}>
           Back

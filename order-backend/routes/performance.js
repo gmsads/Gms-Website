@@ -3,8 +3,8 @@ const router = express.Router();
 const dayjs = require('dayjs');
 
 const Executive = require('../models/Executive');
-const ServiceExecutive = require('../models/ServiceExecutive'); // Add this model
-const Account = require('../models/Account'); // Add this model
+const ServiceExecutive = require('../models/ServiceExecutive');
+const Account = require('../models/Account');
 const ProspectiveClient = require('../models/ProspectiveClients');
 const Report = require('../models/ExecutiveRecord');
 const Target = require('../models/Target');
@@ -16,6 +16,14 @@ const safeSum = (array, field) => {
     const value = Number(item[field]);
     return sum + (isNaN(value) ? 0 : value);
   }, 0);
+};
+
+// Helper function to get month-year key from date
+const getMonthYearKey = (date) => {
+  const d = new Date(date);
+  const month = d.getMonth() + 1;
+  const year = d.getFullYear();
+  return `${year}-${month}`;
 };
 
 // ========================================
@@ -104,7 +112,6 @@ router.get('/', async (req, res) => {
     ]);
 
     // Calculate totals with proper validation
-    const totalProspects = prospects.length;
     const totalCalls = safeSum(reports, 'totalCalls');
     const totalWhatsapp = safeSum(reports, 'whatsapp');
     const totalOrders = orders.length;
@@ -128,7 +135,7 @@ router.get('/', async (req, res) => {
       ? callDurations.reduce((a, b) => a + (Number(b) || 0), 0) / callDurations.length
       : 0;
 
-    // Group targets by month-year and initialize order counts
+    // Group targets by month-year and initialize order counts and prospects
     const monthlyTargets = {};
     targets.forEach(target => {
       const key = `${target.year}-${target.month}`;
@@ -137,8 +144,9 @@ router.get('/', async (req, res) => {
         monthlyTargets[key] = {
           target: 0,
           achieved: 0,
-          advance: 0, // Initialize advance amount
+          advance: 0,
           orders: 0,
+          prospects: 0,
           month: target.month,
           year: target.year
         };
@@ -150,9 +158,7 @@ router.get('/', async (req, res) => {
     // Calculate achieved amounts, advance amounts and order counts by month
     orders.forEach(order => {
       const orderDate = new Date(order.orderDate);
-      const month = orderDate.getMonth() + 1;
-      const year = orderDate.getFullYear();
-      const key = `${year}-${month}`;
+      const key = getMonthYearKey(orderDate);
       
       if (monthlyTargets[key]) {
         const orderTotal = (order.rows || []).reduce((sum, row) => {
@@ -160,9 +166,33 @@ router.get('/', async (req, res) => {
         }, 0);
         
         monthlyTargets[key].achieved += orderTotal;
-        monthlyTargets[key].advance += Number(order.advance) || 0; // Add advance amount
+        monthlyTargets[key].advance += Number(order.advance) || 0;
         monthlyTargets[key].orders += 1;
       }
+    });
+
+    // Handle prospects - create entries and count in ONE LOOP (FIXED)
+    prospects.forEach(prospect => {
+      const prospectDate = new Date(prospect.createdAt);
+      const key = getMonthYearKey(prospectDate);
+      
+      if (!monthlyTargets[key]) {
+        const month = prospectDate.getMonth() + 1;
+        const year = prospectDate.getFullYear();
+        
+        monthlyTargets[key] = {
+          target: 0,
+          achieved: 0,
+          advance: 0,
+          orders: 0,
+          prospects: 0,
+          month: month,
+          year: year
+        };
+      }
+      
+      // Count each prospect only ONCE
+      monthlyTargets[key].prospects += 1;
     });
 
     // Calculate monthly metrics
@@ -171,6 +201,7 @@ router.get('/', async (req, res) => {
     const totalMonthlyAchieved = months.reduce((sum, m) => sum + m.achieved, 0);
     const totalMonthlyAdvance = months.reduce((sum, m) => sum + m.advance, 0);
     const totalMonthlyOrders = months.reduce((sum, m) => sum + m.orders, 0);
+    const totalMonthlyProspects = months.reduce((sum, m) => sum + m.prospects, 0);
     
     const monthDiff = Math.max(
       1,
@@ -179,6 +210,7 @@ router.get('/', async (req, res) => {
     
     const avgMonthlyTarget = Math.round(totalMonthlyTarget / monthDiff);
     const avgMonthlyOrders = Math.round(totalMonthlyOrders / monthDiff);
+    const avgMonthlyProspects = Math.round(totalMonthlyProspects / monthDiff);
     const achievedPercentage = totalMonthlyTarget > 0
       ? Math.round((totalMonthlyAchieved / totalMonthlyTarget) * 100)
       : 0;
@@ -188,27 +220,36 @@ router.get('/', async (req, res) => {
       month: dayjs(`${m.year}-${m.month}-01`).format('MMM YYYY'),
       target: m.target,
       achieved: m.achieved,
-      advance: m.advance, // Include advance in monthly data
+      advance: m.advance,
       orders: m.orders,
+      prospects: m.prospects,
       percentage: m.target > 0 ? Math.round((m.achieved / m.target) * 100) : 0
     }));
+
+    // Sort monthly data by year and month (newest first)
+    detailedMonthlyData.sort((a, b) => {
+      const dateA = new Date(a.month);
+      const dateB = new Date(b.month);
+      return dateB - dateA; // Descending order (newest first)
+    });
 
     // Build response
     const performanceData = {
       executiveName: executiveName,
-      executiveId: executive._id, // Return the actual ID
-      executiveType: executiveType, // Return the type
+      executiveId: executive._id,
+      executiveType: executiveType,
       dateOfJoining: executive.dateOfJoining || '2025-03-01',
       avgMonthlyTarget,
       avgMonthlyOrders,
-      totalProspects,
+      avgMonthlyProspects,
+      totalProspects: totalMonthlyProspects, // Use the calculated total from monthly data
       totalCalls,
       totalWhatsapp,
       totalOrders,
       avgCallDuration: avgCallDuration.toFixed(2),
       target: totalMonthlyTarget,
       achieved: totalMonthlyAchieved,
-      advance: totalMonthlyAdvance, // Include total advance in response
+      advance: totalMonthlyAdvance,
       achievedPercentage,
       detailedData: {
         byMonth: detailedMonthlyData

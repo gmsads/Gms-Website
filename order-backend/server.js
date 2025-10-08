@@ -34,6 +34,7 @@ const designRoutes = require("./routes/designRequests");
 const expensesRoute = require('./routes/expenses');
 const fieldExecutiveRoutes = require('./routes/fieldExecutive');
 const designersRoutes = require('./routes/designers');
+const uploadRoute = require('./routes/uploadRoute.js');
 // Initialize Express
 const app = express();
 runReminderCron();
@@ -41,8 +42,10 @@ runReminderCron();
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // SERVING UPLOADS
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
+// Upload endpoint
+app.use("/api/upload", uploadRoute);
 // Routes - SPECIFIC ROUTES FIRST
 app.use('/api/anniversaries', anniversaryRoutes);
 app.use('/api/expenses', expensesRoute);
@@ -65,6 +68,7 @@ app.use("/api/logout-history", logoutHistoryRoutes);
 app.use("/api/design-requests", designRoutes);
 app.use('/api/field-executive', fieldExecutiveRoutes);
 app.use('/api/designers', designersRoutes);
+
 // AUTH ROUTES (contains add-field-executive)
 app.use("/api", authRoutes);
 
@@ -73,7 +77,7 @@ app.use("/api", orderRoutes);
 app.use("/api", checkClientRoutes);
 app.use("/api", serviceExecutiveRoutes);
 app.use("/api", employeeRoutes);
-
+app.use('/api/employees', require('./routes/employees'));
 // Be careful with this catch-all route - it might conflict
 // app.use("/api", router);
 

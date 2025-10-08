@@ -31,116 +31,114 @@ const AddExecutiveAdmin = () => {
   };
 
   // Add async keyword here
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-  
-    // Basic validation
-    if (!formData.username || !formData.name || !formData.phone || !formData.password) {
-      setPopupMessage('Please fill all required fields');
-      setShowPopup(true);
-      setIsSubmitting(false);
-      return;
-    }
-  
-    // Validate image if uploaded
-    if (image) {
-      const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
-      if (!validTypes.includes(image.type)) {
-        setPopupMessage('Only JPEG, PNG, and GIF images are allowed');
-        setShowPopup(true);
-        setIsSubmitting(false);
-        return;
-      }
-  
-      if (image.size > 2 * 1024 * 1024) {
-        setPopupMessage('Image size should be less than 2MB');
-        setShowPopup(true);
-        setIsSubmitting(false);
-        return;
-      }
-    }
-  
-    // Map frontend role values to backend endpoints
-    const roleEndpointMap = {
-      'executive': 'add-executive',
-      'admin': 'add-admin',
-      'designer': 'add-designer',
-      'account': 'add-account',
-      'Service Executive': 'add-service-executive',
-      'Service Manager': 'add-service-manager',
-      'Sales Manager': 'add-sales-manager',
-      'IT Team': 'add-it-team',
-      'Digital Marketing': 'add-digital-marketing',
-      'Client Service': 'add-clientservice',
-      'unit': 'add-unit',
-      'FieldExecutive': 'add-field-executive'
-    };
-  
-    const endpoint = roleEndpointMap[formData.role];
-    
-    if (!endpoint) {
-      setPopupMessage('Invalid role selected');
-      setShowPopup(true);
-      setIsSubmitting(false);
-      return;
-    }
-  
-    const data = new FormData();
-    for (const key in formData) {
-      if (key !== 'role') { // Don't send role in form data
-        data.append(key, formData[key]);
-      }
-    }
-    if (image) {
-      data.append('image', image);
-    }
-  
-    try {
-      // eslint-disable-next-line no-unused-vars
-      const response = await axios.post(`${API_BASE_URL}/${endpoint}`, data, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      setPopupMessage('Employee added successfully!');
-      setShowPopup(true);
-      
-      // Reset form
-      setFormData({
-        username: '',
-        name: '',
-        phone: '',
-        password: '',
-        email: '',
-        guardianName: '',
-        aadhar: '',
-        joiningDate: '',
-        experience: '',
-        role: 'executive',
-        active: true,
-      });
-      setImage(null);
-    } catch (error) {
-      let message = 'Failed to add employee';
-      if (error.response) {
-        if (error.response.status === 404) {
-          message = `Endpoint not found (404) - ${endpoint} does not exist on server`;
-        } else {
-          message = error.response.data.error || error.response.data.message || message;
-        }
-      } else if (error.request) {
-        message = 'No response from server - is it running?';
-      } else {
-        message = error.message;
-      }
-      setPopupMessage(message);
-      setShowPopup(true);
-    } finally {
-      setIsSubmitting(false);
-    }
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setIsSubmitting(true);
+
+  // Basic validation
+  if (!formData.username || !formData.name || !formData.phone || !formData.password) {
+    setPopupMessage('Please fill all required fields');
+    setShowPopup(true);
+    setIsSubmitting(false);
+    return;
+  }
+
+  // Map frontend role values to backend endpoints
+  const roleEndpointMap = {
+    'executive': 'add-executive',
+    'admin': 'add-admin',
+    'designer': 'add-designer',
+    'account': 'add-account',
+    'Service Executive': 'add-service-executive',
+    'Service Manager': 'add-service-manager',
+    'Sales Manager': 'add-sales-manager',
+    'IT Team': 'add-it-team',
+    'Digital Marketing': 'add-digital-marketing',
+    'Client Service': 'add-clientservice',
+    'unit': 'add-unit',
+    'FieldExecutive': 'add-field-executive'
   };
+
+  const endpoint = roleEndpointMap[formData.role];
+  
+  if (!endpoint) {
+    setPopupMessage('Invalid role selected');
+    setShowPopup(true);
+    setIsSubmitting(false);
+    return;
+  }
+
+  // TEMPORARY: Create JSON payload instead of FormData
+  const payload = {
+    username: formData.username,
+    name: formData.name,
+    phone: formData.phone,
+    password: formData.password,
+    email: formData.email || '',
+    guardianName: formData.gardianName || '',
+    aadhar: formData.aadhar || '',
+    joiningDate: formData.joiningDate || '',
+    experience: formData.experience || '',
+    active: formData.active
+  };
+
+  // For FieldExecutive, we still need to handle image separately
+  if (formData.role === 'FieldExecutive' && image) {
+    setPopupMessage('For Field Executive with image, please use the original form data method');
+    setShowPopup(true);
+    setIsSubmitting(false);
+    return;
+  }
+
+  console.log("🔄 Sending JSON payload:", payload);
+  console.log("🌐 Endpoint:", endpoint);
+
+  try {
+    const response = await axios.post(`${API_BASE_URL}/${endpoint}`, payload, {
+      headers: {
+        'Content-Type': 'application/json', // Change to JSON
+      },
+    });
+    
+    console.log("✅ Success response:", response.data);
+    setPopupMessage('Employee added successfully!');
+    setShowPopup(true);
+    
+    // Reset form
+    setFormData({
+      username: '',
+      name: '',
+      phone: '',
+      password: '',
+      email: '',
+      guardianName: '',
+      aadhar: '',
+      joiningDate: '',
+      experience: '',
+      role: 'executive',
+      active: true,
+    });
+    setImage(null);
+  } catch (error) {
+    console.error("❌ Error details:", error);
+    let message = 'Failed to add employee';
+    if (error.response) {
+      if (error.response.status === 404) {
+        message = `Endpoint not found (404) - ${endpoint} does not exist on server`;
+      } else {
+        message = error.response.data.error || error.response.data.message || message;
+      }
+    } else if (error.request) {
+      message = 'No response from server - is it running?';
+    } else {
+      message = error.message;
+    }
+    setPopupMessage(message);
+    setShowPopup(true);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
   const styles = {
     formContainer: {
       backgroundColor: '#fff',

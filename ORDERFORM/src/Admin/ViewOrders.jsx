@@ -31,6 +31,11 @@ function ViewOrders() {
   const [error, setError] = useState(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [clientTypeFilter, setClientTypeFilter] = useState(null);
+  const [appliedExecutiveFilters, setAppliedExecutiveFilters] = useState({
+    executive: '',
+    executiveType: '',
+    executiveName: ''
+  });
 
   // Router hooks
   const location = useLocation();
@@ -51,7 +56,7 @@ function ViewOrders() {
   // Format date to DD-MM-YYYY
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    
+
     try {
       const parts = dateString.split('-');
       if (parts.length === 3) {
@@ -62,14 +67,14 @@ function ViewOrders() {
           return `${parts[2]}-${parts[1]}-${parts[0]}`;
         }
       }
-      
+
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return dateString;
-      
+
       const day = date.getDate().toString().padStart(2, '0');
       const month = (date.getMonth() + 1).toString().padStart(2, '0');
       const year = date.getFullYear();
-      
+
       return `${day}-${month}-${year}`;
     } catch {
       return dateString;
@@ -79,10 +84,10 @@ function ViewOrders() {
   // Group orders by month for 2025 only
   const groupOrdersByMonth = (orders) => {
     const grouped = {};
-    
+
     orders.forEach(order => {
       let date;
-      
+
       if (order.orderDate && typeof order.orderDate === 'string') {
         const parts = order.orderDate.split('-');
         if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
@@ -93,27 +98,27 @@ function ViewOrders() {
       } else {
         date = new Date(order.orderDate);
       }
-      
+
       if (isNaN(date.getTime())) {
         console.warn('Invalid order date:', order.orderDate);
         return;
       }
-      
+
       const month = date.getMonth() + 1;
       const year = date.getFullYear();
-      
+
       if (year !== 2025) return;
-      
+
       const monthStr = month.toString().padStart(2, '0');
       const monthYearKey = `2025-${monthStr}`;
-      
+
       // Initialize the month if it doesn't exist
       if (!grouped[monthYearKey]) {
-        const monthYearName = new Date(2025, month - 1).toLocaleString('default', { 
-          month: 'long', 
-          year: 'numeric' 
+        const monthYearName = new Date(2025, month - 1).toLocaleString('default', {
+          month: 'long',
+          year: 'numeric'
         });
-        
+
         grouped[monthYearKey] = {
           name: monthYearName,
           orders: [],
@@ -124,22 +129,22 @@ function ViewOrders() {
           }
         };
       }
-      
+
       let orderAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
       const orderAdvance = parseFloat(order.advance) || 0;
       const orderBalance = parseFloat(order.balance) || 0;
-      
+
       grouped[monthYearKey].totals.amount += orderAmount;
       grouped[monthYearKey].totals.advance += orderAdvance;
       grouped[monthYearKey].totals.balance += orderBalance;
-      
+
       grouped[monthYearKey].orders.push(order);
     });
-    
+
     return grouped;
   };
 
-  // Calculate totals for summary cards - MODIFIED TO ONLY INCLUDE REQUESTED TOTALS
+  // Calculate totals for summary cards
   const calculateTotals = () => {
     let totalAmount = 0;
     let totalAdvance = 0;
@@ -163,9 +168,9 @@ function ViewOrders() {
     };
   };
 
-  const { 
-    totalAmount, 
-    totalAdvance, 
+  const {
+    totalAmount,
+    totalAdvance,
     totalBalance
   } = calculateTotals();
 
@@ -175,80 +180,162 @@ function ViewOrders() {
     const month = params.get('month');
     const year = params.get('year');
     const clientType = params.get('clientType');
-    
+    const executive = params.get('executive');
+    const executiveType = params.get('executiveType');
+    const executiveName = params.get('executiveName');
+
     if (month) setMonthFilter(parseInt(month));
     if (year) setYearFilter(parseInt(year));
     if (clientType) setClientTypeFilter(clientType);
-    
+
+    // Store executive filter parameters
+    if (executive || executiveType || executiveName) {
+      setAppliedExecutiveFilters({
+        executive,
+        executiveType,
+        executiveName: executiveName ? decodeURIComponent(executiveName) : ''
+      });
+    }
+
     const role = localStorage.getItem('role');
     const name = localStorage.getItem('name');
     setUserRole(role);
     setExecutiveName(name);
-    
-    fetchOrders(role, name, month, year, clientType);
+
+    fetchOrders(role, name, month, year, clientType, executive, executiveName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
-  // Fetch orders from API with filters
-  const fetchOrders = async (role, name, month = null, year = null, clientType = null) => {
-    setLoading(true);
-    setError(null);
-    try {
-      let url = API_ENDPOINTS.ORDERS;
-      const params = new URLSearchParams();
-      
-      if (role === 'Executive') {
-        params.append('executive', name);
+// Fetch orders from API with filters (client-side filtering version)
+const fetchOrders = async (role, name, month = null, year = null, clientType = null, executive = null, executiveName = null) => {
+  setLoading(true);
+  setError(null);
+  try {
+    let url = API_ENDPOINTS.ORDERS;
+    const params = new URLSearchParams();
+
+    console.log('Fetching orders with params:', {
+      role, name, month, year, clientType, executive, executiveName
+    });
+
+    // Get all orders first
+    const res = await axios.get(url);
+    console.log('Total orders received:', res.data.length);
+
+    let filteredOrders = res.data;
+
+    // Apply executive filters client-side
+    if (executive && executiveName) {
+      const executiveType = new URLSearchParams(location.search).get('executiveType');
+      console.log('Executive filter applied:', { executiveType, executiveName });
+
+      if (executiveType === 'executive') {
+        // Filter by sales executive - SAFER VERSION
+        filteredOrders = filteredOrders.filter(order => {
+          const orderExecutive = order.executive || '';
+          const searchName = executiveName || '';
+          return orderExecutive.toString().toLowerCase().includes(searchName.toLowerCase());
+        });
+      } else if (executiveType === 'service') {
+        // Filter by service executive in rows - SAFER VERSION
+        filteredOrders = filteredOrders.filter(order => {
+          if (!order.rows || !Array.isArray(order.rows)) return false;
+          return order.rows.some(row => {
+            const assignedExecutive = row.assignedExecutive || '';
+            const searchName = executiveName || '';
+            return assignedExecutive.toString().toLowerCase().includes(searchName.toLowerCase());
+          });
+        });
+      } else if (executiveType === 'account') {
+        // Filter by account executive - SAFER VERSION
+        filteredOrders = filteredOrders.filter(order => {
+          const accountExecutive = order.accountExecutive || '';
+          const searchName = executiveName || '';
+          return accountExecutive.toString().toLowerCase().includes(searchName.toLowerCase());
+        });
       }
-      if (month && year) {
-        params.append('month', month);
-        params.append('year', year);
-      }
-      if (clientType) {
-        params.append('clientType', clientType);
-      }
-      
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
-      
-      const res = await axios.get(url);
-      
-      const filteredOrders = res.data.filter(order => {
-        const orderDate = new Date(order.orderDate);
-        return orderDate.getFullYear() === 2025;
+      console.log('Orders after executive filter:', filteredOrders.length);
+    } else if (role === 'Executive') {
+      // If logged in as executive, show only their orders - SAFER VERSION
+      console.log('Filtering for logged-in executive:', name);
+      filteredOrders = filteredOrders.filter(order => {
+        const orderExecutive = order.executive || '';
+        const userName = name || '';
+        return orderExecutive.toString().toLowerCase().includes(userName.toLowerCase());
       });
-      
-      const sortedOrders = filteredOrders.sort((a, b) => {
-        const dateA = new Date(a.orderDate);
-        const dateB = new Date(b.orderDate);
-        return dateB - dateA;
-      });
-      
-      setOrders(sortedOrders);
-      setGroupedOrders(groupOrdersByMonth(sortedOrders));
-    } catch (err) {
-      console.error('Error fetching orders:', err);
-      setError('Failed to fetch orders. Please try again.');
-      toast.error('Failed to fetch orders. Please try again.');
-    } finally {
-      setLoading(false);
+      console.log('Orders after role filter:', filteredOrders.length);
     }
-  };
 
-  // Clear all filters
-  const clearAllFilters = () => {
-    setMonthFilter(null);
-    setYearFilter(2025);
-    setClientTypeFilter(null);
-    navigate('/admin-dashboard/view-orders');
-  };
+    // Apply month and year filter
+    if (month && year) {
+      console.log('Applying month/year filter:', { month, year });
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.orderDate) return false;
+        const orderDate = new Date(order.orderDate);
+        if (isNaN(orderDate.getTime())) return false;
+        return orderDate.getMonth() + 1 === parseInt(month) &&
+          orderDate.getFullYear() === parseInt(year);
+      });
+      console.log('Orders after month filter:', filteredOrders.length);
+    }
 
-  // Clear client type filter only
-  const clearClientTypeFilter = () => {
-    const params = new URLSearchParams(location.search);
-    params.delete('clientType');
-    navigate(`/admin-dashboard/view-orders?${params.toString()}`);
-  };
+    // Apply client type filter
+    if (clientType) {
+      console.log('Applying client type filter:', clientType);
+      filteredOrders = filteredOrders.filter(order => {
+        const orderClientType = order.clientType || '';
+        return orderClientType === clientType;
+      });
+      console.log('Orders after client type filter:', filteredOrders.length);
+    }
+
+    // Filter for 2025 only
+    filteredOrders = filteredOrders.filter(order => {
+      if (!order.orderDate) return false;
+      const orderDate = new Date(order.orderDate);
+      if (isNaN(orderDate.getTime())) return false;
+      return orderDate.getFullYear() === 2025;
+    });
+    console.log('Orders after 2025 filter:', filteredOrders.length);
+
+    const sortedOrders = filteredOrders.sort((a, b) => {
+      const dateA = new Date(a.orderDate || 0);
+      const dateB = new Date(b.orderDate || 0);
+      return dateB - dateA;
+    });
+
+    setOrders(sortedOrders);
+    setGroupedOrders(groupOrdersByMonth(sortedOrders));
+    
+    console.log('Final orders count:', sortedOrders.length);
+  } catch (err) {
+    console.error('Error fetching orders:', err);
+    setError('Failed to fetch orders. Please try again.');
+    toast.error('Failed to fetch orders. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Clear all filters
+const clearAllFilters = () => {
+  setMonthFilter(null);
+  setYearFilter(2025);
+  setClientTypeFilter(null);
+  setAppliedExecutiveFilters({
+    executive: '',
+    executiveType: '',
+    executiveName: ''
+  });
+  navigate('/admin-dashboard/view-orders');
+};
+
+// Clear client type filter only
+const clearClientTypeFilter = () => {
+  const params = new URLSearchParams(location.search);
+  params.delete('clientType');
+  navigate(`/admin-dashboard/view-orders?${params.toString()}`);
+};
 
   // Clear month filter
   const clearMonthFilter = () => {
@@ -258,29 +345,43 @@ function ViewOrders() {
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
   };
 
+  // Clear executive filter only
+  const clearExecutiveFilter = () => {
+    const params = new URLSearchParams(location.search);
+    params.delete('executive');
+    params.delete('executiveType');
+    params.delete('executiveName');
+    navigate(`/admin-dashboard/view-orders?${params.toString()}`);
+    setAppliedExecutiveFilters({
+      executive: '',
+      executiveType: '',
+      executiveName: ''
+    });
+  };
+
   // Format date for input fields (YYYY-MM-DD)
   const formatDateForInput = (dateString) => {
     if (!dateString) return '';
-    
+
     try {
       if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
         return dateString;
       }
-      
+
       if (typeof dateString === 'string' && dateString.includes('-')) {
         const parts = dateString.split('-');
         if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
           return `${parts[2]}-${parts[1]}-${parts[0]}`;
         }
       }
-      
+
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return '';
-      
+
       const year = date.getFullYear();
       const month = (date.getMonth() + 1).toString().padStart(2, '0');
       const day = date.getDate().toString().padStart(2, '0');
-      
+
       return `${year}-${month}-${day}`;
     } catch {
       return '';
@@ -314,13 +415,13 @@ function ViewOrders() {
   const handleEditRowChange = (index, field, value) => {
     const updatedRows = [...editingOrder.rows];
     updatedRows[index] = { ...updatedRows[index], [field]: value };
-    
+
     if (field === 'rate' || field === 'quantity') {
       const quantity = parseFloat(updatedRows[index].quantity) || 0;
       const rate = parseFloat(updatedRows[index].rate) || 0;
       updatedRows[index].total = (quantity * rate).toFixed(2);
     }
-    
+
     // Calculate discounted total when discount changes
     if (field === 'discount') {
       const discount = parseFloat(value) || 0;
@@ -331,7 +432,7 @@ function ViewOrders() {
         discountedTotal: (total - discount).toFixed(2)
       }));
     }
-    
+
     setEditingOrder(prev => ({ ...prev, rows: updatedRows }));
   };
 
@@ -341,7 +442,7 @@ function ViewOrders() {
     try {
       await axios.put(API_ENDPOINTS.UPDATE_ORDER(editingOrder._id), editingOrder);
       setShowModal(false);
-      fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter);
+      fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
       toast.success('Order updated successfully!');
     } catch (err) {
       console.error('Update failed:', err);
@@ -360,7 +461,7 @@ function ViewOrders() {
     try {
       await axios.delete(API_ENDPOINTS.DELETE_ORDER(orderToDelete));
       setShowDeleteConfirm(false);
-      fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter);
+      fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
       toast.success('Order deleted successfully!');
     } catch (err) {
       console.error('Error deleting order:', err);
@@ -373,12 +474,12 @@ function ViewOrders() {
     try {
       setPaymentLoading(true);
       setCurrentOrder(order);
-      
+
       // Get payments history from the order itself
       const payments = order.paymentHistory || [];
-      
+
       setPaymentHistory(payments);
-      
+
       // Set payment form with current balance as default amount
       setPaymentData({
         date: new Date().toISOString().split('T')[0],
@@ -387,7 +488,7 @@ function ViewOrders() {
         reference: '',
         note: ''
       });
-      
+
       setShowPaymentsModal(true);
     } catch (err) {
       console.error('Error in handleRecordPayment:', err);
@@ -407,7 +508,7 @@ function ViewOrders() {
 
     try {
       const paymentAmount = parseFloat(paymentData.amount);
-      
+
       if (!paymentAmount || isNaN(paymentAmount)) {
         toast.error('Please enter a valid payment amount');
         return;
@@ -439,7 +540,7 @@ function ViewOrders() {
       );
 
       toast.success('Payment recorded successfully!');
-      fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter);
+      fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
       setShowPaymentsModal(false);
     } catch (err) {
       console.error('Error recording payment:', err);
@@ -460,7 +561,7 @@ function ViewOrders() {
       return orderDate.getFullYear() === 2025;
     });
 
-    const flattenedOrders = orders2025.flatMap(order => 
+    const flattenedOrders = orders2025.flatMap(order =>
       order.rows.map(row => ({
         'S.No': orders2025.indexOf(order) + 1,
         'Executive': order.executive,
@@ -491,7 +592,7 @@ function ViewOrders() {
         'Payment Date': formatDate(order.paymentDate),
         'Payment Method': order.paymentMethod,
         'Cheque Number': order.chequeNumber,
-        'Payments': order.paymentHistory ? 
+        'Payments': order.paymentHistory ?
           order.paymentHistory.map(p => `${formatDate(p.date)}: ₹${p.amount} (${p.method})`).join('; ') : ''
       }))
     );
@@ -550,7 +651,7 @@ function ViewOrders() {
         }));
 
         await axios.post(API_ENDPOINTS.IMPORT_ORDERS, ordersToImport);
-        fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter);
+        fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
         toast.success('Orders imported successfully!');
       } catch (err) {
         console.error('Error importing orders:', err);
@@ -560,29 +661,52 @@ function ViewOrders() {
     reader.readAsArrayBuffer(file);
   };
 
-  // Filter orders for search functionality
-  const filterOrders = (order) => (row) => {
-    const valuesToSearch = [
-      order.executive, order.business, order.contactPerson, order.location, order.saleClosedBy,
-      `${order.contactCode} ${order.phone}`, order.orderNo, order.orderDate,
-      order.clientType, row.description, row.requirement, row.customRequirement,
-      row.quantity, row.rate, row.total, order.discount, order.discountedTotal,
-      row.deliveryDate, row.assignedExecutive, row.status, row.remark,
-      order.advance, order.balance, order.advanceDate, order.paymentDate,
-      order.paymentMethod, order.chequeNumber
-    ];
-    return valuesToSearch.some((val) =>
-      String(val).toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  };
+ // Filter orders for search functionality
+const filterOrders = (order) => (row) => {
+  const valuesToSearch = [
+    order.executive || '',
+    order.business || '',
+    order.contactPerson || '',
+    order.location || '',
+    order.saleClosedBy || '',
+    `${order.contactCode || ''} ${order.phone || ''}`,
+    order.orderNo || '',
+    order.orderDate || '',
+    order.clientType || '',
+    row.description || '',
+    row.requirement || '',
+    row.customRequirement || '',
+    row.quantity || '',
+    row.rate || '',
+    row.total || '',
+    order.discount || '',
+    order.discountedTotal || '',
+    row.deliveryDate || '',
+    row.assignedExecutive || '',
+    row.status || '',
+    row.remark || '',
+    order.advance || '',
+    order.balance || '',
+    order.advanceDate || '',
+    order.paymentDate || '',
+    order.paymentMethod || '',
+    order.chequeNumber || ''
+  ];
+  
+  return valuesToSearch.some((val) =>
+    String(val).toLowerCase().includes(searchTerm.toLowerCase())
+  );
+};
+
+
 
   // Loading state
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
         height: '100vh',
         backgroundColor: '#f9f9f9'
       }}>
@@ -597,15 +721,15 @@ function ViewOrders() {
   // Error state
   if (error) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
         height: '100vh',
         backgroundColor: '#f9f9f9',
         flexDirection: 'column'
       }}>
-        <div style={{ 
+        <div style={{
           backgroundColor: '#ffebee',
           padding: '20px',
           borderRadius: '8px',
@@ -614,8 +738,8 @@ function ViewOrders() {
         }}>
           <h2 style={{ color: '#c62828' }}>Error Loading Orders</h2>
           <p style={{ margin: '15px 0', color: '#333' }}>{error}</p>
-          <button 
-            onClick={() => fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter)}
+          <button
+            onClick={() => fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName)}
             style={{
               backgroundColor: '#1565c0',
               color: 'white',
@@ -636,10 +760,11 @@ function ViewOrders() {
     <div style={{ padding: '20px', backgroundColor: '#f9f9f9', minHeight: '100vh' }}>
       {/* Toast container */}
       <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999 }} />
-      
+
+     
       {/* Filter Display Section */}
-      <div style={{ 
-        display: 'flex', 
+      <div style={{
+        display: 'flex',
         flexDirection: 'column',
         gap: '10px',
         marginBottom: '20px',
@@ -647,13 +772,13 @@ function ViewOrders() {
         padding: '15px',
         borderRadius: '8px'
       }}>
-        {(monthFilter || clientTypeFilter) && (
+        {(monthFilter || clientTypeFilter || appliedExecutiveFilters.executiveName) && (
           <h3 style={{ margin: '0 0 10px 0' }}>Active Filters:</h3>
         )}
-        
+
         {monthFilter && (
-          <div style={{ 
-            display: 'flex', 
+          <div style={{
+            display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             backgroundColor: 'white',
@@ -663,7 +788,7 @@ function ViewOrders() {
             <span>
               <strong>Month:</strong> {new Date(2025, monthFilter - 1).toLocaleString('default', { month: 'long' })}
             </span>
-            <button 
+            <button
               onClick={clearMonthFilter}
               style={{
                 backgroundColor: '#f44336',
@@ -678,10 +803,10 @@ function ViewOrders() {
             </button>
           </div>
         )}
-        
+
         {clientTypeFilter && (
-          <div style={{ 
-            display: 'flex', 
+          <div style={{
+            display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             backgroundColor: 'white',
@@ -691,7 +816,7 @@ function ViewOrders() {
             <span>
               <strong>Client Type:</strong> {clientTypeFilter}
             </span>
-            <button 
+            <button
               onClick={clearClientTypeFilter}
               style={{
                 backgroundColor: '#f44336',
@@ -706,9 +831,41 @@ function ViewOrders() {
             </button>
           </div>
         )}
-        
-        {(monthFilter || clientTypeFilter) && (
-          <button 
+
+        {appliedExecutiveFilters.executiveName && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: 'white',
+            padding: '8px 12px',
+            borderRadius: '4px'
+          }}>
+            <span>
+              <strong>
+                {appliedExecutiveFilters.executiveType === 'executive' ? 'Sales Executive' :
+                  appliedExecutiveFilters.executiveType === 'service' ? 'Service Executive' :
+                    appliedExecutiveFilters.executiveType === 'account' ? 'Account Executive' : 'Executive'}:
+              </strong> {appliedExecutiveFilters.executiveName}
+            </span>
+            <button
+              onClick={clearExecutiveFilter}
+              style={{
+                backgroundColor: '#f44336',
+                color: 'white',
+                border: 'none',
+                padding: '4px 8px',
+                borderRadius: '3px',
+                cursor: 'pointer'
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
+        {(monthFilter || clientTypeFilter || appliedExecutiveFilters.executiveName) && (
+          <button
             onClick={clearAllFilters}
             style={{
               alignSelf: 'flex-end',
@@ -726,7 +883,7 @@ function ViewOrders() {
         )}
       </div>
 
-      {/* Admin Summary Cards - MODIFIED TO ONLY SHOW REQUESTED CARDS */}
+      {/* Admin Summary Cards */}
       {userRole === 'Admin' && (
         <div style={{
           display: 'flex',
@@ -771,8 +928,8 @@ function ViewOrders() {
             border: `1px solid ${totalBalance > 0 ? 'rgba(231, 76, 60, 0.3)' : 'rgba(39, 174, 96, 0.3)'}`
           }}>
             <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333' }}>Total Balance</div>
-            <div style={{ 
-              fontSize: '24px', 
+            <div style={{
+              fontSize: '24px',
               fontWeight: 'bold',
               color: totalBalance > 0 ? '#e74c3c' : '#27ae60'
             }}>
@@ -783,10 +940,10 @@ function ViewOrders() {
       )}
 
       {/* Search and Export/Import Controls */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: '20px',
         flexWrap: 'wrap',
         gap: '15px'
@@ -798,16 +955,16 @@ function ViewOrders() {
             placeholder="Search orders..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ 
-              padding: '12px 15px', 
-              width: '100%', 
-              borderRadius: '6px', 
+            style={{
+              padding: '12px 15px',
+              width: '100%',
+              borderRadius: '6px',
               border: '1px solid #ddd',
               fontSize: '16px'
             }}
           />
         </div>
-        
+
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '10px' }}>
           {/* Export to Excel Button */}
@@ -861,233 +1018,216 @@ function ViewOrders() {
             // Extract month numbers from keys
             const monthA = parseInt(keyA.split('-')[1]);
             const monthB = parseInt(keyB.split('-')[1]);
-            
+
             // Sort in descending order (most recent first)
             return monthB - monthA;
           })
           .map(([monthYearKey, group]) => (
-          <div key={monthYearKey} style={{ marginBottom: '30px' }}>
-            {/* Month Header */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              backgroundColor: '#218c74',
-              color: 'white',
-              padding: '12px 20px',
-              borderRadius: '8px 8px 0 0',
-              marginBottom: '2px'
-            }}>
-              <h3 style={{ margin: 0, fontSize: '18px' }}>{group.name}</h3>
-              <div style={{ display: 'flex', gap: '20px' }}>
-                {/* Month Total Amount */}
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Amount</div>
-                  <div style={{ fontWeight: 'bold', fontSize: '16px' }}>₹{group.totals.amount.toLocaleString('en-IN')}</div>
-                </div>
-                
-                {/* Month Total Advance */}
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Advance</div>
-                  <div style={{ fontWeight: 'bold', fontSize: '16px' }}>₹{group.totals.advance.toLocaleString('en-IN')}</div>
-                </div>
-                
-                {/* Month Total Balance */}
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Balance</div>
-                  <div style={{ 
-                    fontWeight: 'bold',
-                    fontSize: '16px',
-                    color: group.totals.balance > 0 ? '#ffeb3b' : 'white'
-                  }}>
-                    ₹{group.totals.balance.toLocaleString('en-IN')}
+            <div key={monthYearKey} style={{ marginBottom: '30px' }}>
+              {/* Month Header */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                backgroundColor: '#218c74',
+                color: 'white',
+                padding: '12px 20px',
+                borderRadius: '8px 8px 0 0',
+                marginBottom: '2px'
+              }}>
+                <h3 style={{ margin: 0, fontSize: '18px' }}>{group.name}</h3>
+                <div style={{ display: 'flex', gap: '20px' }}>
+                  {/* Month Total Amount */}
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Amount</div>
+                    <div style={{ fontWeight: 'bold', fontSize: '16px' }}>₹{group.totals.amount.toLocaleString('en-IN')}</div>
+                  </div>
+
+                  {/* Month Total Advance */}
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Advance</div>
+                    <div style={{ fontWeight: 'bold', fontSize: '16px' }}>₹{group.totals.advance.toLocaleString('en-IN')}</div>
+                  </div>
+
+                  {/* Month Total Balance */}
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Balance</div>
+                    <div style={{
+                      fontWeight: 'bold',
+                      fontSize: '16px',
+                      color: group.totals.balance > 0 ? '#ffeb3b' : 'white'
+                    }}>
+                      ₹{group.totals.balance.toLocaleString('en-IN')}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Orders Table - MODIFIED TO HAVE STICKY HEADERS */}
-            <div style={{ overflowX: 'auto', height: '500px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
-                <thead style={{ backgroundColor: '#218c74', color: '#fff', position: 'sticky', top: 0, zIndex: 10 }}>
-                  <tr>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>S.No</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Executive</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Business</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Customer</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Location</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Sale Closed By</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Contact</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Order No</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Order Date</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Client Type</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Description</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Requirement</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Qty</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Rate</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Total</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Discount</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center' , backgroundColor: '#218c74'}}>Final Amount</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center' , backgroundColor: '#218c74'}}>Delivery Date</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Service Assigned</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Status</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center' , backgroundColor: '#218c74'}}>Advance</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center' , backgroundColor: '#218c74'}}>Balance</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Advance Date</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center' , backgroundColor: '#218c74'}}>Payment Date</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Payment Method</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Cheque Number</th>
-                    <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {group.orders.map((order, orderIndex) =>
-                    order.rows.filter(filterOrders(order)).map((row, rowIndex) => (
-                      <tr 
-                        key={`${order._id}-${rowIndex}`} 
-                        style={{ 
-                          backgroundColor: (orderIndex + rowIndex) % 2 === 0 ? '#fdfdfd' : '#f5f9fa',
-                          borderBottom: '1px solid #eee'
-                        }}
-                      >
-                        {/* Order Data Cells */}
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>{orderIndex + 1}</td>
-                        <td style={{ padding: '10px 8px' }}>{order.executive}</td>
-                        <td style={{ padding: '10px 8px' }}>{order.business}</td>
-                        <td style={{ padding: '10px 8px' }}>{order.contactPerson}</td>
-                        <td style={{ padding: '10px 8px' }}>{order.location}</td>
-                        <td style={{ padding: '10px 8px' }}>{order.saleClosedBy}</td>
-                        <td style={{ padding: '10px 8px' }}>{order.contactCode} {order.phone}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>{order.orderNo}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>{formatDate(order.orderDate)}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>{order.clientType}</td>
-                        <td style={{ padding: '10px 8px' }}>{row.description}</td>
-                        <td style={{ padding: '10px 8px' }}>{row.requirement}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'right' }}>{row.quantity}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'right' }}>{row.rate}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold' }}>{row.total}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'right', color: '#e67e22' }}>{order.discount}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>{order.discountedTotal}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>{formatDate(row.deliveryDate)}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'left' }}>
-                          {row.assignedExecutive ? (
+              {/* Orders Table - MODIFIED TO HAVE STICKY HEADERS */}
+              <div style={{ overflowX: 'auto', height: '500px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
+                  <thead style={{ backgroundColor: '#218c74', color: '#fff', position: 'sticky', top: 0, zIndex: 10 }}>
+                    <tr>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>S.No</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Executive</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Business</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Customer</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Location</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Sale Closed By</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Contact</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Order No</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Order Date</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Client Type</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Description</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Requirement</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Qty</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Rate</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Total</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Discount</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Final Amount</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Delivery Date</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Service Assigned</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Status</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Advance</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Balance</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Advance Date</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Payment Date</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Payment Method</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Cheque Number</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.orders.map((order, orderIndex) =>
+                      order.rows.filter(filterOrders(order)).map((row, rowIndex) => (
+                        <tr
+                          key={`${order._id}-${rowIndex}`}
+                          style={{
+                            backgroundColor: (orderIndex + rowIndex) % 2 === 0 ? '#fdfdfd' : '#f5f9fa',
+                            borderBottom: '1px solid #eee'
+                          }}
+                        >
+                          {/* Order Data Cells */}
+                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{orderIndex + 1}</td>
+                          <td style={{ padding: '10px 8px' }}>{order.executive}</td>
+                          <td style={{ padding: '10px 8px' }}>{order.business}</td>
+                          <td style={{ padding: '10px 8px' }}>{order.contactPerson}</td>
+                          <td style={{ padding: '10px 8px' }}>{order.location}</td>
+                          <td style={{ padding: '10px 8px' }}>{order.saleClosedBy}</td>
+                          <td style={{ padding: '10px 8px' }}>{order.contactCode} {order.phone}</td>
+                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{order.orderNo}</td>
+                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{formatDate(order.orderDate)}</td>
+                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{order.clientType}</td>
+                          <td style={{ padding: '10px 8px' }}>{row.description}</td>
+                          <td style={{ padding: '10px 8px' }}>{row.requirement}</td>
+                          <td style={{ padding: '10px 8px', textAlign: 'right' }}>{row.quantity}</td>
+                          <td style={{ padding: '10px 8px', textAlign: 'right' }}>{row.rate}</td>
+                          <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold' }}>{row.total}</td>
+                          <td style={{ padding: '10px 8px', textAlign: 'right', color: '#e67e22' }}>{order.discount}</td>
+                          <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>{order.discountedTotal}</td>
+                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{formatDate(row.deliveryDate)}</td>
+                          <td style={{ padding: '10px 8px', textAlign: 'left' }}>
+                            {row.assignedExecutive ? (
+                              <span style={{
+                                backgroundColor: '#e3f2fd',
+                                color: '#1565c0',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontWeight: 'bold',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}>
+                                {row.assignedExecutive}
+                              </span>
+                            ) : (
+                              <span style={{
+                                backgroundColor: '#fff3e0',
+                                color: '#e65100',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontWeight: 'bold',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}>
+                                Not Assigned
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>
                             <span style={{
-                              backgroundColor: '#e3f2fd',
-                              color: '#1565c0',
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              fontWeight: 'bold',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}>
-                              {row.assignedExecutive}
-                            </span>
-                          ) : (
-                            <span style={{
-                              backgroundColor: '#fff3e0',
-                              color: '#e65100',
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              fontWeight: 'bold',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}>
-                              Not Assigned
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                          <span style={{
-                            backgroundColor: row.status === 'Completed' ? '#d4edda' : 
-                                          row.status === 'In Progress' ? '#fff3cd' : 
-                                          row.status === 'Pending' ? '#f8d7da' : '#e2e3e5',
-                            color: row.status === 'Completed' ? '#155724' : 
-                                  row.status === 'In Progress' ? '#856404' : 
+                              backgroundColor: row.status === 'Completed' ? '#d4edda' :
+                                row.status === 'In Progress' ? '#fff3cd' :
+                                  row.status === 'Pending' ? '#f8d7da' : '#e2e3e5',
+                              color: row.status === 'Completed' ? '#155724' :
+                                row.status === 'In Progress' ? '#856404' :
                                   row.status === 'Pending' ? '#721c24' : '#383d41',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            fontWeight: 'bold',
-                            display: 'inline-block',
-                            minWidth: '80px'
-                          }}>
-                            {row.status || 'Not Set'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '10px 8px', textAlign: 'right' }}>{order.advance}</td>
-                        <td style={{ 
-                          padding: '10px 8px', 
-                          textAlign: 'right',
-                          fontWeight: 'bold',
-                          color: order.balance > 0 ? '#e74c3c' : '#2ecc71'
-                        }}>
-                          {order.balance}
-                        </td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>{formatDate(order.advanceDate)}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>{formatDate(order.paymentDate)}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>{order.paymentMethod}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>{order.chequeNumber}</td>
-                        
-                        {/* Action Buttons */}
-                        <td style={{ 
-                          padding: '10px 8px', 
-                          display: 'flex', 
-                          gap: '8px', 
-                          justifyContent: 'center',
-                          flexWrap: 'wrap'
-                        }}>
-                          {order.balance <= 0 ? (
-                            <span style={{
-                              backgroundColor: '#2ecc71',
-                              color: 'white',
-                              padding: '6px 12px',
+                              padding: '4px 8px',
                               borderRadius: '4px',
-                              fontSize: '12px',
-                              whiteSpace: 'nowrap'
+                              fontWeight: 'bold',
+                              display: 'inline-block',
+                              minWidth: '80px'
                             }}>
-                              Paid
+                              {row.status || 'Not Set'}
                             </span>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => handleRecordPayment(order)}
-                                disabled={paymentLoading}
-                                style={{
-                                  backgroundColor: paymentLoading ? '#bdc3c7' : '#9b59b6',
-                                  color: 'white',
-                                  padding: '6px 12px',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  fontSize: '12px',
-                                  cursor: paymentLoading ? 'not-allowed' : 'pointer',
-                                  whiteSpace: 'nowrap'
-                                }}
-                              >
-                                {paymentLoading ? 'Loading...' : 'Record Payment'}
-                              </button>
-                              
-                              <button
-                                onClick={() => handleEdit(order)}
-                                style={{
-                                  backgroundColor: '#3498db',
-                                  color: 'white',
-                                  padding: '6px 12px',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  fontSize: '12px',
-                                  cursor: 'pointer',
-                                  whiteSpace: 'nowrap'
-                                }}
-                              >
-                                Edit
-                              </button>
-                              
-                              {userRole === 'Admin' && (
+                          </td>
+                          <td style={{ padding: '10px 8px', textAlign: 'right' }}>{order.advance}</td>
+                          <td style={{
+                            padding: '10px 8px',
+                            textAlign: 'right',
+                            fontWeight: 'bold',
+                            color: order.balance > 0 ? '#e74c3c' : '#2ecc71'
+                          }}>
+                            {order.balance}
+                          </td>
+                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{formatDate(order.advanceDate)}</td>
+                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{formatDate(order.paymentDate)}</td>
+                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{order.paymentMethod}</td>
+                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{order.chequeNumber}</td>
+
+                          {/* Action Buttons */}
+                          <td style={{
+                            padding: '10px 8px',
+                            display: 'flex',
+                            gap: '8px',
+                            justifyContent: 'center',
+                            flexWrap: 'wrap'
+                          }}>
+                            {order.balance <= 0 ? (
+                              <span style={{
+                                backgroundColor: '#2ecc71',
+                                color: 'white',
+                                padding: '6px 12px',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                whiteSpace: 'nowrap'
+                              }}>
+                                Paid
+                              </span>
+                            ) : (
+                              <>
                                 <button
-                                  onClick={() => confirmDelete(order._id)}
+                                  onClick={() => handleRecordPayment(order)}
+                                  disabled={paymentLoading}
                                   style={{
-                                    backgroundColor: '#e74c3c',
+                                    backgroundColor: paymentLoading ? '#bdc3c7' : '#9b59b6',
+                                    color: 'white',
+                                    padding: '6px 12px',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    fontSize: '12px',
+                                    cursor: paymentLoading ? 'not-allowed' : 'pointer',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  {paymentLoading ? 'Loading...' : 'Record Payment'}
+                                </button>
+
+                                <button
+                                  onClick={() => handleEdit(order)}
+                                  style={{
+                                    backgroundColor: '#3498db',
                                     color: 'white',
                                     padding: '6px 12px',
                                     border: 'none',
@@ -1097,44 +1237,68 @@ function ViewOrders() {
                                     whiteSpace: 'nowrap'
                                   }}
                                 >
-                                  Delete
+                                  Edit
                                 </button>
-                              )}
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+
+                                {userRole === 'Admin' && (
+                                  <button
+                                    onClick={() => confirmDelete(order._id)}
+                                    style={{
+                                      backgroundColor: '#e74c3c',
+                                      color: 'white',
+                                      padding: '6px 12px',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '12px',
+                                      cursor: 'pointer',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    Delete
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        ))
+          ))
       ) : (
-        <div style={{ 
-          textAlign: 'center', 
+        <div style={{
+          textAlign: 'center',
           padding: '40px',
           backgroundColor: '#fff',
           borderRadius: '8px',
           marginTop: '20px'
         }}>
           <h3 style={{ color: '#666' }}>No orders found for 2025</h3>
+          <p style={{ color: '#999' }}>
+            {appliedExecutiveFilters.executiveName && `for executive: ${appliedExecutiveFilters.executiveName}`}
+            {appliedExecutiveFilters.executiveName && (monthFilter || clientTypeFilter) && ' and '}
+            {monthFilter && `in ${new Date(2025, monthFilter - 1).toLocaleString('default', { month: 'long' })}`}
+            {clientTypeFilter && `with client type: ${clientTypeFilter}`}
+          </p>
           <p style={{ color: '#999' }}>Try adjusting your search or importing orders</p>
         </div>
       )}
+
       {/* Payment Modal */}
       {showPaymentsModal && currentOrder && (
         <div style={{
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          width: '100%', 
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
           height: '100%',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)', 
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
           display: 'flex',
-          alignItems: 'center', 
-          justifyContent: 'center', 
+          alignItems: 'center',
+          justifyContent: 'center',
           zIndex: 1000
         }}>
           <div style={{
@@ -1147,7 +1311,7 @@ function ViewOrders() {
             overflowY: 'auto'
           }}>
             <h2 style={{ marginTop: 0, textAlign: 'center' }}>Record Payment</h2>
-            
+
             {/* Order Summary */}
             <div style={{ marginBottom: '20px', border: '1px solid #eee', padding: '15px', borderRadius: '5px' }}>
               <h3 style={{ marginBottom: '10px', borderBottom: '1px solid #ddd', paddingBottom: '5px' }}>
@@ -1179,7 +1343,7 @@ function ViewOrders() {
                   <strong>Advance Paid:</strong> ₹{parseFloat(currentOrder.advance || 0).toFixed(2)}
                 </div>
                 <div>
-                  <strong>Current Balance:</strong> 
+                  <strong>Current Balance:</strong>
                   <span style={{ color: currentOrder.balance > 0 ? '#e74c3c' : '#2ecc71', fontWeight: 'bold' }}>
                     ₹{parseFloat(currentOrder.balance || 0).toFixed(2)}
                   </span>
@@ -1309,7 +1473,7 @@ function ViewOrders() {
                 <div style={{ marginBottom: '15px' }}>
                   <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>
                     {paymentData.method === 'Cheque' ? 'Cheque Number' :
-                     paymentData.method === 'UPI' ? 'UPI Reference' : 'Transaction ID'} *
+                      paymentData.method === 'UPI' ? 'UPI Reference' : 'Transaction ID'} *
                   </label>
                   <input
                     type="text"
@@ -1382,15 +1546,15 @@ function ViewOrders() {
       {/* Edit Order Modal */}
       {showModal && editingOrder && (
         <div style={{
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          width: '100%', 
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
           height: '100%',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)', 
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
           display: 'flex',
-          alignItems: 'center', 
-          justifyContent: 'center', 
+          alignItems: 'center',
+          justifyContent: 'center',
           zIndex: 1000
         }}>
           <form onSubmit={handleEditSubmit} style={{
@@ -1409,92 +1573,92 @@ function ViewOrders() {
               {/* Business Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Business</label>
-                <input 
-                  name="business" 
-                  value={editingOrder.business} 
-                  onChange={handleEditChange} 
+                <input
+                  name="business"
+                  value={editingOrder.business}
+                  onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-              
+
               {/* Contact Person Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Contact Person</label>
-                <input 
-                  name="contactPerson" 
-                  value={editingOrder.contactPerson} 
-                  onChange={handleEditChange} 
+                <input
+                  name="contactPerson"
+                  value={editingOrder.contactPerson}
+                  onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-              
+
               {/* Location Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Location</label>
-                <input 
-                  name="location" 
-                  value={editingOrder.location} 
-                  onChange={handleEditChange} 
+                <input
+                  name="location"
+                  value={editingOrder.location}
+                  onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-              
+
               {/* Sale Closed By Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Sale Closed By</label>
-                <input 
-                  name="saleClosedBy" 
-                  value={editingOrder.saleClosedBy} 
-                  onChange={handleEditChange} 
+                <input
+                  name="saleClosedBy"
+                  value={editingOrder.saleClosedBy}
+                  onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-              
+
               {/* Contact Code Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Contact Code</label>
-                <input 
-                  name="contactCode" 
-                  value={editingOrder.contactCode} 
-                  onChange={handleEditChange} 
+                <input
+                  name="contactCode"
+                  value={editingOrder.contactCode}
+                  onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-              
+
               {/* Phone Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Phone</label>
-                <input 
-                  name="phone" 
-                  value={editingOrder.phone} 
-                  onChange={handleEditChange} 
+                <input
+                  name="phone"
+                  value={editingOrder.phone}
+                  onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-              
+
               {/* Order No Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Order No</label>
-                <input 
-                  name="orderNo" 
-                  value={editingOrder.orderNo} 
-                  onChange={handleEditChange} 
+                <input
+                  name="orderNo"
+                  value={editingOrder.orderNo}
+                  onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-              
+
               {/* Order Date Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Order Date</label>
-                <input 
-                  name="orderDate" 
-                  type="date" 
-                  value={editingOrder.orderDate} 
-                  onChange={handleEditChange} 
+                <input
+                  name="orderDate"
+                  type="date"
+                  value={editingOrder.orderDate}
+                  onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-              
+
               {/* Client Type Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Client Type</label>
@@ -1509,104 +1673,104 @@ function ViewOrders() {
                   <option value="Agent">Agent</option>
                 </select>
               </div>
-              
+
               {/* Discount Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Discount</label>
-                <input 
-                  name="discount" 
-                  type="number" 
-                  value={editingOrder.discount} 
+                <input
+                  name="discount"
+                  type="number"
+                  value={editingOrder.discount}
                   onChange={(e) => handleEditChange(e)}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-              
+
               {/* Final Amount Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Final Amount</label>
-                <input 
-                  name="discountedTotal" 
-                  type="number" 
-                  value={editingOrder.discountedTotal} 
+                <input
+                  name="discountedTotal"
+                  type="number"
+                  value={editingOrder.discountedTotal}
                   readOnly
-                  style={{ 
-                    width: '100%', 
-                    padding: '8px', 
-                    borderRadius: '4px', 
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '4px',
                     border: '1px solid #ccc',
                     backgroundColor: '#f5f5f5',
                     fontWeight: 'bold'
                   }}
                 />
               </div>
-              
+
               {/* Advance Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Advance</label>
-                <input 
-                  name="advance" 
-                  type="number" 
-                  value={editingOrder.advance} 
-                  onChange={handleEditChange} 
+                <input
+                  name="advance"
+                  type="number"
+                  value={editingOrder.advance}
+                  onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-              
+
               {/* Balance Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Balance</label>
-                <input 
-                  name="balance" 
-                  type="number" 
-                  value={editingOrder.balance} 
-                  onChange={handleEditChange} 
+                <input
+                  name="balance"
+                  type="number"
+                  value={editingOrder.balance}
+                  onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-              
+
               {/* Advance Date Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Advance Date</label>
-                <input 
-                  name="advanceDate" 
-                  type="date" 
-                  value={editingOrder.advanceDate} 
-                  onChange={handleEditChange} 
+                <input
+                  name="advanceDate"
+                  type="date"
+                  value={editingOrder.advanceDate}
+                  onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-              
+
               {/* Payment Date Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Payment Date</label>
-                <input 
-                  name="paymentDate" 
-                  type="date" 
-                  value={editingOrder.paymentDate} 
-                  onChange={handleEditChange} 
+                <input
+                  name="paymentDate"
+                  type="date"
+                  value={editingOrder.paymentDate}
+                  onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-              
+
               {/* Payment Method Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Payment Method</label>
-                <input 
-                  name="paymentMethod" 
-                  value={editingOrder.paymentMethod} 
-                  onChange={handleEditChange} 
+                <input
+                  name="paymentMethod"
+                  value={editingOrder.paymentMethod}
+                  onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-              
+
               {/* Cheque Number Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Cheque Number</label>
-                <input 
-                  name="chequeNumber" 
-                  value={editingOrder.chequeNumber} 
-                  onChange={handleEditChange} 
+                <input
+                  name="chequeNumber"
+                  value={editingOrder.chequeNumber}
+                  onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
@@ -1615,8 +1779,8 @@ function ViewOrders() {
             {/* Order Items Section */}
             <h3 style={{ marginBottom: '15px' }}>Order Items</h3>
             {editingOrder.rows.map((row, index) => (
-              <div key={index} style={{ 
-                display: 'grid', 
+              <div key={index} style={{
+                display: 'grid',
                 gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr',
                 gap: '15px',
                 marginBottom: '15px',
@@ -1633,7 +1797,7 @@ function ViewOrders() {
                     style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                   />
                 </div>
-                
+
                 {/* Requirement Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Requirement</label>
@@ -1643,7 +1807,7 @@ function ViewOrders() {
                     style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                   />
                 </div>
-                
+
                 {/* Custom Requirement Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Custom Requirement</label>
@@ -1653,7 +1817,7 @@ function ViewOrders() {
                     style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                   />
                 </div>
-                
+
                 {/* Quantity Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Quantity</label>
@@ -1664,7 +1828,7 @@ function ViewOrders() {
                     style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                   />
                 </div>
-                
+
                 {/* Rate Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Rate</label>
@@ -1675,7 +1839,7 @@ function ViewOrders() {
                     style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                   />
                 </div>
-                
+
                 {/* Delivery Date Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Delivery Date</label>
@@ -1686,7 +1850,7 @@ function ViewOrders() {
                     style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                   />
                 </div>
-                
+
                 {/* Start Date Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Start Date</label>
@@ -1697,7 +1861,7 @@ function ViewOrders() {
                     style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                   />
                 </div>
-                
+
                 {/* End Date Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>End Date</label>
@@ -1708,7 +1872,7 @@ function ViewOrders() {
                     style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                   />
                 </div>
-                
+
                 {/* Service Assigned Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Service Assigned To</label>
@@ -1719,7 +1883,7 @@ function ViewOrders() {
                     placeholder="Enter service executive name"
                   />
                 </div>
-                
+
                 {/* Status Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Status</label>
@@ -1734,7 +1898,7 @@ function ViewOrders() {
                     <option value="Completed">Completed</option>
                   </select>
                 </div>
-                
+
                 {/* Remark Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Remark</label>
@@ -1744,7 +1908,7 @@ function ViewOrders() {
                     style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                   />
                 </div>
-                
+
                 {/* Is Completed Field */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <label style={{ marginBottom: '5px' }}>Is Completed:</label>
@@ -1796,15 +1960,15 @@ function ViewOrders() {
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div style={{
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          width: '100%', 
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
           height: '100%',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)', 
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
           display: 'flex',
-          alignItems: 'center', 
-          justifyContent: 'center', 
+          alignItems: 'center',
+          justifyContent: 'center',
           zIndex: 1001
         }}>
           <div style={{
@@ -1817,7 +1981,7 @@ function ViewOrders() {
           }}>
             <h3 style={{ marginTop: 0 }}>Confirm Delete</h3>
             <p>Are you sure you want to delete this order? This action cannot be undone.</p>
-            
+
             <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '20px' }}>
               <button
                 onClick={() => setShowDeleteConfirm(false)}

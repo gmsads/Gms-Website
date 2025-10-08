@@ -950,4 +950,24 @@ router.post("/add-field-executive", upload.single('image'), async (req, res) => 
     res.status(500).json({ error: "Server error: " + err.message });
   }
 });
+// Get all Unit employees
+router.get("/units", async (req, res) => {
+  try {
+    const units = await Unit.find({})
+      .select('-password') // Exclude password from the response
+      .sort({ createdAt: -1 }); // Sort by newest first
+
+    res.status(200).json({
+      success: true,
+      data: units,
+      count: units.length
+    });
+  } catch (err) {
+    console.error("Error fetching Unit employees:", err);
+    res.status(500).json({ 
+      success: false,
+      error: "Server error while fetching units" 
+    });
+  }
+});
 module.exports = router;

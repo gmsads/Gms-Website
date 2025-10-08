@@ -1,7 +1,7 @@
-import  { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useLocation } from "react-router-dom";
-import { useReactToPrint } from "react-to-print";
+
 import Invoice from "./Invoice";
 import Select from 'react-select';
 
@@ -106,30 +106,96 @@ function OrderForm({
     return row.gstIncluded ? (baseAmount * 1.18).toFixed(2) : baseAmount.toFixed(2);
   };
 
-  const handlePrint = useReactToPrint({
-    content: () => printRef.current,
-    pageStyle: `
-      @page { size: auto; margin: 10mm; }
-      @media print {
-        body { -webkit-print-color-adjust: exact; }
-        .no-print { display: none !important; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
-      }
-    `,
-  });
+  // Fixed print functions
+  const handlePrint = () => {
+    const printContent = printRef.current;
+    if (!printContent) {
+      alert("No content available for printing");
+      return;
+    }
 
-  const handleInvoicePrint = useReactToPrint({
-    content: () => invoiceRef.current,
-    pageStyle: `
-      @page { size: A4; margin: 10mm; }
-      @media print {
-        body { -webkit-print-color-adjust: exact; }
+    const printWindow = window.open('', '_blank');
+    const printStyles = `
+      <style>
+        body { 
+          font-family: Arial, sans-serif;
+          margin: 0;
+          padding: 20px;
+          color: #333;
+          background: white;
+        }
         .no-print { display: none !important; }
-      }
-    `,
-  });
+        .print-actions { display: none !important; }
+        .form-actions { display: none !important; }
+        .existing-order-notice { display: none !important; }
+        .success-modal-overlay { display: none !important; }
+        @media print {
+          body { margin: 0; padding: 10mm; }
+        }
+      </style>
+    `;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Order Form - ${business || "New Order"}</title>
+          ${printStyles}
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+      setTimeout(() => printWindow.close(), 500);
+    }, 500);
+  };
+
+  const handleInvoicePrint = () => {
+    const invoiceContent = invoiceRef.current;
+    if (!invoiceContent) {
+      alert("No invoice content available for printing");
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    const printStyles = `
+      <style>
+        body { 
+          font-family: Arial, sans-serif;
+          margin: 0;
+          padding: 20mm;
+          color: #333;
+          background: white;
+        }
+        .no-print { display: none !important; }
+        @media print {
+          body { margin: 0; padding: 0; }
+        }
+      </style>
+    `;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Invoice</title>
+          ${printStyles}
+        </head>
+        <body>
+          ${invoiceContent.innerHTML}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+      setTimeout(() => printWindow.close(), 500);
+    }, 500);
+  };
 
   const generateInvoice = () => {
     setShowInvoice(true);
@@ -607,7 +673,7 @@ function OrderForm({
 
       <div className="form-header">
         <h2 className="subtitle">ORDER FORM</h2>
-        <div className="print-actions">
+        <div className="print-actions no-print">
           <button onClick={handlePrint} className="btn btn-print">
             Print Order
           </button>
@@ -1152,7 +1218,7 @@ function OrderForm({
         )}
       </div>
 
-      <div className="form-actions">
+      <div className="form-actions no-print">
         <button type="button" onClick={onBack} className="btn btn-secondary">
           Back to Search
         </button>
@@ -1331,6 +1397,9 @@ function OrderForm({
         .target-change-animation {
           animation: targetChange 1.5s ease;
         }
+        .no-print {
+          /* This class hides elements during printing */
+        }
         @keyframes targetChange {
           0% { background-color: #ffffcc; }
           100% { background-color: transparent; }
@@ -1341,6 +1410,20 @@ function OrderForm({
           }
           .payment-section > div {
             flex-direction: column;
+          }
+        }
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          .form-actions {
+            display: none !important;
+          }
+          .print-actions {
+            display: none !important;
+          }
+          .existing-order-notice {
+            display: none !important;
           }
         }
       `}</style>

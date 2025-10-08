@@ -794,6 +794,21 @@ function AccountDashboard({ loggedInUser }) {
           >
             View Expense
           </NavLink>
+           <NavLink
+            to="inventory"
+            style={linkStyle('inventory')}
+            onMouseEnter={() => setHoveredItem('inventory')}
+            onMouseLeave={() => setHoveredItem('')}
+            onClick={() => {
+              handleSidebarClick();
+              // Reset order form state when navigating to create-order
+              setShowOrderForm(false);
+              setOrderNumber("");
+              setSearchError("");
+            }}
+          >
+         Office Inventory
+          </NavLink>
           <NavLink
             to="hour"
             style={linkStyle('hour')}

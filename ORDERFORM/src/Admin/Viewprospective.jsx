@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { format, addDays } from 'date-fns';
 import { confirmAlert } from 'react-confirm-alert';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import 'react-confirm-alert/src/react-confirm-alert.css';
 
 const ViewProspective = () => {
@@ -18,11 +18,31 @@ const ViewProspective = () => {
   const [sending, setSending] = useState({});
   const [success, setSuccess] = useState({});
   const [redirectId, setRedirectId] = useState(null);
+  const [appliedFilters, setAppliedFilters] = useState({
+    executiveName: '',
+    month: '',
+    year: ''
+  });
 
   // Get user role from localStorage
   const role = localStorage.getItem('role');
   const isAdmin = role === 'Admin';
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Extract filter parameters from URL
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const executiveName = searchParams.get('executiveName');
+    const month = searchParams.get('month');
+    const year = searchParams.get('year');
+    
+    setAppliedFilters({
+      executiveName: executiveName || '',
+      month: month || '',
+      year: year || ''
+    });
+  }, [location]);
 
   // Fetch prospective clients data
   useEffect(() => {
@@ -36,14 +56,39 @@ const ViewProspective = () => {
           params: { userName, role }
         });
 
+        // Apply filters from URL parameters
+        let filteredData = response.data;
+
+        // Filter by executive name if provided
+        if (appliedFilters.executiveName) {
+          filteredData = filteredData.filter(p => 
+            p.ExcutiveName?.toLowerCase().includes(appliedFilters.executiveName.toLowerCase()) ||
+            p.executiveName?.toLowerCase().includes(appliedFilters.executiveName.toLowerCase())
+          );
+        }
+
+        // Filter by month and year if provided
+        if (appliedFilters.month && appliedFilters.year) {
+          filteredData = filteredData.filter(p => {
+            if (!p.createdAt && !p.followUpDate) return false;
+            
+            const prospectDate = new Date(p.createdAt || p.followUpDate);
+            const prospectMonth = prospectDate.getMonth() + 1;
+            const prospectYear = prospectDate.getFullYear();
+            
+            return prospectMonth === parseInt(appliedFilters.month) && 
+                   prospectYear === parseInt(appliedFilters.year);
+          });
+        }
+
         // Sort by creation date (newest first)
-        const sortedData = response.data.sort((a, b) => {
+        const sortedData = filteredData.sort((a, b) => {
           const dateA = new Date(a.createdAt || a.dateCreated || a.followUpDate);
           const dateB = new Date(b.createdAt || b.dateCreated || b.followUpDate);
           return dateB - dateA; // Descending order (newest first)
         });
 
-        // Update state with sorted data
+        // Update state with sorted and filtered data
         setProspectives(sortedData);
         setFilteredProspectives(sortedData);
         setLoading(false);
@@ -55,7 +100,7 @@ const ViewProspective = () => {
     };
 
     fetchProspectives();
-  }, []);
+  }, [appliedFilters]); // Re-fetch when filters change
 
   // Handle redirect after sale closed
   useEffect(() => {
@@ -180,9 +225,34 @@ const ViewProspective = () => {
           role: localStorage.getItem('role')
         }
       });
-      
+
+      // Re-apply filters and sorting
+      let filteredData = response.data;
+
+      // Filter by executive name if provided
+      if (appliedFilters.executiveName) {
+        filteredData = filteredData.filter(p => 
+          p.ExcutiveName?.toLowerCase().includes(appliedFilters.executiveName.toLowerCase()) ||
+          p.executiveName?.toLowerCase().includes(appliedFilters.executiveName.toLowerCase())
+        );
+      }
+
+      // Filter by month and year if provided
+      if (appliedFilters.month && appliedFilters.year) {
+        filteredData = filteredData.filter(p => {
+          if (!p.createdAt && !p.followUpDate) return false;
+          
+          const prospectDate = new Date(p.createdAt || p.followUpDate);
+          const prospectMonth = prospectDate.getMonth() + 1;
+          const prospectYear = prospectDate.getFullYear();
+          
+          return prospectMonth === parseInt(appliedFilters.month) && 
+                 prospectYear === parseInt(appliedFilters.year);
+        });
+      }
+
       // Re-sort the updated data
-      const sortedData = response.data.sort((a, b) => {
+      const sortedData = filteredData.sort((a, b) => {
         const dateA = new Date(a.createdAt || a.dateCreated || a.followUpDate);
         const dateB = new Date(b.createdAt || b.dateCreated || b.followUpDate);
         return dateB - dateA;
@@ -246,6 +316,16 @@ const ViewProspective = () => {
     }
   };
 
+  // Clear all filters
+  const clearFilters = () => {
+    navigate('/admin-dashboard/view-prospective'); // Navigate without filter parameters
+    setAppliedFilters({
+      executiveName: '',
+      month: '',
+      year: ''
+    });
+  };
+
   // Style for different status badges
   const getStatusStyle = (status) => {
     const baseStyle = {
@@ -270,6 +350,9 @@ const ViewProspective = () => {
     }
   };
 
+
+  
+ 
   // Loading and error states
   if (loading) return <div style={styles.loading}>Loading prospective clients...</div>;
   if (error) return <div style={styles.error}>{error}</div>;
@@ -277,7 +360,23 @@ const ViewProspective = () => {
   // Main render
   return (
     <div style={styles.container}>
-      <h2 style={styles.heading}>Prospective Clients</h2>
+      <div style={styles.header}>
+        <h2 style={styles.heading}>Prospective Clients</h2>
+        
+        {/* Show active filters */}
+        {(appliedFilters.executiveName || appliedFilters.month) && (
+          <div style={styles.filterInfo}>
+            <span style={styles.filterText}>
+              Showing prospects for: 
+              {appliedFilters.executiveName && ` Executive: ${decodeURIComponent(appliedFilters.executiveName)}`}
+              {appliedFilters.month && appliedFilters.year && ` Month: ${appliedFilters.month}/${appliedFilters.year}`}
+            </span>
+            <button onClick={clearFilters} style={styles.clearFilterButton}>
+              Clear Filters
+            </button>
+          </div>
+        )}
+      </div>
       
       {/* Search input */}
       <div style={styles.searchContainer}>
@@ -402,6 +501,8 @@ const ViewProspective = () => {
               <tr>
                 <td colSpan={isAdmin ? 11 : 10} style={{ padding: '20px', textAlign: 'center' }}>
                   {searchTerm ? 'No matching results found' : 'No prospective clients available'}
+                  {appliedFilters.executiveName && ` for executive: ${decodeURIComponent(appliedFilters.executiveName)}`}
+                  {appliedFilters.month && appliedFilters.year && ` in ${appliedFilters.month}/${appliedFilters.year}`}
                 </td>
               </tr>
             )}
@@ -422,12 +523,38 @@ const styles = {
     margin: '20px',
     position: 'relative'
   },
+  header: {
+    marginBottom: '25px'
+  },
   heading: {
     color: '#2c3e50',
-    marginBottom: '25px',
+    marginBottom: '15px',
     borderBottom: '2px solid #3498db',
     paddingBottom: '10px',
     fontSize: '24px'
+  },
+  filterInfo: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#e8f4fd',
+    padding: '12px 15px',
+    borderRadius: '6px',
+    marginBottom: '15px'
+  },
+  filterText: {
+    color: '#2c3e50',
+    fontWeight: '500'
+  },
+  clearFilterButton: {
+    padding: '6px 12px',
+    backgroundColor: '#e74c3c',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500'
   },
   searchContainer: {
     marginBottom: '25px',

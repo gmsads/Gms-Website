@@ -74,7 +74,7 @@ const roleRoutes = {
   'Digital Marketing': '/digital-dashboard',
   'Vendor': '/vendor-dashboard',
   'IT': '/it-dashboard',
-  'Unit': '/order',                // Redirect to executive order page
+  'Unit': '/unit-dashboard',                // Redirect to executive order page
   'FieldExecutive': '/order',      // Redirect to executive order page
   'fieldexecutive': '/order'       // Keep backward compatibility
 };

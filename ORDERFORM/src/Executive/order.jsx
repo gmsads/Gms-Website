@@ -12,6 +12,7 @@ import DigitalMarketingOrderForm from "../Executive/Digitalform";
 import Record from "./Record";
 import ViewRecord from "./ViewRecord";
 import AutoLogout from "../mainpage/AutoLogout";
+import PendingPayment from "../Admin/PendingPayment"; // Import PendingPayment
 import "../Executive/order.css";
 import "../app.css";
 
@@ -34,35 +35,23 @@ function Admin() {
     formattedTarget: "₹0",
     formattedAchieved: "₹0",
   });
-  
-  // State for loading status
-  const [loading, setLoading] = useState(true);
-  
-  // State for order number
-  const [orderNumber, setOrderNumber] = useState("");
-  
-  // State for showing order form
-  const [showOrderForm, setShowOrderForm] = useState(false);
-  
-  // State for existing order data
-  const [existingOrderData, setExistingOrderData] = useState(null);
-  
-  // State for loading during search
-  const [isLoading, setIsLoading] = useState(false);
-  
-  // State for search errors
-  const [searchError, setSearchError] = useState("");
-  
-  // State for selected form type
-  const [selectedFormType, setSelectedFormType] = useState("order");
-  
-  // State for showing logout options
-  const [showLogoutOptions, setShowLogoutOptions] = useState(false);
 
-  // State for session timer and AutoLogout control
+  const [loading, setLoading] = useState(true);
+  const [orderNumber, setOrderNumber] = useState("");
+  const [showOrderForm, setShowOrderForm] = useState(false);
+  const [existingOrderData, setExistingOrderData] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [selectedFormType, setSelectedFormType] = useState("order");
+  const [showLogoutOptions, setShowLogoutOptions] = useState(false);
   const [activeDuration, setActiveDuration] = useState("00:00:00");
   const [isSessionActive, setIsSessionActive] = useState(true);
   const timerRef = useRef(null);
+  const [pendingPaymentData, setPendingPaymentData] = useState({
+    count: 0,
+    amount: 0,
+    loading: true
+  });
 
   // Get user role from localStorage
   const userRole = localStorage.getItem("userRole") || "executive";
@@ -89,42 +78,83 @@ function Admin() {
       }
     };
   }, []);
-// In the Admin component, add this useEffect to handle the navigation state
-useEffect(() => {
-  // Check if there's appointment data from a sale closed redirect
-  const saleClosedData = localStorage.getItem('saleClosedAppointmentData');
-  if (saleClosedData) {
+
+  // Fetch pending payment data for the executive
+  const fetchPendingPayments = async () => {
     try {
-      const appointmentData = JSON.parse(saleClosedData);
-      setExistingOrderData(appointmentData);
-      setShowOrderForm(true);
-      setActiveTab('order');
+      setPendingPaymentData(prev => ({ ...prev, loading: true }));
+      const res = await axios.get('/api/orders', {
+        params: {
+          _: new Date().getTime()
+        }
+      });
       
-      // Pre-fill the phone number if available
-      if (appointmentData.phoneNumber) {
-        setOrderNumber(appointmentData.phoneNumber);
-      }
+      // Filter orders for current executive with pending payments
+      const executivePendingOrders = res.data.filter(order => 
+        order?.executive?.toLowerCase() === selectedExecutive.toLowerCase() && 
+        order?.balance > 0
+      );
       
-      // Clear the stored data
-      localStorage.removeItem('saleClosedAppointmentData');
+      const totalPendingAmount = executivePendingOrders.reduce((sum, order) => sum + (order?.balance || 0), 0);
+      
+      setPendingPaymentData({
+        count: executivePendingOrders.length,
+        amount: totalPendingAmount,
+        loading: false
+      });
     } catch (error) {
-      console.error('Error parsing appointment data:', error);
+      console.error('Error fetching pending payments:', error);
+      setPendingPaymentData(prev => ({ ...prev, loading: false }));
     }
-  }
-  
-  // Also check for navigation state
-  if (location.state?.activeTab) {
-    setActiveTab(location.state.activeTab);
-    if (location.state.activeTab === 'order' && location.state.appointmentData) {
-      setExistingOrderData(location.state.appointmentData);
-      setShowOrderForm(true);
-      if (location.state.appointmentData.phoneNumber) {
-        setOrderNumber(location.state.appointmentData.phoneNumber);
+  };
+
+  // Fetch pending payments on component mount and when selectedExecutive changes
+  useEffect(() => {
+    if (selectedExecutive) {
+      fetchPendingPayments();
+      // Refresh every 30 seconds
+      const interval = setInterval(fetchPendingPayments, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [selectedExecutive]);
+
+  // In the Admin component, add this useEffect to handle the navigation state
+  useEffect(() => {
+    // Check if there's appointment data from a sale closed redirect
+    const saleClosedData = localStorage.getItem('saleClosedAppointmentData');
+    if (saleClosedData) {
+      try {
+        const appointmentData = JSON.parse(saleClosedData);
+        setExistingOrderData(appointmentData);
+        setShowOrderForm(true);
+        setActiveTab('order');
+        
+        // Pre-fill the phone number if available
+        if (appointmentData.phoneNumber) {
+          setOrderNumber(appointmentData.phoneNumber);
+        }
+        
+        // Clear the stored data
+        localStorage.removeItem('saleClosedAppointmentData');
+      } catch (error) {
+        console.error('Error parsing appointment data:', error);
       }
     }
-  }
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [location]);
+    
+    // Also check for navigation state
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+      if (location.state.activeTab === 'order' && location.state.appointmentData) {
+        setExistingOrderData(location.state.appointmentData);
+        setShowOrderForm(true);
+        if (location.state.appointmentData.phoneNumber) {
+          setOrderNumber(location.state.appointmentData.phoneNumber);
+        }
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location]);
+
   // Function to calculate and update duration
   const updateDuration = () => {
     const storedTime = localStorage.getItem('loginTime');
@@ -344,6 +374,11 @@ useEffect(() => {
     return percentage < 100 ? "blink-progress" : "";
   };
 
+  // Handle pending payment click
+  const handlePendingPaymentClick = () => {
+    setActiveTab("pending-payments");
+  };
+
   return (
     <div className="app-container">
       {isSessionActive && <AutoLogout />}
@@ -382,6 +417,44 @@ useEffect(() => {
               <div className="timer-value">{activeDuration}</div>
             </div>
           </div>
+
+          {/* Pending Payment Notification */}
+          {pendingPaymentData.count > 0 && (
+            <div 
+              className="pending-payment-notification"
+              onClick={handlePendingPaymentClick}
+              style={{
+                backgroundColor: '#e74c3c',
+                color: 'white',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginRight: '15px',
+                boxShadow: '0 2px 4px rgba(231, 76, 60, 0.3)',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#c0392b';
+                e.target.style.transform = 'scale(1.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = '#e74c3c';
+                e.target.style.transform = 'scale(1)';
+              }}
+            >
+              <span>⚠️</span>
+              <span>
+                {selectedExecutive}, you have {pendingPaymentData.count} pending payments
+                <br />
+                <small>Total: ₹{pendingPaymentData.amount.toLocaleString()}</small>
+              </span>
+            </div>
+          )}
 
           <div
             className="target-display blink"
@@ -463,6 +536,7 @@ useEffect(() => {
               { key: "prospective", icon: "🔍", text: "Create Prospects ➕" },
               { key: "viewProspects", icon: "👁️", text: "View Prospects" },
               { key: "price-list", icon: "💰", text: "Price List" },
+              { key: "pending-payments", icon: "💰", text: "Pending Payments" },
             ].map(({ key, icon, text }) => (
               <div
                 key={key}
@@ -500,6 +574,9 @@ useEffect(() => {
           {activeTab === "prospective" && <Prospective />}
           {activeTab === "viewProspects" && <ViewProspective />}
           {activeTab === "viewRecord" && <ViewRecord />}
+          {activeTab === "pending-payments" && (
+            <PendingPayment executiveFilter={selectedExecutive} />
+          )}
 
           {activeTab === "order" && !showOrderForm && (
             <div className="phone-search-container">

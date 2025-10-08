@@ -59,6 +59,21 @@ const PerformanceView = () => {
     return allExecutives.find(exec => exec.value === selectedExecutive);
   }, [allExecutives, selectedExecutive]);
 
+  // Calculate balance for overall performance
+  const overallBalance = useMemo(() => {
+    if (!performanceData) return 0;
+    const achieved = performanceData.achieved || 0;
+    const advance = performanceData.advance || 0;
+    return achieved - advance;
+  }, [performanceData]);
+
+  // Calculate balance for monthly performance
+  const calculateMonthlyBalance = (monthData) => {
+    const achieved = monthData.achieved || 0;
+    const advance = monthData.advance || 0;
+    return achieved - advance;
+  };
+
   const styles = {
     container: {
       maxWidth: '1200px',
@@ -194,7 +209,8 @@ const PerformanceView = () => {
       marginBottom: '12px',
       paddingBottom: '12px',
       borderBottom: '1px solid #f1f1f1',
-      cursor: 'pointer'
+      cursor: 'pointer',
+      transition: 'background-color 0.2s'
     },
     cardLabel: {
       color: '#7f8c8d',
@@ -203,6 +219,10 @@ const PerformanceView = () => {
     cardValue: {
       fontWeight: '600',
       color: '#2c3e50'
+    },
+    balanceValue: {
+      fontWeight: '600',
+      color: overallBalance >= 0 ? '#27ae60' : '#e74c3c'
     },
     progressContainer: {
       width: '100%',
@@ -316,6 +336,9 @@ const PerformanceView = () => {
       backgroundColor: '#f8f9fa',
       borderRadius: '6px',
       border: '1px solid #ddd'
+    },
+    clickableCardItemHover: {
+      backgroundColor: '#f8f9fa'
     }
   };
 
@@ -385,14 +408,36 @@ const PerformanceView = () => {
     // Extract the executive ID and type from the selected executive
     const [executiveType, executiveId] = selectedExecutive.split('_');
     
-    navigate(`/admin-dashboard/view-orders?month=${monthIndex + 1}&year=${year}&executive=${executiveId}&executiveType=${executiveType}`);
+    // Navigate with all parameters - FIXED
+    navigate(`/admin-dashboard/view-orders?month=${monthIndex + 1}&year=${year}&executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
   };
 
   const handleTotalOrdersClick = () => {
     // Extract the executive ID and type from the selected executive
     const [executiveType, executiveId] = selectedExecutive.split('_');
     
-    navigate(`/admin-dashboard/view-orders?executive=${executiveId}&executiveType=${executiveType}`);
+    // Navigate with executive filter parameters - FIXED
+    navigate(`/admin-dashboard/view-orders?executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
+  };
+
+  const handleTotalProspectsClick = () => {
+    // Extract the executive ID and type from the selected executive
+    const [executiveType, executiveId] = selectedExecutive.split('_');
+    
+    // Navigate to prospects view with executive filter
+    navigate(`/admin-dashboard/view-prospective?executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
+  };
+
+  const handleMonthlyProspectsClick = (monthData) => {
+    const [monthStr, yearStr] = monthData.month.split(' ');
+    const monthIndex = new Date(`${monthStr} 1, ${yearStr}`).getMonth();
+    const year = parseInt(yearStr);
+    
+    // Extract the executive ID and type from the selected executive
+    const [executiveType, executiveId] = selectedExecutive.split('_');
+    
+    // Navigate to prospects view with month and executive filter
+    navigate(`/admin-dashboard/view-prospective?month=${monthIndex + 1}&year=${year}&executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
   };
 
   const getSegmentColor = (segment) => {
@@ -499,6 +544,7 @@ const PerformanceView = () => {
 
     return sortedMonths.map((monthData, index) => {
       const percentage = monthData.percentage || 0;
+      const balance = calculateMonthlyBalance(monthData);
 
       return (
         <div key={index} style={styles.monthlyCard}>
@@ -524,13 +570,43 @@ const PerformanceView = () => {
               ₹{monthData.advance?.toLocaleString('en-IN') || '0'}
             </span>
           </div>
+          <div style={styles.cardItem}>
+            <span style={styles.cardLabel}>Balance Amount:</span>
+            <span style={{
+              ...styles.cardValue,
+              color: balance >= 0 ? '#27ae60' : '#e74c3c'
+            }}>
+              ₹{balance.toLocaleString('en-IN')}
+            </span>
+          </div>
           <div 
-            style={{...styles.clickableCardItem, ...styles.cardItem}}
+            style={styles.clickableCardItem}
             onClick={() => handleMonthClick(monthData)}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#f8f9fa';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'transparent';
+            }}
           >
             <span style={styles.cardLabel}>Total Orders:</span>
             <span style={styles.cardValue}>
               {monthData.orders || '0'}
+            </span>
+          </div>
+          <div 
+            style={styles.clickableCardItem}
+            onClick={() => handleMonthlyProspectsClick(monthData)}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#f8f9fa';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'transparent';
+            }}
+          >
+            <span style={styles.cardLabel}>Monthly Prospects:</span>
+            <span style={styles.cardValue}>
+              {monthData.prospects || '0'}
             </span>
           </div>
         </div>
@@ -671,7 +747,16 @@ const PerformanceView = () => {
 
             <div style={styles.card}>
               <h3 style={styles.cardTitle}>Activity Metrics</h3>
-              <div style={styles.cardItem}>
+              <div 
+                style={styles.clickableCardItem}
+                onClick={handleTotalProspectsClick}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = '#f8f9fa';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = 'transparent';
+                }}
+              >
                 <span style={styles.cardLabel}>Total Prospects:</span>
                 <span style={styles.cardValue}>{performanceData.totalProspects || 0}</span>
               </div>
@@ -712,9 +797,21 @@ const PerformanceView = () => {
                   ₹{(performanceData.advance || 0).toLocaleString('en-IN')}
                 </span>
               </div>
+              <div style={styles.cardItem}>
+                <span style={styles.cardLabel}>Balance Amount:</span>
+                <span style={styles.balanceValue}>
+                  ₹{overallBalance.toLocaleString('en-IN')}
+                </span>
+              </div>
               <div 
-                style={{...styles.clickableCardItem, ...styles.cardItem}}
+                style={styles.clickableCardItem}
                 onClick={handleTotalOrdersClick}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = '#f8f9fa';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = 'transparent';
+                }}
               >
                 <span style={styles.cardLabel}>Total Orders:</span>
                 <span style={styles.cardValue}>
