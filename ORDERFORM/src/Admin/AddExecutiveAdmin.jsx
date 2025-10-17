@@ -56,6 +56,7 @@ const handleSubmit = async (e) => {
     'Digital Marketing': 'add-digital-marketing',
     'Client Service': 'add-clientservice',
     'unit': 'add-unit',
+    'agent': 'add-agent',
     'FieldExecutive': 'add-field-executive'
   };
 
@@ -450,6 +451,7 @@ const handleSubmit = async (e) => {
                 <option value="Digital Marketing">Digital Marketing</option>
                 <option value="Client Service">Client Service</option>
                   <option value="unit">Unit</option>
+                  <option value="agent">Agent</option>
                <option value="FieldExecutive">Field Executive</option>
               </select>
             </div>

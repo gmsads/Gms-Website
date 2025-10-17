@@ -65,7 +65,7 @@ router.get('/chart-data', async (req, res) => {
       pendingPayments: [0, 0],
       pendingServices: [0, 0],
       appointments: [0, 0], // [Done, Upcoming]
-      clientTypes: { New: 0, Renewal: 0, Agent: 0, 'Renewal-Agent': 0 },
+      clientTypes: { Retail: 0, Renewal: 0, Agent: 0, 'Renewal-Agent': 0 },
       timePeriod: {
         year: selectedYear,
         month: selectedMonth !== null ? selectedMonth + 1 : null

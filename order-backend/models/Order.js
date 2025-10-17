@@ -28,6 +28,7 @@ const orderSchema = new mongoose.Schema({
   
   // Order Details
   clientType: String,
+   createdBy: { type: String, required: true },
   target: String,
   rows: [{
     requirement: String,

@@ -4,19 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import OrderForm from '../Executive/OrderForm';
 import DigitalMarketingOrderForm from '../Executive/Digitalform';
 import axios from 'axios';
-import {
-  Chart as ChartJS,
-  Title,
-  Tooltip,
-  LineElement,
-  PointElement,
-  Legend,
-  ArcElement,
-  BarElement,
-  CategoryScale,
-  LinearScale,
-  RadialLinearScale,
-} from 'chart.js';
+import GMSLogo from '../assets/GMS_LOGO_.png'
+import {Chart as ChartJS, Title, Tooltip, LineElement, PointElement, Legend, ArcElement, BarElement, CategoryScale, LinearScale,RadialLinearScale,} from 'chart.js';
 import { Bar, Doughnut, PolarArea, Line } from 'react-chartjs-2';
 
 // Register ChartJS components
@@ -164,7 +153,7 @@ function AdminDashboard() {
   const pendingPayments = safeArray(chartData?.pendingPayments);
   const pendingServices = safeArray(chartData?.pendingServices);
   const appointments = safeArray(chartData?.appointments);
-  const clientTypes = chartData?.clientTypes || { New: 0, Renewal: 0, Agent: 0, 'Renewal-Agent': 0 };
+  const clientTypes = chartData?.clientTypes || { Retail: 0, Renewal: 0, Agent: 0, 'Renewal-Agent': 0 };
 
   // Generate year options
   const years = [];
@@ -199,64 +188,64 @@ function AdminDashboard() {
   };
 
   // Styles
- const styles = {
-  container: {
-    display: 'flex',
-    height: '100vh',
-    overflow: 'hidden',
-  },
-  sidebar: {
-    width: sidebarOpen ? '250px' : '0',
-    background: 'linear-gradient(to bottom, #001529, #003366)',
-    color: '#fff',
-    overflowX: 'hidden',
-    transition: 'width 0.3s',
-    position: 'fixed',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    zIndex: 10,
-    height: '100vh',
-    boxShadow: '2px 0 5px rgba(0,0,0,0.1)',
-  },
-  content: {
-    flex: 1,
-    marginLeft: sidebarOpen ? '250px' : '0',
-    padding: '20px',
-    transition: 'margin-left 0.3s',
-    overflowY: 'auto',
-    background: 'linear-gradient(to bottom right, #f0f2f5, #e6e9ed)',
-    height: '100vh',
-    position: 'relative',
-  },
-  dashboardCards: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-    gap: '20px',
-    marginTop: '20px',
-    width: '100%',
-    height: 'auto',
-    minHeight: 'auto',
-  },
-  card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: '10px',
-    boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    fontSize: '16px',
-    fontWeight: 'bold',
-    color: '#003366',
-    padding: '20px',
-    height: 'auto',
-    minHeight: '350px', // You can keep this or remove it
-    width: '100%',
-    boxSizing: 'border-box',
-  },
+  const styles = {
+    container: {
+      display: 'flex',
+      height: '100vh',
+      overflow: 'hidden',
+    },
+    sidebar: {
+      width: sidebarOpen ? '250px' : '0',
+      background: 'linear-gradient(to bottom, #001529, #003366)',
+      color: '#fff',
+      overflowX: 'hidden',
+      transition: 'width 0.3s',
+      position: 'fixed',
+      top: 0,
+      bottom: 0,
+      left: 0,
+      zIndex: 10,
+      height: '100vh',
+      boxShadow: '2px 0 5px rgba(0,0,0,0.1)',
+    },
+    content: {
+      flex: 1,
+      marginLeft: sidebarOpen ? '250px' : '0',
+      padding: '20px',
+      transition: 'margin-left 0.3s',
+      overflowY: 'auto',
+      background: 'linear-gradient(to bottom right, #f0f2f5, #e6e9ed)',
+      height: '100vh',
+      position: 'relative',
+    },
+    dashboardCards: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+      gap: '20px',
+      marginTop: '20px',
+      width: '100%',
+      height: 'auto',
+      minHeight: 'auto',
+    },
+    card: {
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderRadius: '10px',
+      boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      fontSize: '16px',
+      fontWeight: 'bold',
+      color: '#003366',
+      padding: '20px',
+      height: 'auto',
+      minHeight: '350px', // You can keep this or remove it
+      width: '100%',
+      boxSizing: 'border-box',
+    },
 
-  
+
     sidebarHeader: {
       padding: '20px',
       fontSize: '18px',
@@ -300,16 +289,16 @@ function AdminDashboard() {
       borderLeft: '3px solid transparent',
       background: 'rgba(0,0,0,0.05)',
     },
-    hoverEffect: { 
+    hoverEffect: {
       background: 'rgba(255,255,255,0.1)',
       borderLeft: '3px solid #1890ff',
     },
-    activeSidebarItem: { 
+    activeSidebarItem: {
       background: 'rgba(255,255,255,0.1)',
       borderLeft: '3px solid #1890ff',
       fontWeight: '600',
     },
-   
+
     burger: {
       fontSize: '24px',
       marginRight: '20px',
@@ -321,8 +310,8 @@ function AdminDashboard() {
       zIndex: 30,
       display: window.innerWidth <= 768 ? 'block' : 'none',
     },
-    
-   
+
+
     number: {
       fontSize: '40px',
       color: '#002244',
@@ -488,83 +477,207 @@ function AdminDashboard() {
     ...(hoveredItem === name ? styles.hoverEffect : {}),
   });
 
-  return (
-    <div style={styles.container}>
-      {/* Mobile menu button */}
-      {window.innerWidth <= 768 && (
-        <div 
-          style={styles.mobileMenuButton}
-          onClick={toggleSidebar}
+  // Sidebar Component
+  const Sidebar = () => {
+    return (
+      <div style={{
+        ...styles.sidebar,
+        ...(window.innerWidth <= 768 && !sidebarOpen ? styles.sidebarHidden : {})
+      }}>
+        {/* Logo Header */}
+        <div
+          style={{ ...styles.sidebarHeader, textAlign: 'center', cursor: 'pointer' }}
+          onClick={() => {
+            navigate('/admin-dashboard');
+            handleMenuItemClick();
+          }}
         >
-          ☰
+          <img
+            src={GMSLogo}
+            alt="GMS Logo"
+            style={{
+              width: '160px',
+              height: 'auto',
+              transition: 'transform 0.3s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          />
         </div>
-      )}
 
-      {/* Sidebar */}
-      <div style={styles.sidebar}>
-        <div style={styles.sidebarHeader} onClick={() => {
-          navigate('/admin-dashboard');
-          handleMenuItemClick();
-        }}>
-          GLOBAL MARKETING SOLUTIONS
-        </div>
-        
-        {/* GENERAL Section */}
+        {/* DASHBOARD Section */}
         <div style={styles.sidebarSection}>
-          <div 
+          <div
             style={styles.sidebarSectionTitle}
             onClick={() => toggleSection('general')}
           >
-          Dashboard
-            <span style={{
-              ...styles.dropdownIcon,
-              transform: openSections.general ? 'rotate(180deg)' : 'rotate(0deg)'
-            }}>
+            Dashboard
+            <span
+              style={{
+                ...styles.dropdownIcon,
+                transform: openSections.general ? 'rotate(180deg)' : 'rotate(0deg)',
+              }}
+            >
               ▼
             </span>
           </div>
           {openSections.general && (
             <>
-              <NavLink 
-                to="/admin-dashboard" 
-                style={linkStyle('dashboard')} 
-                onMouseEnter={() => setHoveredItem('dashboard')} 
+              <NavLink
+                to="/admin-dashboard"
+                style={linkStyle('dashboard')}
+                onMouseEnter={() => setHoveredItem('dashboard')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
                 Dashboard
               </NavLink>
-              <NavLink 
-                to="price-list" 
-                style={linkStyle('price-list')} 
-                onMouseEnter={() => setHoveredItem('price-list')} 
+              <NavLink
+                to="ledger"
+                style={linkStyle('ledger')}
+                onMouseEnter={() => setHoveredItem('ledger')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
-                Price List
+                Ledger
               </NavLink>
-              <NavLink 
-                to="hour-reeport" 
-                style={linkStyle('hour-reeport')} 
-                onMouseEnter={() => setHoveredItem('hour-reeport')} 
+            </>
+          )}
+        </div>
+
+        {/* SALES Section */}
+        <div style={styles.sidebarSection}>
+          <div
+            style={styles.sidebarSectionTitle}
+            onClick={() => toggleSection('sales')}
+          >
+            SALES
+            <span
+              style={{
+                ...styles.dropdownIcon,
+                transform: openSections.sales ? 'rotate(180deg)' : 'rotate(0deg)',
+              }}
+            >
+              ▼
+            </span>
+          </div>
+          {openSections.sales && (
+            <>
+              <NavLink
+                to="create-order"
+                style={linkStyle('create-order')}
+                onMouseEnter={() => setHoveredItem('create-order')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleCreateOrderClick}
+              >
+                Create-Order ➕
+              </NavLink>
+
+              <NavLink
+                to="view-orders"
+                style={linkStyle('view-orders')}
+                onMouseEnter={() => setHoveredItem('view-orders')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
-                View Hour Report 
+                View All Orders
               </NavLink>
-              <NavLink 
-                to="Employees" 
-                style={linkStyle('Employees')} 
-                onMouseEnter={() => setHoveredItem('Employees')} 
+
+              <NavLink
+                to="performance"
+                style={linkStyle('performance')}
+                onMouseEnter={() => setHoveredItem('performance')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                View Performance
+              </NavLink>
+
+              <NavLink
+                to="view-prospective"
+                style={linkStyle('view-prospective')}
+                onMouseEnter={() => setHoveredItem('view-prospective')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                View Prospects
+              </NavLink>
+
+              <NavLink
+                to="select-appointment"
+                style={linkStyle('select-appointment')}
+                onMouseEnter={() => setHoveredItem('select-appointment')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                View Appointments
+              </NavLink>
+            </>
+          )}
+        </div>
+
+        {/* MANAGE USERS Section */}
+        <div style={styles.sidebarSection}>
+          <div
+            style={styles.sidebarSectionTitle}
+            onClick={() => toggleSection('manageUsers')}
+          >
+            MANAGE USERS
+            <span
+              style={{
+                ...styles.dropdownIcon,
+                transform: openSections.manageUsers ? 'rotate(180deg)' : 'rotate(0deg)',
+              }}
+            >
+              ▼
+            </span>
+          </div>
+          {openSections.manageUsers && (
+            <>
+              <NavLink
+                to="add-executive"
+                style={linkStyle('add-executive')}
+                onMouseEnter={() => setHoveredItem('add-executive')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Add Employee
+              </NavLink>
+
+              <NavLink
+                to="Employees"
+                style={linkStyle('Employees')}
+                onMouseEnter={() => setHoveredItem('Employees')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
                 Employees
               </NavLink>
-              <NavLink 
-                to="daily-report" 
-                style={linkStyle('daily-report')} 
-                onMouseEnter={() => setHoveredItem('daily-report')} 
+
+              <NavLink
+                to="unit-attendance"
+                style={linkStyle('unit-attendance')}
+                onMouseEnter={() => setHoveredItem('unit-attendance')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Unit-Attendance
+              </NavLink>
+
+              <NavLink
+                to="executives-logins"
+                style={linkStyle('executives-logins')}
+                onMouseEnter={() => setHoveredItem('executives-logins')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Executive Login Time
+              </NavLink>
+
+              <NavLink
+                to="daily-report"
+                style={linkStyle('daily-report')}
+                onMouseEnter={() => setHoveredItem('daily-report')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
@@ -574,196 +687,105 @@ function AdminDashboard() {
           )}
         </div>
 
-        {/* SALES Section */}
-        <div style={styles.sidebarSection}>
-          <div 
-            style={styles.sidebarSectionTitle}
-            onClick={() => toggleSection('sales')}
-          >
-            SALES
-            <span style={{
-              ...styles.dropdownIcon,
-              transform: openSections.sales ? 'rotate(180deg)' : 'rotate(0deg)'
-            }}>
-              ▼
-            </span>
-          </div>
-          {openSections.sales && (
-            <>
-              <NavLink 
-                to="executives-logins" 
-                style={linkStyle('executives-logins')} 
-                onMouseEnter={() => setHoveredItem('executives-logins')} 
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Executive Login Time
-              </NavLink>
-              <NavLink 
-                to="view-orders" 
-                style={linkStyle('view-orders')} 
-                onMouseEnter={() => setHoveredItem('view-orders')} 
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                View All Orders
-              </NavLink>
-              <NavLink 
-                to="create-order" 
-                style={linkStyle('create-order')} 
-                onMouseEnter={() => setHoveredItem('create-orders')} 
-                onMouseLeave={() => setHoveredItem('')} 
-                onClick={handleCreateOrderClick}
-              >
-                Create-Order ➕
-              </NavLink>
-              <NavLink 
-                to="add-executive" 
-                style={linkStyle('add-executive')} 
-                onMouseEnter={() => setHoveredItem('add-executive')} 
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Add Employee
-              </NavLink>
-              <NavLink 
-                to="performance" 
-                style={linkStyle('performance')} 
-                onMouseEnter={() => setHoveredItem('performance')} 
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                View Performance
-              </NavLink>
-            </>
-          )}
-        </div>
-
         {/* SERVICES Section */}
         <div style={styles.sidebarSection}>
-          <div 
+          <div
             style={styles.sidebarSectionTitle}
             onClick={() => toggleSection('services')}
           >
             SERVICES
-            <span style={{
-              ...styles.dropdownIcon,
-              transform: openSections.services ? 'rotate(180deg)' : 'rotate(0deg)'
-            }}>
+            <span
+              style={{
+                ...styles.dropdownIcon,
+                transform: openSections.services ? 'rotate(180deg)' : 'rotate(0deg)',
+              }}
+            >
               ▼
             </span>
           </div>
           {openSections.services && (
             <>
-              <NavLink 
-                to="assign-service" 
-                style={linkStyle('assign-service')} 
-                onMouseEnter={() => setHoveredItem('assign-service')} 
+              <NavLink
+                to="assign-service"
+                style={linkStyle('assign-service')}
+                onMouseEnter={() => setHoveredItem('assign-service')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
                 Assign Service
               </NavLink>
-              <NavLink 
-                to="service-update" 
-                style={linkStyle('service-update')} 
-                onMouseEnter={() => setHoveredItem('service-update')} 
+
+              <NavLink
+                to="service-update"
+                style={linkStyle('service-update')}
+                onMouseEnter={() => setHoveredItem('service-update')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
                 Service Updates
               </NavLink>
-              <NavLink 
-                to="pending-payment" 
-                style={linkStyle('pending-payment')} 
-                onMouseEnter={() => setHoveredItem('pending-payment')} 
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Pending Payment
-              </NavLink>
-              <NavLink 
-                to="pending-service" 
-                style={linkStyle('pending-service')} 
-                onMouseEnter={() => setHoveredItem('pending-service')} 
+
+              <NavLink
+                to="pending-service"
+                style={linkStyle('pending-service')}
+                onMouseEnter={() => setHoveredItem('pending-service')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
                 Pending Service
               </NavLink>
-              <NavLink 
-                to="view-design" 
-                style={linkStyle('view-design')} 
-                onMouseEnter={() => setHoveredItem('view-design')} 
+
+              <NavLink
+                to="view-design"
+                style={linkStyle('view-design')}
+                onMouseEnter={() => setHoveredItem('view-design')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
                 View Design
               </NavLink>
-               <NavLink
-            to="design-report"
-            style={linkStyle('design-report')}
-            onMouseEnter={() => setHoveredItem('design-report')}
-            onMouseLeave={() => setHoveredItem('')}
-          >
-          DesignReports
-          </NavLink>
+
+              <NavLink
+                to="design-report"
+                style={linkStyle('design-report')}
+                onMouseEnter={() => setHoveredItem('design-report')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Design Reports
+              </NavLink>
             </>
           )}
         </div>
 
-        {/* CLIENTS Section */}
+        {/* ACCOUNTS Section */}
         <div style={styles.sidebarSection}>
-          <div 
+          <div
             style={styles.sidebarSectionTitle}
-            onClick={() => toggleSection('clients')}
+            onClick={() => toggleSection('accounts')}
           >
-            CLIENTS
-            <span style={{
-              ...styles.dropdownIcon,
-              transform: openSections.clients ? 'rotate(180deg)' : 'rotate(0deg)'
-            }}>
+            ACCOUNTS
+            <span
+              style={{
+                ...styles.dropdownIcon,
+                transform: openSections.accounts ? 'rotate(180deg)' : 'rotate(0deg)',
+              }}
+            >
               ▼
             </span>
           </div>
-          {openSections.clients && (
+          {openSections.accounts && (
             <>
-              <NavLink 
-                to="prospects" 
-                style={linkStyle('prospects')} 
-                onMouseEnter={() => setHoveredItem('prospects')} 
+              <NavLink
+                to="pending-payment"
+                style={linkStyle('pending-payment')}
+                onMouseEnter={() => setHoveredItem('pending-payment')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
-                Create Prospects +
+                Pending Payment
               </NavLink>
-              <NavLink 
-                to="appointments" 
-                style={linkStyle('appointments')} 
-                onMouseEnter={() => setHoveredItem('appointments')} 
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Create Appointments +
-              </NavLink>
-              <NavLink 
-                to="select-appointment" 
-                style={linkStyle('select-appointment')} 
-                onMouseEnter={() => setHoveredItem('select-appointment')} 
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                View Appointments
-              </NavLink>
-              <NavLink 
-                to="activity" 
-                style={linkStyle('activity')} 
-                onMouseEnter={() => setHoveredItem('activity')} 
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Target
-              </NavLink>
+
               <NavLink
                 to="view-expenses"
                 style={linkStyle('view-expenses')}
@@ -771,34 +793,58 @@ function AdminDashboard() {
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
-                View-Expenses
+                View Expenses
               </NavLink>
-              <NavLink 
-                to="ledger" 
-                style={linkStyle('ledger')} 
-                onMouseEnter={() => setHoveredItem('ledger')} 
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Ledger
-              </NavLink>
-              <NavLink 
-                to="inventory" 
-                style={linkStyle('inventory')} 
-                onMouseEnter={() => setHoveredItem('inventory')} 
+
+              <NavLink
+                to="inventory"
+                style={linkStyle('inventory')}
+                onMouseEnter={() => setHoveredItem('inventory')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
                 Inventory
               </NavLink>
-              <NavLink 
-                to="view-prospective" 
-                style={linkStyle('view-prospective')} 
-                onMouseEnter={() => setHoveredItem('view-prospective')} 
+            </>
+          )}
+        </div>
+
+        {/* CLIENTS Section */}
+        <div style={styles.sidebarSection}>
+          <div
+            style={styles.sidebarSectionTitle}
+            onClick={() => toggleSection('clients')}
+          >
+            CLIENTS
+            <span
+              style={{
+                ...styles.dropdownIcon,
+                transform: openSections.clients ? 'rotate(180deg)' : 'rotate(0deg)',
+              }}
+            >
+              ▼
+            </span>
+          </div>
+          {openSections.clients && (
+            <>
+              <NavLink
+                to="prospects"
+                style={linkStyle('prospects')}
+                onMouseEnter={() => setHoveredItem('prospects')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
-                View Prospects
+                Create Prospects ➕
+              </NavLink>
+
+              <NavLink
+                to="appointments"
+                style={linkStyle('appointments')}
+                onMouseEnter={() => setHoveredItem('appointments')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Create Appointments ➕
               </NavLink>
             </>
           )}
@@ -806,43 +852,65 @@ function AdminDashboard() {
 
         {/* EVENTS Section */}
         <div style={styles.sidebarSection}>
-          <div 
+          <div
             style={styles.sidebarSectionTitle}
             onClick={() => toggleSection('events')}
           >
             EVENTS
-            <span style={{
-              ...styles.dropdownIcon,
-              transform: openSections.events ? 'rotate(180deg)' : 'rotate(0deg)'
-            }}>
+            <span
+              style={{
+                ...styles.dropdownIcon,
+                transform: openSections.events ? 'rotate(180deg)' : 'rotate(0deg)',
+              }}
+            >
               ▼
             </span>
           </div>
           {openSections.events && (
             <>
-              <NavLink 
-                to="create-anniversary" 
-                style={linkStyle('create-anniversary')} 
-                onMouseEnter={() => setHoveredItem('create-anniversary')} 
+              <NavLink
+                to="create-anniversary"
+                style={linkStyle('create-anniversary')}
+                onMouseEnter={() => setHoveredItem('create-anniversary')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
-                Create-Anniversary
+                Create Anniversary
               </NavLink>
-              <NavLink 
-                to="anniversary-list" 
-                style={linkStyle('anniversary-list')} 
-                onMouseEnter={() => setHoveredItem('anniversary-list')} 
+
+              <NavLink
+                to="anniversary-list"
+                style={linkStyle('anniversary-list')}
+                onMouseEnter={() => setHoveredItem('anniversary-list')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
-                Anniversary-List
+                Anniversary List
               </NavLink>
             </>
           )}
         </div>
-      </div>
 
+        {/* TRASH Section */}
+  
+      </div>
+    );
+  };
+
+  return (
+    <div style={styles.container}>
+      {/* Mobile Menu Button - Only show on mobile */}
+      {window.innerWidth <= 768 && (
+        <div
+          style={styles.mobileMenuButton}
+          onClick={toggleSidebar}
+        >
+          ☰
+        </div>
+      )}
+
+      {/* Sidebar */}
+      <Sidebar />
       {/* Main Content Area */}
       <div style={styles.content}>
         {location.pathname.includes('create-order') ? (
@@ -999,9 +1067,9 @@ function AdminDashboard() {
                       ))}
                     </select>
                   </div>
-                  
+
                   <div style={styles.userControls}>
-                    <div 
+                    <div
                       style={styles.profileBadge}
                       onClick={() => navigate('/admin-dashboard/profile')}
                     >
@@ -1222,16 +1290,18 @@ function AdminDashboard() {
                     </div>
 
                     {/* Client Types Bar Chart */}
+
                     <div style={styles.card}>
                       <div>Client Overview {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}</div>
                       <div style={styles.chartContainer}>
                         <Bar
                           data={{
-                            labels: ['New', 'Renewal', 'Agent', 'Renewal-Agent'],
+
+                            labels: ['Retail', 'Renewal', 'Agent', 'Renewal-Agent'], // Updated
                             datasets: [{
                               label: 'Client Types',
                               data: [
-                                clientTypes.New || 0,
+                                clientTypes.Retail || 0, // Updated
                                 clientTypes.Renewal || 0,
                                 clientTypes.Agent || 0,
                                 clientTypes['Renewal-Agent'] || 0,
@@ -1275,7 +1345,8 @@ function AdminDashboard() {
                             },
                             onClick: (event, elements) => {
                               if (elements.length > 0) {
-                                const clientTypes = ['New', 'Renewal', 'Agent', 'Renewal-Agent'];
+                                // Change from: const clientTypes = ['New', 'Renewal', 'Agent', 'Renewal-Agent'];
+                                const clientTypes = ['Retail', 'Renewal', 'Agent', 'Renewal-Agent']; // Updated
                                 const selectedType = clientTypes[elements[0].index];
 
                                 const queryParams = new URLSearchParams();
@@ -1295,7 +1366,8 @@ function AdminDashboard() {
                         />
                       </div>
                       <div style={styles.number}>
-                        {(clientTypes.New || 0) +
+                        {/* Change from: (clientTypes.New || 0) + */}
+                        {(clientTypes.Retail || 0) + // Updated
                           (clientTypes.Renewal || 0) +
                           (clientTypes.Agent || 0) +
                           (clientTypes['Renewal-Agent'] || 0)}
@@ -1315,15 +1387,15 @@ function AdminDashboard() {
                             <Bar
                               data={{
                                 labels: selectedMonth !== null
-                                  ? chartData?.weeklyAgentOrders?.map((_, i) => `Week ${i + 1}`) || 
-                                    Array.from({ length: 5 }, (_, i) => `Week ${i + 1}`)
+                                  ? chartData?.weeklyAgentOrders?.map((_, i) => `Week ${i + 1}`) ||
+                                  Array.from({ length: 5 }, (_, i) => `Week ${i + 1}`)
                                   : monthLabels,
                                 datasets: [
                                   {
                                     label: 'Agent Orders',
                                     data: selectedMonth !== null
-                                      ? chartData?.weeklyAgentOrders?.map(w => w?.count || 0) || 
-                                        Array(5).fill(0)
+                                      ? chartData?.weeklyAgentOrders?.map(w => w?.count || 0) ||
+                                      Array(5).fill(0)
                                       : safeArray(chartData?.agentOrdersByMonth || Array(12).fill(0)),
                                     backgroundColor: 'rgba(255, 206, 86, 0.7)',
                                     borderColor: 'rgba(255, 206, 86, 1)',
@@ -1444,10 +1516,10 @@ function AdminDashboard() {
                                   const status = Object.keys(prospectiveData).filter(key => key !== 'timePeriod')[index];
                                   const queryParams = new URLSearchParams();
                                   queryParams.append('status', status);
-                                  
+
                                   if (year) queryParams.append('year', year);
                                   if (selectedMonth !== null) queryParams.append('month', selectedMonth + 1);
-                                  
+
                                   navigate(`/admin-dashboard/view-prospective?${queryParams.toString()}`);
                                 }
                               },
@@ -1458,14 +1530,14 @@ function AdminDashboard() {
                         )}
                       </div>
                       <div style={styles.number}>
-                        {prospectiveData ? 
+                        {prospectiveData ?
                           Object.entries(prospectiveData)
                             .filter(([key]) => key !== 'timePeriod')
-                            .reduce((sum, [, value]) => sum + value, 0) 
+                            .reduce((sum, [, value]) => sum + value, 0)
                           : 0}
                       </div>
                       <div style={styles.timePeriodText}>
-                        {prospectiveData?.timePeriod?.month 
+                        {prospectiveData?.timePeriod?.month
                           ? `${monthLabels[prospectiveData.timePeriod.month - 1]} ${prospectiveData.timePeriod.year}`
                           : `Year ${prospectiveData?.timePeriod?.year || year}`}
                       </div>

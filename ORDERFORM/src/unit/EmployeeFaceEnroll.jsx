@@ -1,4 +1,3 @@
-// components/EmployeeAttendance.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import * as XLSX from 'xlsx';
@@ -7,29 +6,22 @@ const EmployeeFaceEnroll = () => {
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [employeeName, setEmployeeName] = useState('');
-  const [usingFallback, setUsingFallback] = useState(false);
+  const [usingFallback, setUsingFallback] = useState(true);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [showRecords, setShowRecords] = useState(false);
   const [recordsLoading, setRecordsLoading] = useState(false);
   
-  const [unitEmployees, setUnitEmployees] = useState([]);
-  const [employeesLoading, setEmployeesLoading] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
-  
+  // Filters
   const currentYear = new Date().getFullYear().toString();
   const currentMonth = (new Date().getMonth() + 1).toString();
   const [yearFilter, setYearFilter] = useState(currentYear);
   const [monthFilter, setMonthFilter] = useState(currentMonth);
-  const [departmentFilter, setDepartmentFilter] = useState('all');
-  const [shiftFilter, setShiftFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
   const [todayFilter, setTodayFilter] = useState(false);
   
   const [sortConfig, setSortConfig] = useState({ key: 'loginTime', direction: 'descending' });
-  const [departments, setDepartments] = useState([]);
-  const [shifts] = useState(['all', 'morning', 'evening', 'night']);
   
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -37,10 +29,12 @@ const EmployeeFaceEnroll = () => {
   const [showExcelPreview, setShowExcelPreview] = useState(false);
   const [excelData, setExcelData] = useState([]);
 
+  // Available years for filter
   const availableYears = Array.from({ length: 6 }, (_, i) =>
     (new Date().getFullYear() - i).toString()
   );
 
+  // Months for filter
   const months = [
     { value: 'all', name: 'All Months' },
     { value: '1', name: 'January' },
@@ -57,164 +51,57 @@ const EmployeeFaceEnroll = () => {
     { value: '12', name: 'December' }
   ];
 
-  const fetchUnitEmployees = async (searchTerm = '') => {
-    try {
-      setEmployeesLoading(true);
-      let url = 'http://localhost:5000/api/units';
-      
-      if (searchTerm) {
-        url += `?search=${encodeURIComponent(searchTerm)}&limit=20`;
-      } else {
-        url += '?limit=20';
-      }
+ // Enhanced duplicate check with detailed logging
+const hasEmployeeLoggedInToday = (empName) => {
+  const today = new Date().toISOString().split('T')[0];
+  const todayLogins = JSON.parse(localStorage.getItem('todayEmployeeLogins') || '{}');
 
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
-      }
+  console.log('Checking duplicates for:', empName);
+  console.log('Today logins:', todayLogins[today] || []);
 
-      const data = await response.json();
-      
-      if (data.success) {
-        setUnitEmployees(data.data);
-      } else {
-        toast.error('Failed to load employees list');
-        setUnitEmployees([]);
-      }
-    } catch (err) {
-      console.error('Error fetching unit employees:', err);
-      toast.error('Failed to load employees list');
-      setUnitEmployees([]);
-    } finally {
-      setEmployeesLoading(false);
-    }
-  };
+  if (!todayLogins[today]) return false;
 
-  const fetchDepartments = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/api/attendance/departments');
-      const data = await response.json();
-      
-      if (data.success && data.departments && data.departments.length > 0) {
-        setDepartments(['All Departments', ...data.departments]);
-      } else {
-        const defaultDepartments = [
-          'Production', 
-          'Quality Control', 
-          'Maintenance', 
-          'Logistics', 
-          'Engineering', 
-          'Administration'
-        ];
-        setDepartments(['All Departments', ...defaultDepartments]);
-      }
-    } catch (err) {
-      console.error('Error fetching departments:', err);
-      const defaultDepartments = [
-        'Production', 'Quality Control', 'Maintenance', 
-        'Logistics', 'Engineering', 'Administration'
-      ];
-      setDepartments(['All Departments', ...defaultDepartments]);
-    }
-  };
+  const isDuplicate = todayLogins[today].some(name =>
+    name.toLowerCase() === empName.toLowerCase()
+  );
+  
+  console.log('Is duplicate:', isDuplicate);
+  return isDuplicate;
+};
 
-  const handleEmployeeNameChange = (e) => {
-    const value = e.target.value;
-    setEmployeeName(value);
-    
-    if (value.length >= 2) {
-      const timer = setTimeout(() => {
-        fetchUnitEmployees(value);
-        setShowDropdown(true);
-      }, 300);
-      return () => clearTimeout(timer);
-    } else if (value.length === 0) {
-      setShowDropdown(false);
-    }
-  };
+// Enhanced record function
+const recordEmployeeLogin = (empName) => {
+  const today = new Date().toISOString().split('T')[0];
+  const todayLogins = JSON.parse(localStorage.getItem('todayEmployeeLogins') || '{}');
 
-  const handleEmployeeSelect = (employee) => {
-    setEmployeeName(employee.name);
-    setShowDropdown(false);
-    
-    localStorage.setItem('currentEmployeeName', employee.name);
-    localStorage.setItem('currentEmployeeId', employee._id);
-    localStorage.setItem('currentEmployeeCode', employee.username);
-  };
+  if (!todayLogins[today]) {
+    todayLogins[today] = [];
+  }
 
-  const handleEmployeeInputFocus = () => {
-    if (employeeName.length === 0) {
-      fetchUnitEmployees();
-      setShowDropdown(true);
-    }
-  };
+  const employeeExists = todayLogins[today].some(name =>
+    name.toLowerCase() === empName.toLowerCase()
+  );
 
-  const hasEmployeeLoggedInToday = (empName) => {
-    const today = new Date().toISOString().split('T')[0];
-    const todayLogins = JSON.parse(localStorage.getItem('todayEmployeeLogins') || '{}');
+  if (!employeeExists) {
+    todayLogins[today].push(empName);
+    localStorage.setItem('todayEmployeeLogins', JSON.stringify(todayLogins));
+    console.log('Recorded login for:', empName);
+  } else {
+    console.log('Employee already recorded today:', empName);
+  }
+};
 
-    if (!todayLogins[today]) return false;
+ 
 
-    return todayLogins[today].some(name =>
-      name.toLowerCase() === empName.toLowerCase()
-    );
-  };
-
-  const recordEmployeeLogin = (empName) => {
-    const today = new Date().toISOString().split('T')[0];
-    const todayLogins = JSON.parse(localStorage.getItem('todayEmployeeLogins') || '{}');
-
-    if (!todayLogins[today]) {
-      todayLogins[today] = [];
-    }
-
-    const employeeExists = todayLogins[today].some(name =>
-      name.toLowerCase() === empName.toLowerCase()
-    );
-
-    if (!employeeExists) {
-      todayLogins[today].push(empName);
-      localStorage.setItem('todayEmployeeLogins', JSON.stringify(todayLogins));
-    }
-  };
-
+  // Initialize the component
   useEffect(() => {
-    const initializeFaceRecognition = async () => {
-      try {
-        setLoading(true);
-
-        try {
-          const faceapi = await import('face-api.js');
-
-          const MODEL_URL = '/models';
-          
-          await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-          await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-          await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-
-          setModelsLoaded(true);
-          toast.success("Face recognition models loaded successfully!");
-        } catch (faceApiError) {
-          console.error("Face recognition not available, using fallback:", faceApiError);
-          setUsingFallback(true);
-          toast.info("Using photo capture mode for attendance");
-        }
-      } catch (err) {
-        console.error("Model loading error:", err);
-        setUsingFallback(true);
-        toast.info("Using photo capture mode for attendance");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     const storedEmployeeName = localStorage.getItem('currentEmployeeName');
     if (storedEmployeeName) {
       setEmployeeName(storedEmployeeName);
     }
 
-    fetchDepartments();
-    initializeFaceRecognition();
+    setUsingFallback(true);
+    toast.info("Using photo capture mode for attendance");
 
     return () => {
       if (streamRef.current) {
@@ -227,47 +114,80 @@ const EmployeeFaceEnroll = () => {
     try {
       setRecordsLoading(true);
       let url = 'http://localhost:5000/api/attendance/employee';
-
+  
+      // Build query parameters - FIXED LOGIC
       const params = new URLSearchParams();
-      if (yearFilter && yearFilter !== 'all') params.append('year', yearFilter);
-      if (monthFilter && monthFilter !== 'all') params.append('month', monthFilter);
-      if (departmentFilter && departmentFilter !== 'all') params.append('department', departmentFilter);
-      if (shiftFilter && shiftFilter !== 'all') params.append('shift', shiftFilter);
-      if (dateFilter) params.append('date', dateFilter);
+      
+      // Always send year and month, handle "all" on backend
+      if (yearFilter && yearFilter !== 'all') {
+        params.append('year', yearFilter);
+      }
+      
+      if (monthFilter) {
+        params.append('month', monthFilter);
+      }
+      
+      if (dateFilter) {
+        params.append('date', dateFilter);
+      }
+      
       if (todayFilter) {
         const today = new Date().toISOString().split('T')[0];
         params.append('date', today);
       }
-
+  
       const queryString = params.toString();
       if (queryString) {
         url += `?${queryString}`;
       }
-
+  
+      console.log('Fetching attendance from:', url);
+  
       const response = await fetch(url);
+      
       if (!response.ok) {
         throw new Error(`Server returned ${response.status}`);
       }
-
+  
       const data = await response.json();
-
+      console.log('API Response:', data);
+  
       if (data.success) {
-        const sortedRecords = data.data.sort((a, b) => {
+        const records = Array.isArray(data.data) ? data.data : [];
+        console.log(`Processing ${records.length} records`);
+        
+        const sortedRecords = records.sort((a, b) => {
           return new Date(b.loginTime) - new Date(a.loginTime);
         });
+        
         setAttendanceRecords(sortedRecords);
+        toast.success(`Loaded ${sortedRecords.length} attendance records`);
       } else {
-        toast.error('Failed to load attendance records');
+        toast.error(data.message || 'Failed to load attendance records');
+        setAttendanceRecords([]);
       }
     } catch (err) {
       console.error('Error fetching attendance records:', err);
-      toast.error('Failed to load attendance records');
+      toast.error('Failed to load attendance records. Make sure backend is running.');
       setAttendanceRecords([]);
     } finally {
       setRecordsLoading(false);
     }
   };
+  // Prepare Excel data
+  const prepareExcelData = () => {
+    return attendanceRecords.map(record => ({
+      'Employee Name': record.employeeName,
+      'Employee Code': record.employeeCode,
+      'Date': new Date(record.date).toLocaleDateString(),
+      'Login Time': new Date(record.loginTime).toLocaleString(),
+      'Status': record.status,
+      'Work Hours': record.workHours || 0,
+      'Location': record.location || 'Manufacturing Unit'
+    }));
+  };
 
+  // Handle sorting
   const handleSort = (key) => {
     let direction = 'ascending';
     if (sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -288,6 +208,7 @@ const EmployeeFaceEnroll = () => {
     setAttendanceRecords(sortedRecords);
   };
 
+  // Toggle records view
   const toggleRecordsView = () => {
     if (!showRecords) {
       fetchAttendanceRecords();
@@ -295,9 +216,11 @@ const EmployeeFaceEnroll = () => {
     setShowRecords(!showRecords);
   };
 
+  // Start camera
   const startCamera = async () => {
     try {
       setLoading(true);
+      setCameraError(null);
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -330,6 +253,9 @@ const EmployeeFaceEnroll = () => {
       } else if (err.name === 'NotAllowedError') {
         setCameraError('Camera permission denied. Please allow camera access.');
         toast.error('Camera permission denied.');
+      } else if (err.name === 'NotSupportedError') {
+        setCameraError('Camera not supported in this browser.');
+        toast.error('Camera not supported.');
       } else {
         setCameraError(`Camera error: ${err.message}`);
         toast.error(`Camera error: ${err.message}`);
@@ -337,6 +263,7 @@ const EmployeeFaceEnroll = () => {
     }
   };
 
+  // Stop camera
   const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
@@ -351,126 +278,162 @@ const EmployeeFaceEnroll = () => {
     toast.info("Camera turned off");
   };
 
+  // Capture photo
   const capturePhoto = () => {
-    if (!videoRef.current || !canvasRef.current || !cameraActive) return null;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    return canvas.toDataURL('image/jpeg');
-  };
-
-  const markAttendanceWithPhoto = async () => {
-    if (!cameraActive) {
-      toast.error("Please start the camera first");
-      return;
-    }
-
-    if (!employeeName) {
-      toast.error("Please enter your Employee Name");
-      return;
-    }
-
-    if (hasEmployeeLoggedInToday(employeeName)) {
-      toast.error("You have already logged in today. Cannot login again.");
-      return;
+    if (!videoRef.current || !canvasRef.current || !cameraActive) {
+      console.error("Cannot capture photo: Camera not ready");
+      return null;
     }
 
     try {
-      setLoading(true);
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
 
-      const photoData = capturePhoto();
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
 
-      if (!photoData) {
-        toast.error("Could not capture photo. Please try again.");
-        setLoading(false);
-        return;
-      }
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      const response = await fetch('http://localhost:5000/api/attendance/mark-employee', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          employeeName: employeeName,
-          image: photoData,
-          timestamp: new Date().toISOString()
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-
-        if (data.success) {
-          recordEmployeeLogin(employeeName);
-          localStorage.setItem('currentEmployeeName', employeeName);
-          
-          toast.success(`🎉 Attendance recorded for ${data.name || 'employee'}!`);
-          if (showRecords) {
-            fetchAttendanceRecords();
-          }
-          stopCamera();
-        } else {
-          toast.error(data.message || 'Attendance recording failed.');
-        }
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Server returned ${response.status}`);
-      }
-    } catch (err) {
-      console.error("Attendance error:", err);
-      toast.error(err.message || "Error recording attendance. Please try again.");
-    } finally {
-      setLoading(false);
+      const photoData = canvas.toDataURL('image/jpeg', 0.8);
+      console.log("Photo captured successfully");
+      return photoData;
+    } catch (error) {
+      console.error("Error capturing photo:", error);
+      return null;
     }
   };
 
+ 
+ // Mark attendance with photo - IMPROVED DUPLICATE CHECKING
+const markAttendanceWithPhoto = async () => {
+  if (!cameraActive) {
+    toast.error("Please start the camera first");
+    return;
+  }
+
+  if (!employeeName || employeeName.trim() === '') {
+    toast.error("Please enter your Employee Name");
+    return;
+  }
+
+  const trimmedName = employeeName.trim();
+
+  // Enhanced duplicate check with popup confirmation
+  if (hasEmployeeLoggedInToday(trimmedName)) {
+    // Show custom confirmation popup instead of simple toast
+    const confirmed = window.confirm(
+      `⚠️ ATTENTION: ${trimmedName} has already logged in today.\n\n` +
+      `Do you want to mark attendance again?\n\n` +
+      `✅ Only use this if it's a different person with the same name.\n` +
+      `❌ Cancel if this is the same person.`
+    );
+    
+    if (!confirmed) {
+      toast.warning("Attendance marking cancelled.");
+      return;
+    }
+    // If confirmed, proceed with marking attendance (for cases where multiple people have same name)
+  }
+
+  try {
+    setLoading(true);
+
+    const photoData = capturePhoto();
+
+    if (!photoData) {
+      toast.error("Could not capture photo. Please try again.");
+      setLoading(false);
+      return;
+    }
+
+    console.log("Sending attendance request for:", trimmedName);
+
+    const response = await fetch('http://localhost:5000/api/attendance/mark-employee', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        employeeName: trimmedName,
+        image: photoData,
+        timestamp: new Date().toISOString()
+      })
+    });
+
+    // Check response status before parsing JSON
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Server error:', errorText);
+      throw new Error(`Server returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Attendance response:', data);
+
+    if (data.success) {
+      // Record the login in localStorage
+      recordEmployeeLogin(trimmedName);
+      // Save employee name for future use
+      localStorage.setItem('currentEmployeeName', trimmedName);
+      
+      toast.success(`🎉 Attendance recorded for ${data.name || trimmedName}!`);
+      
+      if (showRecords) {
+        fetchAttendanceRecords(); // Refresh the records view
+      }
+      
+      stopCamera();
+      setEmployeeName(''); // Clear the input for next use
+    } else {
+      // Handle specific backend duplicate error
+      if (data.message && data.message.includes('already marked')) {
+        toast.error(`❌ ${data.message}`);
+        // Update localStorage to reflect this
+        recordEmployeeLogin(trimmedName);
+      } else {
+        toast.error(data.message || 'Attendance recording failed.');
+      }
+    }
+  } catch (err) {
+    console.error("Attendance error:", err);
+    
+    if (err.message.includes('404')) {
+      toast.error("Server endpoint not found. Please check backend connection.");
+    } else if (err.message.includes('500')) {
+      toast.error("Server error. Please try again.");
+    } else {
+      toast.error("Error recording attendance. Please try again.");
+    }
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // Request camera permission
   const requestCameraPermission = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       stream.getTracks().forEach(track => track.stop());
       toast.success("Camera permission granted! Now click 'Start Camera'.");
+      setCameraError(null);
     } catch (err) {
       console.error("Permission request failed:", err);
       toast.error("Camera permission denied. Please allow camera access.");
+      setCameraError('Camera permission denied. Please allow camera access.');
     }
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString();
-  };
-
+  // Reset all filters
   const resetFilters = () => {
     setYearFilter(currentYear);
     setMonthFilter(currentMonth);
-    setDepartmentFilter('all');
-    setShiftFilter('all');
     setDateFilter('');
     setTodayFilter(false);
     fetchAttendanceRecords();
   };
 
-  const prepareExcelData = () => {
-    return attendanceRecords.map(record => ({
-      'Employee Name': record.employeeName,
-      'Employee ID': record.employeeCode,
-      'Department': record.department,
-      'Position': record.position,
-      'Shift': record.shift,
-      'Date': new Date(record.date).toLocaleDateString(),
-      'Login Time': formatDate(record.loginTime),
-      'Status': record.status,
-      'Work Hours': record.workHours || 'N/A'
-    }));
-  };
-
+  // Show Excel preview
   const showExcelView = () => {
     if (attendanceRecords.length === 0) {
       toast.error('No records to export');
@@ -482,6 +445,7 @@ const EmployeeFaceEnroll = () => {
     setShowExcelPreview(true);
   };
 
+  // Download Excel file
   const downloadExcel = () => {
     const ws = XLSX.utils.json_to_sheet(excelData);
     const wb = XLSX.utils.book_new();
@@ -494,76 +458,43 @@ const EmployeeFaceEnroll = () => {
     setShowExcelPreview(false);
   };
 
+  // Close Excel preview
   const closeExcelPreview = () => {
     setShowExcelPreview(false);
     setExcelData([]);
   };
 
-  const canMarkAttendance = usingFallback ? 
-    (cameraActive && employeeName) : 
-    (modelsLoaded && cameraActive && employeeName);
+  const canMarkAttendance = cameraActive && employeeName;
 
   return (
     <div className="attendance-container">
       <h2>FLEX Manufacturing - Employee Attendance</h2>
 
       <div className="status-section">
-        <div className={`status-indicator ${modelsLoaded ? 'loaded' : usingFallback ? 'fallback' : 'loading'}`}>
-          {modelsLoaded ? '✓ Face Recognition Active' :
-            usingFallback ? '✓ Photo Capture Mode' :
-              '⏳ Loading Systems...'}
+        <div className={`status-indicator ${usingFallback ? 'fallback' : 'loaded'}`}>
+          {usingFallback ? '✓ Photo Capture Mode Active' : '✓ Face Recognition Active'}
         </div>
         {loading && <div className="loading-spinner"></div>}
       </div>
 
       {usingFallback && (
         <div className="fallback-notice">
-          <p>⚠️ Advanced face recognition is not available. Using photo capture mode.</p>
+          <p>📸 Using photo capture mode for attendance recording</p>
         </div>
       )}
 
       <div className="employee-id-section">
         <label htmlFor="employeeName">Employee Name:</label>
-        <div className="dropdown-container">
-          <input
-            type="text"
-            id="employeeName"
-            value={employeeName}
-            onChange={handleEmployeeNameChange}
-            onFocus={handleEmployeeInputFocus}
-            onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-            placeholder="Type to search employees..."
-            required
-          />
-          
-          {showDropdown && (
-            <div className="dropdown-list">
-              {employeesLoading ? (
-                <div className="dropdown-loading">Loading employees...</div>
-              ) : unitEmployees.length > 0 ? (
-                unitEmployees.map((employee) => (
-                  <div
-                    key={employee._id}
-                    className="dropdown-item"
-                    onClick={() => handleEmployeeSelect(employee)}
-                  >
-                    <div className="employee-name">{employee.name}</div>
-                    <div className="employee-details">
-                      <span className="employee-id">ID: {employee.username}</span>
-                      {employee.phone && (
-                        <span className="employee-phone">📞 {employee.phone}</span>
-                      )}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="dropdown-no-results">No employees found</div>
-              )}
-            </div>
-          )}
-        </div>
+        <input
+          type="text"
+          id="employeeName"
+          value={employeeName}
+          onChange={(e) => setEmployeeName(e.target.value)}
+          placeholder="Enter your full name as registered"
+          required
+        />
         <p className="help-text">
-          Start typing to search for employees. Select from the dropdown list.
+          Please enter your full name exactly as it appears in the system
         </p>
       </div>
 
@@ -611,7 +542,7 @@ const EmployeeFaceEnroll = () => {
           disabled={loading || !canMarkAttendance}
           className="btn btn-success"
         >
-          {usingFallback ? 'Capture Photo & Mark Attendance' : 'Mark Attendance'}
+          {loading ? 'Processing...' : 'Capture Photo & Mark Attendance'}
         </button>
         <button
           onClick={stopCamera}
@@ -639,6 +570,7 @@ const EmployeeFaceEnroll = () => {
               <li>Ensure camera permissions are allowed</li>
               <li>Make sure no other application is using the camera</li>
               <li>Try refreshing the page</li>
+              <li>Use a different browser (Chrome recommended)</li>
             </ol>
           </div>
         </div>
@@ -672,34 +604,6 @@ const EmployeeFaceEnroll = () => {
                 {months.map(month => (
                   <option key={month.value} value={month.value}>
                     {month.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="filter-group">
-              <label htmlFor="departmentFilter">Department:</label>
-              <select
-                id="departmentFilter"
-                value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
-              >
-                {departments.map(dept => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="filter-group">
-              <label htmlFor="shiftFilter">Shift:</label>
-              <select
-                id="shiftFilter"
-                value={shiftFilter}
-                onChange={(e) => setShiftFilter(e.target.value)}
-              >
-                {shifts.map(shift => (
-                  <option key={shift} value={shift}>
-                    {shift === 'all' ? 'All Shifts' : shift.charAt(0).toUpperCase() + shift.slice(1)}
                   </option>
                 ))}
               </select>
@@ -755,18 +659,6 @@ const EmployeeFaceEnroll = () => {
                       Employee Name {sortConfig.key === 'employeeName' &&
                         (sortConfig.direction === 'ascending' ? '↑' : '↓')}
                     </th>
-                    <th onClick={() => handleSort('employeeCode')}>
-                      Employee ID {sortConfig.key === 'employeeCode' &&
-                        (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                    </th>
-                    <th onClick={() => handleSort('department')}>
-                      Department {sortConfig.key === 'department' &&
-                        (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                    </th>
-                    <th onClick={() => handleSort('shift')}>
-                      Shift {sortConfig.key === 'shift' &&
-                        (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                    </th>
                     <th onClick={() => handleSort('date')}>
                       Date {sortConfig.key === 'date' &&
                         (sortConfig.direction === 'ascending' ? '↑' : '↓')}
@@ -785,11 +677,8 @@ const EmployeeFaceEnroll = () => {
                   {attendanceRecords.map((record) => (
                     <tr key={record._id}>
                       <td>{record.employeeName}</td>
-                      <td>{record.employeeCode}</td>
-                      <td>{record.department}</td>
-                      <td>{record.shift}</td>
                       <td>{new Date(record.date).toLocaleDateString()}</td>
-                      <td>{formatDate(record.loginTime)}</td>
+                      <td>{new Date(record.loginTime).toLocaleString()}</td>
                       <td>
                         <span className={`status-badge ${record.status}`}>
                           {record.status}
@@ -810,6 +699,7 @@ const EmployeeFaceEnroll = () => {
         </div>
       )}
 
+      {/* Excel Preview Modal */}
       {showExcelPreview && (
         <div className="excel-preview-modal">
           <div className="excel-preview-content">
@@ -852,6 +742,7 @@ const EmployeeFaceEnroll = () => {
       )}
 
       <style>{`
+      
         .attendance-container {
           max-width: 1200px;
           margin: 0 auto;
@@ -891,12 +782,6 @@ const EmployeeFaceEnroll = () => {
           border: 1px solid #d6d8db;
         }
         
-        .status-indicator.loading {
-          background-color: #fff3cd;
-          color: #856404;
-          border: 1px solid #ffeeba;
-        }
-        
         .loading-spinner {
           width: 20px;
           height: 20px;
@@ -912,9 +797,9 @@ const EmployeeFaceEnroll = () => {
         }
         
         .fallback-notice {
-          background-color: #fff3cd;
-          border: 1px solid #ffeeba;
-          color: #856404;
+          background-color: #e2e3e5;
+          border: 1px solid #d6d8db;
+          color: #383d41;
           padding: 12px;
           border-radius: 6px;
           margin: 10px 0;
@@ -923,23 +808,13 @@ const EmployeeFaceEnroll = () => {
         
         .employee-id-section {
           margin: 20px 0;
-          text-align: left;
-          background: white;
-          padding: 15px;
-          border-radius: 8px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
         .employee-id-section label {
           display: block;
-          margin-bottom: 5px;
+          margin-bottom: 8px;
           font-weight: bold;
           color: #495057;
-        }
-        
-        .dropdown-container {
-          position: relative;
-          width: 100%;
         }
         
         .employee-id-section input {
@@ -948,74 +823,6 @@ const EmployeeFaceEnroll = () => {
           border: 1px solid #ced4da;
           border-radius: 4px;
           font-size: 16px;
-        }
-        
-        .dropdown-list {
-          position: absolute;
-          top: 100%;
-          left: 0;
-          right: 0;
-          background: white;
-          border: 1px solid #ced4da;
-          border-top: none;
-          border-radius: 0 0 4px 4px;
-          max-height: 200px;
-          overflow-y: auto;
-          z-index: 1000;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        
-        .dropdown-item {
-          padding: 10px 12px;
-          cursor: pointer;
-          border-bottom: 1px solid #f8f9fa;
-          transition: background-color 0.2s;
-        }
-        
-        .dropdown-item:hover {
-          background-color: #f8f9fa;
-        }
-        
-        .dropdown-item:last-child {
-          border-bottom: none;
-        }
-        
-        .employee-name {
-          font-weight: 500;
-          color: #495057;
-          margin-bottom: 4px;
-        }
-        
-        .employee-details {
-          display: flex;
-          justify-content: space-between;
-          font-size: 0.8em;
-          color: #6c757d;
-        }
-        
-        .employee-id {
-          font-family: monospace;
-        }
-        
-        .employee-phone {
-          font-size: 0.75em;
-        }
-        
-        .dropdown-loading,
-        .dropdown-no-results {
-          padding: 12px;
-          text-align: center;
-          color: #6c757d;
-          font-style: italic;
-        }
-        
-        .dropdown-loading {
-          color: #007bff;
-        }
-        
-        .dropdown-container input {
-          border-bottom-left-radius: ${showDropdown ? '0' : '4px'};
-          border-bottom-right-radius: ${showDropdown ? '0' : '4px'};
         }
         
         .help-text {
@@ -1218,6 +1025,7 @@ const EmployeeFaceEnroll = () => {
           border-radius: 8px;
         }
         
+        /* Excel Preview Styles */
         .excel-preview-modal {
           position: fixed;
           top: 0;

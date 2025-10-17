@@ -65,7 +65,8 @@ function OrderForm({
   const [splitCommission, setSplitCommission] = useState(false);
   const [commissionSplitInfo, setCommissionSplitInfo] = useState(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
-  const [advanceError, setAdvanceError] = useState(""); // NEW: For advance validation
+  const [advanceError, setAdvanceError] = useState("");
+  const [createdBy, setCreatedBy] = useState("");
   const printRef = useRef();
   const invoiceRef = useRef();
 
@@ -87,6 +88,11 @@ function OrderForm({
     };
   }
 
+  useEffect(() => {
+    const currentUser = localStorage.getItem("userName") || "Admin";
+    setCreatedBy(currentUser);
+  }, []);
+
   const isTimeBasedRequirement = (requirementName) => {
     return requirementName === "Mobile Vans" || requirementName === "Try Cycles";
   };
@@ -106,7 +112,6 @@ function OrderForm({
     return row.gstIncluded ? (baseAmount * 1.18).toFixed(2) : baseAmount.toFixed(2);
   };
 
-  // Fixed print functions
   const handlePrint = () => {
     const printContent = printRef.current;
     if (!printContent) {
@@ -129,6 +134,13 @@ function OrderForm({
         .form-actions { display: none !important; }
         .existing-order-notice { display: none !important; }
         .success-modal-overlay { display: none !important; }
+        .created-by-info { 
+          background-color: #f0f8ff; 
+          padding: 8px; 
+          border-radius: 4px; 
+          margin-bottom: 10px;
+          border-left: 4px solid #2196F3;
+        }
         @media print {
           body { margin: 0; padding: 10mm; }
         }
@@ -201,7 +213,6 @@ function OrderForm({
     setShowInvoice(true);
   };
 
-  // Function to reset form for new order
   const resetFormForNewOrder = () => {
     setSelectedExecutive(isAdmin ? "" : localStorage.getItem("userName") || "");
     setBusiness(routerLocation.state?.businessName || "");
@@ -231,10 +242,11 @@ function OrderForm({
     setPoDocument(null);
     setSplitCommission(false);
     setCommissionSplitInfo(null);
-    setAdvanceError(""); // NEW: Reset advance error
+    setAdvanceError("");
     setIsCreatingNew(true);
     if (onNewOrder) onNewOrder();
   };
+
   // eslint-disable-next-line no-unused-vars
   const validateAdvance = (advanceAmount, totalAmount) => {
     const advanceNum = parseFloat(advanceAmount) || 0;
@@ -286,6 +298,7 @@ function OrderForm({
       setClientType(existingData.clientType || "");
       setTarget(existingData.target || "");
       setDiscount(existingData.discount || 0);
+      setCreatedBy(existingData.createdBy || "Admin");
 
       if (existingData.rows && existingData.rows.length > 0) {
         setRows(existingData.rows.map((row) => ({
@@ -315,7 +328,6 @@ function OrderForm({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingData, orderNumber, isAdmin, executives, routerLocation.state, isCreatingNew]);
 
-  // Check if commission should be split
   useEffect(() => {
     if (selectedExecutive && saleClosedBy) {
       const shouldSplit = selectedExecutive !== saleClosedBy;
@@ -346,11 +358,18 @@ function OrderForm({
       return;
     }
 
-    // MODIFIED: Validate advance payment is at least 50% ONLY for non-admin users
+    // Debug: Check what's being sent
+    console.log('Submitting order with:', {
+      executive: selectedExecutive,
+      createdBy: createdBy,
+      isAdmin: isAdmin,
+      currentUser: localStorage.getItem("userName")
+    });
+
     const advanceNum = parseFloat(advance) || 0;
     const totalNum = parseFloat(total) || 0;
 
-    if (totalNum > 0 && !isAdmin) { // Only validate for non-admin users
+    if (totalNum > 0 && !isAdmin) {
       const advancePercentage = (advanceNum / totalNum) * 100;
 
       if (advancePercentage < 50) {
@@ -360,7 +379,6 @@ function OrderForm({
         setAdvanceError("");
       }
     }
-
 
     setIsSubmitting(true);
     try {
@@ -384,23 +402,23 @@ function OrderForm({
         ? paymentMethods.map((m) => m === "UPI" ? `UPI - ${selectedUpi}` : m).join(" + ")
         : paymentMethods.join(" + ");
 
-      // Check if commission should be split (only if saleClosedBy is selected AND different from executive)
       const shouldSplitCommission = saleClosedBy && selectedExecutive !== saleClosedBy;
 
-      // Use full amounts if no split, half amounts if split
       const finalTotal = shouldSplitCommission ? (parseFloat(total) / 2).toFixed(2) : parseFloat(total).toFixed(2);
       const finalDiscountedTotal = shouldSplitCommission ? (parseFloat(discountedTotal) / 2).toFixed(2) : parseFloat(discountedTotal).toFixed(2);
       const finalAdvance = shouldSplitCommission ? (parseFloat(advance) / 2).toFixed(2) : parseFloat(advance).toFixed(2);
       const finalBalance = shouldSplitCommission ? (parseFloat(balance) / 2).toFixed(2) : parseFloat(balance).toFixed(2);
       const finalDiscount = shouldSplitCommission ? (parseFloat(discount) / 2).toFixed(2) : parseFloat(discount).toFixed(2);
 
-      // Base order data
+      // FIXED: Always set createdBy for admin users, preserve existing for updates
+      const finalCreatedBy = isAdmin ? createdBy : (existingData?.createdBy || selectedExecutive);
+
       const mainOrderData = {
         executive: selectedExecutive,
         business,
         contactPerson,
         location: clientLocation,
-        saleClosedBy: saleClosedBy || selectedExecutive, // Use executive name if saleClosedBy is empty
+        saleClosedBy: saleClosedBy || selectedExecutive,
         contactCode: "+91",
         phone,
         orderDate,
@@ -426,7 +444,7 @@ function OrderForm({
         }),
         advanceDate,
         paymentDate,
-        paymentMethod: paymentMethodStr,
+        paymentMethods: paymentMethodStr,
         advance: finalAdvance,
         balance: finalBalance,
         total: finalTotal,
@@ -435,6 +453,7 @@ function OrderForm({
         chequeNumber,
         chequeImage,
         designStatus: design === "no" ? "pending" : "provided",
+        createdBy: finalCreatedBy, // FIXED: Use the corrected createdBy value
         commissionSplit: shouldSplitCommission ? {
           executive1: selectedExecutive,
           executive2: saleClosedBy,
@@ -448,7 +467,6 @@ function OrderForm({
         }
       };
 
-      // If commission is split, mark the main order
       if (shouldSplitCommission) {
         mainOrderData.isCommissionSplit = true;
         mainOrderData.splitDetails = {
@@ -457,11 +475,12 @@ function OrderForm({
         };
       }
 
+      console.log('Final order data being submitted:', mainOrderData);
+
       setIsSubmittingDesign(true);
       await axios.post("/api/design-requests", designRequestData);
       setIsSubmittingDesign(false);
 
-      // Submit the main order - check if we're updating existing or creating new
       const orderResponse = (existingData && !isCreatingNew)
         ? await axios.put(`/api/orders/${existingData._id}`, mainOrderData)
         : await axios.post("/api/submit", mainOrderData);
@@ -470,16 +489,15 @@ function OrderForm({
       if (shouldSplitCommission) {
         const duplicateOrderData = {
           ...mainOrderData,
-          executive: saleClosedBy, // Change executive to sale closed by
+          executive: saleClosedBy,
           isCommissionSplit: true,
-          originalOrderId: orderResponse.data._id, // Reference to original order
+          originalOrderId: orderResponse.data._id,
           splitDetails: {
             partnerExecutive: selectedExecutive,
             splitPercentage: 50
           }
         };
 
-        // Create duplicate order for the sale closed by executive
         await axios.post("/api/submit", duplicateOrderData);
       }
 
@@ -487,7 +505,7 @@ function OrderForm({
       setTimeout(() => {
         setShowSuccessModal(false);
         setIsSubmitting(false);
-        setIsCreatingNew(false); // Reset the flag after successful submission
+        setIsCreatingNew(false);
         if (onSuccess) onSuccess(orderResponse.data);
       }, 2000);
     } catch (err) {
@@ -574,7 +592,6 @@ function OrderForm({
     setAdvance(cleanedValue);
     updateBalance(total, cleanedValue);
 
-    // MODIFIED: Only validate advance payment for non-admin users
     const advanceNum = parseFloat(cleanedValue) || 0;
     const totalNum = parseFloat(total) || 0;
 
@@ -587,7 +604,7 @@ function OrderForm({
         setAdvanceError("");
       }
     } else {
-      setAdvanceError(""); // Clear any existing errors for admin
+      setAdvanceError("");
     }
   };
 
@@ -626,6 +643,28 @@ function OrderForm({
   };
 
   const capitalizeFirst = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+  // Validation functions
+  const validateLocation = (value) => {
+    // Only allow letters, spaces, and common location characters
+    return /^[a-zA-Z\s\-.,()]*$/.test(value);
+  };
+
+  const validateContactPerson = (value) => {
+    // Only allow letters and spaces
+    return /^[a-zA-Z\s]*$/.test(value);
+  };
+
+  const validateBusinessName = (value) => {
+    // Allow both letters and numbers for business name
+    return /^[a-zA-Z0-9\s\-.,&()]*$/.test(value);
+  };
+
+  const validateContactNumber = (value) => {
+    // Allow only digits and ensure exactly 10 digits
+    const digits = value.replace(/\D/g, "");
+    return digits.length <= 10;
+  };
 
   if (showInvoice) {
     return (
@@ -671,6 +710,17 @@ function OrderForm({
         </div>
       )}
 
+      {isAdmin && (
+        <div className="created-by-info">
+          <strong>Order Created By: {createdBy}</strong>
+          {createdBy !== selectedExecutive && (
+            <span style={{ marginLeft: '10px', color: '#666' }}>
+              (on behalf of {selectedExecutive})
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="form-header">
         <h2 className="subtitle">ORDER FORM</h2>
         <div className="print-actions no-print">
@@ -711,13 +761,13 @@ function OrderForm({
           </label>
 
           <label>
-            Client Type:
+            Order Type:
             <select value={clientType} onChange={(e) => setClientType(e.target.value)}>
               <option value="">Select</option>
               <option value="Retail">Retail</option>
               <option value="Renewal">Renewal</option>
               <option value="Agent">Agent</option>
-              <option value="Renwal-Agent">Renewal-Agent</option>
+              <option value="Renewal-Agent">Renewal-Agent</option>
               <option value="Corporate">Corporate</option>
               <option value="Walk-In">Walk-In</option>
             </select>
@@ -728,7 +778,11 @@ function OrderForm({
             <input
               type="text"
               value={business}
-              onChange={(e) => setBusiness(capitalizeFirst(e.target.value))}
+              onChange={(e) => {
+                if (validateBusinessName(e.target.value) || e.target.value === "") {
+                  setBusiness(capitalizeFirst(e.target.value));
+                }
+              }}
               placeholder="Enter business name"
             />
           </label>
@@ -740,7 +794,11 @@ function OrderForm({
                 <input
                   type="text"
                   value={contactPerson}
-                  onChange={(e) => setContactPerson(capitalizeFirst(e.target.value))}
+                  onChange={(e) => {
+                    if (validateContactPerson(e.target.value) || e.target.value === "") {
+                      setContactPerson(capitalizeFirst(e.target.value));
+                    }
+                  }}
                   placeholder="Contact person name"
                 />
               </label>
@@ -751,7 +809,11 @@ function OrderForm({
                 <input
                   type="text"
                   value={clientLocation}
-                  onChange={(e) => setClientLocation(e.target.value)}
+                  onChange={(e) => {
+                    if (validateLocation(e.target.value) || e.target.value === "") {
+                      setClientLocation(e.target.value);
+                    }
+                  }}
                   placeholder="Enter location"
                 />
               </label>
@@ -772,7 +834,6 @@ function OrderForm({
             </div>
           </div>
 
-          {/* Commission Split Information */}
           {splitCommission && commissionSplitInfo && (
             <div style={{
               backgroundColor: '#e8f5e8',
@@ -858,8 +919,13 @@ function OrderForm({
             <input
               type="text"
               value={contactNumber}
-              onChange={handleContactNumberChange}
+              onChange={(e) => {
+                if (validateContactNumber(e.target.value) || e.target.value === "") {
+                  handleContactNumberChange(e);
+                }
+              }}
               placeholder="+91 9876543210"
+              maxLength="14"
             />
           </label>
         </div>
@@ -897,7 +963,7 @@ function OrderForm({
                         handleRowChange(index, "requirement", value);
                         if (value !== "other") handleRowChange(index, "customRequirement", "");
                       }}
-                      isSearchable={true} // Enable search functionality
+                      isSearchable={true}
                       placeholder="Search requirement..."
                       styles={{
                         control: (base) => ({
@@ -1224,7 +1290,7 @@ function OrderForm({
         </button>
         <button
           onClick={handleSubmit}
-          disabled={isSubmitting || (!isAdmin && advanceError)} // Only disable for non-admin with advance error
+          disabled={isSubmitting || (!isAdmin && advanceError)}
           className="btn btn-primary"
         >
           {isSubmitting ? "Submitting..." : (existingData && !isCreatingNew) ? "Update Order" : "Submit Order"}
@@ -1321,6 +1387,14 @@ function OrderForm({
           border-radius: 4px;
           cursor: pointer;
         }
+        .created-by-info {
+          background-color: #e8f5e8;
+          border: 1px solid #4caf50;
+          border-radius: 6px;
+          padding: 10px 15px;
+          margin-bottom: 15px;
+          font-size: 14px;
+        }
         .form-top {
           display: flex;
           gap: 20px;
@@ -1335,7 +1409,7 @@ function OrderForm({
           margin-bottom: 15px;
         }
         input, select {
-          width: 100%;
+          width: '100%';
           padding: 8px;
           border: 1px solid #ddd;
           border-radius: 4px;

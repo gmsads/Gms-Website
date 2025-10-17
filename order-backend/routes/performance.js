@@ -18,13 +18,121 @@ const safeSum = (array, field) => {
   }, 0);
 };
 
-// Helper function to get month-year key from date
-const getMonthYearKey = (date) => {
-  const d = new Date(date);
-  const month = d.getMonth() + 1;
-  const year = d.getFullYear();
-  return `${year}-${month}`;
-};
+// ========================================
+// GET overall monthly performance for all executives WITH FILTERS
+// ========================================
+router.get('/overall', async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    
+    // Use filters if provided, otherwise use current month/year
+    const targetMonth = month ? parseInt(month) : new Date().getMonth() + 1;
+    const targetYear = year ? parseInt(year) : new Date().getFullYear();
+
+    console.log(`Fetching overall performance for Month: ${targetMonth}, Year: ${targetYear}`);
+
+    // Calculate date range for the selected month/year
+    const startDate = new Date(targetYear, targetMonth - 1, 1);
+    const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
+
+    console.log(`Date range: ${startDate} to ${endDate}`);
+
+    // Fetch all executives from all types
+    const [salesExecs, serviceExecs, accounts] = await Promise.all([
+      Executive.find().select('name dateOfJoining'),
+      ServiceExecutive.find().select('name dateOfJoining'),
+      Account.find().select('name dateOfJoining')
+    ]);
+
+    const allExecutives = [
+      ...salesExecs.map(e => ({...e.toObject(), type: 'executive'})),
+      ...serviceExecs.map(e => ({...e.toObject(), type: 'service'})),
+      ...accounts.map(e => ({...e.toObject(), type: 'account'}))
+    ];
+
+    const performanceData = [];
+
+    // Get performance data for each executive
+    for (const executive of allExecutives) {
+      try {
+        // Fetch data for the selected month/year
+        const [prospects, reports, orders, targets] = await Promise.all([
+          ProspectiveClient.find({
+            ExcutiveName: executive.name,
+            createdAt: { $gte: startDate, $lte: endDate }
+          }),
+          Report.find({
+            executiveName: executive.name,
+            date: { $gte: startDate, $lte: endDate }
+          }).lean(),
+          Order.find({
+            executive: executive.name,
+            orderDate: { $gte: startDate, $lte: endDate }
+          }),
+          Target.find({
+            executiveName: executive.name,
+            year: targetYear.toString(),
+            month: targetMonth.toString()
+          })
+        ]);
+
+        // Calculate totals
+        const totalTarget = safeSum(targets, 'targetAmount');
+        const totalAchieved = orders.reduce((sum, order) => {
+          return sum + (order.rows || []).reduce((rowSum, row) => {
+            return rowSum + (Number(row.total) || 0);
+          }, 0);
+        }, 0);
+
+        const totalOrders = orders.length;
+        const totalProspects = prospects.length;
+        const totalCalls = safeSum(reports, 'totalCalls');
+        const totalWhatsapp = safeSum(reports, 'whatsapp');
+
+        // Calculate performance percentage
+        const performancePercentage = totalTarget > 0 
+          ? (totalAchieved / totalTarget) * 100 
+          : totalAchieved > 0 ? 100 : 0;
+
+        performanceData.push({
+          executiveName: executive.name,
+          executiveType: executive.type,
+          executiveId: executive._id,
+          totalTarget,
+          totalAchieved,
+          totalOrders,
+          totalProspects,
+          totalCalls,
+          totalWhatsapp,
+          performancePercentage: Math.round(performancePercentage * 100) / 100,
+          month: targetMonth,
+          year: targetYear
+        });
+
+      } catch (execError) {
+        console.error(`Error processing executive ${executive.name}:`, execError);
+        // Continue with next executive even if one fails
+        continue;
+      }
+    }
+
+    // Filter out executives with no activity and sort by performance percentage (descending)
+    const activeExecutives = performanceData
+      .filter(exec => exec.totalTarget > 0 || exec.totalAchieved > 0 || exec.totalOrders > 0)
+      .sort((a, b) => b.performancePercentage - a.performancePercentage);
+
+    console.log(`Found ${activeExecutives.length} active executives for ${targetMonth}/${targetYear}`);
+
+    res.json(activeExecutives);
+
+  } catch (err) {
+    console.error('Error fetching overall performance data:', err);
+    res.status(500).json({ 
+      error: 'Failed to fetch overall performance data',
+      details: err.message 
+    });
+  }
+});
 
 // ========================================
 // GET performance data for an executive
@@ -134,6 +242,14 @@ router.get('/', async (req, res) => {
     const avgCallDuration = callDurations.length > 0
       ? callDurations.reduce((a, b) => a + (Number(b) || 0), 0) / callDurations.length
       : 0;
+
+    // Helper function to get month-year key from date
+    const getMonthYearKey = (date) => {
+      const d = new Date(date);
+      const month = d.getMonth() + 1;
+      const year = d.getFullYear();
+      return `${year}-${month}`;
+    };
 
     // Group targets by month-year and initialize order counts and prospects
     const monthlyTargets = {};
@@ -285,5 +401,87 @@ router.get('/executives', async (_req, res) => {
     res.status(500).json({ error: 'Failed to fetch executives' });
   }
 });
+// ========================================
+// GET overall performance for all time (when no month/year filters)
+// ========================================
+router.get('/overall/all-time', async (req, res) => {
+  try {
+    // Fetch all executives from all types
+    const [salesExecs, serviceExecs, accounts] = await Promise.all([
+      Executive.find().select('name dateOfJoining'),
+      ServiceExecutive.find().select('name dateOfJoining'),
+      Account.find().select('name dateOfJoining')
+    ]);
 
+    const allExecutives = [
+      ...salesExecs.map(e => ({...e.toObject(), type: 'executive'})),
+      ...serviceExecs.map(e => ({...e.toObject(), type: 'service'})),
+      ...accounts.map(e => ({...e.toObject(), type: 'account'}))
+    ];
+
+    const performanceData = [];
+
+    // Get performance data for each executive for all time
+    for (const executive of allExecutives) {
+      try {
+        // Fetch ALL data for this executive
+        const [prospects, reports, orders, targets] = await Promise.all([
+          ProspectiveClient.find({ ExcutiveName: executive.name }),
+          Report.find({ executiveName: executive.name }).lean(),
+          Order.find({ executive: executive.name }),
+          Target.find({ executiveName: executive.name })
+        ]);
+
+        // Calculate totals
+        const totalTarget = safeSum(targets, 'targetAmount');
+        const totalAchieved = orders.reduce((sum, order) => {
+          return sum + (order.rows || []).reduce((rowSum, row) => {
+            return rowSum + (Number(row.total) || 0);
+          }, 0);
+        }, 0);
+
+        const totalOrders = orders.length;
+        const totalProspects = prospects.length;
+        const totalCalls = safeSum(reports, 'totalCalls');
+        const totalWhatsapp = safeSum(reports, 'whatsapp');
+
+        // Calculate performance percentage
+        const performancePercentage = totalTarget > 0 
+          ? (totalAchieved / totalTarget) * 100 
+          : totalAchieved > 0 ? 100 : 0;
+
+        performanceData.push({
+          executiveName: executive.name,
+          executiveType: executive.type,
+          executiveId: executive._id,
+          totalTarget,
+          totalAchieved,
+          totalOrders,
+          totalProspects,
+          totalCalls,
+          totalWhatsapp,
+          performancePercentage: Math.round(performancePercentage * 100) / 100
+        });
+
+      } catch (execError) {
+        console.error(`Error processing executive ${executive.name}:`, execError);
+        continue;
+      }
+    }
+
+    // Filter and sort
+    const activeExecutives = performanceData
+      .filter(exec => exec.totalTarget > 0 || exec.totalAchieved > 0 || exec.totalOrders > 0)
+      .sort((a, b) => b.performancePercentage - a.performancePercentage);
+
+    res.json(activeExecutives);
+
+  } catch (err) {
+    console.error('Error fetching all-time performance data:', err);
+    res.status(500).json({ 
+      error: 'Failed to fetch all-time performance data',
+      details: err.message 
+    });
+  }
+});
 module.exports = router;

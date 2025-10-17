@@ -35,6 +35,8 @@ const expensesRoute = require('./routes/expenses');
 const fieldExecutiveRoutes = require('./routes/fieldExecutive');
 const designersRoutes = require('./routes/designers');
 const uploadRoute = require('./routes/uploadRoute.js');
+const unitAttendanceRoutes = require('./routes/unitAttendance');
+const trashOrdersRoutes = require("./routes/trashOrders");
 // Initialize Express
 const app = express();
 runReminderCron();
@@ -46,6 +48,7 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Upload endpoint
 app.use("/api/upload", uploadRoute);
+app.use("/api/trash-orders",trashOrdersRoutes);
 // Routes - SPECIFIC ROUTES FIRST
 app.use('/api/anniversaries', anniversaryRoutes);
 app.use('/api/expenses', expensesRoute);
@@ -78,6 +81,7 @@ app.use("/api", checkClientRoutes);
 app.use("/api", serviceExecutiveRoutes);
 app.use("/api", employeeRoutes);
 app.use('/api/employees', require('./routes/employees'));
+app.use('/api/attendance', unitAttendanceRoutes);
 // Be careful with this catch-all route - it might conflict
 // app.use("/api", router);
 

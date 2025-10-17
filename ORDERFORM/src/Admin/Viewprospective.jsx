@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { format, addDays } from 'date-fns';
@@ -30,13 +31,23 @@ const ViewProspective = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // API configuration
+  const API_BASE_URL = '/api';
+  const API_ENDPOINTS = {
+    PROSPECTIVES: `${API_BASE_URL}/prospective-clients`,
+    DELETE_PROSPECTIVE: (id) => `${API_BASE_URL}/prospective-clients/${id}`,
+    TRASH_PROSPECTIVES: `${API_BASE_URL}/prospective-clients/trash`,
+    RESTORE_PROSPECTIVE: (id) => `${API_BASE_URL}/prospective-clients/${id}/restore`,
+    PERMANENT_DELETE_PROSPECTIVE: (id) => `${API_BASE_URL}/prospective-clients/${id}/permanent`
+  };
+
   // Extract filter parameters from URL
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const executiveName = searchParams.get('executiveName');
     const month = searchParams.get('month');
     const year = searchParams.get('year');
-    
+
     setAppliedFilters({
       executiveName: executiveName || '',
       month: month || '',
@@ -44,63 +55,68 @@ const ViewProspective = () => {
     });
   }, [location]);
 
-  // Fetch prospective clients data
-  useEffect(() => {
-    const fetchProspectives = async () => {
-      try {
-        const userName = localStorage.getItem('userName');
-        const role = localStorage.getItem('role');
+  // Fetch prospective clients data - EXCLUDE TRASHED
+  const fetchProspectives = async () => {
+    try {
+      const userName = localStorage.getItem('userName');
+      const role = localStorage.getItem('role');
 
-        // API call to get prospective clients
-        const response = await axios.get('/api/prospective-clients', {
-          params: { userName, role }
-        });
-
-        // Apply filters from URL parameters
-        let filteredData = response.data;
-
-        // Filter by executive name if provided
-        if (appliedFilters.executiveName) {
-          filteredData = filteredData.filter(p => 
-            p.ExcutiveName?.toLowerCase().includes(appliedFilters.executiveName.toLowerCase()) ||
-            p.executiveName?.toLowerCase().includes(appliedFilters.executiveName.toLowerCase())
-          );
+      // API call to get prospective clients - EXCLUDE TRASHED
+      const response = await axios.get(API_ENDPOINTS.PROSPECTIVES, {
+        params: {
+          userName,
+          role
+          // Remove isTrashed: false from params since backend handles it
         }
+      });
 
-        // Filter by month and year if provided
-        if (appliedFilters.month && appliedFilters.year) {
-          filteredData = filteredData.filter(p => {
-            if (!p.createdAt && !p.followUpDate) return false;
-            
-            const prospectDate = new Date(p.createdAt || p.followUpDate);
-            const prospectMonth = prospectDate.getMonth() + 1;
-            const prospectYear = prospectDate.getFullYear();
-            
-            return prospectMonth === parseInt(appliedFilters.month) && 
-                   prospectYear === parseInt(appliedFilters.year);
-          });
-        }
+      // Apply filters from URL parameters
+      let filteredData = response.data;
 
-        // Sort by creation date (newest first)
-        const sortedData = filteredData.sort((a, b) => {
-          const dateA = new Date(a.createdAt || a.dateCreated || a.followUpDate);
-          const dateB = new Date(b.createdAt || b.dateCreated || b.followUpDate);
-          return dateB - dateA; // Descending order (newest first)
-        });
-
-        // Update state with sorted and filtered data
-        setProspectives(sortedData);
-        setFilteredProspectives(sortedData);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching prospectives:', err);
-        setError('Failed to load prospective clients');
-        setLoading(false);
+      // Filter by executive name if provided
+      if (appliedFilters.executiveName) {
+        filteredData = filteredData.filter(p =>
+          p.ExcutiveName?.toLowerCase().includes(appliedFilters.executiveName.toLowerCase()) ||
+          p.executiveName?.toLowerCase().includes(appliedFilters.executiveName.toLowerCase())
+        );
       }
-    };
 
+      // Filter by month and year if provided
+      if (appliedFilters.month && appliedFilters.year) {
+        filteredData = filteredData.filter(p => {
+          if (!p.createdAt && !p.followUpDate) return false;
+
+          const prospectDate = new Date(p.createdAt || p.followUpDate);
+          const prospectMonth = prospectDate.getMonth() + 1;
+          const prospectYear = prospectDate.getFullYear();
+
+          return prospectMonth === parseInt(appliedFilters.month) &&
+            prospectYear === parseInt(appliedFilters.year);
+        });
+      }
+
+      // Sort by creation date (newest first)
+      const sortedData = filteredData.sort((a, b) => {
+        const dateA = new Date(a.createdAt || a.dateCreated || a.followUpDate);
+        const dateB = new Date(b.createdAt || b.dateCreated || b.followUpDate);
+        return dateB - dateA; // Descending order (newest first)
+      });
+
+      // Update state with sorted and filtered data
+      setProspectives(sortedData);
+      setFilteredProspectives(sortedData);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching prospectives:', err);
+      setError('Failed to load prospective clients');
+      setLoading(false);
+    }
+  };
+
+  // Fetch data on component mount and when filters change
+  useEffect(() => {
     fetchProspectives();
-  }, [appliedFilters]); // Re-fetch when filters change
+  }, [appliedFilters]);
 
   // Handle redirect after sale closed
   useEffect(() => {
@@ -109,15 +125,15 @@ const ViewProspective = () => {
         const prospectiveData = prospectives.find(p => p._id === redirectId);
         if (prospectiveData) {
           localStorage.setItem('saleClosedProspectiveData', JSON.stringify(prospectiveData));
-          navigate('/order', { 
-            state: { 
+          navigate('/order', {
+            state: {
               activeTab: 'order',
               prospectiveData: prospectiveData
-            } 
+            }
           });
         }
       }, 1500);
-      
+
       return () => clearTimeout(timer);
     }
   }, [redirectId, navigate, prospectives]);
@@ -125,16 +141,14 @@ const ViewProspective = () => {
   // Filter prospectives based on search term
   useEffect(() => {
     if (searchTerm === '') {
-      // Maintain the original sorted order when no search term
       setFilteredProspectives([...prospectives]);
     } else {
       const filtered = prospectives.filter((p) => {
         const searchLower = searchTerm.toLowerCase();
-        const formattedDate = p.followUpDate 
-          ? format(new Date(p.followUpDate), 'MMM dd, yyyy').toLowerCase() 
+        const formattedDate = p.followUpDate
+          ? format(new Date(p.followUpDate), 'MMM dd, yyyy').toLowerCase()
           : '';
-        
-        // Search across multiple fields
+
         return (
           (p.executiveName?.toLowerCase().includes(searchLower)) ||
           (p.businessName?.toLowerCase().includes(searchLower)) ||
@@ -149,14 +163,13 @@ const ViewProspective = () => {
           formattedDate.includes(searchLower)
         );
       });
-      
-      // Apply the same sorting to filtered results
+
       const sortedFiltered = [...filtered].sort((a, b) => {
         const dateA = new Date(a.createdAt || a.dateCreated || a.followUpDate);
         const dateB = new Date(b.createdAt || b.dateCreated || b.followUpDate);
         return dateB - dateA;
       });
-      
+
       setFilteredProspectives(sortedFiltered);
     }
   }, [searchTerm, prospectives]);
@@ -179,25 +192,24 @@ const ViewProspective = () => {
     try {
       setSending(prev => ({ ...prev, [id]: true }));
       setError(null);
-      
+
       const executiveName = localStorage.getItem('userName');
       const response = await axios.patch(`/api/prospective-clients/${id}`, {
         status: 'sale closed',
         executiveName
       });
-      
+
       if (response.status === 200) {
         setSuccess(prev => ({ ...prev, [id]: true }));
-        
+
         // Update local state
-        const updatedProspectives = prospectives.map(p => 
+        const updatedProspectives = prospectives.map(p =>
           p._id === id ? { ...p, status: 'sale closed' } : p
         );
-        
+
         setProspectives(updatedProspectives);
         setFilteredProspectives(updatedProspectives);
-        
-        // Set the ID to trigger redirect
+
         setRedirectId(id);
       }
     } catch (err) {
@@ -212,58 +224,18 @@ const ViewProspective = () => {
     try {
       setSending(prev => ({ ...prev, [id]: true }));
       setError(null);
-      
+
       await axios.patch(`/api/prospective-clients/${id}`, {
         status,
         ...(date && { followUpDate: date })
       });
-      
-      // Refresh data after update
-      const response = await axios.get('/api/prospective-clients', {
-        params: { 
-          userName: localStorage.getItem('userName'),
-          role: localStorage.getItem('role')
-        }
-      });
 
-      // Re-apply filters and sorting
-      let filteredData = response.data;
+      // Refresh the data
+      await fetchProspectives();
 
-      // Filter by executive name if provided
-      if (appliedFilters.executiveName) {
-        filteredData = filteredData.filter(p => 
-          p.ExcutiveName?.toLowerCase().includes(appliedFilters.executiveName.toLowerCase()) ||
-          p.executiveName?.toLowerCase().includes(appliedFilters.executiveName.toLowerCase())
-        );
-      }
-
-      // Filter by month and year if provided
-      if (appliedFilters.month && appliedFilters.year) {
-        filteredData = filteredData.filter(p => {
-          if (!p.createdAt && !p.followUpDate) return false;
-          
-          const prospectDate = new Date(p.createdAt || p.followUpDate);
-          const prospectMonth = prospectDate.getMonth() + 1;
-          const prospectYear = prospectDate.getFullYear();
-          
-          return prospectMonth === parseInt(appliedFilters.month) && 
-                 prospectYear === parseInt(appliedFilters.year);
-        });
-      }
-
-      // Re-sort the updated data
-      const sortedData = filteredData.sort((a, b) => {
-        const dateA = new Date(a.createdAt || a.dateCreated || a.followUpDate);
-        const dateB = new Date(b.createdAt || b.dateCreated || b.followUpDate);
-        return dateB - dateA;
-      });
-      
-      setProspectives(sortedData);
-      setFilteredProspectives(sortedData);
       setShowDatePicker(false);
       setSuccess(prev => ({ ...prev, [id]: true }));
-      
-      // Clear success message after 2 seconds
+
       setTimeout(() => setSuccess(prev => ({ ...prev, [id]: false })), 2000);
     } catch (err) {
       console.error('Error updating status:', err);
@@ -273,42 +245,76 @@ const ViewProspective = () => {
     }
   };
 
-  // Handle delete confirmation and action
   const handleDelete = async (id) => {
     confirmAlert({
-      title: 'Confirm to delete',
-      message: 'Are you sure you want to delete this prospective client?',
+      title: 'Confirm Delete',
+      message: 'Are you sure you want to delete this prospect .',
       buttons: [
         {
-          label: 'Yes',
+          label: 'Delete',
           onClick: async () => {
             try {
-              await axios.delete(`/api/prospective-clients/${id}`);
-              const updatedProspectives = prospectives.filter(p => p._id !== id);
+              setSending(prev => ({ ...prev, [id]: true }));
               
-              // Maintain sorting after deletion
-              const sortedData = updatedProspectives.sort((a, b) => {
-                const dateA = new Date(a.createdAt || a.dateCreated || a.followUpDate);
-                const dateB = new Date(b.createdAt || b.dateCreated || b.followUpDate);
-                return dateB - dateA;
+              console.log('Starting delete process for ID:', id);
+              
+              // Use DELETE endpoint to move to trash (soft delete)
+              const response = await axios.delete(API_ENDPOINTS.DELETE_PROSPECTIVE(id), {
+                data: {
+                  deletedBy: role === 'Admin' ? 'Admin' : localStorage.getItem('userName'),
+                  reason: 'Deleted from prospective clients page'
+                }
               });
-              
-              setProspectives(sortedData);
-              setFilteredProspectives(sortedData);
+  
+              console.log('Delete response:', response.data);
+  
+              if (response.status === 200) {
+                console.log('Successfully deleted from backend, updating UI...');
+                
+                // Remove from local state immediately for better UX
+                const updatedProspectives = prospectives.filter(p => p._id !== id);
+                
+                const sortedData = updatedProspectives.sort((a, b) => {
+                  const dateA = new Date(a.createdAt || a.dateCreated || a.followUpDate);
+                  const dateB = new Date(b.createdAt || b.dateCreated || b.followUpDate);
+                  return dateB - dateA;
+                });
+                
+                setProspectives(sortedData);
+                setFilteredProspectives(sortedData);
+                
+                setSuccess(prev => ({ ...prev, [id]: 'deleted' }));
+                
+                setTimeout(() => setSuccess(prev => {
+                  const newSuccess = { ...prev };
+                  delete newSuccess[id];
+                  return newSuccess;
+                }), 3000);
+              }
             } catch (err) {
               console.error('Error deleting prospective client:', err);
-              setError('Failed to delete prospective client');
+              console.error('Error response:', err.response);
+              console.error('Error details:', err.response?.data);
+              setError('Failed to delete prospective client: ' + (err.response?.data?.error || err.message));
+              
+              // Refresh data to ensure UI is in sync with backend
+              fetchProspectives();
+            } finally {
+              setSending(prev => {
+                const newSending = { ...prev };
+                delete newSending[id];
+                return newSending;
+              });
             }
           }
         },
         {
-          label: 'No',
+          label: 'Cancel',
           onClick: () => {}
         }
       ]
     });
   };
-
   // Confirm follow-up date selection
   const handleDateConfirm = () => {
     if (selectedDate) {
@@ -318,7 +324,7 @@ const ViewProspective = () => {
 
   // Clear all filters
   const clearFilters = () => {
-    navigate('/admin-dashboard/view-prospective'); // Navigate without filter parameters
+    navigate('/admin-dashboard/view-prospective');
     setAppliedFilters({
       executiveName: '',
       month: '',
@@ -336,7 +342,7 @@ const ViewProspective = () => {
       display: 'inline-block'
     };
 
-    switch(status) {
+    switch (status) {
       case 'sale closed':
         return { ...baseStyle, backgroundColor: '#d4edda', color: '#155724' };
       case 'not interested':
@@ -350,24 +356,22 @@ const ViewProspective = () => {
     }
   };
 
-
-  
- 
   // Loading and error states
   if (loading) return <div style={styles.loading}>Loading prospective clients...</div>;
   if (error) return <div style={styles.error}>{error}</div>;
 
-  // Main render
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <h2 style={styles.heading}>Prospective Clients</h2>
-        
+
+      
+
         {/* Show active filters */}
         {(appliedFilters.executiveName || appliedFilters.month) && (
           <div style={styles.filterInfo}>
             <span style={styles.filterText}>
-              Showing prospects for: 
+              Showing prospects for:
               {appliedFilters.executiveName && ` Executive: ${decodeURIComponent(appliedFilters.executiveName)}`}
               {appliedFilters.month && appliedFilters.year && ` Month: ${appliedFilters.month}/${appliedFilters.year}`}
             </span>
@@ -377,7 +381,7 @@ const ViewProspective = () => {
           </div>
         )}
       </div>
-      
+
       {/* Search input */}
       <div style={styles.searchContainer}>
         <input
@@ -419,6 +423,23 @@ const ViewProspective = () => {
         </div>
       )}
 
+
+      {Object.keys(success).map(id => {
+        if (success[id] === 'deleted') {
+          // eslint-disable-next-line no-unused-vars
+          const prospective = prospectives.find(p => p._id === id);
+         
+        }
+        return null;
+      })}
+
+      {/* Error message */}
+      {error && (
+        <div style={styles.errorMessage}>
+          {error}
+        </div>
+      )}
+
       {/* Main table */}
       <div style={styles.tableWrapper}>
         <table style={styles.table}>
@@ -457,7 +478,7 @@ const ViewProspective = () => {
                     </span>
                   </td>
                   <td style={styles.td}>
-                    <select 
+                    <select
                       value=""
                       onChange={(e) => handleStatusChange(p._id, e.target.value)}
                       style={styles.select}
@@ -470,17 +491,17 @@ const ViewProspective = () => {
                       <option value="followup">Follow Up</option>
                     </select>
                     {sending[p._id] && (
-                      <div style={{fontSize: '12px', color: '#2e7d32', marginTop: '5px'}}>
+                      <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
                         Updating...
                       </div>
                     )}
                     {success[p._id] && p.status === 'sale closed' && (
-                      <div style={{fontSize: '12px', color: '#2e7d32', marginTop: '5px'}}>
+                      <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
                         ✓ Sale closed! Redirecting to order form...
                       </div>
                     )}
-                    {success[p._id] && p.status !== 'sale closed' && (
-                      <div style={{fontSize: '12px', color: '#2e7d32', marginTop: '5px'}}>
+                    {success[p._id] && p.status !== 'sale closed' && success[p._id] !== 'moved_to_trash' && (
+                      <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
                         ✓ Status updated successfully!
                       </div>
                     )}
@@ -490,8 +511,9 @@ const ViewProspective = () => {
                       <button
                         onClick={() => handleDelete(p._id)}
                         style={styles.deleteButton}
+                        disabled={sending[p._id]}
                       >
-                        Delete
+                        {sending[p._id] ? 'Deleting...' : 'Delete'}
                       </button>
                     </td>
                   )}
@@ -513,7 +535,7 @@ const ViewProspective = () => {
   );
 };
 
-// Styles object
+// Styles object (same as before)
 const styles = {
   container: {
     padding: '20px',
@@ -524,14 +546,35 @@ const styles = {
     position: 'relative'
   },
   header: {
-    marginBottom: '25px'
+    marginBottom: '25px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '15px'
   },
   heading: {
     color: '#2c3e50',
     marginBottom: '15px',
     borderBottom: '2px solid #3498db',
     paddingBottom: '10px',
-    fontSize: '24px'
+    fontSize: '24px',
+    flex: 1
+  },
+  actionButtons: {
+    display: 'flex',
+    gap: '10px',
+    marginBottom: '15px'
+  },
+  trashButton: {
+    padding: '10px 20px',
+    backgroundColor: '#e67e22',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500'
   },
   filterInfo: {
     display: 'flex',
@@ -540,7 +583,8 @@ const styles = {
     backgroundColor: '#e8f4fd',
     padding: '12px 15px',
     borderRadius: '6px',
-    marginBottom: '15px'
+    marginBottom: '15px',
+    width: '100%'
   },
   filterText: {
     color: '#2c3e50',
@@ -567,13 +611,7 @@ const styles = {
     border: '1px solid #ddd',
     fontSize: '16px',
     boxSizing: 'border-box',
-    outline: 'none',
-    transition: 'all 0.3s',
-    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
-    ':focus': {
-      borderColor: '#3498db',
-      boxShadow: '0 0 5px rgba(52,152,219,0.5)'
-    }
+    outline: 'none'
   },
   tableWrapper: {
     overflowX: 'auto',
@@ -609,11 +647,7 @@ const styles = {
     borderRadius: '4px',
     border: '1px solid #ddd',
     backgroundColor: 'white',
-    cursor: 'pointer',
-    ':focus': {
-      outline: 'none',
-      borderColor: '#3498db'
-    }
+    cursor: 'pointer'
   },
   deleteButton: {
     padding: '6px 12px',
@@ -622,10 +656,7 @@ const styles = {
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
-    fontWeight: '500',
-    ':hover': {
-      backgroundColor: '#c0392b'
-    }
+    fontWeight: '500'
   },
   modalOverlay: {
     position: 'fixed',
@@ -671,8 +702,7 @@ const styles = {
     color: 'white',
     border: 'none',
     borderRadius: '4px',
-    cursor: 'pointer',
-    fontWeight: '500'
+    cursor: 'pointer'
   },
   cancelButton: {
     padding: '10px 20px',
@@ -680,8 +710,7 @@ const styles = {
     color: 'white',
     border: 'none',
     borderRadius: '4px',
-    cursor: 'pointer',
-    fontWeight: '500'
+    cursor: 'pointer'
   },
   loading: {
     textAlign: 'center',
@@ -694,6 +723,24 @@ const styles = {
     padding: '40px',
     fontSize: '18px',
     color: '#e74c3c'
+  },
+  errorMessage: {
+    backgroundColor: '#f8d7da',
+    color: '#721c24',
+    padding: '12px 15px',
+    borderRadius: '4px',
+    marginBottom: '15px',
+    border: '1px solid #f5c6cb'
+  },
+  trashSuccessMessage: {
+    backgroundColor: '#d4edda',
+    color: '#155724',
+    padding: '12px 15px',
+    borderRadius: '4px',
+    marginBottom: '15px',
+    border: '1px solid #c3e6cb',
+    fontSize: '14px',
+    fontWeight: '500'
   }
 };
 

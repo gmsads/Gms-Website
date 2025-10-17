@@ -65,7 +65,6 @@ router.get("/requirements", async (req, res) => {
   }
 });
 
-// ============================
 // POST a new order (auto-generate orderNo)
 // ============================
 router.post("/submit", async (req, res) => {
@@ -95,7 +94,17 @@ router.post("/submit", async (req, res) => {
     const paddedNum = String(nextNumber).padStart(3, "0");
     const newOrderNo = `${orderPrefix}${paddedNum}`;
 
-    const newOrder = new Order({ ...req.body, orderNo: newOrderNo });
+    // FIXED: Ensure createdBy field is properly saved
+    const orderData = {
+      ...req.body,
+      orderNo: newOrderNo,
+      // Ensure createdBy is always set from the request
+      createdBy: req.body.createdBy || req.body.executive // Fallback to executive if not provided
+    };
+
+    console.log('Final order data to save:', orderData); // Debug log
+
+    const newOrder = new Order(orderData);
 
     await newOrder.save();
 
@@ -106,6 +115,100 @@ router.post("/submit", async (req, res) => {
   }
 });
 
+// ============================
+// UPDATE an existing order
+// ============================
+router.put("/orders/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log("Updating order:", id, "with data:", req.body);
+
+    // FIXED: Ensure createdBy field is preserved during update
+    const updateData = { ...req.body };
+    
+    // If createdBy is not provided in update, preserve the existing one
+    if (!updateData.createdBy) {
+      const existingOrder = await Order.findById(id);
+      if (existingOrder && existingOrder.createdBy) {
+        updateData.createdBy = existingOrder.createdBy;
+      }
+    }
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedOrder) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json({ message: "Order updated successfully", order: updatedOrder });
+  } catch (err) {
+    console.error("Error updating order:", err);
+    res.status(500).json({ error: "Failed to update order" });
+  }
+});
+
+// ============================
+// GET all orders (with filtering)
+// ============================
+router.get("/orders", async (req, res) => {
+  try {
+    let query = {};
+
+    console.log('Query parameters:', req.query); // Debug log
+
+    // Filter by executive name if specified (for performance view)
+    if (req.query.executive) {
+      query.executive = req.query.executive;
+    }
+
+    // Filter by service executive if specified
+    if (req.query.serviceExecutive) {
+      query['rows.assignedExecutive'] = req.query.serviceExecutive;
+    }
+
+    // Filter by logged-in executive if role is Executive
+    if (req.query.role === "Executive") {
+      query.executive = req.query.name;
+    }
+
+    // Filter by client type if specified
+    if (req.query.clientType) {
+      query.clientType = req.query.clientType;
+    }
+
+    // Filter by month/year if specified
+    if (req.query.month && req.query.year) {
+      const month = parseInt(req.query.month);
+      const year = parseInt(req.query.year);
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 1);
+
+      query.orderDate = {
+        $gte: startDate,
+        $lt: endDate,
+      };
+    }
+
+    console.log('Final query:', query); // Debug log
+
+    const orders = await Order.find(query);
+    console.log('Found orders:', orders.length); // Debug log
+    
+    // Debug: Log createdBy field for each order
+    orders.forEach(order => {
+      console.log(`Order ${order.orderNo}: executive=${order.executive}, createdBy=${order.createdBy}`);
+    });
+    
+    res.json(orders);
+  } catch (err) {
+    console.error("Error fetching orders:", err);
+    res.status(500).json({ error: "Failed to fetch orders" });
+  }
+});
 // ============================
 // GET dashboard chart data
 // ============================
@@ -181,59 +284,7 @@ router.get("/dashboard/chart-data", async (req, res) => {
 });
 
 
-// ============================
-// GET all orders (with filtering)
-// ============================
-router.get("/orders", async (req, res) => {
-  try {
-    let query = {};
 
-    console.log('Query parameters:', req.query); // Debug log
-
-    // Filter by executive name if specified (for performance view)
-    if (req.query.executive) {
-      query.executive = req.query.executive;
-    }
-
-    // Filter by service executive if specified
-    if (req.query.serviceExecutive) {
-      query['rows.assignedExecutive'] = req.query.serviceExecutive;
-    }
-
-    // Filter by logged-in executive if role is Executive
-    if (req.query.role === "Executive") {
-      query.executive = req.query.name;
-    }
-
-    // Filter by client type if specified
-    if (req.query.clientType) {
-      query.clientType = req.query.clientType;
-    }
-
-    // Filter by month/year if specified
-    if (req.query.month && req.query.year) {
-      const month = parseInt(req.query.month);
-      const year = parseInt(req.query.year);
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 1);
-
-      query.orderDate = {
-        $gte: startDate,
-        $lt: endDate,
-      };
-    }
-
-    console.log('Final query:', query); // Debug log
-
-    const orders = await Order.find(query);
-    console.log('Found orders:', orders.length); // Debug log
-    
-    res.json(orders);
-  } catch (err) {
-    console.error("Error fetching orders:", err);
-    res.status(500).json({ error: "Failed to fetch orders" });
-  }
-});
 
 // ============================
 // GET orders with pending payments
@@ -1007,4 +1058,187 @@ router.put('/orders/:orderId/rows/:rowIndex/status', async (req, res) => {
     res.status(500).json({ error: 'Failed to update status' });
   }
 });
+
+// ============================
+// PUT: Mark executive as inactive/active
+// ============================
+router.put("/service-executives/:id/status", async (req, res) => {
+  try {
+    const { active, inactiveReason } = req.body;
+    
+    const updatedExecutive = await ServiceExecutive.findByIdAndUpdate(
+      req.params.id,
+      { 
+        active: active !== undefined ? active : true,
+        inactiveReason: active === false ? inactiveReason : null,
+        inactiveSince: active === false ? new Date() : null
+      },
+      { new: true }
+    );
+
+    if (!updatedExecutive) {
+      return res.status(404).json({ error: "Executive not found" });
+    }
+
+    res.json({ 
+      message: `Executive ${active ? 'activated' : 'deactivated'} successfully`,
+      executive: updatedExecutive 
+    });
+  } catch (err) {
+    console.error("Error updating executive status:", err);
+    res.status(500).json({ error: "Failed to update executive status" });
+  }
+});
+
+// ============================
+// GET active service executives only
+// ============================
+router.get("/service-executives/active", async (req, res) => {
+  try {
+    const activeExecutives = await ServiceExecutive.find({ active: { $ne: false } });
+    res.json(activeExecutives);
+  } catch (err) {
+    console.error("Error fetching active executives:", err);
+    res.status(500).json({ error: "Failed to fetch active executives" });
+  }
+});
+// ============================
+// GET trashed orders
+// ============================
+router.get("/orders/trash", async (req, res) => {
+  try {
+    const trashedOrders = await Order.find({ isTrashed: true })
+      .sort({ trashedAt: -1 });
+    
+    console.log('Found trashed orders:', trashedOrders.length);
+    res.json(trashedOrders);
+  } catch (err) {
+    console.error("Error fetching trashed orders:", err);
+    res.status(500).json({ error: "Failed to fetch trashed orders" });
+  }
+});
+// ============================
+// DELETE: Move order to trash (soft delete)
+// ============================
+router.delete("/orders/:id", async (req, res) => {
+  try {
+    const orderToDelete = await Order.findById(req.params.id);
+
+    if (!orderToDelete) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    console.log('Moving order to trash:', {
+      orderId: req.params.id,
+      orderNo: orderToDelete.orderNo,
+      deletedBy: req.body.deletedBy,
+      reason: req.body.reason
+    });
+
+    // Instead of deleting, mark as trashed (soft delete)
+    orderToDelete.isTrashed = true;
+    orderToDelete.trashedAt = new Date();
+    orderToDelete.trashedBy = req.body.deletedBy || 'Admin';
+    orderToDelete.deletionReason = req.body.reason || 'Deleted by user';
+
+    await orderToDelete.save();
+
+    console.log('Order successfully moved to trash:', orderToDelete.orderNo);
+
+    res.json({ 
+      message: "Order moved to trash successfully",
+      order: {
+        id: orderToDelete._id,
+        orderNo: orderToDelete.orderNo,
+        isTrashed: orderToDelete.isTrashed,
+        trashedAt: orderToDelete.trashedAt
+      }
+    });
+  } catch (err) {
+    console.error("Error moving order to trash:", err);
+    res.status(500).json({ error: "Failed to move order to trash" });
+  }
+});
+// ============================
+// PUT: Restore order from trash
+// ============================
+router.put("/orders/:id/restore", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    order.isTrashed = false;
+    order.trashedAt = null;
+    order.trashedBy = null;
+    order.deletionReason = null;
+
+    await order.save();
+
+    res.json({ message: "Order restored successfully" });
+  } catch (err) {
+    console.error("Error restoring order:", err);
+    res.status(500).json({ error: "Failed to restore order" });
+  }
+});
+// ============================
+// DELETE: Permanently delete order from trash
+// ============================
+router.delete("/orders/:id/permanent", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    if (!order.isTrashed) {
+      return res.status(400).json({ error: "Order is not in trash" });
+    }
+
+    // Permanently delete the order
+    await Order.findByIdAndDelete(req.params.id);
+
+    res.json({ message: "Order permanently deleted" });
+  } catch (err) {
+    console.error("Error permanently deleting order:", err);
+    res.status(500).json({ error: "Failed to permanently delete order" });
+  }
+});
+// ============================
+// Migration route to add trash fields to existing orders
+// ============================
+router.post("/migrate-trash-fields", async (req, res) => {
+  try {
+    const result = await Order.updateMany(
+      { 
+        $or: [
+          { isTrashed: { $exists: false } },
+          { trashedAt: { $exists: false } },
+          { trashedBy: { $exists: false } },
+          { deletionReason: { $exists: false } }
+        ]
+      },
+      {
+        $set: {
+          isTrashed: false,
+          trashedAt: null,
+          trashedBy: null,
+          deletionReason: null
+        }
+      }
+    );
+    
+    res.json({ 
+      message: "Migration completed", 
+      modified: result.modifiedCount 
+    });
+  } catch (err) {
+    console.error("Migration error:", err);
+    res.status(500).json({ error: "Migration failed" });
+  }
+});
+
 module.exports = router;

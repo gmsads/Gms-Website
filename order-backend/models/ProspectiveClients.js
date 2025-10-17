@@ -38,13 +38,8 @@ const prospectiveClientSchema = new mongoose.Schema({
     },
     followUpDate: {
         type: Date,
-        required: [true, 'Follow-up date is required'],
-        validate: {
-            validator: function(v) {
-                return v >= new Date();
-            },
-            message: 'Follow-up date must be in the future'
-        }
+        required: [true, 'Follow-up date is required']
+        // Removed the future date validation as it causes issues
     },
     prospectType: {
         type: String,
@@ -80,13 +75,19 @@ const prospectiveClientSchema = new mongoose.Schema({
             default: Date.now
         }
     }],
-    createdAt: {
-        type: Date,
-        default: Date.now
+    // Trash functionality fields
+    isTrashed: {
+        type: Boolean,
+        default: false
     },
-    updatedAt: {
-        type: Date,
-        default: Date.now
+    trashedAt: {
+        type: Date
+    },
+    trashedBy: {
+        type: String
+    },
+    deletionReason: {
+        type: String
     }
 }, {
     timestamps: true, // This will automatically manage createdAt and updatedAt

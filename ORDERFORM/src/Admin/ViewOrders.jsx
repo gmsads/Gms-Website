@@ -13,7 +13,6 @@ function ViewOrders() {
   const [executiveName, setExecutiveName] = useState('');
   const [editingOrder, setEditingOrder] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
   const [paymentData, setPaymentData] = useState({
@@ -36,12 +35,13 @@ function ViewOrders() {
     executiveType: '',
     executiveName: ''
   });
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Router hooks
   const location = useLocation();
   const navigate = useNavigate();
 
-  // API configuration
+  // API configuration - CORRECTED TO MATCH YOUR BACKEND
   const API_BASE_URL = '/api';
   const API_ENDPOINTS = {
     ORDERS: `${API_BASE_URL}/orders`,
@@ -50,7 +50,11 @@ function ViewOrders() {
     DELETE_ORDER: (id) => `${API_BASE_URL}/orders/${id}`,
     RECORD_PAYMENT: (id) => `${API_BASE_URL}/orders/${id}/record-payment`,
     GET_PAYMENTS: (id) => `${API_BASE_URL}/orders/${id}`,
-    IMPORT_ORDERS: `${API_BASE_URL}/orders/import`
+    IMPORT_ORDERS: `${API_BASE_URL}/orders/import`,
+    // CORRECTED TRASH ENDPOINTS - Match your backend routes
+    TRASH_ORDERS: `${API_BASE_URL}/orders/trash`,
+    RESTORE_ORDER: (id) => `${API_BASE_URL}/orders/${id}/restore`,
+    PERMANENT_DELETE_ORDER: (id) => `${API_BASE_URL}/orders/${id}/permanent`
   };
 
   // Format date to DD-MM-YYYY
@@ -206,136 +210,135 @@ function ViewOrders() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
-// Fetch orders from API with filters (client-side filtering version)
-const fetchOrders = async (role, name, month = null, year = null, clientType = null, executive = null, executiveName = null) => {
-  setLoading(true);
-  setError(null);
-  try {
-    let url = API_ENDPOINTS.ORDERS;
-    const params = new URLSearchParams();
+  // Fetch orders from API with filters (client-side filtering version)
+  const fetchOrders = async (role, name, month = null, year = null, clientType = null, executive = null, executiveName = null) => {
+    setLoading(true);
+    setError(null);
+    try {
+      let url = API_ENDPOINTS.ORDERS;
 
-    console.log('Fetching orders with params:', {
-      role, name, month, year, clientType, executive, executiveName
-    });
+      console.log('Fetching orders with params:', {
+        role, name, month, year, clientType, executive, executiveName
+      });
 
-    // Get all orders first
-    const res = await axios.get(url);
-    console.log('Total orders received:', res.data.length);
+      // Get all orders first
+      const res = await axios.get(url);
+      console.log('Total orders received:', res.data.length);
 
-    let filteredOrders = res.data;
+      let filteredOrders = res.data;
 
-    // Apply executive filters client-side
-    if (executive && executiveName) {
-      const executiveType = new URLSearchParams(location.search).get('executiveType');
-      console.log('Executive filter applied:', { executiveType, executiveName });
+      // Apply executive filters client-side
+      if (executive && executiveName) {
+        const executiveType = new URLSearchParams(location.search).get('executiveType');
+        console.log('Executive filter applied:', { executiveType, executiveName });
 
-      if (executiveType === 'executive') {
-        // Filter by sales executive - SAFER VERSION
+        if (executiveType === 'executive') {
+          // Filter by sales executive - SAFER VERSION
+          filteredOrders = filteredOrders.filter(order => {
+            const orderExecutive = order.executive || '';
+            const searchName = executiveName || '';
+            return orderExecutive.toString().toLowerCase().includes(searchName.toLowerCase());
+          });
+        } else if (executiveType === 'service') {
+          // Filter by service executive in rows - SAFER VERSION
+          filteredOrders = filteredOrders.filter(order => {
+            if (!order.rows || !Array.isArray(order.rows)) return false;
+            return order.rows.some(row => {
+              const assignedExecutive = row.assignedExecutive || '';
+              const searchName = executiveName || '';
+              return assignedExecutive.toString().toLowerCase().includes(searchName.toLowerCase());
+            });
+          });
+        } else if (executiveType === 'account') {
+          // Filter by account executive - SAFER VERSION
+          filteredOrders = filteredOrders.filter(order => {
+            const accountExecutive = order.accountExecutive || '';
+            const searchName = executiveName || '';
+            return accountExecutive.toString().toLowerCase().includes(searchName.toLowerCase());
+          });
+        }
+        console.log('Orders after executive filter:', filteredOrders.length);
+      } else if (role === 'Executive') {
+        // If logged in as executive, show only their orders - SAFER VERSION
+        console.log('Filtering for logged-in executive:', name);
         filteredOrders = filteredOrders.filter(order => {
           const orderExecutive = order.executive || '';
-          const searchName = executiveName || '';
-          return orderExecutive.toString().toLowerCase().includes(searchName.toLowerCase());
+          const userName = name || '';
+          return orderExecutive.toString().toLowerCase().includes(userName.toLowerCase());
         });
-      } else if (executiveType === 'service') {
-        // Filter by service executive in rows - SAFER VERSION
-        filteredOrders = filteredOrders.filter(order => {
-          if (!order.rows || !Array.isArray(order.rows)) return false;
-          return order.rows.some(row => {
-            const assignedExecutive = row.assignedExecutive || '';
-            const searchName = executiveName || '';
-            return assignedExecutive.toString().toLowerCase().includes(searchName.toLowerCase());
-          });
-        });
-      } else if (executiveType === 'account') {
-        // Filter by account executive - SAFER VERSION
-        filteredOrders = filteredOrders.filter(order => {
-          const accountExecutive = order.accountExecutive || '';
-          const searchName = executiveName || '';
-          return accountExecutive.toString().toLowerCase().includes(searchName.toLowerCase());
-        });
+        console.log('Orders after role filter:', filteredOrders.length);
       }
-      console.log('Orders after executive filter:', filteredOrders.length);
-    } else if (role === 'Executive') {
-      // If logged in as executive, show only their orders - SAFER VERSION
-      console.log('Filtering for logged-in executive:', name);
-      filteredOrders = filteredOrders.filter(order => {
-        const orderExecutive = order.executive || '';
-        const userName = name || '';
-        return orderExecutive.toString().toLowerCase().includes(userName.toLowerCase());
-      });
-      console.log('Orders after role filter:', filteredOrders.length);
-    }
 
-    // Apply month and year filter
-    if (month && year) {
-      console.log('Applying month/year filter:', { month, year });
+      // Apply month and year filter
+      if (month && year) {
+        console.log('Applying month/year filter:', { month, year });
+        filteredOrders = filteredOrders.filter(order => {
+          if (!order.orderDate) return false;
+          const orderDate = new Date(order.orderDate);
+          if (isNaN(orderDate.getTime())) return false;
+          return orderDate.getMonth() + 1 === parseInt(month) &&
+            orderDate.getFullYear() === parseInt(year);
+        });
+        console.log('Orders after month filter:', filteredOrders.length);
+      }
+
+      // Apply client type filter
+      if (clientType) {
+        console.log('Applying client type filter:', clientType);
+        filteredOrders = filteredOrders.filter(order => {
+          const orderClientType = order.clientType || '';
+          return orderClientType === clientType;
+        });
+        console.log('Orders after client type filter:', filteredOrders.length);
+      }
+
+      // Filter for 2025 only
       filteredOrders = filteredOrders.filter(order => {
         if (!order.orderDate) return false;
         const orderDate = new Date(order.orderDate);
         if (isNaN(orderDate.getTime())) return false;
-        return orderDate.getMonth() + 1 === parseInt(month) &&
-          orderDate.getFullYear() === parseInt(year);
+        return orderDate.getFullYear() === 2025;
       });
-      console.log('Orders after month filter:', filteredOrders.length);
-    }
+      console.log('Orders after 2025 filter:', filteredOrders.length);
 
-    // Apply client type filter
-    if (clientType) {
-      console.log('Applying client type filter:', clientType);
-      filteredOrders = filteredOrders.filter(order => {
-        const orderClientType = order.clientType || '';
-        return orderClientType === clientType;
+      const sortedOrders = filteredOrders.sort((a, b) => {
+        const dateA = new Date(a.orderDate || 0);
+        const dateB = new Date(b.orderDate || 0);
+        return dateB - dateA;
       });
-      console.log('Orders after client type filter:', filteredOrders.length);
+
+      setOrders(sortedOrders);
+      setGroupedOrders(groupOrdersByMonth(sortedOrders));
+
+      console.log('Final orders count:', sortedOrders.length);
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+      setError('Failed to fetch orders. Please try again.');
+      toast.error('Failed to fetch orders. Please try again.');
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // Filter for 2025 only
-    filteredOrders = filteredOrders.filter(order => {
-      if (!order.orderDate) return false;
-      const orderDate = new Date(order.orderDate);
-      if (isNaN(orderDate.getTime())) return false;
-      return orderDate.getFullYear() === 2025;
+  // Clear all filters
+  const clearAllFilters = () => {
+    setMonthFilter(null);
+    setYearFilter(2025);
+    setClientTypeFilter(null);
+    setAppliedExecutiveFilters({
+      executive: '',
+      executiveType: '',
+      executiveName: ''
     });
-    console.log('Orders after 2025 filter:', filteredOrders.length);
+    navigate('/admin-dashboard/view-orders');
+  };
 
-    const sortedOrders = filteredOrders.sort((a, b) => {
-      const dateA = new Date(a.orderDate || 0);
-      const dateB = new Date(b.orderDate || 0);
-      return dateB - dateA;
-    });
-
-    setOrders(sortedOrders);
-    setGroupedOrders(groupOrdersByMonth(sortedOrders));
-    
-    console.log('Final orders count:', sortedOrders.length);
-  } catch (err) {
-    console.error('Error fetching orders:', err);
-    setError('Failed to fetch orders. Please try again.');
-    toast.error('Failed to fetch orders. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-};
-
-// Clear all filters
-const clearAllFilters = () => {
-  setMonthFilter(null);
-  setYearFilter(2025);
-  setClientTypeFilter(null);
-  setAppliedExecutiveFilters({
-    executive: '',
-    executiveType: '',
-    executiveName: ''
-  });
-  navigate('/admin-dashboard/view-orders');
-};
-
-// Clear client type filter only
-const clearClientTypeFilter = () => {
-  const params = new URLSearchParams(location.search);
-  params.delete('clientType');
-  navigate(`/admin-dashboard/view-orders?${params.toString()}`);
-};
+  // Clear client type filter only
+  const clearClientTypeFilter = () => {
+    const params = new URLSearchParams(location.search);
+    params.delete('clientType');
+    navigate(`/admin-dashboard/view-orders?${params.toString()}`);
+  };
 
   // Clear month filter
   const clearMonthFilter = () => {
@@ -450,24 +453,66 @@ const clearClientTypeFilter = () => {
     }
   };
 
-  // Confirm order deletion
+  // Confirm delete order
   const confirmDelete = (orderId) => {
+    console.log('Confirming delete for order:', orderId);
     setOrderToDelete(orderId);
-    setShowDeleteConfirm(true);
+    setShowDeleteModal(true);
   };
 
-  // Delete order
+  // Handle delete order - Complete version
   const handleDelete = async () => {
     try {
-      await axios.delete(API_ENDPOINTS.DELETE_ORDER(orderToDelete));
-      setShowDeleteConfirm(false);
+      if (!orderToDelete) {
+        toast.error('No order selected for deletion');
+        return;
+      }
+
+      console.log('Attempting to delete order:', orderToDelete);
+
+      // Use the DELETE endpoint from your backend
+      const response = await axios.delete(API_ENDPOINTS.DELETE_ORDER(orderToDelete), {
+        data: {
+          deletedBy: userRole === 'Admin' ? 'Admin' : executiveName,
+          reason: 'Deleted from view orders page'
+        }
+      });
+
+      console.log('Delete successful:', response.data);
+
+      // Close modal and reset state
+      setShowDeleteModal(false);
+      setOrderToDelete(null);
+
+      // Refresh the orders list to show updated data
       fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
-      toast.success('Order deleted successfully!');
+
+      toast.success('Order moved to trash successfully!');
     } catch (err) {
-      console.error('Error deleting order:', err);
-      toast.error(err.response?.data?.message || 'Failed to delete order');
+      console.error('Delete error details:', {
+        status: err.response?.status,
+        data: err.response?.data,
+        message: err.message
+      });
+
+      let errorMessage = 'Failed to delete order';
+
+      if (err.response?.status === 404) {
+        errorMessage = 'Order not found or already deleted';
+      } else if (err.response?.status === 500) {
+        errorMessage = 'Server error. Please try again.';
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      toast.error(errorMessage);
     }
   };
+
+  // Navigate to trash page
+  
 
   // Prepare payment form
   const handleRecordPayment = async (order) => {
@@ -592,6 +637,7 @@ const clearClientTypeFilter = () => {
         'Payment Date': formatDate(order.paymentDate),
         'Payment Method': order.paymentMethod,
         'Cheque Number': order.chequeNumber,
+        'Created By': order.createdBy || order.executive, // NEW: Include created by in export
         'Payments': order.paymentHistory ?
           order.paymentHistory.map(p => `${formatDate(p.date)}: ₹${p.amount} (${p.method})`).join('; ') : ''
       }))
@@ -647,7 +693,8 @@ const clearClientTypeFilter = () => {
           advanceDate: item['Advance Date'],
           paymentDate: item['Payment Date'],
           paymentMethod: item['Payment Method'] || 'Cash',
-          chequeNumber: item['Cheque Number'] || ''
+          chequeNumber: item['Cheque Number'] || '',
+          createdBy: item['Created By'] || item['Executive'] // NEW: Include created by in import
         }));
 
         await axios.post(API_ENDPOINTS.IMPORT_ORDERS, ordersToImport);
@@ -661,44 +708,43 @@ const clearClientTypeFilter = () => {
     reader.readAsArrayBuffer(file);
   };
 
- // Filter orders for search functionality
-const filterOrders = (order) => (row) => {
-  const valuesToSearch = [
-    order.executive || '',
-    order.business || '',
-    order.contactPerson || '',
-    order.location || '',
-    order.saleClosedBy || '',
-    `${order.contactCode || ''} ${order.phone || ''}`,
-    order.orderNo || '',
-    order.orderDate || '',
-    order.clientType || '',
-    row.description || '',
-    row.requirement || '',
-    row.customRequirement || '',
-    row.quantity || '',
-    row.rate || '',
-    row.total || '',
-    order.discount || '',
-    order.discountedTotal || '',
-    row.deliveryDate || '',
-    row.assignedExecutive || '',
-    row.status || '',
-    row.remark || '',
-    order.advance || '',
-    order.balance || '',
-    order.advanceDate || '',
-    order.paymentDate || '',
-    order.paymentMethod || '',
-    order.chequeNumber || ''
-  ];
-  
-  return valuesToSearch.some((val) =>
-    String(val).toLowerCase().includes(searchTerm.toLowerCase())
-  );
-};
+  // Filter orders for search functionality
+  const filterOrders = (order) => (row) => {
+    const valuesToSearch = [
+      order.executive || '',
+      order.business || '',
+      order.contactPerson || '',
+      order.location || '',
+      order.saleClosedBy || '',
+      `${order.contactCode || ''} ${order.phone || ''}`,
+      order.orderNo || '',
+      order.orderDate || '',
+      order.clientType || '',
+      row.description || '',
+      row.requirement || '',
+      row.customRequirement || '',
+      row.quantity || '',
+      row.rate || '',
+      row.total || '',
+      order.discount || '',
+      order.discountedTotal || '',
+      row.deliveryDate || '',
+      row.assignedExecutive || '',
+      row.status || '',
+      row.remark || '',
+      order.advance || '',
+      order.balance || '',
+      order.advanceDate || '',
+      order.paymentDate || '',
+      order.paymentMethod || '',
+      order.chequeNumber || '',
+      order.createdBy || '' // NEW: Include created by in search
+    ];
 
-
+    return valuesToSearch.some((val) =>
+      String(val).toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  };
 
   // Loading state
   if (loading) {
@@ -761,7 +807,63 @@ const filterOrders = (order) => (row) => {
       {/* Toast container */}
       <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999 }} />
 
-     
+      {/* Summary Cards - ALWAYS VISIBLE */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-around',
+        marginBottom: '25px',
+        flexWrap: 'wrap',
+        gap: '20px'
+      }}>
+        {/* Total Amount Card */}
+        <div style={{
+          backgroundColor: 'rgba(52, 152, 219, 0.1)',
+          padding: '20px',
+          borderRadius: '12px',
+          minWidth: '220px',
+          textAlign: 'center',
+          border: '1px solid rgba(52, 152, 219, 0.3)',
+          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Amount</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3498db' }}>₹{totalAmount}</div>
+        </div>
+
+        {/* Total Advance Card */}
+        <div style={{
+          backgroundColor: 'rgba(155, 89, 182, 0.1)',
+          padding: '20px',
+          borderRadius: '12px',
+          minWidth: '220px',
+          textAlign: 'center',
+          border: '1px solid rgba(155, 89, 182, 0.3)',
+          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Advance</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#9b59b6' }}>₹{totalAdvance}</div>
+        </div>
+
+        {/* Total Balance Card */}
+        <div style={{
+          backgroundColor: totalBalance > 0 ? 'rgba(231, 76, 60, 0.1)' : 'rgba(39, 174, 96, 0.1)',
+          padding: '20px',
+          borderRadius: '12px',
+          minWidth: '220px',
+          textAlign: 'center',
+          border: `1px solid ${totalBalance > 0 ? 'rgba(231, 76, 60, 0.3)' : 'rgba(39, 174, 96, 0.3)'}`,
+          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Balance</div>
+          <div style={{
+            fontSize: '24px',
+            fontWeight: 'bold',
+            color: totalBalance > 0 ? '#e74c3c' : '#27ae60'
+          }}>
+            ₹{totalBalance}
+          </div>
+        </div>
+      </div>
+
       {/* Filter Display Section */}
       <div style={{
         display: 'flex',
@@ -883,62 +985,6 @@ const filterOrders = (order) => (row) => {
         )}
       </div>
 
-      {/* Admin Summary Cards */}
-      {userRole === 'Admin' && (
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-around',
-          marginBottom: '25px',
-          flexWrap: 'wrap',
-          gap: '20px'
-        }}>
-          {/* Total Amount Card */}
-          <div style={{
-            backgroundColor: 'rgba(52, 152, 219, 0.1)',
-            padding: '20px',
-            borderRadius: '12px',
-            minWidth: '220px',
-            textAlign: 'center',
-            border: '1px solid rgba(52, 152, 219, 0.3)'
-          }}>
-            <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333' }}>Total Amount</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3498db' }}>₹{totalAmount}</div>
-          </div>
-
-          {/* Total Advance Card */}
-          <div style={{
-            backgroundColor: 'rgba(155, 89, 182, 0.1)',
-            padding: '20px',
-            borderRadius: '12px',
-            minWidth: '220px',
-            textAlign: 'center',
-            border: '1px solid rgba(155, 89, 182, 0.3)'
-          }}>
-            <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333' }}>Total Advance</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#9b59b6' }}>₹{totalAdvance}</div>
-          </div>
-
-          {/* Total Balance Card */}
-          <div style={{
-            backgroundColor: totalBalance > 0 ? 'rgba(231, 76, 60, 0.1)' : 'rgba(39, 174, 96, 0.1)',
-            padding: '20px',
-            borderRadius: '12px',
-            minWidth: '220px',
-            textAlign: 'center',
-            border: `1px solid ${totalBalance > 0 ? 'rgba(231, 76, 60, 0.3)' : 'rgba(39, 174, 96, 0.3)'}`
-          }}>
-            <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333' }}>Total Balance</div>
-            <div style={{
-              fontSize: '24px',
-              fontWeight: 'bold',
-              color: totalBalance > 0 ? '#e74c3c' : '#27ae60'
-            }}>
-              ₹{totalBalance}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Search and Export/Import Controls */}
       <div style={{
         display: 'flex',
@@ -999,6 +1045,24 @@ const filterOrders = (order) => (row) => {
           >
             Import from Excel
           </button>
+
+          {/* Trash Button - Only for Admin */}
+          {/* {userRole === 'Admin' && (
+            <button
+              onClick={navigateToTrash}
+              style={{
+                backgroundColor: '#e67e22',
+                color: 'white',
+                padding: '12px 20px',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              View Trash
+            </button>
+          )} */}
 
           {/* Hidden file input for import */}
           <input
@@ -1063,7 +1127,7 @@ const filterOrders = (order) => (row) => {
                 </div>
               </div>
 
-              {/* Orders Table - MODIFIED TO HAVE STICKY HEADERS */}
+              {/* Orders Table - MODIFIED TO HAVE STICKY HEADERS AND CREATED BY COLUMN */}
               <div style={{ overflowX: 'auto', height: '500px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
                   <thead style={{ backgroundColor: '#218c74', color: '#fff', position: 'sticky', top: 0, zIndex: 10 }}>
@@ -1088,6 +1152,8 @@ const filterOrders = (order) => (row) => {
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Delivery Date</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Service Assigned</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Status</th>
+                      {/* NEW: Created By Column */}
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Created By</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Advance</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Balance</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Advance Date</th>
@@ -1110,7 +1176,36 @@ const filterOrders = (order) => (row) => {
                           {/* Order Data Cells */}
                           <td style={{ padding: '10px 8px', textAlign: 'center' }}>{orderIndex + 1}</td>
                           <td style={{ padding: '10px 8px' }}>{order.executive}</td>
-                          <td style={{ padding: '10px 8px' }}>{order.business}</td>
+
+                          {/* BUSINESS CELL - CLICKABLE BUTTON STYLE (FROM SECOND VERSION) */}
+                          <td style={{ padding: '10px 8px' }}>
+                            <button
+                              onClick={() => navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(order.business)}`)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#003366',
+                                cursor: 'pointer',
+                                padding: '4px 8px',
+                                fontSize: 'inherit',
+                                fontFamily: 'inherit',
+                                borderRadius: '4px',
+                                transition: 'all 0.2s ease',
+                                fontWeight: '500'
+                              }}
+                              onMouseOver={(e) => {
+                                e.target.style.backgroundColor = '#e3f2fd';
+                                e.target.style.color = '#003366';
+                              }}
+                              onMouseOut={(e) => {
+                                e.target.style.backgroundColor = 'transparent';
+                                e.target.style.color = '#003366';
+                              }}
+                            >
+                              {order.business}
+                            </button>
+                          </td>
+
                           <td style={{ padding: '10px 8px' }}>{order.contactPerson}</td>
                           <td style={{ padding: '10px 8px' }}>{order.location}</td>
                           <td style={{ padding: '10px 8px' }}>{order.saleClosedBy}</td>
@@ -1172,6 +1267,31 @@ const filterOrders = (order) => (row) => {
                               {row.status || 'Not Set'}
                             </span>
                           </td>
+                          {/* NEW: Created By Cell */}
+                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                            {order.createdBy && order.createdBy !== order.executive ? (
+                              <span style={{
+                                backgroundColor: '#e8f5e8',
+                                color: '#2e7d32',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontWeight: 'bold',
+                                fontSize: '12px',
+                                display: 'inline-block'
+                              }}>
+                                Admin: {order.createdBy}
+                              </span>
+                            ) : (
+                              <span style={{
+                                color: '#666',
+                                fontSize: '12px'
+                              }}>
+                                {order.executive}
+                              </span>
+                            )}
+                          </td>
+
+
                           <td style={{ padding: '10px 8px', textAlign: 'right' }}>{order.advance}</td>
                           <td style={{
                             padding: '10px 8px',
@@ -1183,7 +1303,11 @@ const filterOrders = (order) => (row) => {
                           </td>
                           <td style={{ padding: '10px 8px', textAlign: 'center' }}>{formatDate(order.advanceDate)}</td>
                           <td style={{ padding: '10px 8px', textAlign: 'center' }}>{formatDate(order.paymentDate)}</td>
-                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{order.paymentMethod}</td>
+                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                            {order.paymentMethods && order.paymentMethods.length > 0
+                              ? order.paymentMethods.join(', ')
+                              : 'Not specified'}
+                          </td>
                           <td style={{ padding: '10px 8px', textAlign: 'center' }}>{order.chequeNumber}</td>
 
                           {/* Action Buttons */}
@@ -1240,6 +1364,7 @@ const filterOrders = (order) => (row) => {
                                   Edit
                                 </button>
 
+                                {/* DELETE BUTTON - ONLY FOR ADMIN */}
                                 {userRole === 'Admin' && (
                                   <button
                                     onClick={() => confirmDelete(order._id)}
@@ -1331,6 +1456,9 @@ const filterOrders = (order) => (row) => {
                   <strong>Sale Closed By:</strong> {currentOrder.saleClosedBy}
                 </div>
                 <div>
+                  <strong>Created By:</strong> {currentOrder.createdBy || currentOrder.executive}
+                </div>
+                <div>
                   <strong>Total Amount:</strong> ₹{currentOrder.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0).toFixed(2)}
                 </div>
                 <div>
@@ -1350,6 +1478,7 @@ const filterOrders = (order) => (row) => {
                 </div>
               </div>
             </div>
+
 
             {/* Payment History Section */}
             {paymentHistory.length > 0 && (
@@ -1673,6 +1802,22 @@ const filterOrders = (order) => (row) => {
                   <option value="Agent">Agent</option>
                 </select>
               </div>
+              {/* Created By Field - NEW */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px' }}>Created By</label>
+                <input
+                  name="createdBy"
+                  value={editingOrder.createdBy || editingOrder.executive}
+                  readOnly
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                    backgroundColor: '#f5f5f5'
+                  }}
+                />
+              </div>
 
               {/* Discount Field */}
               <div>
@@ -1756,12 +1901,27 @@ const filterOrders = (order) => (row) => {
               {/* Payment Method Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Payment Method</label>
-                <input
-                  name="paymentMethod"
-                  value={editingOrder.paymentMethod}
-                  onChange={handleEditChange}
+                <select
+                  name="paymentMethods"
+                  value={editingOrder.paymentMethods && editingOrder.paymentMethods[0] || ''}
+                  onChange={(e) => {
+                    const methods = e.target.value ? [e.target.value] : [];
+                    setEditingOrder(prev => ({ ...prev, paymentMethods: methods }));
+                  }}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                />
+                >
+                  <option value="">Select Payment Method</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Cheque">Cheque</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <optgroup label="UPI">
+
+                    <option value="9985330008@Chary">9985330008@Chary</option>
+                    <option value="9985330004@Swathi">9985330004@Swathi</option>
+                    <option value="9553146376@Laxmipathi">9553146376@Laxmipathi</option>
+                  </optgroup>
+                  <option value="Other">Other</option>
+                </select>
               </div>
 
               {/* Cheque Number Field */}
@@ -1958,7 +2118,7 @@ const filterOrders = (order) => (row) => {
       )}
 
       {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
+      {showDeleteModal && (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -1973,25 +2133,32 @@ const filterOrders = (order) => (row) => {
         }}>
           <div style={{
             backgroundColor: 'white',
-            padding: '20px',
+            padding: '25px',
             borderRadius: '8px',
             width: '400px',
             maxWidth: '90%',
             textAlign: 'center'
           }}>
-            <h3 style={{ marginTop: 0 }}>Confirm Delete</h3>
-            <p>Are you sure you want to delete this order? This action cannot be undone.</p>
+            <h3 style={{ marginTop: 0, color: '#e74c3c' }}>Confirm Deletion</h3>
+            <p style={{ margin: '20px 0', fontSize: '16px' }}>
+              Are you sure you want to delete this order ?
+            </p>
+
 
             <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '20px' }}>
               <button
-                onClick={() => setShowDeleteConfirm(false)}
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setOrderToDelete(null);
+                }}
                 style={{
                   backgroundColor: '#757575',
                   color: 'white',
                   border: 'none',
-                  padding: '8px 15px',
+                  padding: '10px 20px',
                   borderRadius: '4px',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  fontSize: '14px'
                 }}
               >
                 Cancel
@@ -1999,12 +2166,14 @@ const filterOrders = (order) => (row) => {
               <button
                 onClick={handleDelete}
                 style={{
-                  backgroundColor: '#f44336',
+                  backgroundColor: '#e74c3c',
                   color: 'white',
                   border: 'none',
-                  padding: '8px 15px',
+                  padding: '10px 20px',
                   borderRadius: '4px',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
                 }}
               >
                 Delete

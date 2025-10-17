@@ -17,18 +17,13 @@ import "../Executive/order.css";
 import "../app.css";
 
 function Admin() {
-  // State for sidebar toggle
+ 
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
-  
-  // State for active tab
   const [activeTab, setActiveTab] = useState("executive-dashboard");
-  
-  // State for selected executive
   const [selectedExecutive] = useState(
     localStorage.getItem("userName") || "Executive"
   );
-  
-  // State for target data
+
   const [targetData, setTargetData] = useState({
     target: 0,
     achieved: 0,
@@ -53,23 +48,13 @@ function Admin() {
     loading: true
   });
 
-  // Get user role from localStorage
   const userRole = localStorage.getItem("userRole") || "executive";
-  
-  // Ref for logout dropdown
   const logoutRef = useRef(null);
-
-  // Initialize timer on component mount
   useEffect(() => {
-    // Set initial login time if not set
     if (!localStorage.getItem('loginTime')) {
       localStorage.setItem('loginTime', new Date().toISOString());
     }
-
-    // Calculate initial duration immediately
     updateDuration();
-
-    // Start the interval timer
     timerRef.current = setInterval(updateDuration, 1000);
 
     return () => {
@@ -79,7 +64,6 @@ function Admin() {
     };
   }, []);
 
-  // Fetch pending payment data for the executive
   const fetchPendingPayments = async () => {
     try {
       setPendingPaymentData(prev => ({ ...prev, loading: true }));
@@ -89,7 +73,6 @@ function Admin() {
         }
       });
       
-      // Filter orders for current executive with pending payments
       const executivePendingOrders = res.data.filter(order => 
         order?.executive?.toLowerCase() === selectedExecutive.toLowerCase() && 
         order?.balance > 0
@@ -108,19 +91,17 @@ function Admin() {
     }
   };
 
-  // Fetch pending payments on component mount and when selectedExecutive changes
   useEffect(() => {
     if (selectedExecutive) {
       fetchPendingPayments();
-      // Refresh every 30 seconds
       const interval = setInterval(fetchPendingPayments, 30000);
       return () => clearInterval(interval);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedExecutive]);
 
-  // In the Admin component, add this useEffect to handle the navigation state
   useEffect(() => {
-    // Check if there's appointment data from a sale closed redirect
+   
     const saleClosedData = localStorage.getItem('saleClosedAppointmentData');
     if (saleClosedData) {
       try {
@@ -129,19 +110,17 @@ function Admin() {
         setShowOrderForm(true);
         setActiveTab('order');
         
-        // Pre-fill the phone number if available
+        
         if (appointmentData.phoneNumber) {
           setOrderNumber(appointmentData.phoneNumber);
         }
-        
-        // Clear the stored data
+
         localStorage.removeItem('saleClosedAppointmentData');
       } catch (error) {
         console.error('Error parsing appointment data:', error);
       }
     }
-    
-    // Also check for navigation state
+   
     if (location.state?.activeTab) {
       setActiveTab(location.state.activeTab);
       if (location.state.activeTab === 'order' && location.state.appointmentData) {
@@ -155,7 +134,7 @@ function Admin() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
 
-  // Function to calculate and update duration
+
   const updateDuration = () => {
     const storedTime = localStorage.getItem('loginTime');
     if (!storedTime) return;
@@ -171,7 +150,7 @@ function Admin() {
     setActiveDuration(`${hours}:${minutes}:${seconds}`);
   };
 
-  // Reset timer function
+
   const resetTimer = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);

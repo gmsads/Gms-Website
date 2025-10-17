@@ -204,15 +204,6 @@ function UnitDashboard() {
           >
             Attendance
           </NavLink>
-             <NavLink
-            to="employee-login"
-            style={linkStyle('employee-login')}
-            onMouseEnter={() => setHoveredItem('employee-login')}
-            onMouseLeave={() => setHoveredItem('')}
-            onClick={handleSidebarClick}
-          >
-         Employee Login
-          </NavLink>
            
           <NavLink
             to="record"

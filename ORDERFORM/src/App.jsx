@@ -59,11 +59,15 @@ import FieldExecutivePage from './Executive/FieldExecutivePage';
 import UnitDashboard from './unit/UnitDashboard.jsx';
 import EmployeeFaceEnroll from './unit/EmployeeFaceEnroll.jsx';
 import EmployeeLogin from './unit/EmployeeLogin.jsx';
+import UnitAttendance from './Admin/UnitAttendance.jsx';
+import TrashOrders from './Admin/TrashOrders';
+import AgentDashboard from './Agent/AgentDashboard.jsx'
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        
         <Route
           path="/unit-dashboard"
           element={
@@ -128,6 +132,8 @@ function App() {
           <Route path="appointments" element={<Appointment />} />
           <Route path="prospects" element={<Prospective />} />
           <Route path="daily-report" element={<DailyReport />} />
+          <Route path="trash-orders" element={<TrashOrders />} />
+          <Route path="unit-attendance" element={<UnitAttendance />}/>
           <Route path="view-orders" element={<ViewOrders />} />
           <Route path="employees" element={<Employees />} />
           <Route path="add-executive" element={<AddExecutiveAdmin />} />
@@ -154,6 +160,15 @@ function App() {
           <Route path="design-report" element={<DesignReport />} />
 
         </Route>
+        <Route
+  path="/agent-dashboard"
+  element={
+    <ProtectedRoute allowedRoles={['Agent']}>
+      <AgentDashboard />
+    </ProtectedRoute>
+  }
+/>
+
         <Route
           path="/service-manager-dashboard"
           element={
@@ -220,14 +235,17 @@ function App() {
         </Route>
 
         {/* Executive Dashboard Route */}
-        <Route
-          path="/executive-dashboard"
-          element={
-            <ProtectedRoute>
-              <ExecutiveDashboard />
-            </ProtectedRoute>
-          }
-        />
+      {/* Executive Dashboard Route */}
+<Route
+  path="/executive-dashboard"
+  element={
+    <ProtectedRoute>
+      <ExecutiveDashboard />
+    </ProtectedRoute>
+  }
+/>
+<Route path="/performance" element={<ViewPerformance />} />
+        
 
         {/* Field Executive Page Route - ADDED THIS SECTION */}
         <Route

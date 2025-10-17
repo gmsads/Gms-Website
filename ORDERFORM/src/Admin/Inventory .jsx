@@ -30,7 +30,7 @@ const Inventory = () => {
     ];
 
     // API base URL
-    const API_URL = 'http://localhost:5000/api/inventory';
+    const API_URL = '/api/inventory';
 
     // Load inventory from backend
     useEffect(() => {

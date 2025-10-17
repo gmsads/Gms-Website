@@ -4,6 +4,7 @@ import axios from 'axios';
 const STATUS = {
   PENDING: 'Pending',
   COMPLETED: 'Completed',
+  ONBOARDING: 'Onboarding',
   INSTALLATION_PENDING: 'Installation Pending',
   DESIGN_PENDING: 'Design Pending',
   PRINTING: 'Printing',

@@ -115,6 +115,39 @@ router.get('/appointments/assigned/:executiveName', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch assigned appointments' });
   }
 });
+// ✅ PUT - Assign an executive to an appointment
+router.put('/:id/assign', async (req, res) => {
+  try {
+    const { executiveName } = req.body;
+
+    if (!executiveName || executiveName.trim() === '') {
+      return res.status(400).json({ error: 'Executive name is required' });
+    }
+
+    const updatedAppointment = await Appointment.findByIdAndUpdate(
+      req.params.id,
+      { executiveName, status: 'assigned' },
+      { new: true }
+    );
+
+    if (!updatedAppointment) {
+      return res.status(404).json({ error: 'Appointment not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Executive assigned successfully',
+      appointment: updatedAppointment
+    });
+  } catch (error) {
+    console.error('Error assigning executive:', error);
+    res.status(500).json({
+      error: 'Failed to assign executive',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 
 // PUT - Update appointment status (maintains backward compatibility)
 router.put('/:id/status', async (req, res) => {
@@ -127,7 +160,7 @@ router.put('/:id/status', async (req, res) => {
 
     // Support both frontend and backend status values
     const statusMapping = {
-      // Frontend values → Backend values
+    
       'New Lead': 'pending',
       'Contacted': 'contacted',
       'Interested': 'in progress',
@@ -137,8 +170,6 @@ router.put('/:id/status', async (req, res) => {
       'Converted': 'sale closed',
       'On Hold': 'postponded',
       'Completed': 'completed',
-      
-      // Also accept backend values directly (for other parts of app)
       'pending': 'pending',
       'assigned': 'assigned',
       'contacted': 'contacted',
