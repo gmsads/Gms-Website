@@ -22,9 +22,59 @@ function AssignService() {
   const [showExecutiveStatusPopup, setShowExecutiveStatusPopup] = useState(false);
   const [executiveStatusMessage, setExecutiveStatusMessage] = useState('');
 
+  // NEW STATES for status and remarks (from ServiceUpdate)
+  const [currentRemarks, setCurrentRemarks] = useState({});
+  const [remarksHistory, setRemarksHistory] = useState(() => {
+    const savedRemarks = localStorage.getItem('serviceRemarks');
+    return savedRemarks ? JSON.parse(savedRemarks) : {};
+  });
+  const [localStatuses, setLocalStatuses] = useState(() => {
+    const savedStatuses = localStorage.getItem('serviceStatuses');
+    return savedStatuses ? JSON.parse(savedStatuses) : {};
+  });
+
+  // REMOVED: Status filter state
+  const [yearFilter, setYearFilter] = useState('ALL');
+  const [monthFilter, setMonthFilter] = useState('ALL');
+
+  // Status constants (from ServiceUpdate)
+  const STATUS = {
+    PENDING: 'Pending',
+    COMPLETED: 'Completed',
+    INSTALLATION_PENDING: 'Installation Pending',
+    DESIGN_PENDING: 'Design Pending',
+    PRINTING: 'Printing',
+    CUSTOMIZE: 'Customize'
+  };
+
+  const currentUser = localStorage.getItem('userName') || '';
+
   // Refs for tracking assignment state
   const lastAssignedIndexRef = useRef(-1);
   const isAutoAssigningRef = useRef(false);
+
+  // Helper function to generate unique row keys (from ServiceUpdate)
+  const generateRowKey = (orderId, rowIndex) => `${orderId}-${rowIndex}`;
+
+  // Generate years from 2020 to 2030
+  const availableYears = ['ALL', '2020', '2021', '2022', '2023', '2024', '2025', '2026', '2027', '2028', '2029', '2030'];
+
+  // Months data
+  const availableMonths = [
+    { value: 'ALL', label: 'All Months' },
+    { value: '1', label: 'January' },
+    { value: '2', label: 'February' },
+    { value: '3', label: 'March' },
+    { value: '4', label: 'April' },
+    { value: '5', label: 'May' },
+    { value: '6', label: 'June' },
+    { value: '7', label: 'July' },
+    { value: '8', label: 'August' },
+    { value: '9', label: 'September' },
+    { value: '10', label: 'October' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'December' }
+  ];
 
   // Load last assigned index from localStorage on component mount
   useEffect(() => {
@@ -54,8 +104,18 @@ function AssignService() {
           return dateB - dateA;
         });
         
-        setOrders(sortedOrders);
-        setFilteredOrders(sortedOrders);
+        // Format orders with row keys (like ServiceUpdate)
+        const formattedOrders = sortedOrders.map(order => ({
+          ...order,
+          rows: order.rows.map((row, idx) => ({
+            ...row,
+            originalIndex: idx,
+            rowKey: generateRowKey(order._id, idx),
+          }))
+        }));
+        
+        setOrders(formattedOrders);
+        setFilteredOrders(formattedOrders);
         setServiceExecutives(executivesRes.data); // Store all executives for display
         
       } catch (err) {
@@ -76,22 +136,63 @@ function AssignService() {
     }
   }, [orders, serviceExecutives, autoAssignEnabled]);
 
-  // Filter orders based on search term
+  // UPDATED: Filter orders based on search term and filters (removed status filter)
   useEffect(() => {
-    if (searchTerm === '') {
-      setFilteredOrders(orders);
-    } else {
-      const filtered = orders.filter(order => 
-        order.orderNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (order.contactPerson && order.contactPerson.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (order.phone && order.phone.includes(searchTerm)) ||
-        order.rows.some(row => 
-          row.requirement && row.requirement.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      );
+    const filterOrders = () => {
+      if (orders.length === 0) return;
+
+      const searchLower = searchTerm.toLowerCase();
+      
+      const filtered = orders
+        .map(order => ({
+          ...order,
+          rows: order.rows.filter(row => {
+            if (row.isCompleted) return false;
+
+            const rowKey = `${order._id}-${row.originalIndex}`;
+            const displayStatus = localStatuses[rowKey] || row.status || STATUS.PENDING;
+            
+            // Get order date for year/month filtering
+            const orderDate = order.createdAt || order.orderDate;
+            const orderYear = orderDate ? new Date(orderDate).getFullYear().toString() : null;
+            const orderMonth = orderDate ? (new Date(orderDate).getMonth() + 1).toString() : null;
+
+            // REMOVED: Status filter logic
+
+            // Apply year filter
+            let yearMatch = true;
+            if (yearFilter !== 'ALL' && orderYear) {
+              yearMatch = orderYear === yearFilter;
+            }
+
+            // Apply month filter
+            let monthMatch = true;
+            if (monthFilter !== 'ALL' && orderMonth) {
+              monthMatch = orderMonth === monthFilter;
+            }
+
+            // Apply search filter - search across all relevant fields
+            const searchMatch = !searchTerm.trim() || 
+              (order.orderNo && order.orderNo.toLowerCase().includes(searchLower)) ||
+              (order.business && order.business.toLowerCase().includes(searchLower)) ||
+              (order.contactPerson && order.contactPerson.toLowerCase().includes(searchLower)) ||
+              (order.phone && order.phone.includes(searchTerm)) ||
+              (order.executive && order.executive.toLowerCase().includes(searchLower)) ||
+              (row.requirement && row.requirement.toLowerCase().includes(searchLower)) ||
+              (row.assignedExecutive && row.assignedExecutive.toLowerCase().includes(searchLower)) ||
+              (displayStatus && displayStatus.toLowerCase().includes(searchLower)) ||
+              (row.quantity && row.quantity.toString().includes(searchTerm));
+
+            return yearMatch && monthMatch && searchMatch;
+          })
+        }))
+        .filter(order => order.rows.length > 0);
+
       setFilteredOrders(filtered);
-    }
-  }, [searchTerm, orders]);
+    };
+
+    filterOrders();
+  }, [searchTerm, yearFilter, monthFilter, orders, localStatuses]); // REMOVED: statusFilter from dependencies
 
   // Get active executives only
   const getActiveExecutives = () => {
@@ -207,8 +308,17 @@ function AssignService() {
           return dateB - dateA;
         });
         
-        setOrders(sortedOrders);
-        setFilteredOrders(sortedOrders);
+        // Format orders with row keys
+        const formattedOrders = sortedOrders.map(order => ({
+          ...order,
+          rows: order.rows.map((row, idx) => ({
+            ...row,
+            originalIndex: idx,
+            rowKey: generateRowKey(order._id, idx),
+          }))
+        }));
+        
+        setOrders(formattedOrders);
       }
 
     } catch (err) {
@@ -216,6 +326,126 @@ function AssignService() {
     } finally {
       isAutoAssigningRef.current = false;
     }
+  };
+
+  // NEW: Handle status change (from ServiceUpdate)
+  const handleStatusChange = async (orderId, originalIndex, newStatus) => {
+    try {
+      setLoading(true);
+      
+      const rowKey = `${orderId}-${originalIndex}`;
+      
+      // Update local status
+      const updatedStatuses = {
+        ...localStatuses,
+        [rowKey]: newStatus
+      };
+      setLocalStatuses(updatedStatuses);
+      localStorage.setItem('serviceStatuses', JSON.stringify(updatedStatuses));
+
+      // Update UI optimistically
+      setOrders(prevOrders => 
+        prevOrders.map(order => {
+          if (order._id === orderId) {
+            const updatedRows = order.rows.map((row, idx) => 
+              idx === originalIndex 
+                ? { 
+                    ...row, 
+                    status: newStatus,
+                    isCompleted: newStatus === STATUS.COMPLETED,
+                    updatedAt: new Date().toISOString()
+                  } 
+                : row
+            );
+            return { ...order, rows: updatedRows };
+          }
+          return order;
+        })
+      );
+
+      // API call to update status
+      await axios.put('/api/update-status', {
+        orderId,
+        rowIndex: originalIndex,
+        newStatus,
+        updatedBy: currentUser
+      });
+
+      setError(null);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update status');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // NEW: Handle current remark input change (from ServiceUpdate)
+  const handleCurrentRemarkChange = (orderId, rowIndex, value) => {
+    const key = `${orderId}-${rowIndex}`;
+    setCurrentRemarks(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  // NEW: Handle saving remark with timestamp (from ServiceUpdate)
+  const handleSaveRemark = (orderId, rowIndex) => {
+    const key = `${orderId}-${rowIndex}`;
+    const currentRemark = currentRemarks[key] || '';
+    
+    if (!currentRemark.trim()) {
+      alert('Please enter a remark before saving');
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    const newRemarkEntry = {
+      text: currentRemark,
+      timestamp: timestamp,
+      user: currentUser
+    };
+
+    // Get existing remarks from localStorage
+    const savedRemarks = JSON.parse(localStorage.getItem('serviceRemarks') || '{}');
+    
+    // Initialize or update remarks array for this row
+    const existingRemarks = savedRemarks[key] || [];
+    const updatedRemarks = [newRemarkEntry, ...existingRemarks]; // Newest first
+    
+    // Update localStorage
+    const updatedRemarksData = {
+      ...savedRemarks,
+      [key]: updatedRemarks
+    };
+    
+    localStorage.setItem('serviceRemarks', JSON.stringify(updatedRemarksData));
+    setRemarksHistory(updatedRemarksData);
+
+    // Clear the current input field
+    setCurrentRemarks(prev => ({
+      ...prev,
+      [key]: ''
+    }));
+
+    console.log('Remark saved:', newRemarkEntry);
+  };
+
+  // NEW: Get remarks history for a specific row (from ServiceUpdate)
+  const getRemarksForRow = (orderId, rowIndex) => {
+    const key = `${orderId}-${rowIndex}`;
+    return remarksHistory[key] || [];
+  };
+
+  // NEW: Format timestamp for display (from ServiceUpdate)
+  const formatTimestamp = (timestamp) => {
+    return new Date(timestamp).toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
   };
 
   // Manual assignment function (only active executives in dropdown)
@@ -243,8 +473,17 @@ function AssignService() {
         return dateB - dateA;
       });
       
-      setOrders(sortedOrders);
-      setFilteredOrders(sortedOrders);
+      // Format orders with row keys
+      const formattedOrders = sortedOrders.map(order => ({
+        ...order,
+        rows: order.rows.map((row, idx) => ({
+          ...row,
+          originalIndex: idx,
+          rowKey: generateRowKey(order._id, idx),
+        }))
+      }));
+      
+      setOrders(formattedOrders);
       
       const order = orders.find(o => o._id === orderId);
       setAssignedInfo({
@@ -310,6 +549,19 @@ function AssignService() {
     }
   };
 
+  // NEW: Get status style based on status value (from ServiceUpdate)
+  const getStatusStyle = (status) => {
+    const baseStyle = styles.serviceStatus;
+    switch(status) {
+      case STATUS.COMPLETED: return { ...baseStyle, ...styles.statusCompleted };
+      case STATUS.INSTALLATION_PENDING: return { ...baseStyle, ...styles.statusInstallationPending };
+      case STATUS.DESIGN_PENDING: return { ...baseStyle, ...styles.statusDesignPending };
+      case STATUS.PRINTING: return { ...baseStyle, ...styles.statusPrinting };
+      case STATUS.CUSTOMIZE: return { ...baseStyle, ...styles.statusCustomize };
+      default: return { ...baseStyle, ...styles.statusPending };
+    }
+  };
+
   // Styles definition
   const styles = {
     container: {
@@ -350,15 +602,16 @@ function AssignService() {
     searchContainer: {
       marginBottom: '20px',
       display: 'flex',
-      alignItems: 'center'
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: '15px'
     },
     searchInput: {
       padding: '10px 15px',
       borderRadius: '4px',
       border: '1px solid #ced4da',
       minWidth: '300px',
-      fontSize: '14px',
-      marginRight: '10px'
+      fontSize: '14px'
     },
     searchButton: {
       padding: '10px 15px',
@@ -368,6 +621,42 @@ function AssignService() {
       borderRadius: '4px',
       cursor: 'pointer',
       fontSize: '14px'
+    },
+    // UPDATED: Filter container styles (removed status filter)
+    filterContainer: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '15px',
+      marginBottom: '20px',
+      flexWrap: 'wrap',
+      padding: '15px',
+      backgroundColor: '#f8f9fa',
+      borderRadius: '8px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+    },
+    filterGroup: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    },
+    filterLabel: {
+      fontWeight: '600',
+      fontSize: '14px',
+      color: '#003366',
+      whiteSpace: 'nowrap'
+    },
+    filterSelect: {
+      padding: '8px 12px',
+      borderRadius: '4px',
+      border: '1px solid #ccc',
+      fontSize: '14px',
+      minWidth: '150px'
+    },
+    filterDivider: {
+      width: '1px',
+      height: '30px',
+      backgroundColor: '#ddd',
+      margin: '0 10px'
     },
     card: {
       backgroundColor: '#f8f9fa',
@@ -489,7 +778,9 @@ function AssignService() {
       padding: '20px',
       textAlign: 'center',
       color: '#666',
-      fontSize: '16px'
+      fontSize: '16px',
+      backgroundColor: '#f0f0f0',
+      borderRadius: '8px'
     },
     autoAssignedBadge: {
       backgroundColor: '#4BB543',
@@ -586,6 +877,129 @@ function AssignService() {
       gap: '10px',
       justifyContent: 'flex-end',
       marginTop: '15px'
+    },
+    // NEW STYLES from ServiceUpdate for status and remarks
+    serviceStatus: {
+      padding: '4px 8px',
+      borderRadius: '4px',
+      fontSize: '14px',
+      fontWeight: 'bold',
+      display: 'inline-block',
+    },
+    statusPending: {
+      backgroundColor: '#FFF3E0',
+      color: '#E65100',
+    },
+    statusCompleted: {
+      backgroundColor: '#E8F5E9',
+      color: '#2E7D32',
+    },
+    statusInstallationPending: {
+      backgroundColor: '#E3F2FD',
+      color: '#1565C0',
+    },
+    statusDesignPending: {
+      backgroundColor: '#F3E5F5',
+      color: '#6A1B9A',
+    },
+    statusPrinting: {
+      backgroundColor: '#FFECB3',
+      color: '#FF8F00',
+    },
+    statusCustomize: {
+      backgroundColor: '#DCE775',
+      color: '#827717',
+    },
+    dropdown: {
+      padding: '6px 10px',
+      borderRadius: '4px',
+      border: '1px solid #ccc',
+      backgroundColor: '#fff',
+      fontSize: '14px',
+      flex: '1',
+      cursor: 'pointer',
+    },
+    remarkInput: {
+      padding: '8px',
+      borderRadius: '4px',
+      border: '1px solid #ccc',
+      width: '100%',
+      marginTop: '5px'
+    },
+    remarkContainer: {
+      marginTop: '10px'
+    },
+    saveButton: {
+      padding: '8px 16px',
+      backgroundColor: '#4CAF50',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      marginTop: '5px',
+      marginLeft: '5px',
+    },
+    assignButton: {
+      padding: '8px 16px',
+      backgroundColor: '#FF9800',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      marginTop: '10px',
+    },
+    assignSection: {
+      marginTop: '15px',
+      padding: '15px',
+      backgroundColor: '#FFF3E0',
+      borderRadius: '4px',
+      border: '1px dashed #FF9800',
+    },
+    remarksHistory: {
+      marginTop: '10px',
+      maxHeight: '200px',
+      overflowY: 'auto',
+      border: '1px solid #e0e0e0',
+      borderRadius: '4px',
+      padding: '10px',
+      backgroundColor: '#fafafa',
+    },
+    remarkItem: {
+      padding: '8px',
+      marginBottom: '8px',
+      borderLeft: '3px solid #4CAF50',
+      backgroundColor: 'white',
+      borderRadius: '4px',
+    },
+    remarkText: {
+      marginBottom: '4px',
+      fontSize: '14px',
+    },
+    remarkTimestamp: {
+      fontSize: '12px',
+      color: '#666',
+      fontStyle: 'italic',
+    },
+    noRemarks: {
+      fontSize: '14px',
+      color: '#999',
+      textAlign: 'center',
+      padding: '10px',
+    },
+    // NEW: Quantity field style
+    quantityField: {
+      backgroundColor: '#e3f2fd',
+      padding: '6px 10px',
+      borderRadius: '4px',
+      fontWeight: 'bold',
+      display: 'inline-block',
+    },
+    // NEW: Results count style
+    resultsCount: {
+      marginBottom: '15px',
+      fontSize: '14px',
+      color: '#666',
+      fontStyle: 'italic'
     }
   };
 
@@ -727,11 +1141,11 @@ function AssignService() {
         )}
       </div>
 
-      {/* Search Section */}
+      {/* NEW: Search and Filter Section */}
       <div style={styles.searchContainer}>
         <input
           type="text"
-          placeholder="Search by order no, contact, phone, or requirement"
+          placeholder="Search by order no, business, contact, phone, executive, requirement, status, quantity..."
           style={styles.searchInput}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -745,6 +1159,67 @@ function AssignService() {
           Search
         </button>
       </div>
+
+      {/* UPDATED: Filter Container (removed status filter) */}
+      <div style={styles.filterContainer}>
+        {/* Year Filter */}
+        <div style={styles.filterGroup}>
+          <label style={styles.filterLabel}>Year:</label>
+          <select
+            style={styles.filterSelect}
+            value={yearFilter}
+            onChange={(e) => setYearFilter(e.target.value)}
+          >
+            {availableYears.map(year => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={styles.filterDivider}></div>
+
+        {/* Month Filter */}
+        <div style={styles.filterGroup}>
+          <label style={styles.filterLabel}>Month:</label>
+          <select
+            style={styles.filterSelect}
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+          >
+            {availableMonths.map(month => (
+              <option key={month.value} value={month.value}>
+                {month.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={styles.filterDivider}></div>
+
+        {/* Clear Filters Button */}
+        <button
+          style={styles.button}
+          onClick={() => {
+            setSearchTerm('');
+            setYearFilter('ALL');
+            setMonthFilter('ALL');
+          }}
+        >
+          Clear Filters
+        </button>
+      </div>
+
+      {/* Results Count */}
+      {filteredOrders.length > 0 && (
+        <div style={styles.resultsCount}>
+          Showing {filteredOrders.reduce((count, order) => count + order.rows.length, 0)} services
+          {searchTerm && ` for "${searchTerm}"`}
+          {yearFilter !== 'ALL' && ` in year ${yearFilter}`}
+          {monthFilter !== 'ALL' && ` in ${availableMonths.find(m => m.value === monthFilter)?.label}`}
+        </div>
+      )}
 
       {/* Service Assignment Success Popup */}
       {showSuccess && (
@@ -835,12 +1310,23 @@ function AssignService() {
       {/* Orders List */}
       {filteredOrders.length === 0 ? (
         <div style={styles.noResults}>
-          {searchTerm ? 'No matching orders found' : 'No pending services found'}
+          {searchTerm || yearFilter !== 'ALL' || monthFilter !== 'ALL'
+            ? `No services match your current filters` 
+            : 'No pending services found'
+          }
+          <br />
+          {searchTerm && <div>Search term: "{searchTerm}"</div>}
+          {yearFilter !== 'ALL' && <div>Year: {yearFilter}</div>}
+          {monthFilter !== 'ALL' && <div>Month: {availableMonths.find(m => m.value === monthFilter)?.label}</div>}
         </div>
       ) : (
         filteredOrders.map(order =>
           order.rows.map((row, rowIndex) => {
             if (row.isCompleted) return null;
+
+            const rowKey = `${order._id}-${row.originalIndex}`;
+            const displayStatus = localStatuses[rowKey] || row.status || STATUS.PENDING;
+            const rowRemarksHistory = getRemarksForRow(order._id, row.originalIndex);
 
             return (
               <div key={`${order._id}-${rowIndex}`} style={styles.card}>
@@ -885,6 +1371,14 @@ function AssignService() {
                   <span style={styles.label}>Requirement:</span>
                   <span style={styles.value}>{row.requirement || 'No details'}</span>
                 </div>
+
+                {/* NEW: Quantity Field */}
+                <div style={styles.field}>
+                  <span style={styles.label}>Quantity:</span>
+                  <span style={styles.quantityField}>
+                    {row.quantity || '1'}
+                  </span>
+                </div>
                 
                 <div style={styles.field}>
                   <span style={styles.label}>Delivery Date:</span>
@@ -893,43 +1387,105 @@ function AssignService() {
                   </span>
                 </div>
 
-                {/* Manual Assignment Section */}
-                {!row.assignedExecutive && (
-                  <div style={{ marginTop: '15px' }}>
-                    <div style={styles.field}>
-                      <span style={styles.label}>Assign To:</span>
-                      <select
-                        style={styles.select}
-                        value={selectedOrder === `${order._id}-${rowIndex}` ? selectedExecutive : ''}
-                        onChange={(e) => {
-                          setSelectedExecutive(e.target.value);
-                          setSelectedOrder(`${order._id}-${rowIndex}`);
-                        }}
-                      >
-                        <option value="">Select Service Executive</option>
-                        {getActiveExecutives().map(executive => (
-                          <option key={executive._id} value={executive._id}>
-                            {executive.name} ({executive.phone})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                {/* NEW: Current Status Field */}
+                <div style={styles.field}>
+                  <span style={styles.label}>Current Status:</span>
+                  <span style={getStatusStyle(displayStatus)}>
+                    {displayStatus}
+                  </span>
+                </div>
 
-                    <div style={{...styles.field, marginTop: '10px'}}>
-                      <span style={styles.label}></span>
-                      <button
-                        style={{
-                          ...styles.button,
-                          ...(!selectedExecutive || selectedOrder !== `${order._id}-${rowIndex}` ? styles.buttonDisabled : {})
-                        }}
-                        disabled={!selectedExecutive || selectedOrder !== `${order._id}-${rowIndex}`}
-                        onClick={() => handleAssignService(order._id, rowIndex)}
-                      >
-                        Assign Service
-                      </button>
+                {/* NEW: Update Status Field */}
+                <div style={styles.field}>
+                  <span style={styles.label}>Update Status:</span>
+                  <select
+                    style={styles.dropdown}
+                    value={displayStatus}
+                    onChange={(e) => handleStatusChange(order._id, row.originalIndex, e.target.value)}
+                    disabled={loading}
+                  >
+                    {Object.values(STATUS).map(status => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* NEW: Add Remark Field */}
+                <div style={styles.remarkContainer}>
+                  <div style={styles.label}>Add Remark:</div>
+                  <input
+                    type="text"
+                    style={styles.remarkInput}
+                    value={currentRemarks[rowKey] || ''}
+                    onChange={(e) => handleCurrentRemarkChange(order._id, row.originalIndex, e.target.value)}
+                    placeholder="Add a new remark here..."
+                  />
+                  <button 
+                    style={styles.saveButton}
+                    onClick={() => handleSaveRemark(order._id, row.originalIndex)}
+                    disabled={loading}
+                  >
+                    Save Remark
+                  </button>
+
+                  {/* NEW: Remarks History */}
+                  {rowRemarksHistory.length > 0 && (
+                    <div style={styles.remarksHistory}>
+                      <div style={styles.label}>Remarks History:</div>
+                      {rowRemarksHistory.map((remark, index) => (
+                        <div key={index} style={styles.remarkItem}>
+                          <div style={styles.remarkText}>{remark.text}</div>
+                          <div style={styles.remarkTimestamp}>
+                            {formatTimestamp(remark.timestamp)} by {remark.user || 'Unknown'}
+                          </div>
+                        </div>
+                      ))}
                     </div>
+                  )}
+                </div>
+
+                {/* UPDATED: Assign Service Executive Section - Show for both assigned and unassigned services */}
+                <div style={styles.assignSection}>
+                  <div style={styles.field}>
+                    <span style={styles.label}>
+                      {row.assignedExecutive ? 'Reassign Service Executive:' : 'Assign Service Executive:'}
+                    </span>
+                    <select
+                      style={styles.dropdown}
+                      value={selectedOrder === rowKey ? selectedExecutive : ''}
+                      onChange={(e) => {
+                        setSelectedExecutive(e.target.value);
+                        setSelectedOrder(rowKey);
+                      }}
+                    >
+                      <option value="">Select Service Executive</option>
+                      {getActiveExecutives().map(executive => (
+                        <option key={executive._id} value={executive._id}>
+                          {executive.name} ({executive.phone})
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                )}
+
+                  <button
+                    style={styles.assignButton}
+                    disabled={!selectedExecutive || selectedOrder !== rowKey}
+                    onClick={() => handleAssignService(order._id, row.originalIndex)}
+                  >
+                    {row.assignedExecutive ? 'Reassign Service' : 'Assign Service'}
+                  </button>
+
+                  {/* Show assigned executive info if already assigned */}
+                  {row.assignedExecutive && (
+                    <div style={{marginTop: '10px', padding: '10px', backgroundColor: '#e8f5e9', borderRadius: '4px'}}>
+                      <strong>Currently Assigned:</strong> {row.assignedExecutive} 
+                      {row.assignedExecutivePhone && ` (${row.assignedExecutivePhone})`}
+                      {row.assignedAt && ` - Assigned on: ${new Date(row.assignedAt).toLocaleString()}`}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })

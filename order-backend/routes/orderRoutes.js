@@ -429,50 +429,57 @@ router.post("/set-target", async (req, res) => {
 // ============================
 router.post("/orders/:id/record-payment", async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
-    if (!order) return res.status(404).json({ message: "Order not found" });
+    const orderId = req.params.id;
+    const { date, amount, method, reference, note } = req.body;
 
-    // Validate payment data
-    if (!req.body.amount || isNaN(req.body.amount)) {
-      return res.status(400).json({ message: "Invalid payment amount" });
+    // ... validation code ...
+
+    // First get the order to preserve createdBy
+    const existingOrder = await Order.findById(orderId);
+    if (!existingOrder) {
+      return res.status(404).json({ message: "Order not found" });
     }
 
-    const paymentAmount = parseFloat(req.body.amount);
-
-    if (paymentAmount > order.balance) {
-      return res.status(400).json({
-        message: `Payment amount (${paymentAmount}) exceeds remaining balance (${order.balance})`,
-      });
-    }
+    const paymentAmount = parseFloat(amount);
+    const newBalance = parseFloat((existingOrder.balance - paymentAmount).toFixed(2));
 
     // Create payment record
     const paymentRecord = {
-      date: req.body.date || new Date(),
+      date: date ? new Date(date) : new Date(),
       amount: paymentAmount,
-      method: req.body.method || "Cash",
-      reference: req.body.reference || "",
-      note: req.body.note || "",
+      method: method || "Cash",
+      reference: reference || "",
+      note: note || "",
     };
 
-    // Add to payment history
-    order.paymentHistory = order.paymentHistory || [];
-    order.paymentHistory.push(paymentRecord);
-
-    // Update balance
-    order.balance = parseFloat((order.balance - paymentAmount).toFixed(2));
-
-    // Update status
-    order.status = order.balance <= 0 ? "Paid" : "Partially Paid";
-    if (order.balance <= 0) {
-      order.paymentDate = new Date();
-    }
-
-    await order.save();
+    // Update with all required fields preserved
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      {
+        $push: { paymentHistory: paymentRecord },
+        $set: {
+          balance: newBalance,
+          status: newBalance <= 0 ? "Paid" : "Partially Paid",
+          createdBy: existingOrder.createdBy, // PRESERVE createdBy
+          executive: existingOrder.executive, // Preserve other required fields
+          business: existingOrder.business,
+          contactPerson: existingOrder.contactPerson,
+          phone: existingOrder.phone,
+          orderNo: existingOrder.orderNo,
+          orderDate: existingOrder.orderDate,
+          ...(newBalance <= 0 && { paymentDate: new Date() })
+        }
+      },
+      { 
+        new: true, 
+        runValidators: true 
+      }
+    );
 
     res.json({
       success: true,
       message: "Payment recorded successfully",
-      order,
+      order: updatedOrder,
     });
   } catch (err) {
     console.error("Payment error:", err);
@@ -482,7 +489,6 @@ router.post("/orders/:id/record-payment", async (req, res) => {
     });
   }
 });
-
 // ============================
 // GET: Get target for executive
 // ============================

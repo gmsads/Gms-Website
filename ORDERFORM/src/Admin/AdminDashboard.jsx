@@ -716,16 +716,6 @@ function AdminDashboard() {
               </NavLink>
 
               <NavLink
-                to="service-update"
-                style={linkStyle('service-update')}
-                onMouseEnter={() => setHoveredItem('service-update')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Service Updates
-              </NavLink>
-
-              <NavLink
                 to="pending-service"
                 style={linkStyle('pending-service')}
                 onMouseEnter={() => setHoveredItem('pending-service')}

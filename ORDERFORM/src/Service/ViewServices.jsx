@@ -405,7 +405,8 @@ const ViewServices = () => {
         orderNo: order.orderNo,
         executiveName: executive.name,
         executivePhone: executive.phone,
-        requirement: order.rows[rowIndex].requirement
+        requirement: order.rows[rowIndex].requirement,
+        quantity: order.rows[rowIndex].quantity || 'N/A'
       });
       
       setShowAssignSuccess(true);
@@ -470,7 +471,8 @@ const ViewServices = () => {
             (order.business && order.business.toLowerCase().includes(searchLower)) ||
             (order.contactPerson && order.contactPerson.toLowerCase().includes(searchLower)) ||
             (row.requirement && row.requirement.toLowerCase().includes(searchLower)) ||
-            (row.displayStatus && row.displayStatus.toLowerCase().includes(searchLower))
+            (row.displayStatus && row.displayStatus.toLowerCase().includes(searchLower)) ||
+            (row.quantity && row.quantity.toString().toLowerCase().includes(searchLower))
           );
         })
       }))
@@ -530,7 +532,7 @@ const ViewServices = () => {
       <div style={styles.searchContainer}>
         <input
           type="text"
-          placeholder="Search by order number, business, contact, requirement, or status..."
+          placeholder="Search by order number, business, contact, requirement, quantity, or status..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={styles.searchInput}
@@ -569,6 +571,10 @@ const ViewServices = () => {
           <div style={styles.successItem}>
             <span style={styles.successLabel}>Service:</span>
             <span>{assignedInfo.requirement}</span>
+          </div>
+          <div style={styles.successItem}>
+            <span style={styles.successLabel}>Quantity:</span>
+            <span>{assignedInfo.quantity}</span>
           </div>
         </div>
       )}
@@ -625,6 +631,12 @@ const ViewServices = () => {
                 <div style={styles.field}>
                   <span style={styles.label}>Requirement:</span>
                   <span style={styles.value}>{row.requirement || 'No details'}</span>
+                </div>
+
+                {/* Quantity field */}
+                <div style={styles.field}>
+                  <span style={styles.label}>Quantity:</span>
+                  <span style={styles.value}>{row.quantity || 'N/A'}</span>
                 </div>
 
                 <div style={styles.field}>

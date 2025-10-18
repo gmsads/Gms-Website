@@ -42,7 +42,6 @@ import ViewPerformance from './Admin/ViewPerformance';
 import ServiceManagerDashboard from './ServiceManager/Servicemanagerdashbaord';
 import ITDashboard from './ITTeam/ITDashboard';
 import DesignUpdates from "./Service/DesignUpdates";
-import ServiceUpdate from './Admin/ServiceUpdate';
 import Vendors from './Service/Vendors';
 import Pricelist from './Service/Pricelist';
 import Inventory from './Admin/Inventory ';
@@ -153,7 +152,6 @@ function App() {
           <Route path="create-anniversary" element={<CreateAnniversary />} />
           <Route path="anniversary-list" element={<AnniversaryList />} />
           <Route path="performance" element={<ViewPerformance />} />
-          <Route path="service-update" element={<ServiceUpdate />} />
           <Route path="price-list" element={<Pricelist />} />
           <Route path="inventory" element={<Inventory />} />
           <Route path="hour-reeport" element={<HourReport />} />
