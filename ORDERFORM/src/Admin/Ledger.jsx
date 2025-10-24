@@ -32,10 +32,7 @@ const Ledger = () => {
           const decodedBusiness = decodeURIComponent(businessFromUrl);
           setSearchTerm(decodedBusiness);
           // Auto-filter for this business
-          const filtered = data.filter(order => 
-            order.business?.toLowerCase() === decodedBusiness.toLowerCase()
-          );
-          setFilteredOrders(filtered);
+          performSearch(data, decodedBusiness);
         }
       } catch (err) {
         console.error('Fetch error:', err);
@@ -48,29 +45,58 @@ const Ledger = () => {
     fetchOrders();
   }, [location.search]);
 
+  // Perform search with partial matching
+  const performSearch = (orders, term) => {
+    const searchTerm = term.trim().toLowerCase();
+
+    if (searchTerm.length < 1) {
+      setFilteredOrders([]);
+      return;
+    }
+
+    const filtered = orders.filter(order => {
+      // Check all fields for partial matches
+      const businessMatch = order.business?.toLowerCase().includes(searchTerm);
+      const orderNoMatch = order.orderNo?.toLowerCase().includes(searchTerm);
+      const clientTypeMatch = order.clientType?.toLowerCase().includes(searchTerm);
+      const contactPersonMatch = order.contactPerson?.toLowerCase().includes(searchTerm);
+      const phoneMatch = order.phone?.toLowerCase().includes(searchTerm);
+      
+      // Return true if any field matches
+      return businessMatch || orderNoMatch || clientTypeMatch || contactPersonMatch || phoneMatch;
+    });
+    
+    setFilteredOrders(filtered);
+  };
+
   // Handle search form submission
   const handleSearch = (e) => {
     e.preventDefault();
-    const term = searchTerm.trim().toLowerCase();
-
-    if (term.length < 1) {
+    
+    if (searchTerm.trim().length < 1) {
       setFilteredOrders([]);
       // Update URL without business parameter when search is cleared
       navigate('/admin-dashboard/ledger');
       return;
     }
 
-    const filtered = allOrders.filter(order =>
-      order.business?.toLowerCase().includes(term) ||
-      order.orderNo?.toLowerCase().includes(term) ||
-      order.clientType?.toLowerCase().includes(term) ||
-      order.contactPerson?.toLowerCase().includes(term) ||
-      order.phone?.toLowerCase().includes(term)
-    );
-    setFilteredOrders(filtered);
+    performSearch(allOrders, searchTerm);
     
     // Update URL with search term
-    navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(term)}`);
+    navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(searchTerm)}`);
+  };
+
+  // Handle real-time search as user types
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    
+    // Perform search immediately as user types
+    if (value.trim().length > 0) {
+      performSearch(allOrders, value);
+    } else {
+      setFilteredOrders([]);
+    }
   };
 
   // Handle payment input changes
@@ -174,7 +200,7 @@ const Ledger = () => {
           <input
             type="text"
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onChange={handleSearchChange}
             placeholder="Search by Business, Order No, Client Type, Contact Person or Phone..."
             style={styles.searchInput}
           />
@@ -197,14 +223,14 @@ const Ledger = () => {
       {/* Results Count */}
       {filteredOrders.length > 0 && (
         <div style={styles.resultsCount}>
-          Found {filteredOrders.length} order(s) for "{searchTerm}"
+          Found {filteredOrders.length} order(s) matching "{searchTerm}"
         </div>
       )}
 
       {/* No Results Message */}
       {Object.keys(groupedOrders).length === 0 && searchTerm && (
         <div style={styles.noResults}>
-          <p>No orders found for "{searchTerm}"</p>
+          <p>No orders found matching "{searchTerm}"</p>
           <button onClick={clearSearch} style={styles.clearSearchButton}>
             Clear Search
           </button>

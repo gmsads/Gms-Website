@@ -19,15 +19,26 @@ const ViewProspective = () => {
   const [sending, setSending] = useState({});
   const [success, setSuccess] = useState({});
   const [redirectId, setRedirectId] = useState(null);
-  const [appliedFilters, setAppliedFilters] = useState({
-    executiveName: '',
+  
+  // Simple filter states
+  const [filters, setFilters] = useState({
+    year: '',
     month: '',
-    year: ''
+    leadSource: ''
   });
 
-  // Get user role from localStorage
+  // Get user info from localStorage
   const role = localStorage.getItem('role');
+  const userName = localStorage.getItem('userName');
   const isAdmin = role === 'Admin';
+  
+  // Define executive names who should see ALL prospects (like Admin)
+  const privilegedExecutives = ['Soujanya', 'Aleem', 'Sirisha', 'Sangeetha', 'Malleshwari', 'Malli'];
+  const isPrivilegedExecutive = privilegedExecutives.includes(userName);
+  
+  // Users who can see all prospects: Admin + privileged executives
+  const canSeeAllProspects = isAdmin || isPrivilegedExecutive;
+  
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -44,79 +55,130 @@ const ViewProspective = () => {
   // Extract filter parameters from URL
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
-    const executiveName = searchParams.get('executiveName');
+
     const month = searchParams.get('month');
     const year = searchParams.get('year');
 
-    setAppliedFilters({
-      executiveName: executiveName || '',
+    setFilters({
+      year: year || '',
       month: month || '',
-      year: year || ''
+      leadSource: ''
     });
   }, [location]);
 
-  // Fetch prospective clients data - EXCLUDE TRASHED
+  // Fetch prospective clients data - UPDATED VERSION with privileged route
   const fetchProspectives = async () => {
     try {
       const userName = localStorage.getItem('userName');
       const role = localStorage.getItem('role');
 
-      // API call to get prospective clients - EXCLUDE TRASHED
-      const response = await axios.get(API_ENDPOINTS.PROSPECTIVES, {
-        params: {
-          userName,
-          role
-          // Remove isTrashed: false from params since backend handles it
-        }
-      });
+      // Determine which API endpoint to use based on user privileges
+      let apiEndpoint;
+      let params = {};
 
-      // Apply filters from URL parameters
-      let filteredData = response.data;
-
-      // Filter by executive name if provided
-      if (appliedFilters.executiveName) {
-        filteredData = filteredData.filter(p =>
-          p.ExcutiveName?.toLowerCase().includes(appliedFilters.executiveName.toLowerCase()) ||
-          p.executiveName?.toLowerCase().includes(appliedFilters.executiveName.toLowerCase())
-        );
+      if (role === 'Admin' || privilegedExecutives.includes(userName)) {
+        // Use the privileged route for Admin and privileged executives
+        apiEndpoint = `${API_BASE_URL}/prospective-clients/privileged/all`;
+        params = { userName };
+      } else {
+        // Use the regular route for normal executives
+        apiEndpoint = API_ENDPOINTS.PROSPECTIVES;
+        params = { userName, role };
       }
 
-      // Filter by month and year if provided
-      if (appliedFilters.month && appliedFilters.year) {
-        filteredData = filteredData.filter(p => {
-          if (!p.createdAt && !p.followUpDate) return false;
-
-          const prospectDate = new Date(p.createdAt || p.followUpDate);
-          const prospectMonth = prospectDate.getMonth() + 1;
-          const prospectYear = prospectDate.getFullYear();
-
-          return prospectMonth === parseInt(appliedFilters.month) &&
-            prospectYear === parseInt(appliedFilters.year);
-        });
-      }
+      const response = await axios.get(apiEndpoint, { params });
 
       // Sort by creation date (newest first)
-      const sortedData = filteredData.sort((a, b) => {
+      const sortedData = response.data.sort((a, b) => {
         const dateA = new Date(a.createdAt || a.dateCreated || a.followUpDate);
         const dateB = new Date(b.createdAt || b.dateCreated || b.followUpDate);
-        return dateB - dateA; // Descending order (newest first)
+        return dateB - dateA;
       });
 
-      // Update state with sorted and filtered data
       setProspectives(sortedData);
       setFilteredProspectives(sortedData);
       setLoading(false);
     } catch (err) {
       console.error('Error fetching prospectives:', err);
-      setError('Failed to load prospective clients');
+      
+      // Handle access denied errors gracefully
+      if (err.response?.status === 403) {
+        setError('Access denied. You do not have permission to view all prospects.');
+      } else {
+        setError('Failed to load prospective clients');
+      }
       setLoading(false);
     }
   };
 
-  // Fetch data on component mount and when filters change
+  // Fetch data on component mount
   useEffect(() => {
     fetchProspectives();
-  }, [appliedFilters]);
+  }, []);
+
+  // Apply filters whenever filters or search term changes
+  useEffect(() => {
+    applyFilters();
+  }, [prospectives, filters, searchTerm]);
+
+  // Apply filters based on year, month, lead source and search term
+  const applyFilters = () => {
+    let filtered = [...prospectives];
+
+    // Year Filter (based on created date)
+    if (filters.year) {
+      filtered = filtered.filter(p => {
+        const createdDate = new Date(p.createdAt || p.dateCreated);
+        return createdDate.getFullYear() === parseInt(filters.year);
+      });
+    }
+
+    // Month Filter (based on created date)
+    if (filters.month) {
+      filtered = filtered.filter(p => {
+        const createdDate = new Date(p.createdAt || p.dateCreated);
+        return (createdDate.getMonth() + 1) === parseInt(filters.month);
+      });
+    }
+
+    // Lead Source Filter
+    if (filters.leadSource) {
+      filtered = filtered.filter(p => 
+        p.leadFrom?.toLowerCase().includes(filters.leadSource.toLowerCase())
+      );
+    }
+
+    // Search Term Filter
+    if (searchTerm) {
+      filtered = filtered.filter((p) => {
+        const searchLower = searchTerm.toLowerCase();
+        const createdDate = p.createdAt
+          ? format(new Date(p.createdAt), 'MMM dd, yyyy').toLowerCase()
+          : '';
+        const followUpDate = p.followUpDate
+          ? format(new Date(p.followUpDate), 'MMM dd, yyyy').toLowerCase()
+          : '';
+
+        return (
+          (p.executiveName?.toLowerCase().includes(searchLower)) ||
+          (p.ExcutiveName?.toLowerCase().includes(searchLower)) ||
+          (p.businessName?.toLowerCase().includes(searchLower)) ||
+          (p.contactPerson?.toLowerCase().includes(searchLower)) ||
+          (p.phoneNumber?.includes(searchTerm)) ||
+          (p.location?.toLowerCase().includes(searchLower)) ||
+          (p.leadFrom?.toLowerCase().includes(searchLower)) ||
+          (p.requirementDescription?.toLowerCase().includes(searchLower)) ||
+          (p.prospectType?.toLowerCase().includes(searchLower)) ||
+          (p.whatsappStatus?.toLowerCase().includes(searchLower)) ||
+          (p.status?.toLowerCase().includes(searchLower)) ||
+          createdDate.includes(searchLower) ||
+          followUpDate.includes(searchLower)
+        );
+      });
+    }
+
+    setFilteredProspectives(filtered);
+  };
 
   // Handle redirect after sale closed
   useEffect(() => {
@@ -137,42 +199,6 @@ const ViewProspective = () => {
       return () => clearTimeout(timer);
     }
   }, [redirectId, navigate, prospectives]);
-
-  // Filter prospectives based on search term
-  useEffect(() => {
-    if (searchTerm === '') {
-      setFilteredProspectives([...prospectives]);
-    } else {
-      const filtered = prospectives.filter((p) => {
-        const searchLower = searchTerm.toLowerCase();
-        const formattedDate = p.followUpDate
-          ? format(new Date(p.followUpDate), 'MMM dd, yyyy').toLowerCase()
-          : '';
-
-        return (
-          (p.executiveName?.toLowerCase().includes(searchLower)) ||
-          (p.businessName?.toLowerCase().includes(searchLower)) ||
-          (p.contactPerson?.toLowerCase().includes(searchLower)) ||
-          (p.phoneNumber?.includes(searchTerm)) ||
-          (p.location?.toLowerCase().includes(searchLower)) ||
-          (p.leadFrom?.toLowerCase().includes(searchLower)) ||
-          (p.requirementDescription?.toLowerCase().includes(searchLower)) ||
-          (p.prospectType?.toLowerCase().includes(searchLower)) ||
-          (p.whatsappStatus?.toLowerCase().includes(searchLower)) ||
-          (p.status?.toLowerCase().includes(searchLower)) ||
-          formattedDate.includes(searchLower)
-        );
-      });
-
-      const sortedFiltered = [...filtered].sort((a, b) => {
-        const dateA = new Date(a.createdAt || a.dateCreated || a.followUpDate);
-        const dateB = new Date(b.createdAt || b.dateCreated || b.followUpDate);
-        return dateB - dateA;
-      });
-
-      setFilteredProspectives(sortedFiltered);
-    }
-  }, [searchTerm, prospectives]);
 
   // Handle status change with special case for followup and sale closed
   const handleStatusChange = (id, status) => {
@@ -248,7 +274,7 @@ const ViewProspective = () => {
   const handleDelete = async (id) => {
     confirmAlert({
       title: 'Confirm Delete',
-      message: 'Are you sure you want to delete this prospect .',
+      message: 'Are you sure you want to delete this prospect.',
       buttons: [
         {
           label: 'Delete',
@@ -258,7 +284,6 @@ const ViewProspective = () => {
               
               console.log('Starting delete process for ID:', id);
               
-              // Use DELETE endpoint to move to trash (soft delete)
               const response = await axios.delete(API_ENDPOINTS.DELETE_PROSPECTIVE(id), {
                 data: {
                   deletedBy: role === 'Admin' ? 'Admin' : localStorage.getItem('userName'),
@@ -271,7 +296,6 @@ const ViewProspective = () => {
               if (response.status === 200) {
                 console.log('Successfully deleted from backend, updating UI...');
                 
-                // Remove from local state immediately for better UX
                 const updatedProspectives = prospectives.filter(p => p._id !== id);
                 
                 const sortedData = updatedProspectives.sort((a, b) => {
@@ -293,11 +317,7 @@ const ViewProspective = () => {
               }
             } catch (err) {
               console.error('Error deleting prospective client:', err);
-              console.error('Error response:', err.response);
-              console.error('Error details:', err.response?.data);
               setError('Failed to delete prospective client: ' + (err.response?.data?.error || err.message));
-              
-              // Refresh data to ensure UI is in sync with backend
               fetchProspectives();
             } finally {
               setSending(prev => {
@@ -315,6 +335,7 @@ const ViewProspective = () => {
       ]
     });
   };
+
   // Confirm follow-up date selection
   const handleDateConfirm = () => {
     if (selectedDate) {
@@ -322,14 +343,36 @@ const ViewProspective = () => {
     }
   };
 
+  // Handle filter changes
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
   // Clear all filters
   const clearFilters = () => {
-    navigate('/admin-dashboard/view-prospective');
-    setAppliedFilters({
-      executiveName: '',
+    setFilters({
+      year: '',
       month: '',
-      year: ''
+      leadSource: ''
     });
+    setSearchTerm('');
+  };
+
+  // Get years from 2010 to 2050
+  const getAvailableYears = () => {
+    const years = [];
+    for (let year = 2050; year >= 2010; year--) {
+      years.push(year);
+    }
+    return years;
+  };
+
+  // Get unique lead sources
+  const getUniqueLeadSources = () => {
+    return [...new Set(prospectives.map(p => p.leadFrom).filter(Boolean))];
   };
 
   // Style for different status badges
@@ -363,17 +406,27 @@ const ViewProspective = () => {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h2 style={styles.heading}>Prospective Clients</h2>
+        <h2 style={styles.heading}>
+          Prospective Clients 
+          {canSeeAllProspects && ` - All Prospects`}
+          {!canSeeAllProspects && ` - ${userName}'s Prospects`}
+        </h2>
 
-      
+        {/* User privilege indicator */}
+        {isPrivilegedExecutive && (
+          <div style={styles.privilegeBanner}>
+            <strong>Privileged Access:</strong> Viewing all prospects
+          </div>
+        )}
 
         {/* Show active filters */}
-        {(appliedFilters.executiveName || appliedFilters.month) && (
+        {(filters.year || filters.month || filters.leadSource) && (
           <div style={styles.filterInfo}>
             <span style={styles.filterText}>
-              Showing prospects for:
-              {appliedFilters.executiveName && ` Executive: ${decodeURIComponent(appliedFilters.executiveName)}`}
-              {appliedFilters.month && appliedFilters.year && ` Month: ${appliedFilters.month}/${appliedFilters.year}`}
+              Active Filters: 
+              {filters.year && ` Year: ${filters.year}`}
+              {filters.month && ` Month: ${filters.month}`}
+              {filters.leadSource && ` Lead Source: ${filters.leadSource}`}
             </span>
             <button onClick={clearFilters} style={styles.clearFilterButton}>
               Clear Filters
@@ -382,11 +435,70 @@ const ViewProspective = () => {
         )}
       </div>
 
+      {/* Simple Filter Controls */}
+      <div style={styles.filterContainer}>
+        <div style={styles.filterRow}>
+          {/* Year Filter */}
+          <div style={styles.filterGroup}>
+            <label style={styles.filterLabel}>Year:</label>
+            <select
+              value={filters.year}
+              onChange={(e) => handleFilterChange('year', e.target.value)}
+              style={styles.filterSelect}
+            >
+              <option value="">All Years</option>
+              {getAvailableYears().map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Month Filter */}
+          <div style={styles.filterGroup}>
+            <label style={styles.filterLabel}>Month:</label>
+            <select
+              value={filters.month}
+              onChange={(e) => handleFilterChange('month', e.target.value)}
+              style={styles.filterSelect}
+            >
+              <option value="">All Months</option>
+              <option value="1">January</option>
+              <option value="2">February</option>
+              <option value="3">March</option>
+              <option value="4">April</option>
+              <option value="5">May</option>
+              <option value="6">June</option>
+              <option value="7">July</option>
+              <option value="8">August</option>
+              <option value="9">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+          </div>
+
+          {/* Lead Source Filter */}
+          <div style={styles.filterGroup}>
+            <label style={styles.filterLabel}>Lead Source:</label>
+            <select
+              value={filters.leadSource}
+              onChange={(e) => handleFilterChange('leadSource', e.target.value)}
+              style={styles.filterSelect}
+            >
+              <option value="">All Sources</option>
+              {getUniqueLeadSources().map(source => (
+                <option key={source} value={source}>{source}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Search input */}
       <div style={styles.searchContainer}>
         <input
           type="text"
-          placeholder="Search by name, business, phone, location, lead source, etc..."
+          placeholder="Search by name, business, phone, location, lead source, dates, etc..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={styles.searchInput}
@@ -423,16 +535,6 @@ const ViewProspective = () => {
         </div>
       )}
 
-
-      {Object.keys(success).map(id => {
-        if (success[id] === 'deleted') {
-          // eslint-disable-next-line no-unused-vars
-          const prospective = prospectives.find(p => p._id === id);
-         
-        }
-        return null;
-      })}
-
       {/* Error message */}
       {error && (
         <div style={styles.errorMessage}>
@@ -440,11 +542,18 @@ const ViewProspective = () => {
         </div>
       )}
 
+      {/* Results count */}
+      <div style={styles.resultsCount}>
+        Showing {filteredProspectives.length} of {prospectives.length} prospects
+        {canSeeAllProspects ? ' (All Prospects)' : ` (Assigned to ${userName})`}
+      </div>
+
       {/* Main table */}
       <div style={styles.tableWrapper}>
         <table style={styles.table}>
           <thead>
             <tr style={styles.tableHeadRow}>
+              <th style={styles.th}>Created Date</th>
               <th style={styles.th}>Executive</th>
               <th style={styles.th}>Business</th>
               <th style={styles.th}>Contact</th>
@@ -455,13 +564,16 @@ const ViewProspective = () => {
               <th style={styles.th}>Follow-up Date</th>
               <th style={styles.th}>Status</th>
               <th style={styles.th}>Actions</th>
-              {isAdmin && <th style={styles.th}>Delete</th>}
+              {canSeeAllProspects && <th style={styles.th}>Delete</th>}
             </tr>
           </thead>
           <tbody>
             {filteredProspectives.length > 0 ? (
               filteredProspectives.map((p) => (
                 <tr key={p._id} style={styles.tableRow}>
+                  <td style={styles.td}>
+                    {p.createdAt ? format(new Date(p.createdAt), 'MMM dd, yyyy') : 'N/A'}
+                  </td>
                   <td style={styles.td}>{p.ExcutiveName || p.executiveName}</td>
                   <td style={styles.td}>{p.businessName}</td>
                   <td style={styles.td}>{p.contactPerson}</td>
@@ -506,7 +618,7 @@ const ViewProspective = () => {
                       </div>
                     )}
                   </td>
-                  {isAdmin && (
+                  {canSeeAllProspects && (
                     <td style={styles.td}>
                       <button
                         onClick={() => handleDelete(p._id)}
@@ -521,10 +633,13 @@ const ViewProspective = () => {
               ))
             ) : (
               <tr>
-                <td colSpan={isAdmin ? 11 : 10} style={{ padding: '20px', textAlign: 'center' }}>
-                  {searchTerm ? 'No matching results found' : 'No prospective clients available'}
-                  {appliedFilters.executiveName && ` for executive: ${decodeURIComponent(appliedFilters.executiveName)}`}
-                  {appliedFilters.month && appliedFilters.year && ` in ${appliedFilters.month}/${appliedFilters.year}`}
+                <td colSpan={canSeeAllProspects ? 12 : 11} style={{ padding: '20px', textAlign: 'center' }}>
+                  {searchTerm || filters.year || filters.month || filters.leadSource 
+                    ? 'No matching results found with current filters' 
+                    : !canSeeAllProspects 
+                      ? `No prospective clients assigned to ${userName}`
+                      : 'No prospective clients available'
+                  }
                 </td>
               </tr>
             )}
@@ -535,46 +650,64 @@ const ViewProspective = () => {
   );
 };
 
-// Styles object (same as before)
+// Styles object (keep the same as before)
 const styles = {
   container: {
     padding: '20px',
     backgroundColor: '#f9f9f9',
     borderRadius: '8px',
     boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-    margin: '20px',
-    position: 'relative'
+    margin: '20px'
   },
   header: {
-    marginBottom: '25px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: '15px'
+    marginBottom: '20px'
   },
   heading: {
     color: '#2c3e50',
     marginBottom: '15px',
     borderBottom: '2px solid #3498db',
     paddingBottom: '10px',
-    fontSize: '24px',
-    flex: 1
+    fontSize: '24px'
   },
-  actionButtons: {
-    display: 'flex',
-    gap: '10px',
-    marginBottom: '15px'
-  },
-  trashButton: {
-    padding: '10px 20px',
-    backgroundColor: '#e67e22',
-    color: 'white',
-    border: 'none',
+  privilegeBanner: {
+    backgroundColor: '#d4edda',
+    padding: '10px 15px',
     borderRadius: '6px',
-    cursor: 'pointer',
+    marginBottom: '15px',
+    border: '1px solid #c3e6cb',
+    color: '#155724',
     fontSize: '14px',
     fontWeight: '500'
+  },
+  filterContainer: {
+    backgroundColor: 'white',
+    padding: '15px',
+    borderRadius: '8px',
+    marginBottom: '20px',
+    border: '1px solid #e0e0e0'
+  },
+  filterRow: {
+    display: 'flex',
+    gap: '20px',
+    alignItems: 'flex-end',
+    flexWrap: 'wrap'
+  },
+  filterGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '5px',
+    minWidth: '150px'
+  },
+  filterLabel: {
+    fontWeight: '500',
+    color: '#2c3e50',
+    fontSize: '14px'
+  },
+  filterSelect: {
+    padding: '8px 12px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    fontSize: '14px'
   },
   filterInfo: {
     display: 'flex',
@@ -583,12 +716,12 @@ const styles = {
     backgroundColor: '#e8f4fd',
     padding: '12px 15px',
     borderRadius: '6px',
-    marginBottom: '15px',
-    width: '100%'
+    marginBottom: '15px'
   },
   filterText: {
     color: '#2c3e50',
-    fontWeight: '500'
+    fontWeight: '500',
+    fontSize: '14px'
   },
   clearFilterButton: {
     padding: '6px 12px',
@@ -601,8 +734,7 @@ const styles = {
     fontWeight: '500'
   },
   searchContainer: {
-    marginBottom: '25px',
-    position: 'relative'
+    marginBottom: '20px'
   },
   searchInput: {
     width: '100%',
@@ -613,6 +745,12 @@ const styles = {
     boxSizing: 'border-box',
     outline: 'none'
   },
+  resultsCount: {
+    marginBottom: '15px',
+    color: '#666',
+    fontSize: '14px',
+    fontWeight: '500'
+  },
   tableWrapper: {
     overflowX: 'auto',
     borderRadius: '6px',
@@ -622,20 +760,22 @@ const styles = {
   table: {
     width: '100%',
     borderCollapse: 'collapse',
-    fontSize: '15px'
+    fontSize: '14px'
   },
   tableHeadRow: {
     backgroundColor: '#3498db',
     color: 'white'
   },
   th: {
-    padding: '15px',
+    padding: '12px 8px',
     textAlign: 'left',
-    fontWeight: '600'
+    fontWeight: '600',
+    fontSize: '13px'
   },
   td: {
-    padding: '12px 15px',
-    borderBottom: '1px solid #eee'
+    padding: '10px 8px',
+    borderBottom: '1px solid #eee',
+    fontSize: '13px'
   },
   tableRow: {
     ':hover': {
@@ -647,7 +787,8 @@ const styles = {
     borderRadius: '4px',
     border: '1px solid #ddd',
     backgroundColor: 'white',
-    cursor: 'pointer'
+    cursor: 'pointer',
+    fontSize: '13px'
   },
   deleteButton: {
     padding: '6px 12px',
@@ -656,7 +797,8 @@ const styles = {
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
-    fontWeight: '500'
+    fontWeight: '500',
+    fontSize: '13px'
   },
   modalOverlay: {
     position: 'fixed',
@@ -731,16 +873,6 @@ const styles = {
     borderRadius: '4px',
     marginBottom: '15px',
     border: '1px solid #f5c6cb'
-  },
-  trashSuccessMessage: {
-    backgroundColor: '#d4edda',
-    color: '#155724',
-    padding: '12px 15px',
-    borderRadius: '4px',
-    marginBottom: '15px',
-    border: '1px solid #c3e6cb',
-    fontSize: '14px',
-    fontWeight: '500'
   }
 };
 

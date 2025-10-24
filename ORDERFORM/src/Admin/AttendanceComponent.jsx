@@ -512,7 +512,7 @@ const AttendanceComponent = ({ employees = [] }) => {
         
         .month-navigation button {
           padding: 5px 10px;
-          background: #f0f0f0;
+          background: #7d75a8ff;
           border: 1px solid #ddd;
           border-radius: 4px;
           cursor: pointer;

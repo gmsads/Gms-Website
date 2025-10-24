@@ -8,6 +8,12 @@ const DailyRecord = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Filter states
+  const [filters, setFilters] = useState({
+    year: '',
+    month: ''
+  });
 
   useEffect(() => {
     fetchRecords();
@@ -15,7 +21,7 @@ const DailyRecord = () => {
 
   useEffect(() => {
     filterRecords();
-  }, [searchTerm, records]);
+  }, [searchTerm, records, filters]);
 
   const fetchRecords = async () => {
     try {
@@ -32,19 +38,191 @@ const DailyRecord = () => {
   };
 
   const filterRecords = () => {
-    const term = searchTerm.toLowerCase();
-    const filtered = records.filter((record) =>
-      Object.values(record).some((value) =>
-        String(value).toLowerCase().includes(term)
-      )
-    );
+    let filtered = [...records];
+
+    // Apply year filter
+    if (filters.year) {
+      filtered = filtered.filter(record => {
+        const recordYear = new Date(record.date).getFullYear();
+        return recordYear === parseInt(filters.year);
+      });
+    }
+
+    // Apply month filter
+    if (filters.month) {
+      filtered = filtered.filter(record => {
+        const recordMonth = new Date(record.date).getMonth() + 1;
+        return recordMonth === parseInt(filters.month);
+      });
+    }
+
+    // Apply search term filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter((record) =>
+        Object.values(record).some((value) =>
+          String(value).toLowerCase().includes(term)
+        )
+      );
+    }
+
     setFilteredRecords(filtered);
+  };
+
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      year: '',
+      month: ''
+    });
+    setSearchTerm('');
+  };
+
+
+  // Get years from 2010 to 2050 for dropdown
+  const getAllYears = () => {
+    const years = [];
+    for (let year = 2050; year >= 2010; year--) {
+      years.push(year);
+    }
+    return years;
   };
 
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <h1 style={{ marginBottom: '20px', color: '#333' }}>Daily Reports</h1>
 
+      {/* Filter Controls */}
+      <div style={{
+        backgroundColor: 'white',
+        padding: '15px',
+        borderRadius: '8px',
+        marginBottom: '20px',
+        border: '1px solid #e0e0e0',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <div style={{
+          display: 'flex',
+          gap: '20px',
+          alignItems: 'flex-end',
+          flexWrap: 'wrap'
+        }}>
+          {/* Year Filter */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '5px'
+          }}>
+            <label style={{
+              fontWeight: '500',
+              color: '#2c3e50',
+              fontSize: '14px'
+            }}>
+              Year:
+            </label>
+            <select
+              value={filters.year}
+              onChange={(e) => handleFilterChange('year', e.target.value)}
+              style={{
+                padding: '8px 12px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '14px',
+                minWidth: '120px'
+              }}
+            >
+              <option value="">All Years</option>
+              {getAllYears().map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Month Filter */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '5px'
+          }}>
+            <label style={{
+              fontWeight: '500',
+              color: '#2c3e50',
+              fontSize: '14px'
+            }}>
+              Month:
+            </label>
+            <select
+              value={filters.month}
+              onChange={(e) => handleFilterChange('month', e.target.value)}
+              style={{
+                padding: '8px 12px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '14px',
+                minWidth: '140px'
+              }}
+            >
+              <option value="">All Months</option>
+              <option value="1">January</option>
+              <option value="2">February</option>
+              <option value="3">March</option>
+              <option value="4">April</option>
+              <option value="5">May</option>
+              <option value="6">June</option>
+              <option value="7">July</option>
+              <option value="8">August</option>
+              <option value="9">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+          </div>
+
+          {/* Clear Filters Button */}
+          {(filters.year || filters.month) && (
+            <button
+              onClick={clearFilters}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#e74c3c',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                height: '36px'
+              }}
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+
+        {/* Active Filters Display */}
+        {(filters.year || filters.month) && (
+          <div style={{
+            marginTop: '10px',
+            padding: '8px 12px',
+            backgroundColor: '#e8f4fd',
+            borderRadius: '4px',
+            fontSize: '14px',
+            color: '#2c3e50'
+          }}>
+            Active Filters: 
+            {filters.year && ` Year: ${filters.year}`}
+            {filters.month && ` Month: ${filters.month}`}
+          </div>
+        )}
+      </div>
+
+      {/* Search input */}
       <input
         type="text"
         placeholder="Search by any field..."
@@ -59,6 +237,16 @@ const DailyRecord = () => {
           borderRadius: '4px',
         }}
       />
+
+      {/* Results count */}
+      <div style={{
+        marginBottom: '15px',
+        color: '#666',
+        fontSize: '14px',
+        fontWeight: '500'
+      }}>
+        Showing {filteredRecords.length} of {records.length} records
+      </div>
 
       {error && (
         <div style={{
@@ -96,14 +284,17 @@ const DailyRecord = () => {
           borderRadius: '4px',
           textAlign: 'center'
         }}>
-          No records found.
+          {searchTerm || filters.year || filters.month 
+            ? 'No records found with current filters' 
+            : 'No records found'
+          }
         </div>
       ) : (
         <div style={{
           overflowX: 'auto',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           borderRadius: '4px',
-          maxHeight: '400px',   // limit height so body scrolls
+          maxHeight: '400px',
           overflowY: 'auto'
         }}>
           <table style={{
@@ -113,7 +304,7 @@ const DailyRecord = () => {
           }}>
             <thead>
               <tr style={{
-                backgroundColor: '#1976d2',  // darker blue header row
+                backgroundColor: '#1976d2',
                 borderBottom: '1px solid #ddd'
               }}>
                 <th style={{
@@ -122,8 +313,8 @@ const DailyRecord = () => {
                   fontWeight: 'bold',
                   position: 'sticky',
                   top: 0,
-                  backgroundColor: '#003366', // match row bg
-                  color: '#fff',              // white text
+                  backgroundColor: '#003366',
+                  color: '#fff',
                   zIndex: 2
                 }}>Executive Name</th>
                 <th style={{
@@ -167,7 +358,6 @@ const DailyRecord = () => {
                   zIndex: 2
                 }}>WhatsApp</th>
               </tr>
-
             </thead>
             <tbody>
               {filteredRecords.map((record) => (

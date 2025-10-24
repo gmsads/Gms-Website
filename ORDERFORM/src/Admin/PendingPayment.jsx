@@ -4,8 +4,6 @@ import * as XLSX from 'xlsx';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { saveAs } from 'file-saver';
 import { Document, Packer, Paragraph, Table, TableCell, TableRow, WidthType, AlignmentType, TextRun } from 'docx';
-
-// Import jsPDF only (no jspdf-autotable)
 import jsPDF from 'jspdf';
 
 function PendingPayment({ executiveFilter = null }) {
@@ -26,6 +24,14 @@ function PendingPayment({ executiveFilter = null }) {
     note: ''
   });
   const [paymentLoading, setPaymentLoading] = useState(false);
+
+  // Success popup state
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [paymentResult, setPaymentResult] = useState({
+    submittedAmount: 0,
+    remainingBalance: 0,
+    orderNo: ''
+  });
 
   // Filter states
   const [year, setYear] = useState(new Date().getFullYear());
@@ -239,18 +245,40 @@ function PendingPayment({ executiveFilter = null }) {
         note: paymentData.note
       };
 
-      await axios.post(`/api/orders/${currentOrder._id}/record-payment`, paymentPayload);
+      const response = await axios.post(`/api/orders/${currentOrder._id}/record-payment`, paymentPayload);
       
-      // Refresh the orders list to get updated data with proper sorting
+      // Calculate remaining balance
+      const remainingBalance = parseFloat((currentOrder.balance - paymentAmount).toFixed(2));
+      
+      // Show success popup with payment details
+      setPaymentResult({
+        submittedAmount: paymentAmount,
+        remainingBalance: remainingBalance,
+        orderNo: currentOrder.orderNo
+      });
+      setShowSuccessPopup(true);
+      
+      // Close payment modal
+      setShowPaymentModal(false);
+      
+      // Refresh the orders list
       await fetchOrders();
       
-      setShowPaymentModal(false);
     } catch (err) {
       console.error('Error recording payment:', err);
       alert('Failed to record payment. Please try again.');
     } finally {
       setPaymentLoading(false);
     }
+  };
+
+  const closeSuccessPopup = () => {
+    setShowSuccessPopup(false);
+    setPaymentResult({
+      submittedAmount: 0,
+      remainingBalance: 0,
+      orderNo: ''
+    });
   };
 
   // Get current filter description for export files
@@ -838,6 +866,77 @@ function PendingPayment({ executiveFilter = null }) {
     },
   };
 
+  // Success popup styles
+  const successPopupStyles = {
+    modal: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 2000,
+    },
+    content: {
+      backgroundColor: 'white',
+      padding: '30px',
+      borderRadius: '12px',
+      width: '400px',
+      maxWidth: '90%',
+      textAlign: 'center',
+      boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+    },
+    icon: {
+      fontSize: '60px',
+      color: '#27ae60',
+      marginBottom: '15px',
+    },
+    title: {
+      fontSize: '24px',
+      fontWeight: 'bold',
+      color: '#27ae60',
+      marginBottom: '20px',
+    },
+    message: {
+      fontSize: '16px',
+      color: '#2c3e50',
+      marginBottom: '10px',
+    },
+    amount: {
+      fontSize: '20px',
+      fontWeight: 'bold',
+      color: '#e74c3c',
+      margin: '10px 0',
+    },
+    balance: {
+      fontSize: '18px',
+      fontWeight: 'bold',
+      color: '#3498db',
+      margin: '10px 0',
+    },
+    orderNo: {
+      fontSize: '14px',
+      color: '#7f8c8d',
+      marginBottom: '20px',
+      fontStyle: 'italic',
+    },
+    button: {
+      backgroundColor: '#27ae60',
+      color: 'white',
+      border: 'none',
+      padding: '12px 30px',
+      borderRadius: '6px',
+      fontSize: '16px',
+      fontWeight: 'bold',
+      cursor: 'pointer',
+      marginTop: '10px',
+      transition: 'all 0.3s',
+    },
+  };
+
   return (
     <div style={styles.container}>
       <h2 style={styles.title}>
@@ -1137,6 +1236,43 @@ function PendingPayment({ executiveFilter = null }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Success Popup */}
+      {showSuccessPopup && (
+        <div style={successPopupStyles.modal}>
+          <div style={successPopupStyles.content}>
+            <div style={successPopupStyles.icon}>✓</div>
+            <h2 style={successPopupStyles.title}>Payment Successful!</h2>
+            
+            <p style={successPopupStyles.message}>
+              Payment has been recorded successfully
+            </p>
+            
+            <div style={successPopupStyles.amount}>
+              Amount Paid: ₹{paymentResult.submittedAmount.toLocaleString()}
+            </div>
+            
+            <div style={successPopupStyles.balance}>
+              Remaining Balance: ₹{paymentResult.remainingBalance.toLocaleString()}
+            </div>
+            
+            {paymentResult.orderNo && (
+              <div style={successPopupStyles.orderNo}>
+                Order: {paymentResult.orderNo}
+              </div>
+            )}
+            
+            <button 
+              onClick={closeSuccessPopup}
+              style={successPopupStyles.button}
+              onMouseOver={(e) => e.target.style.backgroundColor = '#219a52'}
+              onMouseOut={(e) => e.target.style.backgroundColor = '#27ae60'}
+            >
+              OK
+            </button>
           </div>
         </div>
       )}

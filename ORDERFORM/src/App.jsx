@@ -61,12 +61,13 @@ import EmployeeLogin from './unit/EmployeeLogin.jsx';
 import UnitAttendance from './Admin/UnitAttendance.jsx';
 import TrashOrders from './Admin/TrashOrders';
 import AgentDashboard from './Agent/AgentDashboard.jsx'
-
+import Parties from './Admin/Parties';
+import Quotation from './Admin/Quotation';
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        
+
         <Route
           path="/unit-dashboard"
           element={
@@ -76,13 +77,13 @@ function App() {
           }
         >
 
-          <Route path="daily-report" element={<DailyReport />} /> 
+          <Route path="daily-report" element={<DailyReport />} />
           <Route path="record" element={<Record />} />
           <Route path="hour" element={<Hourrecord />} />
           <Route path="hour-reeport" element={<HourReport />} />
           <Route path="employee-face" element={<EmployeeFaceEnroll />} />
-          <Route path="employee-login" element={<EmployeeLogin/>} />
-      
+          <Route path="employee-login" element={<EmployeeLogin />} />
+
         </Route>
         <Route path="/" element={<LandingPage />} />
         <Route path="/order" element={<Order />} />
@@ -132,7 +133,7 @@ function App() {
           <Route path="prospects" element={<Prospective />} />
           <Route path="daily-report" element={<DailyReport />} />
           <Route path="trash-orders" element={<TrashOrders />} />
-          <Route path="unit-attendance" element={<UnitAttendance />}/>
+          <Route path="unit-attendance" element={<UnitAttendance />} />
           <Route path="view-orders" element={<ViewOrders />} />
           <Route path="employees" element={<Employees />} />
           <Route path="add-executive" element={<AddExecutiveAdmin />} />
@@ -156,16 +157,17 @@ function App() {
           <Route path="inventory" element={<Inventory />} />
           <Route path="hour-reeport" element={<HourReport />} />
           <Route path="design-report" element={<DesignReport />} />
-
+          <Route path="parties" element={<Parties />} />
+          <Route path="quotation" element={<Quotation/>}/>
         </Route>
         <Route
-  path="/agent-dashboard"
-  element={
-    <ProtectedRoute allowedRoles={['Agent']}>
-      <AgentDashboard />
-    </ProtectedRoute>
-  }
-/>
+          path="/agent-dashboard"
+          element={
+            <ProtectedRoute allowedRoles={['Agent']}>
+              <AgentDashboard />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="/service-manager-dashboard"
@@ -233,17 +235,17 @@ function App() {
         </Route>
 
         {/* Executive Dashboard Route */}
-      {/* Executive Dashboard Route */}
-<Route
-  path="/executive-dashboard"
-  element={
-    <ProtectedRoute>
-      <ExecutiveDashboard />
-    </ProtectedRoute>
-  }
-/>
-<Route path="/performance" element={<ViewPerformance />} />
-        
+        {/* Executive Dashboard Route */}
+        <Route
+          path="/executive-dashboard"
+          element={
+            <ProtectedRoute>
+              <ExecutiveDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/performance" element={<ViewPerformance />} />
+
 
         {/* Field Executive Page Route - ADDED THIS SECTION */}
         <Route

@@ -36,6 +36,13 @@ function ViewOrders() {
     executiveName: ''
   });
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  
+  // NEW: Month filter info state
+  const [monthFilterInfo, setMonthFilterInfo] = useState({
+    monthCount: 0,
+    monthName: '',
+    weekCount: 0
+  });
 
   // Router hooks
   const location = useLocation();
@@ -187,10 +194,24 @@ function ViewOrders() {
     const executive = params.get('executive');
     const executiveType = params.get('executiveType');
     const executiveName = params.get('executiveName');
+    
+    // NEW: Read month filter info
+    const monthCount = params.get('monthCount');
+    const monthName = params.get('monthName');
+    const weekCount = params.get('weekCount');
 
     if (month) setMonthFilter(parseInt(month));
     if (year) setYearFilter(parseInt(year));
     if (clientType) setClientTypeFilter(clientType);
+
+    // Store month filter info
+    if (monthCount || monthName || weekCount) {
+      setMonthFilterInfo({
+        monthCount: monthCount ? parseInt(monthCount) : 0,
+        monthName: monthName || '',
+        weekCount: weekCount ? parseInt(weekCount) : 0
+      });
+    }
 
     // Store executive filter parameters
     if (executive || executiveType || executiveName) {
@@ -330,6 +351,7 @@ function ViewOrders() {
       executiveType: '',
       executiveName: ''
     });
+    setMonthFilterInfo({ monthCount: 0, monthName: '', weekCount: 0 });
     navigate('/admin-dashboard/view-orders');
   };
 
@@ -345,7 +367,12 @@ function ViewOrders() {
     const params = new URLSearchParams(location.search);
     params.delete('month');
     params.delete('year');
+    params.delete('week');
+    params.delete('monthCount');
+    params.delete('monthName');
+    params.delete('weekCount');
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
+    setMonthFilterInfo({ monthCount: 0, monthName: '', weekCount: 0 });
   };
 
   // Clear executive filter only
@@ -864,6 +891,64 @@ function ViewOrders() {
         </div>
       </div>
 
+      {/* Month Filter Info Section - NEW */}
+      {(monthFilterInfo.monthCount > 0 || monthFilterInfo.weekCount > 0) && (
+        <div style={{
+          backgroundColor: '#e3f2fd',
+          padding: '15px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          border: '2px solid #1976d2'
+        }}>
+          <h3 style={{ margin: '0 0 10px 0', color: '#1976d2' }}>
+            Filtered Orders Summary
+          </h3>
+          {monthFilterInfo.monthCount > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              backgroundColor: 'white',
+              padding: '10px',
+              borderRadius: '4px',
+              marginBottom: '8px'
+            }}>
+              <span style={{ fontWeight: 'bold' }}>📊 {monthFilterInfo.monthName}:</span>
+              <span style={{
+                backgroundColor: '#1976d2',
+                color: 'white',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontWeight: 'bold'
+              }}>
+                {monthFilterInfo.monthCount} Orders
+              </span>
+            </div>
+          )}
+          {monthFilterInfo.weekCount > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              backgroundColor: 'white',
+              padding: '10px',
+              borderRadius: '4px'
+            }}>
+              <span style={{ fontWeight: 'bold' }}>📅 Week {new URLSearchParams(location.search).get('week')}:</span>
+              <span style={{
+                backgroundColor: '#2196f3',
+                color: 'white',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontWeight: 'bold'
+              }}>
+                {monthFilterInfo.weekCount} Orders
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Filter Display Section */}
       <div style={{
         display: 'flex',
@@ -1046,24 +1131,6 @@ function ViewOrders() {
             Import from Excel
           </button>
 
-          {/* Trash Button - Only for Admin */}
-          {/* {userRole === 'Admin' && (
-            <button
-              onClick={navigateToTrash}
-              style={{
-                backgroundColor: '#e67e22',
-                color: 'white',
-                padding: '12px 20px',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
-              View Trash
-            </button>
-          )} */}
-
           {/* Hidden file input for import */}
           <input
             id="importExcelInput"
@@ -1197,7 +1264,7 @@ function ViewOrders() {
                                 e.target.style.backgroundColor = '#e3f2fd';
                                 e.target.style.color = '#003366';
                               }}
-                              onMouseOut={(e) => {
+                              onMouseLeave={(e) => {
                                 e.target.style.backgroundColor = 'transparent';
                                 e.target.style.color = '#003366';
                               }}

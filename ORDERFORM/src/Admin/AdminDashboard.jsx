@@ -5,7 +5,7 @@ import OrderForm from '../Executive/OrderForm';
 import DigitalMarketingOrderForm from '../Executive/Digitalform';
 import axios from 'axios';
 import GMSLogo from '../assets/GMS_LOGO_.png'
-import {Chart as ChartJS, Title, Tooltip, LineElement, PointElement, Legend, ArcElement, BarElement, CategoryScale, LinearScale,RadialLinearScale,} from 'chart.js';
+import { Chart as ChartJS, Title, Tooltip, LineElement, PointElement, Legend, ArcElement, BarElement, CategoryScale, LinearScale, RadialLinearScale, } from 'chart.js';
 import { Bar, Doughnut, PolarArea, Line } from 'react-chartjs-2';
 
 // Register ChartJS components
@@ -533,6 +533,24 @@ function AdminDashboard() {
                 Dashboard
               </NavLink>
               <NavLink
+                to="parties"
+                style={linkStyle('parties')}
+                onMouseEnter={() => setHoveredItem('parties')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+               Clients
+              </NavLink>
+              <NavLink
+                to="quotation"
+                style={linkStyle('quotation')}
+                onMouseEnter={() => setHoveredItem('quotation')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Quotation 
+              </NavLink>
+              <NavLink
                 to="ledger"
                 style={linkStyle('ledger')}
                 onMouseEnter={() => setHoveredItem('ledger')}
@@ -541,6 +559,7 @@ function AdminDashboard() {
               >
                 Ledger
               </NavLink>
+                
             </>
           )}
         </div>
@@ -663,6 +682,15 @@ function AdminDashboard() {
               >
                 Unit-Attendance
               </NavLink>
+               <NavLink
+                to="activity"
+                style={linkStyle('activity')}
+                onMouseEnter={() => setHoveredItem('activity')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Target
+              </NavLink>
 
               <NavLink
                 to="executives-logins"
@@ -683,6 +711,7 @@ function AdminDashboard() {
               >
                 Daily Report
               </NavLink>
+             
             </>
           )}
         </div>
@@ -882,7 +911,7 @@ function AdminDashboard() {
         </div>
 
         {/* TRASH Section */}
-  
+
       </div>
     );
   };
@@ -1087,6 +1116,7 @@ function AdminDashboard() {
                 ) : (
                   <div style={styles.dashboardCards}>
                     {/* Total Orders Bar Chart */}
+
                     <div style={styles.card}>
                       <div>Total Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : '(Monthly)'}</div>
                       <div style={styles.chartContainer}>
@@ -1122,12 +1152,32 @@ function AdminDashboard() {
                             },
                             onClick: (_, elements) => {
                               if (elements.length > 0) {
+                                const queryParams = new URLSearchParams();
+
                                 if (selectedMonth === null) {
-                                  navigate(`/admin-dashboard/view-orders?month=${elements[0].index + 1}&year=${year}`);
+                                  // When viewing all months, click on a month bar
+                                  const clickedMonth = elements[0].index + 1;
+                                  queryParams.append('month', clickedMonth);
+                                  queryParams.append('year', year);
+
+                                  // Add the count for display in view orders
+                                  const monthCount = safeArray(chartData?.totalOrdersByMonth)[elements[0].index] || 0;
+                                  queryParams.append('monthCount', monthCount);
+                                  queryParams.append('monthName', monthLabels[elements[0].index]);
                                 } else {
+                                  // When viewing specific month, click on a week bar
                                   const weekNumber = elements[0].index + 1;
-                                  navigate(`/admin-dashboard/view-orders?month=${selectedMonth + 1}&year=${year}&week=${weekNumber}`);
+                                  queryParams.append('month', selectedMonth + 1);
+                                  queryParams.append('year', year);
+                                  queryParams.append('week', weekNumber);
+
+                                  // Add the count for display in view orders
+                                  const weekCount = chartData?.weeklyOrders?.[elements[0].index]?.count || 0;
+                                  queryParams.append('weekCount', weekCount);
+                                  queryParams.append('monthName', monthLabels[selectedMonth]);
                                 }
+
+                                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                               }
                             },
                             scales: {
@@ -1167,39 +1217,42 @@ function AdminDashboard() {
                       )}
                     </div>
 
-                    {/* Pending Payment */}
-                    <div style={styles.card}>
-                      <div>Payment Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}</div>
-                      <div style={styles.pieChart}>
-                        <Doughnut
-                          data={{
-                            labels: ['Paid', 'Pending'],
-                            datasets: [
-                              {
-                                data: pendingPayments,
-                                backgroundColor: ['green', 'red'],
-                              },
-                            ],
-                          }}
-                          options={{
-                            onClick: (e, elements) => {
-                              if (elements.length > 0 && elements[0].index === 1) {
-                                handleChartClick('pending-payment');
-                              }
-                            },
-                          }}
-                        />
-                        <div
-                          style={{
-                            ...styles.clickableSection,
-                            pointerEvents: pendingPayments[1] > 0 ? 'auto' : 'none'
-                          }}
-                          onClick={() => pendingPayments[1] > 0 && handleChartClick('pending-payment')}
-                        />
-                      </div>
-                      <div style={styles.number}>{pendingPayments[1]}</div>
-                    </div>
-
+                 {/* Pending Payment - SHOW ONLY PENDING AMOUNT */}
+<div style={styles.card}>
+  <div>Payment Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}</div>
+  <div style={styles.pieChart}>
+    <Doughnut
+      data={{
+        labels: ['Paid', 'Pending'],
+        datasets: [
+          {
+            data: pendingPayments,
+            backgroundColor: ['green', 'red'],
+          },
+        ],
+      }}
+      options={{
+        onClick: (e, elements) => {
+          if (elements.length > 0 && elements[0].index === 1) {
+            handleChartClick('pending-payment');
+          }
+        },
+      }}
+    />
+    <div
+      style={{
+        ...styles.clickableSection,
+        pointerEvents: pendingPayments[1] > 0 ? 'auto' : 'none'
+      }}
+      onClick={() => pendingPayments[1] > 0 && handleChartClick('pending-payment')}
+    />
+  </div>
+  {/* Show count and ONLY PENDING AMOUNT */}
+  <div style={styles.number}>{pendingPayments[1]}</div>
+  <div style={{ fontSize: '16px', color: 'red', marginTop: '5px', fontWeight: 'bold' }}>
+    Pending Amount: ₹{(chartData?.pendingAmount || 0).toLocaleString('en-IN')}
+  </div>
+</div>
                     {/* Pending Service */}
                     <div style={styles.card}>
                       <div>Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}</div>

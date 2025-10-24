@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ProspectiveClient = require('../models/ProspectiveClients');
-
+const PRIVILEGED_EXECUTIVES = ['admin1','Soujanya', 'Aleem', 'Sirisha', 'Sangeetha', 'Malleshwari', 'Malli'];
 // Create a new prospective client
 router.post('/', async (req, res) => {
     try {
@@ -134,7 +134,6 @@ router.get('/by-phone', async (req, res) => {
     }
 });
 
-// Add this to your prospective-clients routes
 // Add this to your prospective-clients routes
 router.get('/stats', async (req, res) => {
   try {
@@ -298,6 +297,42 @@ router.delete('/:id', async (req, res) => {
         });
     } catch (error) {
         console.error('Error deleting client:', error);
+        res.status(500).json({ 
+            message: 'Server error',
+            error: error.message 
+        });
+    }
+});
+// Get all prospective clients for privileged executives (separate route)
+router.get('/privileged/all', async (req, res) => {
+    try {
+        const { userName, search, status } = req.query;
+
+        // Verify the user is a privileged executive
+        if (!PRIVILEGED_EXECUTIVES.includes(userName)) {
+            return res.status(403).json({ 
+                message: 'Access denied. Privileged executive access required.' 
+            });
+        }
+
+        let query = {};
+        
+        // Filter by status if provided
+        if (status) {
+            query.status = status;
+        }
+
+        // Search functionality
+        if (search) {
+            query.$text = { $search: search };
+        }
+
+        const clients = await ProspectiveClient.find(query)
+            .sort({ followUpDate: 1, createdAt: -1 });
+            
+        res.json(clients);
+    } catch (error) {
+        console.error('Error fetching all prospective clients for privileged executive:', error);
         res.status(500).json({ 
             message: 'Server error',
             error: error.message 

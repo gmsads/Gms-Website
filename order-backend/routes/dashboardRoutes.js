@@ -58,13 +58,15 @@ router.get('/chart-data', async (req, res) => {
       }
     });
 
-    // Initialize counters
+    // Initialize counters - SIMPLIFIED AMOUNT TRACKING
     const result = {
       totalOrdersByMonth: selectedMonth !== null ? [filteredOrders.length] : Array(12).fill(0),
-      agentOrdersByMonth: selectedMonth !== null ? [0] : Array(12).fill(0), // Added for agent orders
+      totalOrdersAmountByMonth: selectedMonth !== null ? [0] : Array(12).fill(0), // Keep for total orders amount
+      agentOrdersByMonth: selectedMonth !== null ? [0] : Array(12).fill(0),
       pendingPayments: [0, 0],
+      pendingAmount: 0, // NEW: Only track pending amount
       pendingServices: [0, 0],
-      appointments: [0, 0], // [Done, Upcoming]
+      appointments: [0, 0],
       clientTypes: { Retail: 0, Renewal: 0, Agent: 0, 'Renewal-Agent': 0 },
       timePeriod: {
         year: selectedYear,
@@ -72,22 +74,37 @@ router.get('/chart-data', async (req, res) => {
       }
     };
 
-    // Process filtered orders
+    // Process filtered orders - SIMPLIFIED AMOUNT CALCULATION
     filteredOrders.forEach(order => {
       try {
         const orderDate = new Date(order.orderDate);
         const month = orderDate.getMonth();
+        const orderTotal = order.total || 0;
+        const orderBalance = order.balance || 0;
         
         if (selectedMonth === null) {
+          // Yearly view - accumulate by month
           result.totalOrdersByMonth[month]++;
-          // Count agent orders by month
-          if (order.clientType === 'Agent' || order.clientType === 'Renewal-Agent') {
+          result.totalOrdersAmountByMonth[month] += orderTotal;
+        } else {
+          // Monthly view - total for the month
+          result.totalOrdersAmountByMonth[0] += orderTotal;
+        }
+
+        // Count agent orders by month
+        if (order.clientType === 'Agent' || order.clientType === 'Renewal-Agent') {
+          if (selectedMonth === null) {
             result.agentOrdersByMonth[month]++;
           }
         }
 
-        // Payment status
-        order.balance > 0 ? result.pendingPayments[1]++ : result.pendingPayments[0]++;
+        // Payment status - ONLY TRACK PENDING AMOUNT
+        if (orderBalance > 0) {
+          result.pendingPayments[1]++; // Count pending
+          result.pendingAmount += orderBalance; // ONLY PENDING AMOUNT
+        } else {
+          result.pendingPayments[0]++; // Count paid
+        }
 
         // Client type
         if (order.clientType && result.clientTypes.hasOwnProperty(order.clientType)) {
@@ -196,7 +213,6 @@ router.get('/chart-data', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 router.get('/view-orders', async (req, res) => {
   try {

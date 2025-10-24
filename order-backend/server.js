@@ -37,6 +37,9 @@ const designersRoutes = require('./routes/designers');
 const uploadRoute = require('./routes/uploadRoute.js');
 const unitAttendanceRoutes = require('./routes/unitAttendance');
 const trashOrdersRoutes = require("./routes/trashOrders");
+const parties = require("./routes/parties");
+const attendanceRoutes = require('./routes/attendance');// Cron Jobs
+const quotationRoutes = require('./routes/quotations');
 // Initialize Express
 const app = express();
 runReminderCron();
@@ -50,6 +53,8 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 app.use("/api/upload", uploadRoute);
 app.use("/api/trash-orders",trashOrdersRoutes);
 // Routes - SPECIFIC ROUTES FIRST
+app.use('/api/quotations', quotationRoutes);
+app.use('/api/attendance', attendanceRoutes);
 app.use('/api/anniversaries', anniversaryRoutes);
 app.use('/api/expenses', expensesRoute);
 app.use('/api/price-items', priceItemsRouter);
@@ -76,6 +81,7 @@ app.use('/api/designers', designersRoutes);
 app.use("/api", authRoutes);
 
 // GENERIC ROUTES LAST
+app.use("/api/parties",parties);
 app.use("/api", orderRoutes);
 app.use("/api", checkClientRoutes);
 app.use("/api", serviceExecutiveRoutes);

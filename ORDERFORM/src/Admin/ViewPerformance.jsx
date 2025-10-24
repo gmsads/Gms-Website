@@ -116,10 +116,28 @@ const PerformanceView = () => {
     return achieved - advance;
   };
 
-  // NEW CRITERIA: Check if month meets incentive criteria (target achieved)
+  // NEW CRITERIA: Check if month meets incentive criteria (target achieved OR minimum orders)
   const meetsIncentiveCriteria = (monthData) => {
-    const targetAchieved = monthData.percentage >= 100; // Only need 100% target achievement
-    return targetAchieved;
+    const targetAchieved = monthData.percentage >= 100; // 100% target achievement
+    const minimumOrders = (monthData.orders || 0) >= 10; // At least 10 orders
+    
+    return targetAchieved || minimumOrders;
+  };
+
+  // NEW: Calculate what's needed for eligibility
+  const calculateEligibilityGap = (monthData) => {
+    const currentPercentage = monthData.percentage || 0;
+    const currentOrders = monthData.orders || 0;
+    
+    const targetNeeded = Math.max(0, 100 - currentPercentage);
+    const ordersNeeded = Math.max(0, 10 - currentOrders);
+    
+    return {
+      targetNeeded,
+      ordersNeeded,
+      meetsTargetCriteria: currentPercentage >= 100,
+      meetsOrderCriteria: currentOrders >= 10
+    };
   };
 
   // PERSISTENT: Handle manual eligibility toggle with executive-specific storage
@@ -133,7 +151,9 @@ const PerformanceView = () => {
       
       // Only allow adding eligibility, not removing
       if (!newState[uniqueKey]) {
-        // Add eligibility with simple flag (no amount calculation)
+        const gap = calculateEligibilityGap(monthData);
+        
+        // Add eligibility with criteria met information
         newState[uniqueKey] = {
           eligible: true,
           executiveName: executiveName,
@@ -141,7 +161,10 @@ const PerformanceView = () => {
           criteria: {
             targetRequired: 100,
             targetAchieved: monthData.percentage || 0,
-            ordersCount: monthData.orders || 0,
+            ordersRequired: 10,
+            ordersAchieved: monthData.orders || 0,
+            meetsTarget: gap.meetsTargetCriteria,
+            meetsOrders: gap.meetsOrderCriteria,
             dateMarked: new Date().toISOString()
           }
         };
@@ -224,6 +247,7 @@ const PerformanceView = () => {
       }
     }
   }, [employeeNameFromUrl, allExecutives]);
+
 // NEW: Fetch overall performance data with month and year filters
 const fetchOverallPerformance = async (month = null, year = null) => {
   setChartLoading(true);
@@ -642,6 +666,20 @@ const fetchOverallPerformance = async (month = null, year = null) => {
       color: '#495057',
       marginBottom: '10px',
       textAlign: 'center'
+    },
+    gapInfo: {
+      fontSize: '13px',
+      color: '#dc3545',
+      marginBottom: '8px',
+      textAlign: 'center',
+      fontWeight: '600'
+    },
+    criteriaMetInfo: {
+      fontSize: '14px',
+      color: '#28a745',
+      marginBottom: '8px',
+      textAlign: 'center',
+      fontWeight: '600'
     },
     // CHART STYLES
     chartContainer: {
@@ -1137,109 +1175,129 @@ const fetchOverallPerformance = async (month = null, year = null) => {
     );
   };
 
-  const renderMonthlyTargets = () => {
-    if (!performanceData?.detailedData?.byMonth) return null;
+ const renderMonthlyTargets = () => {
+  if (!performanceData?.detailedData?.byMonth) return null;
 
-    const sortedMonths = [...performanceData.detailedData.byMonth].sort((a, b) => {
-      const [aMonth, aYear] = a.month.split(' ');
-      const [bMonth, bYear] = b.month.split(' ');
-      const aDate = new Date(`${aMonth} 1, ${aYear}`);
-      const bDate = new Date(`${bMonth} 1, ${bYear}`);
-      return bDate - aDate;
-    });
+  const sortedMonths = [...performanceData.detailedData.byMonth].sort((a, b) => {
+    const [aMonth, aYear] = a.month.split(' ');
+    const [bMonth, bYear] = b.month.split(' ');
+    const aDate = new Date(`${aMonth} 1, ${aYear}`);
+    const bDate = new Date(`${bMonth} 1, ${bYear}`);
+    return bDate - aDate;
+  });
 
-    return sortedMonths.map((monthData, index) => {
-      const percentage = monthData.percentage || 0;
-      const balance = calculateMonthlyBalance(monthData);
-      const monthKey = monthData.month;
-      const isManuallyEligible = isMonthEligible(monthKey); // PERSISTENT: Use the new function
-      const meetsCriteria = meetsIncentiveCriteria(monthData);
+  return sortedMonths.map((monthData, index) => {
+    const percentage = monthData.percentage || 0;
+    const balance = calculateMonthlyBalance(monthData);
+    const monthKey = monthData.month;
+    const isManuallyEligible = isMonthEligible(monthKey); // PERSISTENT: Use the new function
+    const meetsCriteria = meetsIncentiveCriteria(monthData);
+    const gap = calculateEligibilityGap(monthData);
 
-      return (
-        <div key={index} style={styles.monthlyCard}>
-          {isManuallyEligible && (
-            <span style={styles.eligibleBadge}>✅ Eligible</span>
-          )}
-          
-          <h3 style={styles.cardTitle}>{monthData.month}</h3>
-          
-          {renderPerformanceBox(percentage)}
-          
-          <div style={styles.cardItem}>
-            <span style={styles.cardLabel}>Target Amount:</span>
-            <span style={styles.cardValue}>
-              ₹{monthData.target?.toLocaleString('en-IN') || '0'}
-            </span>
-          </div>
-          <div style={styles.cardItem}>
-            <span style={styles.cardLabel}>Achieved Amount:</span>
-            <span style={styles.cardValue}>
-              ₹{monthData.achieved?.toLocaleString('en-IN') || '0'}
-            </span>
-          </div>
-          <div style={styles.cardItem}>
-            <span style={styles.cardLabel}>Advance Amount:</span>
-            <span style={styles.cardValue}>
-              ₹{monthData.advance?.toLocaleString('en-IN') || '0'}
-            </span>
-          </div>
-          <div style={styles.cardItem}>
-            <span style={styles.cardLabel}>Balance Amount:</span>
-            <span style={{
-              ...styles.cardValue,
-              color: balance >= 0 ? '#27ae60' : '#e74c3c'
-            }}>
-              ₹{balance.toLocaleString('en-IN')}
-            </span>
-          </div>
-          <div 
-            style={styles.clickableCardItem}
-            onClick={() => handleMonthClick(monthData)}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#f8f9fa';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = 'transparent';
-            }}
-          >
-            <span style={styles.cardLabel}>Total Orders:</span>
-            <span style={styles.cardValue}>
-              {monthData.orders || '0'}
-            </span>
-          </div>
-          <div 
-            style={styles.clickableCardItem}
-            onClick={() => handleMonthlyProspectsClick(monthData)}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#f8f9fa';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = 'transparent';
-            }}
-          >
-            <span style={styles.cardLabel}>Monthly Prospects:</span>
-            <span style={styles.cardValue}>
-              {monthData.prospects || '0'}
-            </span>
-          </div>
-          
-          {/* PERSISTENT: UPDATED INCENTIVE ELIGIBILITY SECTION */}
-          <div style={styles.incentiveEligibilitySection}>
-            <div style={styles.incentiveInfo}>
-              <strong>Target Achievement: {percentage}%</strong>
-              <br />
-              {meetsCriteria ? (
-                <span style={{ color: '#28a745' }}>✅ Meets incentive criteria</span>
-              ) : (
-                <span style={{ color: '#dc3545' }}>❌ Target not achieved (needs 100%)</span>
-              )}
+    return (
+      <div key={index} style={styles.monthlyCard}>
+        {isManuallyEligible && (
+          <span style={styles.eligibleBadge}>✅ Eligible</span>
+        )}
+        
+        <h3 style={styles.cardTitle}>{monthData.month}</h3>
+        
+        {renderPerformanceBox(percentage)}
+        
+        <div style={styles.cardItem}>
+          <span style={styles.cardLabel}>Target Amount:</span>
+          <span style={styles.cardValue}>
+            ₹{monthData.target?.toLocaleString('en-IN') || '0'}
+          </span>
+        </div>
+        <div style={styles.cardItem}>
+          <span style={styles.cardLabel}>Achieved Amount:</span>
+          <span style={styles.cardValue}>
+            ₹{monthData.achieved?.toLocaleString('en-IN') || '0'}
+          </span>
+        </div>
+        <div style={styles.cardItem}>
+          <span style={styles.cardLabel}>Advance Amount:</span>
+          <span style={styles.cardValue}>
+            ₹{monthData.advance?.toLocaleString('en-IN') || '0'}
+          </span>
+        </div>
+        <div style={styles.cardItem}>
+          <span style={styles.cardLabel}>Balance Amount:</span>
+          <span style={{
+            ...styles.cardValue,
+            color: balance >= 0 ? '#27ae60' : '#e74c3c'
+          }}>
+            ₹{balance.toLocaleString('en-IN')}
+          </span>
+        </div>
+        <div 
+          style={styles.clickableCardItem}
+          onClick={() => handleMonthClick(monthData)}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#f8f9fa';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = 'transparent';
+          }}
+        >
+          <span style={styles.cardLabel}>Total Orders:</span>
+          <span style={styles.cardValue}>
+            {monthData.orders || '0'}
+          </span>
+        </div>
+        <div 
+          style={styles.clickableCardItem}
+          onClick={() => handleMonthlyProspectsClick(monthData)}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#f8f9fa';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = 'transparent';
+          }}
+        >
+          <span style={styles.cardLabel}>Monthly Prospects:</span>
+          <span style={styles.cardValue}>
+            {monthData.prospects || '0'}
+          </span>
+        </div>
+        
+        {/* UPDATED INCENTIVE ELIGIBILITY SECTION */}
+        <div style={styles.incentiveEligibilitySection}>
+          {isManuallyEligible ? (
+            <div style={{ textAlign: 'center', color: '#28a745', fontWeight: '600' }}>
+              ✅ Already Marked Eligible for Incentive
             </div>
-            
-            {isManuallyEligible ? (
-              <div style={{ textAlign: 'center', color: '#28a745', fontWeight: '600' }}>
-                ✅ Marked Eligible for Incentive
-              </div>
-            ) : (
+          ) : (
+            <>
+              {/* Show criteria status */}
+              {gap.meetsTargetCriteria && (
+                <div style={styles.criteriaMetInfo}>
+                  ✅ Target Achieved: {percentage}% (Required: 100%)
+                </div>
+              )}
+              {gap.meetsOrderCriteria && (
+                <div style={styles.criteriaMetInfo}>
+                  ✅ Orders Completed: {monthData.orders || 0} (Required: 10)
+                </div>
+              )}
+              
+              {/* Show what's needed if criteria not met */}
+              {!meetsCriteria && (
+                <>
+                  {!gap.meetsTargetCriteria && (
+                    <div style={styles.gapInfo}>
+                      📊 Need {gap.targetNeeded}% more to reach target
+                    </div>
+                  )}
+                  {!gap.meetsOrderCriteria && (
+                    <div style={styles.gapInfo}>
+                      📦 Need {gap.ordersNeeded} more orders to reach minimum
+                    </div>
+                  )}
+                </>
+              )}
+              
               <button
                 onClick={() => handleToggleEligibility(monthKey, monthData)}
                 disabled={!meetsCriteria}
@@ -1248,14 +1306,19 @@ const fetchOverallPerformance = async (month = null, year = null) => {
                   ...(!meetsCriteria ? { backgroundColor: '#6c757d', cursor: 'not-allowed' } : {})
                 }}
               >
-                {meetsCriteria ? 'Make Eligible for Incentive' : 'Target Not Achieved'}
+                {meetsCriteria ? 'Make Eligible for Incentive' : 'Criteria Not Met'}
               </button>
-            )}
-          </div>
+              
+              <div style={{ fontSize: '12px', color: '#6c757d', textAlign: 'center', marginTop: '8px' }}>
+                Eligibility requires: 100% Target OR 10+ Orders
+              </div>
+            </>
+          )}
         </div>
-      );
-    });
-  };
+      </div>
+    );
+  });
+};
 
   return (
     <div style={styles.container}>
@@ -1381,7 +1444,7 @@ const fetchOverallPerformance = async (month = null, year = null) => {
             )}
           </h2>
 
-          {/* PERSISTENT: UPDATED INCENTIVE SUMMARY CARD */}
+          {/* UPDATED INCENTIVE SUMMARY CARD */}
           {renderIncentiveInfo()}
 
           <div style={styles.cardGrid}>
