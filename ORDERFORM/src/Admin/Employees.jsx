@@ -1,16 +1,16 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import SalaryComponent from './SalaryComponent';
 import AttendanceComponent from './AttendanceComponent';
 
 export default function Employees() {
-  // State declarations
   const [employeeCategories, setEmployeeCategories] = useState({});
   const [expanded, setExpanded] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [counts, setCounts] = useState({ active: 0, inactive: 0, total: 0 });
-  const [activeFilter, setActiveFilter] = useState('all');
+  const [activeFilter, setActiveFilter] = useState('active');
   const [popupMessage, setPopupMessage] = useState({ show: false, message: '', type: '' });
   const [rejoinModal, setRejoinModal] = useState({
     isOpen: false,
@@ -18,14 +18,6 @@ export default function Employees() {
     category: '',
     index: -1,
     rejoinDate: new Date().toISOString().split('T')[0]
-  });
-  const [resignationModal, setResignationModal] = useState({
-    isOpen: false,
-    employee: null,
-    category: '',
-    index: -1,
-    resignationDate: new Date().toISOString().split('T')[0],
-    resignationReason: ''
   });
   const [editModal, setEditModal] = useState({
     isOpen: false,
@@ -35,8 +27,15 @@ export default function Employees() {
     showRejoinDate: false
   });
   const [activeTab, setActiveTab] = useState('directory');
+  const [resignationModal, setResignationModal] = useState({
+    isOpen: false,
+    employee: null,
+    category: '',
+    index: -1,
+    resignationDate: new Date().toISOString().split('T')[0],
+    resignationReason: ''
+  });
 
-  // Role options for dropdown
   const roleOptions = useMemo(() => [
     'Executive',
     'Admin',
@@ -63,7 +62,7 @@ export default function Employees() {
   // Function to generate random color based on name
   const getAvatarColor = useCallback((name) => {
     if (!name) return '#003366';
-    
+
     const colors = [
       '#003366', '#004d99', '#0066cc', '#0080ff',
       '#006600', '#008000', '#009900', '#00b300',
@@ -71,40 +70,21 @@ export default function Employees() {
       '#660066', '#800080', '#990099', '#b300b3',
       '#006666', '#008080', '#009999', '#00b3b3'
     ];
-    
+
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
-    
+
     return colors[Math.abs(hash) % colors.length];
   }, []);
 
-  // Fetch employees from API
   const fetchEmployees = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('Fetching employees from API...');
       const response = await fetch('/api/employees');
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API response not OK:', response.status, errorText);
-        throw new Error(`Failed to fetch employee data: ${response.status}`);
-      }
-      
+      if (!response.ok) throw new Error('Failed to fetch employee data');
       const data = await response.json();
-      console.log('Employees data received:', data);
-
-      // DEBUG: Check if resignation reasons are coming in the data
-      // eslint-disable-next-line no-unused-vars
-      Object.entries(data).forEach(([category, employees]) => {
-        employees.forEach(employee => {
-          if (employee.resignationReason) {
-            console.log(`Found resignation reason for ${employee.name}:`, employee.resignationReason);
-          }
-        });
-      });
 
       const transformedData = {};
       Object.entries(data).forEach(([category, employees]) => {
@@ -114,29 +94,25 @@ export default function Employees() {
           phone: employee.phone || '',
           active: Boolean(employee.active),
           role: category,
-          image: employee.imageUrl || null,
+          image: employee.image || null,
           rejoinDate: employee.rejoinDate || '',
           resignationDate: employee.resignationDate || '',
-          resignationReason: employee.resignationReason || '' // Added resignation reason
+          resignationReason: employee.resignationReason || ''
         }));
       });
 
-      console.log('Transformed data with resignation reasons:', transformedData);
       setEmployeeCategories(transformedData);
       setLoading(false);
     } catch (err) {
-      console.error('Error in fetchEmployees:', err);
       setError(err.message || 'Failed to load employee data');
       setLoading(false);
     }
   }, []);
 
-  // Fetch employees on component mount
   useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
 
-  // Show popup message
   const showPopup = useCallback((message, type = 'info') => {
     setPopupMessage({ show: true, message, type });
     setTimeout(() => {
@@ -144,11 +120,10 @@ export default function Employees() {
     }, 5000);
   }, []);
 
-  // Handle rejoin submit
   const handleRejoinSubmit = useCallback(async () => {
     try {
-      const { employee, category, index, rejoinDate } = rejoinModal;
-      
+      const { employee, category, rejoinDate } = rejoinModal;
+
       if (!rejoinDate) {
         showPopup('Rejoin date is required', 'error');
         return;
@@ -161,17 +136,15 @@ export default function Employees() {
         resignationReason: ''
       };
 
-      setEmployeeCategories(prev => {
-        const updated = { ...prev };
-        updated[category] = [...updated[category]];
-        updated[category][index] = {
-          ...updated[category][index],
-          ...updates
-        };
-        return updated;
-      });
+      // Find the correct index in the original array
+      const originalIndex = employeeCategories[category]?.findIndex(emp => emp.name === employee.name);
+      
+      if (originalIndex === -1) {
+        throw new Error('Employee not found');
+      }
 
-      const response = await fetch('/api/employees/update-profile', {
+      // Update server first
+      const response = await fetch('/api/update-profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -183,34 +156,72 @@ export default function Employees() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Server response error:', errorData);
-        await fetchEmployees();
-        throw new Error(errorData.message || 'Status update failed on server');
+        throw new Error('Status update failed on server');
       }
 
-      showPopup(`${employee.name} has rejoined on ${rejoinDate}`, 'success');
-      setRejoinModal({ 
-        isOpen: false, 
-        employee: null, 
-        category: '', 
-        index: -1, 
-        rejoinDate: new Date().toISOString().split('T')[0] 
+      // Then update local state
+      setEmployeeCategories(prev => {
+        const updated = { ...prev };
+        updated[category] = [...updated[category]];
+        updated[category][originalIndex] = {
+          ...updated[category][originalIndex],
+          ...updates
+        };
+        return updated;
       });
-      
+
+      showPopup(`${employee.name} has rejoined on ${rejoinDate}`, 'success');
+      setRejoinModal({
+        isOpen: false,
+        employee: null,
+        category: '',
+        index: -1,
+        rejoinDate: new Date().toISOString().split('T')[0]
+      });
+
     } catch (err) {
       console.error('Rejoin error:', err);
       showPopup('Failed to update status', 'error');
       await fetchEmployees();
     }
-  }, [rejoinModal, fetchEmployees, showPopup]);
+  }, [rejoinModal, employeeCategories, fetchEmployees, showPopup]);
 
-  // Handle resignation submit
+  // Updated toggleEmployeeStatus function
+  const toggleEmployeeStatus = useCallback(async (category, index, employee) => {
+    try {
+      if (employee.active) {
+        // Deactivating an active employee - show resignation modal
+        setResignationModal({
+          isOpen: true,
+          employee,
+          category,
+          index: -1,
+          resignationDate: new Date().toISOString().split('T')[0],
+          resignationReason: ''
+        });
+      } else {
+        // Activating an inactive employee - show rejoin modal
+        setRejoinModal({
+          isOpen: true,
+          employee,
+          category,
+          index: -1,
+          rejoinDate: new Date().toISOString().split('T')[0]
+        });
+      }
+    } catch (err) {
+      console.error('Status update error:', err);
+      showPopup('Failed to update status. Refreshing data...', 'error');
+      await fetchEmployees();
+    }
+  }, [fetchEmployees]);
+
+  // Updated handleResignationSubmit function
   const handleResignationSubmit = useCallback(async () => {
     try {
-      const { employee, category, index, resignationDate, resignationReason } = resignationModal;
-      
-      if (!resignationDate || !resignationReason.trim()) {
+      const { employee, category, resignationDate, resignationReason } = resignationModal;
+
+      if (!resignationDate || !resignationReason) {
         showPopup('Resignation date and reason are required', 'error');
         return;
       }
@@ -218,21 +229,19 @@ export default function Employees() {
       const updates = {
         active: false,
         resignationDate,
-        resignationReason: resignationReason.trim(),
+        resignationReason,
         rejoinDate: ''
       };
 
-      setEmployeeCategories(prev => {
-        const updated = { ...prev };
-        updated[category] = [...updated[category]];
-        updated[category][index] = {
-          ...updated[category][index],
-          ...updates
-        };
-        return updated;
-      });
+      // Find the correct index in the original array
+      const originalIndex = employeeCategories[category]?.findIndex(emp => emp.name === employee.name);
+      
+      if (originalIndex === -1) {
+        throw new Error('Employee not found');
+      }
 
-      const response = await fetch('/api/employees/update-profile', {
+      // Update server first
+      const response = await fetch('/api/update-profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -244,59 +253,37 @@ export default function Employees() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Server response error:', errorData);
-        await fetchEmployees();
-        throw new Error(errorData.message || 'Status update failed on server');
+        throw new Error('Status update failed on server');
       }
 
-      showPopup(`${employee.name} has been marked as inactive`, 'success');
-      setResignationModal({ 
-        isOpen: false, 
-        employee: null, 
-        category: '', 
-        index: -1, 
+      // Then update local state
+      setEmployeeCategories(prev => {
+        const updated = { ...prev };
+        updated[category] = [...updated[category]];
+        updated[category][originalIndex] = {
+          ...updated[category][originalIndex],
+          ...updates
+        };
+        return updated;
+      });
+
+      showPopup(`${employee.name} has been deactivated`, 'success');
+      setResignationModal({
+        isOpen: false,
+        employee: null,
+        category: '',
+        index: -1,
         resignationDate: new Date().toISOString().split('T')[0],
         resignationReason: ''
       });
-      
+
     } catch (err) {
       console.error('Resignation error:', err);
       showPopup('Failed to update status', 'error');
       await fetchEmployees();
     }
-  }, [resignationModal, fetchEmployees, showPopup]);
+  }, [resignationModal, employeeCategories, fetchEmployees, showPopup]);
 
-  // Toggle employee status (active/inactive) - UPDATED: Now uses modals instead of prompts
-  const toggleEmployeeStatus = useCallback((category, index) => {
-    const employee = employeeCategories[category][index];
-    const newStatus = !employee.active;
-
-    console.log('Toggling status for:', employee.name, 'to:', newStatus);
-
-    if (newStatus && !employee.active) {
-      // Activating an inactive employee - show rejoin modal
-      setRejoinModal({
-        isOpen: true,
-        employee,
-        category,
-        index,
-        rejoinDate: new Date().toISOString().split('T')[0]
-      });
-    } else if (!newStatus && employee.active) {
-      // Deactivating an active employee - show resignation modal
-      setResignationModal({
-        isOpen: true,
-        employee,
-        category,
-        index,
-        resignationDate: new Date().toISOString().split('T')[0],
-        resignationReason: ''
-      });
-    }
-  }, [employeeCategories]);
-
-  // Filter categories based on active filter
   const filteredCategories = useMemo(() => {
     return Object.entries(employeeCategories).reduce((acc, [category, employees]) => {
       const filtered = employees.filter(employee => {
@@ -314,7 +301,6 @@ export default function Employees() {
     }, {});
   }, [employeeCategories, activeFilter]);
 
-  // Calculate counts for active/inactive employees
   useEffect(() => {
     let activeCount = 0;
     let inactiveCount = 0;
@@ -333,9 +319,7 @@ export default function Employees() {
     });
   }, [employeeCategories]);
 
-  // Handle edit click - open edit modal
   const handleEditClick = useCallback((employee, category) => {
-    console.log('Editing employee:', employee.name, 'Resignation reason:', employee.resignationReason);
     setEditModal({
       isOpen: true,
       employee: {
@@ -352,13 +336,9 @@ export default function Employees() {
     });
   }, []);
 
-  // Handle save employee data
   const handleSave = useCallback(async () => {
     try {
       const { employee, currentCategory } = editModal;
-      console.log('Saving employee:', employee.name);
-      console.log('Resignation reason being saved:', employee.resignationReason);
-      console.log('Employee active status:', employee.active);
 
       if (!employee.name || !employee.phone || !employee.username) {
         throw new Error('Please fill all required fields');
@@ -374,39 +354,33 @@ export default function Employees() {
       formData.append('joiningDate', employee.joiningDate || '');
       formData.append('experience', employee.experience || '');
       formData.append('role', currentCategory);
-      formData.append('active', employee.active.toString());
+      formData.append('active', employee.active);
 
       if (employee.rejoinDate) {
         formData.append('rejoinDate', employee.rejoinDate);
       }
 
-      // FIXED: Always send resignation details when employee is inactive
-      if (!employee.active) {
-        formData.append('resignationDate', employee.resignationDate || new Date().toISOString().split('T')[0]);
-        formData.append('resignationReason', employee.resignationReason || 'No reason provided');
-      } else {
+      if (employee.active) {
         formData.append('resignationDate', '');
         formData.append('resignationReason', '');
+      } else {
+        formData.append('resignationDate', employee.resignationDate || '');
+        formData.append('resignationReason', employee.resignationReason || '');
       }
 
       if (employee.imageFile) {
         formData.append('image', employee.imageFile);
       }
 
-      console.log('Sending update request...');
-      const response = await fetch('/api/employees/employee-uploads/update-profile', {
+      const response = await fetch('/api/employee-uploads/update-profile', {
         method: 'PUT',
         body: formData,
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Server response error:', errorData);
-        throw new Error(errorData.message || `Update failed: ${response.status}`);
+        throw new Error(errorData.message || 'Update failed');
       }
-
-      const result = await response.json();
-      console.log('Update successful:', result);
 
       await fetchEmployees();
       setEditModal({ isOpen: false, employee: null, currentCategory: '', originalCategory: '' });
@@ -417,15 +391,13 @@ export default function Employees() {
     }
   }, [editModal, fetchEmployees, showPopup]);
 
-  // Download all employee data as Excel
   const downloadEmployeeData = useCallback(() => {
     const allEmployees = Object.entries(employeeCategories).flatMap(([category, employees]) =>
       employees.map(emp => ({
         ...emp,
         department: category,
         status: emp.active ? 'Active' : 'Inactive',
-        rejoinDate: emp.rejoinDate || 'N/A',
-        resignationReason: emp.resignationReason || 'N/A'
+        rejoinDate: emp.rejoinDate || 'N/A'
       }))
     );
 
@@ -435,14 +407,12 @@ export default function Employees() {
     XLSX.writeFile(wb, "employee_data.xlsx");
   }, [employeeCategories]);
 
-  // Download individual employee data as Excel
   const downloadIndividualData = useCallback((employee) => {
     const ws = XLSX.utils.json_to_sheet([{
       ...employee,
       department: editModal.currentCategory,
       status: employee.active ? 'Active' : 'Inactive',
-      rejoinDate: employee.rejoinDate || 'N/A',
-      resignationReason: employee.resignationReason || 'N/A'
+      rejoinDate: employee.rejoinDate || 'N/A'
     }]);
 
     const wb = XLSX.utils.book_new();
@@ -450,7 +420,6 @@ export default function Employees() {
     XLSX.writeFile(wb, `${employee.name}_data.xlsx`);
   }, [editModal.currentCategory]);
 
-  // Toggle category expansion (show more/less)
   const toggleCategoryExpansion = useCallback((category) => {
     setExpanded(prev => ({
       ...prev,
@@ -458,64 +427,11 @@ export default function Employees() {
     }));
   }, []);
 
-  // Render employee list item with resignation reason
-  const renderEmployeeListItem = (employee, category, index) => {
-    console.log(`Rendering employee: ${employee.name}, Active: ${employee.active}, Resignation Reason: "${employee.resignationReason}"`);
-    
-    return (
-      <li
-        key={`${category}-${employee.name}-${index}`}
-        className={`employee-item ${employee.active ? '' : 'inactive-employee'}`}
-      >
-        <div className="employee-image-name" onClick={() => handleEditClick(employee, category)}>
-          <div 
-            className="employee-initials-avatar"
-            style={{ backgroundColor: getAvatarColor(employee.name) }}
-          >
-            {getInitials(employee.name)}
-          </div>
-          <div className="employee-info">
-            <span className="employee-name">
-              {employee.name}
-              {!employee.active && <span className="inactive-badge"> (Inactive)</span>}
-            </span>
-            {/* SHOW RESIGNATION REASON WHEN EMPLOYEE IS INACTIVE */}
-            {!employee.active && employee.resignationReason && employee.resignationReason.trim() !== '' && (
-              <div className="resignation-reason">
-                <strong>Reason: </strong>{employee.resignationReason}
-              </div>
-            )}
-            {/* Show placeholder if inactive but no reason */}
-            {!employee.active && (!employee.resignationReason || employee.resignationReason.trim() === '') && (
-              <div className="resignation-reason placeholder">
-                <strong>Reason: </strong>No reason provided
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="employee-status">
-          <div
-            onClick={() => toggleEmployeeStatus(category, index)}
-            className="toggle-switch"
-            aria-label={employee.active ? 'Deactivate' : 'Activate'}
-          >
-            <div className={`slider ${employee.active ? 'active' : ''}`}>
-              <span className="slider-knob"></span>
-            </div>
-          </div>
-        </div>
-      </li>
-    );
-  };
-
-  // Show loading or error states
   if (loading) return <div className="loading">Loading employees...</div>;
   if (error) return <div className="error">Error: {error}</div>;
 
-  // Main component render
   return (
     <div className="employee-directory">
-      {/* Popup Message */}
       {popupMessage.show && (
         <div className={`popup-message ${popupMessage.type}`}>
           {popupMessage.message}
@@ -528,7 +444,72 @@ export default function Employees() {
         </div>
       )}
 
-      {/* Rejoin Modal */}
+      {resignationModal.isOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '450px' }}>
+            <div className="modal-header">
+              <h3>Resignation Details</h3>
+              <button
+                className="close-button"
+                onClick={() => setResignationModal({
+                  isOpen: false,
+                  employee: null,
+                  category: '',
+                  index: -1,
+                  resignationDate: new Date().toISOString().split('T')[0],
+                  resignationReason: ''
+                })}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="form-group">
+              <label>Resignation Date*</label>
+              <input
+                type="date"
+                value={resignationModal.resignationDate}
+                onChange={(e) => setResignationModal(prev => ({ ...prev, resignationDate: e.target.value }))}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Reason for Resignation*</label>
+              <input
+                type="text"
+                value={resignationModal.resignationReason}
+                onChange={(e) => setResignationModal(prev => ({ ...prev, resignationReason: e.target.value }))}
+                placeholder="Enter reason for resignation"
+                required
+              />
+            </div>
+
+            <div className="modal-footer">
+              <button
+                className="cancel-button"
+                onClick={() => setResignationModal({
+                  isOpen: false,
+                  employee: null,
+                  category: '',
+                  index: -1,
+                  resignationDate: new Date().toISOString().split('T')[0],
+                  resignationReason: ''
+                })}
+              >
+                Cancel
+              </button>
+              <button
+                className="save-button"
+                onClick={handleResignationSubmit}
+              >
+                Confirm Resignation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {rejoinModal.isOpen && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '400px' }}>
@@ -536,10 +517,10 @@ export default function Employees() {
               <h3>Set Rejoin Date</h3>
               <button
                 className="close-button"
-                onClick={() => setRejoinModal({ 
-                  isOpen: false, 
-                  employee: null, 
-                  category: '', 
+                onClick={() => setRejoinModal({
+                  isOpen: false,
+                  employee: null,
+                  category: '',
                   index: -1,
                   rejoinDate: new Date().toISOString().split('T')[0]
                 })}
@@ -559,10 +540,10 @@ export default function Employees() {
             <div className="modal-footer">
               <button
                 className="cancel-button"
-                onClick={() => setRejoinModal({ 
-                  isOpen: false, 
-                  employee: null, 
-                  category: '', 
+                onClick={() => setRejoinModal({
+                  isOpen: false,
+                  employee: null,
+                  category: '',
                   index: -1,
                   rejoinDate: new Date().toISOString().split('T')[0]
                 })}
@@ -580,86 +561,20 @@ export default function Employees() {
         </div>
       )}
 
-      {/* Resignation Modal */}
-      {resignationModal.isOpen && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '500px' }}>
-            <div className="modal-header">
-              <h3>Set Resignation Details</h3>
-              <button
-                className="close-button"
-                onClick={() => setResignationModal({ 
-                  isOpen: false, 
-                  employee: null, 
-                  category: '', 
-                  index: -1,
-                  resignationDate: new Date().toISOString().split('T')[0],
-                  resignationReason: ''
-                })}
-              >
-                &times;
-              </button>
-            </div>
-            <div className="form-group">
-              <label>Resignation Date*</label>
-              <input
-                type="date"
-                value={resignationModal.resignationDate}
-                onChange={(e) => setResignationModal(prev => ({ ...prev, resignationDate: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>Resignation Reason*</label>
-              <textarea
-                value={resignationModal.resignationReason}
-                onChange={(e) => setResignationModal(prev => ({ ...prev, resignationReason: e.target.value }))}
-                placeholder="Enter reason for resignation"
-                rows="4"
-                required
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '0.95rem', boxSizing: 'border-box', resize: 'vertical' }}
-              />
-            </div>
-            <div className="modal-footer">
-              <button
-                className="cancel-button"
-                onClick={() => setResignationModal({ 
-                  isOpen: false, 
-                  employee: null, 
-                  category: '', 
-                  index: -1,
-                  resignationDate: new Date().toISOString().split('T')[0],
-                  resignationReason: ''
-                })}
-              >
-                Cancel
-              </button>
-              <button
-                className="save-button"
-                onClick={handleResignationSubmit}
-              >
-                Confirm Resignation
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs Navigation */}
       <div className="tabs">
-        <button 
+        <button
           className={activeTab === 'directory' ? 'active' : ''}
           onClick={() => setActiveTab('directory')}
         >
           Employee Directory
         </button>
-        <button 
+        <button
           className={activeTab === 'attendance' ? 'active' : ''}
           onClick={() => setActiveTab('attendance')}
         >
           Attendance
         </button>
-        <button 
+        <button
           className={activeTab === 'salaries' ? 'active' : ''}
           onClick={() => setActiveTab('salaries')}
         >
@@ -667,19 +582,12 @@ export default function Employees() {
         </button>
       </div>
 
-      {/* Employee Directory Tab */}
       {activeTab === 'directory' && (
         <>
           <div className="header">
             <h1>Employee Directory</h1>
             <div className="controls">
               <div className="filter-buttons">
-                <button
-                  className={activeFilter === 'all' ? 'active' : ''}
-                  onClick={() => setActiveFilter('all')}
-                >
-                  All <span className="count-badge">{counts.total}</span>
-                </button>
                 <button
                   className={activeFilter === 'active' ? 'active' : ''}
                   onClick={() => setActiveFilter('active')}
@@ -691,6 +599,12 @@ export default function Employees() {
                   onClick={() => setActiveFilter('inactive')}
                 >
                   Inactive <span className="count-badge">{counts.inactive}</span>
+                </button>
+                <button
+                  className={activeFilter === 'all' ? 'active' : ''}
+                  onClick={() => setActiveFilter('all')}
+                >
+                  All <span className="count-badge">{counts.total}</span>
                 </button>
               </div>
               <button className="download-button" onClick={downloadEmployeeData}>
@@ -709,9 +623,43 @@ export default function Employees() {
                 <div key={category} className="category-card">
                   <h3>{category}</h3>
                   <ul className="employee-list">
-                    {visibleEmployees.map((employee, index) => 
-                      renderEmployeeListItem(employee, category, index)
-                    )}
+                    {visibleEmployees.map((employee, index) => (
+                      <li
+                        key={`${category}-${employee.name}-${index}`}
+                        className={`employee-item ${employee.active ? '' : 'inactive-employee'}`}
+                      >
+                        <div className="employee-image-name" onClick={() => handleEditClick(employee, category)}>
+                          <div
+                            className="employee-initials-avatar"
+                            style={{ backgroundColor: getAvatarColor(employee.name) }}
+                          >
+                            {getInitials(employee.name)}
+                          </div>
+                          <div className="employee-details">
+                            <span className="employee-name">
+                              {employee.name}
+                              {!employee.active && <span className="inactive-badge"> (Inactive)</span>}
+                            </span>
+                            {!employee.active && (
+                              <div className="resignation-reason">
+                                Reason: {employee.resignationReason || 'No reason provided'}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="employee-status">
+                          <div
+                            onClick={() => toggleEmployeeStatus(category, index, employee)}
+                            className="toggle-switch"
+                            aria-label={employee.active ? 'Deactivate' : 'Activate'}
+                          >
+                            <div className={`slider ${employee.active ? 'active' : ''}`}>
+                              <span className="slider-knob"></span>
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
                   </ul>
                   {shouldShowMore && (
                     <button
@@ -728,17 +676,14 @@ export default function Employees() {
         </>
       )}
 
-      {/* Attendance Tab */}
       {activeTab === 'attendance' && (
         <AttendanceComponent employees={Object.values(employeeCategories).flat()} />
       )}
 
-      {/* Salaries Tab */}
       {activeTab === 'salaries' && (
         <SalaryComponent employees={Object.values(employeeCategories).flat()} />
       )}
 
-      {/* Edit Employee Modal */}
       {editModal.isOpen && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -760,12 +705,11 @@ export default function Employees() {
             </div>
 
             <div className="form-container">
-              {/* Employee Initials Section */}
               <div className="form-section">
                 <div className="form-group">
                   <label>Employee Initials</label>
                   <div className="initials-display-container">
-                    <div 
+                    <div
                       className="employee-initials-large"
                       style={{ backgroundColor: getAvatarColor(editModal.employee.name) }}
                     >
@@ -775,7 +719,6 @@ export default function Employees() {
                 </div>
               </div>
 
-              {/* Basic Information Section */}
               <div className="form-section">
                 <div className="form-row">
                   <div className="form-group">
@@ -857,130 +800,106 @@ export default function Employees() {
                 </div>
               </div>
 
-              {/* Role and Personal Details Section */}
-             {/* Role and Personal Details Section */}
-<div className="form-section">
-  <div className="form-row">
-    <div className="form-group">
-      {/* View Performance Button */}
-      <div style={{ marginBottom: '15px' }}>
-        <button
-          type="button"
-          className="view-performance-button"
-          onClick={() => {
-            // Close the modal first
-            setEditModal({
-              isOpen: false,
-              employee: null,
-              currentCategory: '',
-              originalCategory: ''
-            });
-            // Navigate to performance page
-            window.location.href = `/performance?employee=${encodeURIComponent(editModal.employee.name)}`;
-          }}
-        >
-          View Performance
-        </button>
-      </div>
-      
-      <label>Role/Department*</label>
-      <select
-        value={editModal.currentCategory}
-        onChange={(e) =>
-          setEditModal(prev => ({
-            ...prev,
-            currentCategory: e.target.value
-          }))
-        }
-        required
-      >
-        <option value="">Select Role</option>
-        {roleOptions.map(role => (
-          <option key={role} value={role}>{role}</option>
-        ))}
-      </select>
-    </div>
+              <div className="form-section">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Role/Department*</label>
+                    <select
+                      value={editModal.currentCategory}
+                      onChange={(e) =>
+                        setEditModal(prev => ({
+                          ...prev,
+                          currentCategory: e.target.value
+                        }))
+                      }
+                      required
+                    >
+                      <option value="">Select Role</option>
+                      {roleOptions.map(role => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
+                  </div>
 
-    <div className="form-group">
-      <label>Parent/Guardian Name</label>
-      <input
-        type="text"
-        value={editModal.employee.guardianName || ''}
-        onChange={(e) =>
-          setEditModal(prev => ({
-            ...prev,
-            employee: {
-              ...prev.employee,
-              guardianName: e.target.value
-            }
-          }))
-        }
-        placeholder="Full name"
-      />
-    </div>
-  </div>
+                  <div className="form-group">
+                    <label>Parent/Guardian Name</label>
+                    <input
+                      type="text"
+                      value={editModal.employee.guardianName || ''}
+                      onChange={(e) =>
+                        setEditModal(prev => ({
+                          ...prev,
+                          employee: {
+                            ...prev.employee,
+                            guardianName: e.target.value
+                          }
+                        }))
+                      }
+                      placeholder="Full name"
+                    />
+                  </div>
+                </div>
 
-  {/* Rest of the form section remains the same */}
-  <div className="form-row">
-    <div className="form-group">
-      <label>Aadhar Card Number</label>
-      <input
-        type="text"
-        value={editModal.employee.aadhar || ''}
-        onChange={(e) =>
-          setEditModal(prev => ({
-            ...prev,
-            employee: {
-              ...prev.employee,
-              aadhar: e.target.value
-            }
-          }))
-        }
-        placeholder="12-digit Aadhar number"
-      />
-    </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Aadhar Card Number</label>
+                    <input
+                      type="text"
+                      value={editModal.employee.aadhar || ''}
+                      onChange={(e) =>
+                        setEditModal(prev => ({
+                          ...prev,
+                          employee: {
+                            ...prev.employee,
+                            aadhar: e.target.value
+                          }
+                        }))
+                      }
+                      placeholder="12-digit Aadhar number"
+                    />
+                  </div>
 
-    <div className="form-group">
-      <label>Date of Joining</label>
-      <input
-        type="date"
-        value={editModal.employee.joiningDate || ''}
-        onChange={(e) =>
-          setEditModal(prev => ({
-            ...prev,
-            employee: {
-              ...prev.employee,
-              joiningDate: e.target.value
-            }
-          }))
-        }
-      />
-    </div>
-  </div>
+                  <div className="form-group">
+                    <label>Date of Joining</label>
+                    <input
+                      type="date"
+                      value={editModal.employee.joiningDate || ''}
+                      onChange={(e) =>
+                        setEditModal(prev => ({
+                          ...prev,
+                          employee: {
+                            ...prev.employee,
+                            joiningDate: e.target.value
+                          }
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
 
-  <div className="form-row">
-    <div className="form-group">
-      <label>Past Experience (years)</label>
-      <input
-        type="number"
-        min="0"
-        max="50"
-        value={editModal.employee.experience || ''}
-        onChange={(e) =>
-          setEditModal(prev => ({
-            ...prev,
-            employee: {
-              ...prev.employee,
-              experience: e.target.value
-            }
-          }))
-        }
-        placeholder="Years of experience"
-      />
-    </div>
-  </div>
-</div>
-              {/* Employment Status Section */}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Past Experience (years)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="50"
+                      value={editModal.employee.experience || ''}
+                      onChange={(e) =>
+                        setEditModal(prev => ({
+                          ...prev,
+                          employee: {
+                            ...prev.employee,
+                            experience: e.target.value
+                          }
+                        }))
+                      }
+                      placeholder="Years of experience"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="form-group">
                 <label>Employment Status</label>
                 <div className="status-toggle">
@@ -990,29 +909,38 @@ export default function Employees() {
                     data-status="active"
                     onClick={() => {
                       const wasInactive = !editModal.employee.active;
-                      const newEmployeeState = {
-                        ...editModal.employee,
-                        active: true,
-                        resignationDate: wasInactive ? '' : editModal.employee.resignationDate,
-                        resignationReason: wasInactive ? '' : editModal.employee.resignationReason
-                      };
-
+                      
                       if (wasInactive) {
-                        setRejoinModal({
-                          isOpen: true,
-                          employee: editModal.employee,
-                          category: editModal.currentCategory,
-                          index: -1, // This will be handled differently in edit context
-                          rejoinDate: new Date().toISOString().split('T')[0]
-                        });
-                        return;
-                      }
+                        // If activating an inactive employee, ask for rejoin date
+                        const rejoinDate = prompt('Please enter rejoin date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
+                        if (!rejoinDate) return;
 
-                      setEditModal(prev => ({
-                        ...prev,
-                        employee: newEmployeeState,
-                        showRejoinDate: false
-                      }));
+                        const newEmployeeState = {
+                          ...editModal.employee,
+                          active: true,
+                          rejoinDate: rejoinDate,
+                          resignationDate: '',
+                          resignationReason: ''
+                        };
+
+                        setEditModal(prev => ({
+                          ...prev,
+                          employee: newEmployeeState,
+                          showRejoinDate: true
+                        }));
+                      } else {
+                        // If already active, just keep it active
+                        const newEmployeeState = {
+                          ...editModal.employee,
+                          active: true
+                        };
+
+                        setEditModal(prev => ({
+                          ...prev,
+                          employee: newEmployeeState,
+                          showRejoinDate: false
+                        }));
+                      }
                     }}
                   >
                     <span className="status-indicator active"></span>
@@ -1023,14 +951,26 @@ export default function Employees() {
                     className={`status-option ${!editModal.employee.active ? 'active' : ''}`}
                     data-status="inactive"
                     onClick={() => {
-                      setResignationModal({
-                        isOpen: true,
-                        employee: editModal.employee,
-                        category: editModal.currentCategory,
-                        index: -1, // This will be handled differently in edit context
-                        resignationDate: new Date().toISOString().split('T')[0],
-                        resignationReason: editModal.employee.resignationReason || ''
-                      });
+                      // If deactivating an active employee, ask for resignation details
+                      const resignationDate = prompt('Please enter resignation date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
+                      if (!resignationDate) return;
+                      
+                      const resignationReason = prompt('Please enter reason for resignation:');
+                      if (resignationReason === null) return;
+
+                      const newEmployeeState = {
+                        ...editModal.employee,
+                        active: false,
+                        resignationDate: resignationDate,
+                        resignationReason: resignationReason || 'No reason provided',
+                        rejoinDate: ''
+                      };
+
+                      setEditModal(prev => ({
+                        ...prev,
+                        employee: newEmployeeState,
+                        showRejoinDate: false
+                      }));
                     }}
                   >
                     <span className="status-indicator inactive"></span>
@@ -1039,7 +979,6 @@ export default function Employees() {
                 </div>
               </div>
 
-              {/* Rejoin Date Display */}
               {editModal.employee.rejoinDate && (
                 <div className="form-group">
                   <label>Rejoin Date</label>
@@ -1051,7 +990,6 @@ export default function Employees() {
                 </div>
               )}
 
-              {/* Employee ID Display */}
               <div className="form-group">
                 <label>Employee ID</label>
                 <div className="employee-id-display">
@@ -1061,7 +999,6 @@ export default function Employees() {
               </div>
             </div>
 
-            {/* Resignation Details Section (only shown when employee is inactive) */}
             {!editModal.employee.active && (
               <div className="form-section full-width">
                 <h4 className="section-title">Resignation Details</h4>
@@ -1103,7 +1040,6 @@ export default function Employees() {
               </div>
             )}
 
-            {/* Modal Footer Buttons */}
             <div className="modal-footer">
               <button
                 className="cancel-button"
@@ -1135,37 +1071,11 @@ export default function Employees() {
         </div>
       )}
 
-      {/* CSS Styles */}
-      <style jsx>{`
+      <style>{`
         .employee-directory {
           padding: 20px;
           max-width: 1200px;
           margin: 0 auto;
-        }
-
-        .employee-info {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-
-        .resignation-reason {
-          font-size: 0.8em;
-          color: #dc3545;
-          background: #f8f9fa;
-          padding: 4px 8px;
-          border-radius: 4px;
-          border-left: 3px solid #dc3545;
-          margin-top: 4px;
-          max-width: 200px;
-          word-break: break-word;
-          font-weight: normal;
-        }
-
-        .resignation-reason.placeholder {
-          color: #6c757d;
-          border-left-color: #6c757d;
-          font-style: italic;
         }
 
         .tabs {
@@ -1308,7 +1218,7 @@ export default function Employees() {
         }
 
         .inactive-employee {
-          opacity: 0.8;
+          opacity: 0.7;
           background-color: #f8f9fa;
         }
 
@@ -1331,7 +1241,6 @@ export default function Employees() {
           font-weight: bold;
           font-size: 14px;
           box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-          flex-shrink: 0;
         }
 
         .employee-initials-large {
@@ -1349,6 +1258,12 @@ export default function Employees() {
           border: 3px solid #003366;
         }
 
+        .employee-details {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
         .employee-name {
           cursor: pointer;
           font-weight: 500;
@@ -1359,6 +1274,13 @@ export default function Employees() {
           font-size: 0.8em;
           margin-left: 5px;
           font-weight: normal;
+        }
+
+        .resignation-reason {
+          font-size: 0.75rem;
+          color: #666;
+          font-style: italic;
+          margin-top: 2px;
         }
 
         .employee-status {
@@ -1674,21 +1596,7 @@ export default function Employees() {
           cursor: pointer;
           padding: 0 0 0 10px;
         }
-.view-performance-button {
-  padding: 10px 20px;
-  background: #ff6b00;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  width: 100%;
-  transition: background 0.3s ease;
-}
 
-.view-performance-button:hover {
-  background: #e55e00;
-}
         @keyframes slideIn {
           from {
             transform: translateX(100%);

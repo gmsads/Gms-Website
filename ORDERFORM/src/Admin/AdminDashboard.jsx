@@ -773,6 +773,15 @@ function AdminDashboard() {
               >
                 Design Reports
               </NavLink>
+              <NavLink
+                to="vendors"
+                style={linkStyle('vendors')}
+                onMouseEnter={() => setHoveredItem('vendors')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                   Vendors
+              </NavLink>
             </>
           )}
         </div>

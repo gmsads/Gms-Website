@@ -63,9 +63,12 @@ import TrashOrders from './Admin/TrashOrders';
 import AgentDashboard from './Agent/AgentDashboard.jsx'
 import Parties from './Admin/Parties';
 import Quotation from './Admin/Quotation';
+import InstallPWAButton from './components/InstallPWAButton';
 function App() {
   return (
     <BrowserRouter>
+         {/* PWA Install Button visible on all pages */}
+      <InstallPWAButton />
       <Routes>
 
         <Route
@@ -131,6 +134,7 @@ function App() {
 
           <Route path="appointments" element={<Appointment />} />
           <Route path="prospects" element={<Prospective />} />
+            <Route path="vendors" element={<Vendors />} />
           <Route path="daily-report" element={<DailyReport />} />
           <Route path="trash-orders" element={<TrashOrders />} />
           <Route path="unit-attendance" element={<UnitAttendance />} />
@@ -189,9 +193,7 @@ function App() {
           <Route path="assign-service" element={<AssignService />} />
           <Route path="price-list" element={<Pricelist />} />
         </Route>
-        <Route
-          path="/vendor-dashboard"
-          element={
+        <Route path="/vendor-dashboard" element={
             <ProtectedRoute allowedRoles={['Vendor']}>
               <VendorDashboard />
             </ProtectedRoute>

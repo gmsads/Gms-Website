@@ -181,7 +181,7 @@ function ViewOrders() {
 
   const {
     totalAmount,
-    totalAdvance,
+
     totalBalance
   } = calculateTotals();
 
@@ -834,7 +834,7 @@ function ViewOrders() {
       {/* Toast container */}
       <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999 }} />
 
-      {/* Summary Cards - ALWAYS VISIBLE */}
+      {/* Summary Cards - ALWAYS VISIBLE - REMOVED TOTAL ADVANCE CARD */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-around',
@@ -854,20 +854,6 @@ function ViewOrders() {
         }}>
           <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Amount</div>
           <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3498db' }}>₹{totalAmount}</div>
-        </div>
-
-        {/* Total Advance Card */}
-        <div style={{
-          backgroundColor: 'rgba(155, 89, 182, 0.1)',
-          padding: '20px',
-          borderRadius: '12px',
-          minWidth: '220px',
-          textAlign: 'center',
-          border: '1px solid rgba(155, 89, 182, 0.3)',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Advance</div>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#9b59b6' }}>₹{totalAdvance}</div>
         </div>
 
         {/* Total Balance Card */}
@@ -1172,12 +1158,6 @@ function ViewOrders() {
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Amount</div>
                     <div style={{ fontWeight: 'bold', fontSize: '16px' }}>₹{group.totals.amount.toLocaleString('en-IN')}</div>
-                  </div>
-
-                  {/* Month Total Advance */}
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Advance</div>
-                    <div style={{ fontWeight: 'bold', fontSize: '16px' }}>₹{group.totals.advance.toLocaleString('en-IN')}</div>
                   </div>
 
                   {/* Month Total Balance */}
