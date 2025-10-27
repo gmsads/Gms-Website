@@ -41,6 +41,8 @@ const parties = require("./routes/parties");
 const attendanceRoutes = require('./routes/attendance');// Cron Jobs
 const quotationRoutes = require('./routes/quotations');
 // Initialize Express
+const salaryRoutes = require('./routes/salaryRoutes');
+
 const app = express();
 runReminderCron();
 
@@ -48,6 +50,7 @@ runReminderCron();
 app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use('/api/salaries', salaryRoutes);
 
 // Upload endpoint
 app.use("/api/upload", uploadRoute);

@@ -3,7 +3,7 @@ import axios from 'axios';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 // Configure axios base URL
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = '/api';
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,

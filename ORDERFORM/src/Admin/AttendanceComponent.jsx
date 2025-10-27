@@ -2,13 +2,28 @@ import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 
 const AttendanceComponent = ({ employees = [] }) => {
+  // State for storing attendance data
   const [attendanceData, setAttendanceData] = useState([]);
+  
+  // State for loading status
   const [loading, setLoading] = useState(true);
+  
+  // State for error handling
   const [error, setError] = useState(null);
+  
+  // State for selected month (default: current month)
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  
+  // State for selected employee
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  
+  // State for view mode (month/year)
   const [viewMode, setViewMode] = useState('month');
+  
+  // State for search functionality
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // State for edit attendance modal
   const [editAttendanceModal, setEditAttendanceModal] = useState({
     isOpen: false,
     date: '',
@@ -17,7 +32,7 @@ const AttendanceComponent = ({ employees = [] }) => {
     notes: ''
   });
 
-  // Sort employees alphabetically
+  // Sort employees alphabetically by name
   const sortedEmployees = [...employees].sort((a, b) =>
     a.name.localeCompare(b.name)
   );
@@ -27,6 +42,7 @@ const AttendanceComponent = ({ employees = [] }) => {
     employee.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Get active employees only
   const activeEmployees = filteredEmployees.filter(e => e?.active) || [];
 
   // Fetch attendance data when month or employee changes
@@ -53,6 +69,7 @@ const AttendanceComponent = ({ employees = [] }) => {
     fetchAttendanceData();
   }, [selectedMonth, selectedEmployee]);
 
+  // Function to download attendance report as Excel
   const downloadAttendanceReport = () => {
     if (!attendanceData.length) {
       alert('No attendance data to download');
@@ -76,6 +93,7 @@ const AttendanceComponent = ({ employees = [] }) => {
     XLSX.writeFile(wb, `attendance_report_${selectedMonth}.xlsx`);
   };
 
+  // Function to handle editing attendance
   const handleEditAttendance = (date, employee) => {
     if (!employee || !date) return;
 
@@ -94,6 +112,7 @@ const AttendanceComponent = ({ employees = [] }) => {
     });
   };
 
+  // Function to save attendance changes
   const handleSaveAttendance = async () => {
     try {
       if (!editAttendanceModal.employee || !editAttendanceModal.date) {
@@ -115,11 +134,12 @@ const AttendanceComponent = ({ employees = [] }) => {
 
       if (!response.ok) throw new Error('Failed to update attendance');
 
-      // Refresh data
+      // Refresh data after saving
       const updatedResponse = await fetch(`/api/attendance?month=${selectedMonth}&employeeId=${editAttendanceModal.employee._id}`);
       const updatedData = await updatedResponse.json();
       setAttendanceData(updatedData || []);
 
+      // Close modal
       setEditAttendanceModal({
         isOpen: false,
         date: '',
@@ -141,12 +161,22 @@ const AttendanceComponent = ({ employees = [] }) => {
     return `${year}-${month}-${day}`;
   };
 
+  // Helper function to check if a date is Sunday
+  const isSunday = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.getDay() === 0; // 0 represents Sunday
+  };
+
+  // Show loading state
   if (loading) return <div className="loading">Loading attendance data...</div>;
+  
+  // Show error state
   if (error) return <div className="error">Error: {error}</div>;
 
-  // Get day names for the header
+  // Day names for calendar header
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+  // Function to render month view calendar
   const renderMonthView = () => {
     const daysInMonth = getDaysInMonth(selectedMonth);
     const [year, month] = selectedMonth.split('-').map(Number);
@@ -154,16 +184,16 @@ const AttendanceComponent = ({ employees = [] }) => {
 
     return (
       <div className="calendar-view">
-        {/* Day names header */}
+        {/* Day names header row */}
         <div className="day-names-row">
           {dayNames.map(day => (
             <div key={day} className="day-name-cell">{day}</div>
           ))}
         </div>
 
-        {/* Calendar days */}
+        {/* Calendar days grid */}
         <div className="days-grid">
-          {/* Empty cells for days before the 1st */}
+          {/* Empty cells for days before the 1st of month */}
           {Array(firstDay).fill(null).map((_, i) => (
             <div key={`empty-${i}`} className="day-cell empty"></div>
           ))}
@@ -176,14 +206,29 @@ const AttendanceComponent = ({ employees = [] }) => {
               return recordDateStr === date;
             });
 
+            // Determine cell class based on status and day
+            let cellClass = 'day-cell';
+            if (isSunday(date)) {
+              cellClass += ' sunday';
+            }
+            if (record?.status) {
+              cellClass += ` ${record.status}`;
+            }
+
             return (
               <div
                 key={date}
-                className={`day-cell ${record?.status || ''}`}
+                className={cellClass}
                 onClick={() => handleEditAttendance(date, selectedEmployee)}
               >
                 <div className="day-number">{i + 1}</div>
                 <div className="day-status">{record?.status || ''}</div>
+                {/* Display notes if they exist */}
+                {record?.notes && (
+                  <div className="day-notes" title={record.notes}>
+                    {record.notes}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -192,6 +237,7 @@ const AttendanceComponent = ({ employees = [] }) => {
     );
   };
 
+  // Function to render year view
   const renderYearView = () => {
     const [year] = selectedMonth.split('-').map(Number);
     const months = Array.from({ length: 12 }, (_, i) => {
@@ -222,7 +268,6 @@ const AttendanceComponent = ({ employees = [] }) => {
             const presentCount = monthData.filter(r => r.status === 'present').length;
             const absentCount = monthData.filter(r => r.status === 'absent').length;
             const halfDayCount = monthData.filter(r => r.status === 'half-day').length;
-            const leaveCount = monthData.filter(r => r.status === 'leave').length;
 
             return (
               <div
@@ -238,7 +283,6 @@ const AttendanceComponent = ({ employees = [] }) => {
                   <div className="stat present">{presentCount}P</div>
                   <div className="stat absent">{absentCount}A</div>
                   <div className="stat half-day">{halfDayCount}H</div>
-                  <div className="stat leave">{leaveCount}L</div>
                 </div>
               </div>
             );
@@ -248,13 +292,13 @@ const AttendanceComponent = ({ employees = [] }) => {
     );
   };
 
+  // Function to render attendance summary section
   const renderSummarySection = () => {
     if (!selectedEmployee) return null;
 
     const presentCount = attendanceData.filter(r => r.status === 'present').length;
     const absentCount = attendanceData.filter(r => r.status === 'absent').length;
     const halfDayCount = attendanceData.filter(r => r.status === 'half-day').length;
-    const leaveCount = attendanceData.filter(r => r.status === 'leave').length;
     const totalDays = new Date(
       new Date(selectedMonth + '-01').getFullYear(),
       new Date(selectedMonth + '-01').getMonth() + 1,
@@ -287,21 +331,20 @@ const AttendanceComponent = ({ employees = [] }) => {
             <span className="summary-label">Half Day:</span>
             <span className="summary-value">{halfDayCount}</span>
           </div>
-          <div className="summary-item leave">
-            <span className="summary-label">Leave:</span>
-            <span className="summary-value">{leaveCount}</span>
-          </div>
         </div>
       </div>
     );
   };
 
+  // Main component render
   return (
     <div className="attendance-component">
       <h2>Employee Attendance</h2>
 
+      {/* Controls section */}
       <div className="controls">
         <div className="month-selector">
+          {/* View mode selector */}
           <select
             value={viewMode}
             onChange={(e) => setViewMode(e.target.value)}
@@ -310,9 +353,11 @@ const AttendanceComponent = ({ employees = [] }) => {
             <option value="year">Year View</option>
           </select>
 
+          {/* Month navigation for month view */}
           {viewMode === 'month' && (
             <div className="month-navigation">
               <button
+                className="nav-button prev-button"
                 onClick={() => {
                   const [year, month] = selectedMonth.split('-').map(Number);
                   const prevMonth = month === 1 ? 12 : month - 1;
@@ -330,6 +375,7 @@ const AttendanceComponent = ({ employees = [] }) => {
               />
 
               <button
+                className="nav-button next-button"
                 onClick={() => {
                   const [year, month] = selectedMonth.split('-').map(Number);
                   const nextMonth = month === 12 ? 1 : month + 1;
@@ -342,6 +388,8 @@ const AttendanceComponent = ({ employees = [] }) => {
               </button>
             </div>
           )}
+          
+          {/* Year selector for year view */}
           {viewMode === 'year' && (
             <input
               type="number"
@@ -352,12 +400,16 @@ const AttendanceComponent = ({ employees = [] }) => {
             />
           )}
         </div>
+        
+        {/* Download button */}
         <button onClick={downloadAttendanceReport} className="download-button">
           Download Attendance
         </button>
       </div>
 
+      {/* Main attendance container */}
       <div className="attendance-container">
+        {/* Employee list sidebar */}
         <div className="employee-list">
           <div className="search-container">
             <input
@@ -381,6 +433,7 @@ const AttendanceComponent = ({ employees = [] }) => {
           </ul>
         </div>
 
+        {/* Attendance details main area */}
         <div className="attendance-details">
           {selectedEmployee ? (
             <>
@@ -395,6 +448,7 @@ const AttendanceComponent = ({ employees = [] }) => {
         </div>
       </div>
 
+      {/* Edit Attendance Modal */}
       {editAttendanceModal.isOpen && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -428,7 +482,6 @@ const AttendanceComponent = ({ employees = [] }) => {
                   <option value="present">Present</option>
                   <option value="absent">Absent</option>
                   <option value="half-day">Half Day</option>
-                  <option value="leave">Leave</option>
                 </select>
               </div>
 
@@ -441,6 +494,7 @@ const AttendanceComponent = ({ employees = [] }) => {
                     notes: e.target.value
                   }))}
                   rows="3"
+                  placeholder="Add notes for this attendance record..."
                 />
               </div>
             </div>
@@ -469,6 +523,7 @@ const AttendanceComponent = ({ employees = [] }) => {
         </div>
       )}
 
+      {/* CSS Styles */}
       <style>{`
         .attendance-component {
           padding: 20px;
@@ -510,26 +565,37 @@ const AttendanceComponent = ({ employees = [] }) => {
           gap: 10px;
         }
         
-        .month-navigation button {
+        .nav-button {
           padding: 5px 10px;
-          background: #7d75a8ff;
           border: 1px solid #ddd;
           border-radius: 4px;
           cursor: pointer;
+          font-weight: 500;
         }
         
-        .month-navigation button:disabled {
+        .prev-button {
+          background: #003366;
+          color: white;
+        }
+        
+        .next-button {
+          background: #4CAF50;
+          color: white;
+        }
+        
+        .nav-button:disabled {
           opacity: 0.5;
           cursor: not-allowed;
         }
         
         .download-button {
-          background: #4CAF50;
+          background: #FF9800;
           color: white;
           border: none;
           padding: 8px 16px;
           border-radius: 4px;
           cursor: pointer;
+          font-weight: 500;
         }
         
         .attendance-container {
@@ -634,11 +700,6 @@ const AttendanceComponent = ({ employees = [] }) => {
           background-color: #fff3e0;
         }
         
-        .summary-item.leave {
-          border-color: #2196F3;
-          background-color: #e3f2fd;
-        }
-        
         .summary-label {
           font-weight: bold;
           display: block;
@@ -683,17 +744,24 @@ const AttendanceComponent = ({ employees = [] }) => {
           border: 1px solid #ddd;
           border-radius: 4px;
           padding: 8px;
-          min-height: 60px;
+          min-height: 80px;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
           cursor: pointer;
+          position: relative;
         }
         
         .day-cell.empty {
           background-color: #f9f9f9;
           cursor: default;
+        }
+        
+        /* Sunday styling - blue background */
+        .day-cell.sunday {
+          background-color: #e6f2ff;
+          border-color: #4d94ff;
         }
         
         .day-cell.present {
@@ -711,18 +779,48 @@ const AttendanceComponent = ({ employees = [] }) => {
           border-color: #FF9800;
         }
         
-        .day-cell.leave {
-          background-color: #e3f2fd;
-          border-color: #2196F3;
+        /* Combined styles for Sunday with status */
+        .day-cell.sunday.present {
+          background-color: #d9f2d9;
+          border-color: #4CAF50;
+        }
+        
+        .day-cell.sunday.absent {
+          background-color: #f8d7da;
+          border-color: #F44336;
+        }
+        
+        .day-cell.sunday.half-day {
+          background-color: #ffe6cc;
+          border-color: #FF9800;
         }
         
         .day-number {
           font-weight: bold;
+          font-size: 0.9rem;
+          margin-bottom: 2px;
         }
         
         .day-status {
           font-size: 0.8rem;
           text-transform: capitalize;
+          margin-bottom: 3px;
+          font-weight: 500;
+        }
+        
+        .day-notes {
+          font-size: 0.7rem;
+          color: #666;
+          text-align: center;
+          word-wrap: break-word;
+          overflow: hidden;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          line-height: 1.2;
+          max-height: 2.4em;
+          width: 100%;
+          padding: 0 2px;
         }
         
         .year-view {
@@ -785,11 +883,6 @@ const AttendanceComponent = ({ employees = [] }) => {
         .month-stats .half-day {
           background-color: #fff3e0;
           color: #e65100;
-        }
-        
-        .month-stats .leave {
-          background-color: #e3f2fd;
-          color: #1565c0;
         }
         
         .modal-overlay {
@@ -937,6 +1030,7 @@ const AttendanceComponent = ({ employees = [] }) => {
   );
 };
 
+// Helper function to get all days in a month
 function getDaysInMonth(monthStr) {
   if (!monthStr) return [];
 

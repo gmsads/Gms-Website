@@ -427,15 +427,23 @@ router.post("/set-target", async (req, res) => {
 // ============================
 // POST: Record payment for order
 // ============================
+// Add debugging to see what's failing
 router.post("/orders/:id/record-payment", async (req, res) => {
   try {
+    console.log("Payment request received:", req.body);
+    console.log("Order ID:", req.params.id);
+
     const orderId = req.params.id;
     const { date, amount, method, reference, note } = req.body;
 
-    // ... validation code ...
+    // Validate required fields
+    if (!amount) {
+      return res.status(400).json({ message: "Payment amount is required" });
+    }
 
-    // First get the order to preserve createdBy
     const existingOrder = await Order.findById(orderId);
+    console.log("Existing order:", existingOrder);
+    
     if (!existingOrder) {
       return res.status(404).json({ message: "Order not found" });
     }
@@ -452,40 +460,59 @@ router.post("/orders/:id/record-payment", async (req, res) => {
       note: note || "",
     };
 
-    // Update with all required fields preserved
+    console.log("Payment record to be created:", paymentRecord);
+
+    // Build update object dynamically to avoid missing fields
+    const updateData = {
+      $push: { paymentHistory: paymentRecord },
+      $set: {
+        balance: newBalance,
+        status: newBalance <= 0 ? "Paid" : "Partially Paid",
+        updatedAt: new Date()
+      }
+    };
+
+    // Preserve all existing fields that might be required
+    const requiredFields = ['createdBy', 'executive', 'business', 'contactPerson', 'phone', 'orderNo', 'orderDate'];
+    requiredFields.forEach(field => {
+      if (existingOrder[field]) {
+        updateData.$set[field] = existingOrder[field];
+      }
+    });
+
+    // Add payment date if fully paid
+    if (newBalance <= 0) {
+      updateData.$set.paymentDate = new Date();
+    }
+
+    console.log("Update data:", updateData);
+
     const updatedOrder = await Order.findByIdAndUpdate(
       orderId,
-      {
-        $push: { paymentHistory: paymentRecord },
-        $set: {
-          balance: newBalance,
-          status: newBalance <= 0 ? "Paid" : "Partially Paid",
-          createdBy: existingOrder.createdBy, // PRESERVE createdBy
-          executive: existingOrder.executive, // Preserve other required fields
-          business: existingOrder.business,
-          contactPerson: existingOrder.contactPerson,
-          phone: existingOrder.phone,
-          orderNo: existingOrder.orderNo,
-          orderDate: existingOrder.orderDate,
-          ...(newBalance <= 0 && { paymentDate: new Date() })
-        }
-      },
+      updateData,
       { 
         new: true, 
         runValidators: true 
       }
     );
 
+    console.log("Order updated successfully:", updatedOrder._id);
+
     res.json({
       success: true,
       message: "Payment recorded successfully",
       order: updatedOrder,
     });
+
   } catch (err) {
-    console.error("Payment error:", err);
+    console.error("Payment error details:", err);
+    console.error("Error stack:", err.stack);
+    
     res.status(500).json({
-      message: "Server error",
+      message: "Server error while recording payment",
       error: err.message,
+      // Don't expose full error in production
+      ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
     });
   }
 });

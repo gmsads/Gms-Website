@@ -37,7 +37,7 @@ function ViewOrders() {
   });
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   
-  // NEW: Month filter info state
+  // Month filter info state
   const [monthFilterInfo, setMonthFilterInfo] = useState({
     monthCount: 0,
     monthName: '',
@@ -48,7 +48,7 @@ function ViewOrders() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // API configuration - CORRECTED TO MATCH YOUR BACKEND
+  // API configuration
   const API_BASE_URL = '/api';
   const API_ENDPOINTS = {
     ORDERS: `${API_BASE_URL}/orders`,
@@ -58,10 +58,21 @@ function ViewOrders() {
     RECORD_PAYMENT: (id) => `${API_BASE_URL}/orders/${id}/record-payment`,
     GET_PAYMENTS: (id) => `${API_BASE_URL}/orders/${id}`,
     IMPORT_ORDERS: `${API_BASE_URL}/orders/import`,
-    // CORRECTED TRASH ENDPOINTS - Match your backend routes
     TRASH_ORDERS: `${API_BASE_URL}/orders/trash`,
     RESTORE_ORDER: (id) => `${API_BASE_URL}/orders/${id}/restore`,
     PERMANENT_DELETE_ORDER: (id) => `${API_BASE_URL}/orders/${id}/permanent`
+  };
+
+  // Check if user should see summary cards
+  const shouldShowSummaryCards = () => {
+    const rolesThatCanSeeCards = ['Admin', 'Account', 'Service Executive'];
+    return rolesThatCanSeeCards.includes(userRole);
+  };
+
+  // Check if user should see only their own orders
+  const shouldSeeOnlyOwnOrders = () => {
+    const rolesThatCanSeeAll = ['Admin', 'Account', 'Service Executive'];
+    return !rolesThatCanSeeAll.includes(userRole);
   };
 
   // Format date to DD-MM-YYYY
@@ -123,7 +134,6 @@ function ViewOrders() {
       const monthStr = month.toString().padStart(2, '0');
       const monthYearKey = `2025-${monthStr}`;
 
-      // Initialize the month if it doesn't exist
       if (!grouped[monthYearKey]) {
         const monthYearName = new Date(2025, month - 1).toLocaleString('default', {
           month: 'long',
@@ -181,9 +191,26 @@ function ViewOrders() {
 
   const {
     totalAmount,
-
     totalBalance
   } = calculateTotals();
+
+  // Get user info from localStorage with proper fallbacks
+  const getUserInfo = () => {
+    try {
+      const role = localStorage.getItem('role') || '';
+      const name = localStorage.getItem('name') || localStorage.getItem('userName') || '';
+      
+      console.log('User info from localStorage:', { role, name });
+      
+      setUserRole(role);
+      setExecutiveName(name);
+      
+      return { role, name };
+    } catch (error) {
+      console.error('Error getting user info from localStorage:', error);
+      return { role: '', name: '' };
+    }
+  };
 
   // Fetch orders on component mount or when filters change
   useEffect(() => {
@@ -195,7 +222,6 @@ function ViewOrders() {
     const executiveType = params.get('executiveType');
     const executiveName = params.get('executiveName');
     
-    // NEW: Read month filter info
     const monthCount = params.get('monthCount');
     const monthName = params.get('monthName');
     const weekCount = params.get('weekCount');
@@ -204,7 +230,6 @@ function ViewOrders() {
     if (year) setYearFilter(parseInt(year));
     if (clientType) setClientTypeFilter(clientType);
 
-    // Store month filter info
     if (monthCount || monthName || weekCount) {
       setMonthFilterInfo({
         monthCount: monthCount ? parseInt(monthCount) : 0,
@@ -213,7 +238,6 @@ function ViewOrders() {
       });
     }
 
-    // Store executive filter parameters
     if (executive || executiveType || executiveName) {
       setAppliedExecutiveFilters({
         executive,
@@ -222,16 +246,12 @@ function ViewOrders() {
       });
     }
 
-    const role = localStorage.getItem('role');
-    const name = localStorage.getItem('name');
-    setUserRole(role);
-    setExecutiveName(name);
+    const { role, name } = getUserInfo();
 
     fetchOrders(role, name, month, year, clientType, executive, executiveName);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
-  // Fetch orders from API with filters (client-side filtering version)
+  // Fetch orders from API with proper role-based filtering
   const fetchOrders = async (role, name, month = null, year = null, clientType = null, executive = null, executiveName = null) => {
     setLoading(true);
     setError(null);
@@ -242,85 +262,49 @@ function ViewOrders() {
         role, name, month, year, clientType, executive, executiveName
       });
 
-      // Get all orders first
-      const res = await axios.get(url);
-      console.log('Total orders received:', res.data.length);
+      const queryParams = new URLSearchParams();
+      
+      // CRITICAL FIX: Filter by executive name for non-privileged users
+      const rolesThatCanSeeAll = ['Admin', 'Account', 'Service Executive'];
+      const shouldFilter = role && !rolesThatCanSeeAll.includes(role) && name;
+      
+      if (shouldFilter) {
+        queryParams.append('executive', name);
+        console.log('🔒 FILTERING: Showing only orders for executive:', name);
+      } else {
+        console.log('👑 NO FILTER: Showing all orders for role:', role);
+      }
+
+      if (month) queryParams.append('month', month);
+      if (year) queryParams.append('year', year);
+      if (clientType) queryParams.append('clientType', clientType);
+      if (executive) queryParams.append('executive', executive);
+      if (executiveName) queryParams.append('executiveName', executiveName);
+
+      console.log('📡 API Call:', `${url}?${queryParams.toString()}`);
+      const res = await axios.get(`${url}?${queryParams.toString()}`);
+      console.log('📦 Total orders received from API:', res.data.length);
 
       let filteredOrders = res.data;
 
-      // Apply executive filters client-side
-      if (executive && executiveName) {
-        const executiveType = new URLSearchParams(location.search).get('executiveType');
-        console.log('Executive filter applied:', { executiveType, executiveName });
-
-        if (executiveType === 'executive') {
-          // Filter by sales executive - SAFER VERSION
-          filteredOrders = filteredOrders.filter(order => {
-            const orderExecutive = order.executive || '';
-            const searchName = executiveName || '';
-            return orderExecutive.toString().toLowerCase().includes(searchName.toLowerCase());
-          });
-        } else if (executiveType === 'service') {
-          // Filter by service executive in rows - SAFER VERSION
-          filteredOrders = filteredOrders.filter(order => {
-            if (!order.rows || !Array.isArray(order.rows)) return false;
-            return order.rows.some(row => {
-              const assignedExecutive = row.assignedExecutive || '';
-              const searchName = executiveName || '';
-              return assignedExecutive.toString().toLowerCase().includes(searchName.toLowerCase());
-            });
-          });
-        } else if (executiveType === 'account') {
-          // Filter by account executive - SAFER VERSION
-          filteredOrders = filteredOrders.filter(order => {
-            const accountExecutive = order.accountExecutive || '';
-            const searchName = executiveName || '';
-            return accountExecutive.toString().toLowerCase().includes(searchName.toLowerCase());
-          });
-        }
-        console.log('Orders after executive filter:', filteredOrders.length);
-      } else if (role === 'Executive') {
-        // If logged in as executive, show only their orders - SAFER VERSION
-        console.log('Filtering for logged-in executive:', name);
-        filteredOrders = filteredOrders.filter(order => {
-          const orderExecutive = order.executive || '';
-          const userName = name || '';
-          return orderExecutive.toString().toLowerCase().includes(userName.toLowerCase());
-        });
-        console.log('Orders after role filter:', filteredOrders.length);
-      }
-
-      // Apply month and year filter
-      if (month && year) {
-        console.log('Applying month/year filter:', { month, year });
-        filteredOrders = filteredOrders.filter(order => {
-          if (!order.orderDate) return false;
-          const orderDate = new Date(order.orderDate);
-          if (isNaN(orderDate.getTime())) return false;
-          return orderDate.getMonth() + 1 === parseInt(month) &&
-            orderDate.getFullYear() === parseInt(year);
-        });
-        console.log('Orders after month filter:', filteredOrders.length);
-      }
-
-      // Apply client type filter
-      if (clientType) {
-        console.log('Applying client type filter:', clientType);
-        filteredOrders = filteredOrders.filter(order => {
-          const orderClientType = order.clientType || '';
-          return orderClientType === clientType;
-        });
-        console.log('Orders after client type filter:', filteredOrders.length);
-      }
-
-      // Filter for 2025 only
       filteredOrders = filteredOrders.filter(order => {
         if (!order.orderDate) return false;
         const orderDate = new Date(order.orderDate);
         if (isNaN(orderDate.getTime())) return false;
         return orderDate.getFullYear() === 2025;
       });
-      console.log('Orders after 2025 filter:', filteredOrders.length);
+
+      console.log('📊 Orders after 2025 filter:', filteredOrders.length);
+
+      if (shouldFilter) {
+        const userOrders = filteredOrders.filter(order => order.executive === name);
+        console.log('🔍 VERIFICATION: User orders count:', userOrders.length);
+        console.log('🔍 VERIFICATION: User orders:', userOrders.map(o => ({ 
+          orderNo: o.orderNo, 
+          executive: o.executive,
+          match: o.executive === name 
+        })));
+      }
 
       const sortedOrders = filteredOrders.sort((a, b) => {
         const dateA = new Date(a.orderDate || 0);
@@ -331,9 +315,9 @@ function ViewOrders() {
       setOrders(sortedOrders);
       setGroupedOrders(groupOrdersByMonth(sortedOrders));
 
-      console.log('Final orders count:', sortedOrders.length);
+      console.log('✅ Final orders count:', sortedOrders.length);
     } catch (err) {
-      console.error('Error fetching orders:', err);
+      console.error('❌ Error fetching orders:', err);
       setError('Failed to fetch orders. Please try again.');
       toast.error('Failed to fetch orders. Please try again.');
     } finally {
@@ -420,6 +404,11 @@ function ViewOrders() {
 
   // Prepare order for editing
   const handleEdit = (order) => {
+    if (shouldSeeOnlyOwnOrders() && order.executive !== executiveName) {
+      toast.error('You can only edit your own orders');
+      return;
+    }
+    
     setEditingOrder({
       ...order,
       orderDate: formatDateForInput(order.orderDate),
@@ -452,7 +441,6 @@ function ViewOrders() {
       updatedRows[index].total = (quantity * rate).toFixed(2);
     }
 
-    // Calculate discounted total when discount changes
     if (field === 'discount') {
       const discount = parseFloat(value) || 0;
       const total = parseFloat(editingOrder.total) || 0;
@@ -472,7 +460,10 @@ function ViewOrders() {
     try {
       await axios.put(API_ENDPOINTS.UPDATE_ORDER(editingOrder._id), editingOrder);
       setShowModal(false);
-      fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
+      
+      const { role, name } = getUserInfo();
+      fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
+      
       toast.success('Order updated successfully!');
     } catch (err) {
       console.error('Update failed:', err);
@@ -482,12 +473,18 @@ function ViewOrders() {
 
   // Confirm delete order
   const confirmDelete = (orderId) => {
+    const orderToDeleteObj = orders.find(order => order._id === orderId);
+    if (shouldSeeOnlyOwnOrders() && orderToDeleteObj && orderToDeleteObj.executive !== executiveName) {
+      toast.error('You can only delete your own orders');
+      return;
+    }
+    
     console.log('Confirming delete for order:', orderId);
     setOrderToDelete(orderId);
     setShowDeleteModal(true);
   };
 
-  // Handle delete order - Complete version
+  // Handle delete order
   const handleDelete = async () => {
     try {
       if (!orderToDelete) {
@@ -497,7 +494,6 @@ function ViewOrders() {
 
       console.log('Attempting to delete order:', orderToDelete);
 
-      // Use the DELETE endpoint from your backend
       const response = await axios.delete(API_ENDPOINTS.DELETE_ORDER(orderToDelete), {
         data: {
           deletedBy: userRole === 'Admin' ? 'Admin' : executiveName,
@@ -507,12 +503,11 @@ function ViewOrders() {
 
       console.log('Delete successful:', response.data);
 
-      // Close modal and reset state
       setShowDeleteModal(false);
       setOrderToDelete(null);
 
-      // Refresh the orders list to show updated data
-      fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
+      const { role, name } = getUserInfo();
+      fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
 
       toast.success('Order moved to trash successfully!');
     } catch (err) {
@@ -538,21 +533,21 @@ function ViewOrders() {
     }
   };
 
-  // Navigate to trash page
-  
-
   // Prepare payment form
   const handleRecordPayment = async (order) => {
+    if (shouldSeeOnlyOwnOrders() && order.executive !== executiveName) {
+      toast.error('You can only record payments for your own orders');
+      return;
+    }
+    
     try {
       setPaymentLoading(true);
       setCurrentOrder(order);
 
-      // Get payments history from the order itself
       const payments = order.paymentHistory || [];
 
       setPaymentHistory(payments);
 
-      // Set payment form with current balance as default amount
       setPaymentData({
         date: new Date().toISOString().split('T')[0],
         amount: order.balance > 0 ? order.balance.toString() : '',
@@ -596,7 +591,6 @@ function ViewOrders() {
         return;
       }
 
-      // Create payment payload matching your backend expectations
       const paymentPayload = {
         date: paymentData.date,
         amount: paymentAmount,
@@ -605,14 +599,16 @@ function ViewOrders() {
         note: paymentData.note
       };
 
-      // Record the payment using the correct endpoint
       await axios.post(
         API_ENDPOINTS.RECORD_PAYMENT(currentOrder._id),
         paymentPayload
       );
 
       toast.success('Payment recorded successfully!');
-      fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
+      
+      const { role, name } = getUserInfo();
+      fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
+      
       setShowPaymentsModal(false);
     } catch (err) {
       console.error('Error recording payment:', err);
@@ -628,7 +624,12 @@ function ViewOrders() {
 
   // Export orders to Excel
   const handleExportToExcel = () => {
-    const orders2025 = orders.filter(order => {
+    let ordersToExport = orders;
+    if (shouldSeeOnlyOwnOrders()) {
+      ordersToExport = orders.filter(order => order.executive === executiveName);
+    }
+
+    const orders2025 = ordersToExport.filter(order => {
       const orderDate = new Date(order.orderDate);
       return orderDate.getFullYear() === 2025;
     });
@@ -664,7 +665,7 @@ function ViewOrders() {
         'Payment Date': formatDate(order.paymentDate),
         'Payment Method': order.paymentMethod,
         'Cheque Number': order.chequeNumber,
-        'Created By': order.createdBy || order.executive, // NEW: Include created by in export
+        'Created By': order.createdBy || order.executive,
         'Payments': order.paymentHistory ?
           order.paymentHistory.map(p => `${formatDate(p.date)}: ₹${p.amount} (${p.method})`).join('; ') : ''
       }))
@@ -673,11 +674,16 @@ function ViewOrders() {
     const worksheet = XLSX.utils.json_to_sheet(flattenedOrders);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
-    XLSX.writeFile(workbook, 'orders_2025_export.xlsx');
+    XLSX.writeFile(workbook, shouldSeeOnlyOwnOrders() ? `my_orders_2025_export.xlsx` : 'orders_2025_export.xlsx');
   };
 
   // Import orders from Excel
   const handleImportFromExcel = async (e) => {
+    if (shouldSeeOnlyOwnOrders()) {
+      toast.error('You do not have permission to import orders');
+      return;
+    }
+    
     const file = e.target.files[0];
     if (!file) return;
 
@@ -721,11 +727,14 @@ function ViewOrders() {
           paymentDate: item['Payment Date'],
           paymentMethod: item['Payment Method'] || 'Cash',
           chequeNumber: item['Cheque Number'] || '',
-          createdBy: item['Created By'] || item['Executive'] // NEW: Include created by in import
+          createdBy: item['Created By'] || item['Executive']
         }));
 
         await axios.post(API_ENDPOINTS.IMPORT_ORDERS, ordersToImport);
-        fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
+        
+        const { role, name } = getUserInfo();
+        fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
+        
         toast.success('Orders imported successfully!');
       } catch (err) {
         console.error('Error importing orders:', err);
@@ -765,7 +774,7 @@ function ViewOrders() {
       order.paymentDate || '',
       order.paymentMethod || '',
       order.chequeNumber || '',
-      order.createdBy || '' // NEW: Include created by in search
+      order.createdBy || ''
     ];
 
     return valuesToSearch.some((val) =>
@@ -812,7 +821,10 @@ function ViewOrders() {
           <h2 style={{ color: '#c62828' }}>Error Loading Orders</h2>
           <p style={{ margin: '15px 0', color: '#333' }}>{error}</p>
           <button
-            onClick={() => fetchOrders(userRole, executiveName, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName)}
+            onClick={() => {
+              const { role, name } = getUserInfo();
+              fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
+            }}
             style={{
               backgroundColor: '#1565c0',
               color: 'white',
@@ -834,50 +846,66 @@ function ViewOrders() {
       {/* Toast container */}
       <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999 }} />
 
-      {/* Summary Cards - ALWAYS VISIBLE - REMOVED TOTAL ADVANCE CARD */}
+      {/* User Role Info Banner */}
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-around',
-        marginBottom: '25px',
-        flexWrap: 'wrap',
-        gap: '20px'
+        backgroundColor: shouldSeeOnlyOwnOrders() ? '#e3f2fd' : '#f3e5f5',
+        padding: '10px 15px',
+        borderRadius: '6px',
+        marginBottom: '20px',
+        border: `2px solid ${shouldSeeOnlyOwnOrders() ? '#2196f3' : '#9c27b0'}`,
+        textAlign: 'center',
+        fontWeight: 'bold'
       }}>
-        {/* Total Amount Card */}
-        <div style={{
-          backgroundColor: 'rgba(52, 152, 219, 0.1)',
-          padding: '20px',
-          borderRadius: '12px',
-          minWidth: '220px',
-          textAlign: 'center',
-          border: '1px solid rgba(52, 152, 219, 0.3)',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Amount</div>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3498db' }}>₹{totalAmount}</div>
-        </div>
-
-        {/* Total Balance Card */}
-        <div style={{
-          backgroundColor: totalBalance > 0 ? 'rgba(231, 76, 60, 0.1)' : 'rgba(39, 174, 96, 0.1)',
-          padding: '20px',
-          borderRadius: '12px',
-          minWidth: '220px',
-          textAlign: 'center',
-          border: `1px solid ${totalBalance > 0 ? 'rgba(231, 76, 60, 0.3)' : 'rgba(39, 174, 96, 0.3)'}`,
-          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Balance</div>
-          <div style={{
-            fontSize: '24px',
-            fontWeight: 'bold',
-            color: totalBalance > 0 ? '#e74c3c' : '#27ae60'
-          }}>
-            ₹{totalBalance}
-          </div>
-        </div>
+        {shouldSeeOnlyOwnOrders() 
+          ? `👤 Viewing Your Orders Only - ${executiveName || 'User'} (${userRole || 'User'})`
+          : `👑 Viewing All Orders - ${userRole || 'Admin'} Role`
+        }
       </div>
 
-      {/* Month Filter Info Section - NEW */}
+      {/* Summary Cards - Only show for Admin, Account, and Service Executive */}
+      {shouldShowSummaryCards() && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-around',
+          marginBottom: '25px',
+          flexWrap: 'wrap',
+          gap: '20px'
+        }}>
+          <div style={{
+            backgroundColor: 'rgba(52, 152, 219, 0.1)',
+            padding: '20px',
+            borderRadius: '12px',
+            minWidth: '220px',
+            textAlign: 'center',
+            border: '1px solid rgba(52, 152, 219, 0.3)',
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Amount</div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3498db' }}>₹{totalAmount}</div>
+          </div>
+
+          <div style={{
+            backgroundColor: totalBalance > 0 ? 'rgba(231, 76, 60, 0.1)' : 'rgba(39, 174, 96, 0.1)',
+            padding: '20px',
+            borderRadius: '12px',
+            minWidth: '220px',
+            textAlign: 'center',
+            border: `1px solid ${totalBalance > 0 ? 'rgba(231, 76, 60, 0.3)' : 'rgba(39, 174, 96, 0.3)'}`,
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Balance</div>
+            <div style={{
+              fontSize: '24px',
+              fontWeight: 'bold',
+              color: totalBalance > 0 ? '#e74c3c' : '#27ae60'
+            }}>
+              ₹{totalBalance}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Month Filter Info Section */}
       {(monthFilterInfo.monthCount > 0 || monthFilterInfo.weekCount > 0) && (
         <div style={{
           backgroundColor: '#e3f2fd',
@@ -935,6 +963,7 @@ function ViewOrders() {
         </div>
       )}
 
+      {/* Rest of the component remains the same */}
       {/* Filter Display Section */}
       <div style={{
         display: 'flex',
@@ -1101,21 +1130,23 @@ function ViewOrders() {
             Export to Excel
           </button>
 
-          {/* Import from Excel Button */}
-          <button
-            onClick={() => document.getElementById('importExcelInput').click()}
-            style={{
-              backgroundColor: '#2980b9',
-              color: 'white',
-              padding: '12px 20px',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            Import from Excel
-          </button>
+          {/* Import from Excel Button - Only show for Admin, Account, and Service Executive */}
+          {!shouldSeeOnlyOwnOrders() && (
+            <button
+              onClick={() => document.getElementById('importExcelInput').click()}
+              style={{
+                backgroundColor: '#2980b9',
+                color: 'white',
+                padding: '12px 20px',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Import from Excel
+            </button>
+          )}
 
           {/* Hidden file input for import */}
           <input
@@ -1132,11 +1163,8 @@ function ViewOrders() {
       {Object.entries(groupedOrders).length > 0 ? (
         Object.entries(groupedOrders)
           .sort(([keyA], [keyB]) => {
-            // Extract month numbers from keys
             const monthA = parseInt(keyA.split('-')[1]);
             const monthB = parseInt(keyB.split('-')[1]);
-
-            // Sort in descending order (most recent first)
             return monthB - monthA;
           })
           .map(([monthYearKey, group]) => (
@@ -1154,13 +1182,11 @@ function ViewOrders() {
               }}>
                 <h3 style={{ margin: 0, fontSize: '18px' }}>{group.name}</h3>
                 <div style={{ display: 'flex', gap: '20px' }}>
-                  {/* Month Total Amount */}
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Amount</div>
                     <div style={{ fontWeight: 'bold', fontSize: '16px' }}>₹{group.totals.amount.toLocaleString('en-IN')}</div>
                   </div>
 
-                  {/* Month Total Balance */}
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Balance</div>
                     <div style={{
@@ -1174,7 +1200,7 @@ function ViewOrders() {
                 </div>
               </div>
 
-              {/* Orders Table - MODIFIED TO HAVE STICKY HEADERS AND CREATED BY COLUMN */}
+              {/* Orders Table */}
               <div style={{ overflowX: 'auto', height: '500px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
                   <thead style={{ backgroundColor: '#218c74', color: '#fff', position: 'sticky', top: 0, zIndex: 10 }}>
@@ -1199,7 +1225,6 @@ function ViewOrders() {
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Delivery Date</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Service Assigned</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Status</th>
-                      {/* NEW: Created By Column */}
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Created By</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Advance</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Balance</th>
@@ -1220,11 +1245,9 @@ function ViewOrders() {
                             borderBottom: '1px solid #eee'
                           }}
                         >
-                          {/* Order Data Cells */}
                           <td style={{ padding: '10px 8px', textAlign: 'center' }}>{orderIndex + 1}</td>
                           <td style={{ padding: '10px 8px' }}>{order.executive}</td>
 
-                          {/* BUSINESS CELL - CLICKABLE BUTTON STYLE (FROM SECOND VERSION) */}
                           <td style={{ padding: '10px 8px' }}>
                             <button
                               onClick={() => navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(order.business)}`)}
@@ -1314,7 +1337,6 @@ function ViewOrders() {
                               {row.status || 'Not Set'}
                             </span>
                           </td>
-                          {/* NEW: Created By Cell */}
                           <td style={{ padding: '10px 8px', textAlign: 'center' }}>
                             {order.createdBy && order.createdBy !== order.executive ? (
                               <span style={{
@@ -1337,7 +1359,6 @@ function ViewOrders() {
                               </span>
                             )}
                           </td>
-
 
                           <td style={{ padding: '10px 8px', textAlign: 'right' }}>{order.advance}</td>
                           <td style={{
@@ -1411,8 +1432,7 @@ function ViewOrders() {
                                   Edit
                                 </button>
 
-                                {/* DELETE BUTTON - ONLY FOR ADMIN */}
-                                {userRole === 'Admin' && (
+                                {(userRole === 'Admin' || (shouldSeeOnlyOwnOrders() && order.executive === executiveName)) && (
                                   <button
                                     onClick={() => confirmDelete(order._id)}
                                     style={{
@@ -1450,6 +1470,7 @@ function ViewOrders() {
         }}>
           <h3 style={{ color: '#666' }}>No orders found for 2025</h3>
           <p style={{ color: '#999' }}>
+            {shouldSeeOnlyOwnOrders() && `for executive: ${executiveName}`}
             {appliedExecutiveFilters.executiveName && `for executive: ${appliedExecutiveFilters.executiveName}`}
             {appliedExecutiveFilters.executiveName && (monthFilter || clientTypeFilter) && ' and '}
             {monthFilter && `in ${new Date(2025, monthFilter - 1).toLocaleString('default', { month: 'long' })}`}
@@ -1484,7 +1505,6 @@ function ViewOrders() {
           }}>
             <h2 style={{ marginTop: 0, textAlign: 'center' }}>Record Payment</h2>
 
-            {/* Order Summary */}
             <div style={{ marginBottom: '20px', border: '1px solid #eee', padding: '15px', borderRadius: '5px' }}>
               <h3 style={{ marginBottom: '10px', borderBottom: '1px solid #ddd', paddingBottom: '5px' }}>
                 Order Summary
@@ -1526,8 +1546,6 @@ function ViewOrders() {
               </div>
             </div>
 
-
-            {/* Payment History Section */}
             {paymentHistory.length > 0 && (
               <div style={{ marginBottom: '20px', border: '1px solid #eee', padding: '15px', borderRadius: '5px' }}>
                 <h3 style={{ marginBottom: '10px', borderBottom: '1px solid #ddd', paddingBottom: '5px' }}>
@@ -1565,7 +1583,6 @@ function ViewOrders() {
               </div>
             )}
 
-            {/* Payment Form */}
             <form onSubmit={handlePaymentSubmit}>
               <div style={{ marginBottom: '15px' }}>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Pending Amount</label>
@@ -1744,9 +1761,7 @@ function ViewOrders() {
           }}>
             <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Edit Order</h2>
 
-            {/* Order Fields Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
-              {/* Business Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Business</label>
                 <input
@@ -1757,7 +1772,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Contact Person Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Contact Person</label>
                 <input
@@ -1768,7 +1782,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Location Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Location</label>
                 <input
@@ -1779,7 +1792,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Sale Closed By Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Sale Closed By</label>
                 <input
@@ -1790,7 +1802,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Contact Code Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Contact Code</label>
                 <input
@@ -1801,7 +1812,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Phone Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Phone</label>
                 <input
@@ -1812,7 +1822,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Order No Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Order No</label>
                 <input
@@ -1823,7 +1832,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Order Date Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Order Date</label>
                 <input
@@ -1835,7 +1843,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Client Type Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Client Type</label>
                 <select
@@ -1849,7 +1856,7 @@ function ViewOrders() {
                   <option value="Agent">Agent</option>
                 </select>
               </div>
-              {/* Created By Field - NEW */}
+
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Created By</label>
                 <input
@@ -1866,7 +1873,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Discount Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Discount</label>
                 <input
@@ -1878,7 +1884,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Final Amount Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Final Amount</label>
                 <input
@@ -1897,7 +1902,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Advance Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Advance</label>
                 <input
@@ -1909,7 +1913,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Balance Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Balance</label>
                 <input
@@ -1921,7 +1924,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Advance Date Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Advance Date</label>
                 <input
@@ -1933,7 +1935,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Payment Date Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Payment Date</label>
                 <input
@@ -1945,7 +1946,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Payment Method Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Payment Method</label>
                 <select
@@ -1962,7 +1962,6 @@ function ViewOrders() {
                   <option value="Cheque">Cheque</option>
                   <option value="Bank Transfer">Bank Transfer</option>
                   <optgroup label="UPI">
-
                     <option value="9985330008@Chary">9985330008@Chary</option>
                     <option value="9985330004@Swathi">9985330004@Swathi</option>
                     <option value="9553146376@Laxmipathi">9553146376@Laxmipathi</option>
@@ -1971,7 +1970,6 @@ function ViewOrders() {
                 </select>
               </div>
 
-              {/* Cheque Number Field */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Cheque Number</label>
                 <input
@@ -1983,7 +1981,6 @@ function ViewOrders() {
               </div>
             </div>
 
-            {/* Order Items Section */}
             <h3 style={{ marginBottom: '15px' }}>Order Items</h3>
             {editingOrder.rows.map((row, index) => (
               <div key={index} style={{
@@ -1995,7 +1992,6 @@ function ViewOrders() {
                 backgroundColor: '#f5f5f5',
                 borderRadius: '4px'
               }}>
-                {/* Description Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Description</label>
                   <input
@@ -2005,7 +2001,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Requirement Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Requirement</label>
                   <input
@@ -2015,7 +2010,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Custom Requirement Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Custom Requirement</label>
                   <input
@@ -2025,7 +2019,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Quantity Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Quantity</label>
                   <input
@@ -2036,7 +2029,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Rate Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Rate</label>
                   <input
@@ -2047,7 +2039,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Delivery Date Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Delivery Date</label>
                   <input
@@ -2058,7 +2049,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Start Date Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Start Date</label>
                   <input
@@ -2069,7 +2059,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* End Date Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>End Date</label>
                   <input
@@ -2080,7 +2069,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Service Assigned Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Service Assigned To</label>
                   <input
@@ -2091,7 +2079,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Status Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Status</label>
                   <select
@@ -2106,7 +2093,6 @@ function ViewOrders() {
                   </select>
                 </div>
 
-                {/* Remark Field */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Remark</label>
                   <input
@@ -2116,7 +2102,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Is Completed Field */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <label style={{ marginBottom: '5px' }}>Is Completed:</label>
                   <input
@@ -2129,7 +2114,6 @@ function ViewOrders() {
               </div>
             ))}
 
-            {/* Form Actions */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
               <button
                 type="button"
@@ -2188,9 +2172,8 @@ function ViewOrders() {
           }}>
             <h3 style={{ marginTop: 0, color: '#e74c3c' }}>Confirm Deletion</h3>
             <p style={{ margin: '20px 0', fontSize: '16px' }}>
-              Are you sure you want to delete this order ?
+              Are you sure you want to delete this order?
             </p>
-
 
             <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '20px' }}>
               <button

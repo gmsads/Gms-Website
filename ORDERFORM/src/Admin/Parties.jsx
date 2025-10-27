@@ -38,7 +38,7 @@ const Parties = () => {
   const fetchParties = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:5000/api/parties');
+      const response = await axios.get('/api/parties');
       setParties(response.data);
     } catch (error) {
       console.error('Error fetching parties:', error);
@@ -73,7 +73,7 @@ const Parties = () => {
     
     setLoading(true);
     try {
-      await axios.delete(`http://localhost:5000/api/parties/${deletingParty._id}`);
+      await axios.delete(`/api/parties/${deletingParty._id}`);
       setParties(prev => prev.filter(party => party._id !== deletingParty._id));
       showNotification(`Party "${deletingParty.partyName}" deleted successfully!`, 'success');
     } catch (error) {
