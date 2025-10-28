@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import AutoLogout from '../mainpage/AutoLogout';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfYear, endOfYear, eachMonthOfInterval,  } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfYear, endOfYear, eachMonthOfInterval, isWithinInterval } from 'date-fns';
 
 const FieldExecutivePage = () => {
     const [fieldData, setFieldData] = useState([]);
@@ -47,6 +47,9 @@ const FieldExecutivePage = () => {
         details: '',
         leads: 0
     });
+
+    // Mobile menu state
+    const [showMobileMenu, setShowMobileMenu] = useState(false);
 
     useEffect(() => {
         const checkAuthorization = async () => {
@@ -94,11 +97,10 @@ const FieldExecutivePage = () => {
         }
     };
 
-
     // Apply filters when they change
     useEffect(() => {
         applyFilters();
-    }, [selectedDate, fieldData]);
+    }, [selectedDate, fieldData, statsMonthFilter, statsYearFilter]);
 
     // Apply stats filters when they change
     useEffect(() => {
@@ -108,7 +110,16 @@ const FieldExecutivePage = () => {
     const applyFilters = () => {
         let filtered = [...fieldData];
 
-        // Apply date filter if a date is selected
+        // First apply month/year filter from stats filters
+        filtered = filtered.filter(activity => {
+            const activityDate = new Date(activity.date);
+            return (
+                activityDate.getMonth() === statsMonthFilter.getMonth() &&
+                activityDate.getFullYear() === statsYearFilter
+            );
+        });
+
+        // Then apply date filter if a specific date is selected
         if (selectedDate) {
             filtered = filtered.filter(activity => {
                 const activityDate = new Date(activity.date);
@@ -117,16 +128,6 @@ const FieldExecutivePage = () => {
         }
 
         setFilteredData(filtered);
-
-        // Update filtered stats
-        const scheduled = filtered.filter(a => a.status === 'scheduled').length;
-        const completed = filtered.filter(a => a.status === 'completed').length;
-
-        setFilteredStats({
-            scheduled,
-            completed,
-            leads: stats.leads
-        });
     };
 
     const applyStatsFilters = () => {
@@ -155,8 +156,22 @@ const FieldExecutivePage = () => {
 
     const resetFilters = () => {
         setSelectedDate(null);
-        setFilteredData(fieldData);
-        setFilteredStats(stats);
+        // Reset to show all data for the currently selected month/year
+        const filtered = fieldData.filter(activity => {
+            const activityDate = new Date(activity.date);
+            return (
+                activityDate.getMonth() === statsMonthFilter.getMonth() &&
+                activityDate.getFullYear() === statsYearFilter
+            );
+        });
+        setFilteredData(filtered);
+    };
+
+    const handleMonthYearChange = (month, year) => {
+        setStatsMonthFilter(new Date(year, month));
+        setStatsYearFilter(year);
+        setCurrentDate(new Date(year, month)); // Also update calendar view
+        setSelectedDate(null); // Reset date selection when month/year changes
     };
 
     const handleAddVisit = async (e) => {
@@ -220,13 +235,19 @@ const FieldExecutivePage = () => {
 
     const navigateMonth = (direction) => {
         if (direction > 0) {
-            setCurrentDate(addMonths(currentDate, 1));
+            const newDate = addMonths(currentDate, 1);
+            setCurrentDate(newDate);
+            // Update stats filters when navigating calendar
+            handleMonthYearChange(newDate.getMonth(), newDate.getFullYear());
         } else {
-            setCurrentDate(subMonths(currentDate, 1));
+            const newDate = subMonths(currentDate, 1);
+            setCurrentDate(newDate);
+            // Update stats filters when navigating calendar
+            handleMonthYearChange(newDate.getMonth(), newDate.getFullYear());
         }
     };
 
-    // Get activities for the current month
+    // Get activities for the current month (for calendar display)
     const getMonthActivities = () => {
         return fieldData.filter(activity => {
             const activityDate = new Date(activity.date);
@@ -243,7 +264,7 @@ const FieldExecutivePage = () => {
         start: startOfYear(new Date()),
         end: endOfYear(new Date())
     }).map(month => ({
-        value: month,
+        value: month.getMonth(),
         label: format(month, 'MMMM')
     }));
 
@@ -258,12 +279,22 @@ const FieldExecutivePage = () => {
             <AutoLogout />
 
             <header className="page-header">
-                <button onClick={() => navigate('/order')} className="back-btn">
-                    &larr; Back to Dashboard
-                </button>
+                <div className="header-left">
+                    <button 
+                        className="mobile-menu-btn"
+                        onClick={() => setShowMobileMenu(!showMobileMenu)}
+                    >
+                        ☰
+                    </button>
+                    <button onClick={() => navigate('/order')} className="back-btn">
+                        &larr; Back
+                    </button>
+                </div>
+                
                 <h1>Field Executive Dashboard</h1>
+                
                 <div className="header-actions">
-                    <span>Welcome, {localStorage.getItem('userName')}</span>
+                    <span className="welcome-text">Welcome, {localStorage.getItem('userName')}</span>
                     <button
                         onClick={() => setShowCalendar(!showCalendar)}
                         className="toggle-calendar-btn"
@@ -272,6 +303,46 @@ const FieldExecutivePage = () => {
                     </button>
                 </div>
             </header>
+
+            {/* Mobile Menu */}
+            {showMobileMenu && (
+                <div className="mobile-menu-overlay">
+                    <div className="mobile-menu">
+                        <button 
+                            className="mobile-menu-close"
+                            onClick={() => setShowMobileMenu(false)}
+                        >
+                            ✕
+                        </button>
+                        <div className="mobile-menu-content">
+                            <button 
+                                className="mobile-menu-item"
+                                onClick={() => {
+                                    setShowAddForm(true);
+                                    setShowMobileMenu(false);
+                                }}
+                            >
+                                Add New Visit
+                            </button>
+                            <button 
+                                className="mobile-menu-item"
+                                onClick={() => {
+                                    setShowReportForm(true);
+                                    setShowMobileMenu(false);
+                                }}
+                            >
+                                Submit Report
+                            </button>
+                            <button 
+                                className="mobile-menu-item"
+                                onClick={() => setShowCalendar(!showCalendar)}
+                            >
+                                {showCalendar ? 'Hide Calendar' : 'Show Calendar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <main className="field-content">
                 <div className="main-content-layout">
@@ -284,18 +355,18 @@ const FieldExecutivePage = () => {
                                 <div className="stats-filters">
                                     <select
                                         value={statsMonthFilter.getMonth()}
-                                        onChange={(e) => setStatsMonthFilter(new Date(statsYearFilter, e.target.value))}
+                                        onChange={(e) => handleMonthYearChange(parseInt(e.target.value), statsYearFilter)}
                                         className="stats-filter-select"
                                     >
                                         {months.map((month, index) => (
-                                            <option key={index} value={index}>
+                                            <option key={index} value={month.value}>
                                                 {month.label}
                                             </option>
                                         ))}
                                     </select>
                                     <select
                                         value={statsYearFilter}
-                                        onChange={(e) => setStatsYearFilter(parseInt(e.target.value))}
+                                        onChange={(e) => handleMonthYearChange(statsMonthFilter.getMonth(), parseInt(e.target.value))}
                                         className="stats-filter-select"
                                     >
                                         {years.map(year => (
@@ -334,8 +405,14 @@ const FieldExecutivePage = () => {
                         {/* Activities Section */}
                         <div className="field-activities">
                             <div className="section-header">
-                                <h2>Field Activities {selectedDate ? `for ${format(selectedDate, 'MMM d, yyyy')}` : `in ${format(currentDate, 'MMMM yyyy')}`}</h2>
-                                <span className="activities-count">{filteredData.length} of {monthActivities.length} activities</span>
+                                <h2>
+                                    Field Activities for {format(statsMonthFilter, 'MMMM yyyy')}
+                                    {selectedDate && ` - ${format(selectedDate, 'MMM d, yyyy')}`}
+                                </h2>
+                                <span className="activities-count">
+                                    {filteredData.length} activity{filteredData.length !== 1 ? 'ies' : ''}
+                                    {selectedDate && ` on ${format(selectedDate, 'MMM d, yyyy')}`}
+                                </span>
                             </div>
                             <div className="activities-table">
                                 <div className="table-header">
@@ -348,10 +425,15 @@ const FieldExecutivePage = () => {
                                 {filteredData.length > 0 ? (
                                     filteredData.map((activity, index) => (
                                         <div key={index} className="table-row">
+                                            <span className="mobile-label">Date:</span>
                                             <span>{new Date(activity.date).toLocaleDateString()}</span>
+                                            <span className="mobile-label">Client:</span>
                                             <span className="client-name">{activity.client}</span>
+                                            <span className="mobile-label">Location:</span>
                                             <span>{activity.location}</span>
+                                            <span className="mobile-label">Purpose:</span>
                                             <span>{activity.purpose}</span>
+                                            <span className="mobile-label">Status:</span>
                                             <span className={`status ${activity.status}`}>
                                                 {activity.status}
                                             </span>
@@ -361,7 +443,7 @@ const FieldExecutivePage = () => {
                                     <div className="no-data">
                                         {selectedDate
                                             ? `No field activities found for ${format(selectedDate, 'MMM d, yyyy')}`
-                                            : `No field activities found for ${format(currentDate, 'MMMM yyyy')}`
+                                            : `No field activities found for ${format(statsMonthFilter, 'MMMM yyyy')}`
                                         }
                                     </div>
                                 )}
@@ -404,9 +486,14 @@ const FieldExecutivePage = () => {
                                             <div key={day} className="calendar-weekday">{day}</div>
                                         ))}
                                         {daysInMonth.map(day => {
-                                            const dayActivities = fieldData.filter(activity =>
-                                                isSameDay(new Date(activity.date), day)
-                                            );
+                                            const dayActivities = fieldData.filter(activity => {
+                                                const activityDate = new Date(activity.date);
+                                                return (
+                                                    isSameDay(activityDate, day) &&
+                                                    activityDate.getMonth() === statsMonthFilter.getMonth() &&
+                                                    activityDate.getFullYear() === statsYearFilter
+                                                );
+                                            });
 
                                             const isSelected = selectedDate && isSameDay(day, selectedDate);
                                             const isCurrentMonth = isSameMonth(day, currentDate);
@@ -456,7 +543,15 @@ const FieldExecutivePage = () => {
                 {showAddForm && (
                     <div className="modal-overlay">
                         <div className="modal">
-                            <h2>Schedule New Visit</h2>
+                            <div className="modal-header">
+                                <h2>Schedule New Visit</h2>
+                                <button 
+                                    className="modal-close"
+                                    onClick={() => setShowAddForm(false)}
+                                >
+                                    ✕
+                                </button>
+                            </div>
                             <form onSubmit={handleAddVisit}>
                                 <div className="form-group">
                                     <label>Client Name:</label>
@@ -514,7 +609,15 @@ const FieldExecutivePage = () => {
                 {showReportForm && (
                     <div className="modal-overlay">
                         <div className="modal">
-                            <h2>Submit Visit Report</h2>
+                            <div className="modal-header">
+                                <h2>Submit Visit Report</h2>
+                                <button 
+                                    className="modal-close"
+                                    onClick={() => setShowReportForm(false)}
+                                >
+                                    ✕
+                                </button>
+                            </div>
                             <form onSubmit={handleSubmitReport}>
                                 <div className="form-group">
                                     <label>Visit ID:</label>
@@ -525,7 +628,11 @@ const FieldExecutivePage = () => {
                                     >
                                         <option value="">Select a visit</option>
                                         {fieldData
-                                            .filter(activity => activity.status === 'scheduled')
+                                            .filter(activity => 
+                                                activity.status === 'scheduled' &&
+                                                new Date(activity.date).getMonth() === statsMonthFilter.getMonth() &&
+                                                new Date(activity.date).getFullYear() === statsYearFilter
+                                            )
                                             .map(activity => (
                                                 <option key={activity._id} value={activity._id}>
                                                     {activity.client} - {new Date(activity.date).toLocaleDateString()}
@@ -571,667 +678,964 @@ const FieldExecutivePage = () => {
             </main>
 
             <style>{`
-        .field-executive-page {
-          padding: 1.5rem;
-          background-color: #f8fafc;
-          min-height: 100vh;
-          position: relative;
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        .page-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 2rem;
-          padding: 1.2rem 1.5rem;
-          background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-          color: white;
-          border-radius: 12px;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        
-        .page-header h1 {
-          margin: 0;
-          font-weight: 600;
-          font-size: 1.8rem;
-        }
-        
-        .back-btn {
-          padding: 0.6rem 1.2rem;
-          background-color: rgba(255, 255, 255, 0.2);
-          color: white;
-          border: none;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 0.9rem;
-          font-weight: 500;
-          transition: all 0.2s ease;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-        
-        .back-btn:hover {
-          background-color: rgba(255, 255, 255, 0.3);
-          transform: translateY(-1px);
-        }
-        
-        .header-actions {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          font-weight: 500;
-        }
-        
-        .toggle-calendar-btn {
-          padding: 0.6rem 1rem;
-          background-color: rgba(255, 255, 255, 0.2);
-          color: white;
-          border: none;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 0.8rem;
-          font-weight: 500;
-          transition: all 0.2s ease;
-        }
-        
-        .toggle-calendar-btn:hover {
-          background-color: rgba(255, 255, 255, 0.3);
-        }
-        
-        .field-content {
-          display: flex;
-          flex-direction: column;
-          gap: 2rem;
-        }
-        
-        .main-content-layout {
-          display: grid;
-          grid-template-columns: ${showCalendar ? '2fr 1fr' : '1fr'};
-          gap: 2rem;
-          transition: grid-template-columns 0.3s ease;
-        }
-        
-        .left-column {
-          display: flex;
-          flex-direction: column;
-          gap: 2rem;
-        }
-        
-        .right-column {
-          display: flex;
-          flex-direction: column;
-          gap: 2rem;
-        }
-        
-        /* Stats Section */
-        .field-stats {
-          background-color: white;
-          padding: 1.5rem;
-          border-radius: 12px;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-        }
-        
-        .stats-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1.2rem;
-        }
-        
-        .stats-header h2 {
-          margin: 0;
-          color: #1f2937;
-          font-size: 1.3rem;
-          font-weight: 600;
-        }
-        
-        .stats-filters {
-          display: flex;
-          gap: 0.5rem;
-        }
-        
-        .stats-filter-select {
-          padding: 0.5rem;
-          border: 1px solid #d1d5db;
-          border-radius: 6px;
-          background-color: white;
-        }
-        
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 1.2rem;
-        }
-        
-        .stat-card {
-          display: flex;
-          align-items: center;
-          padding: 1.5rem;
-          border-radius: 12px;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-          color: white;
-          transition: transform 0.2s ease;
-        }
-        
-        .stat-card:hover {
-          transform: translateY(-3px);
-        }
-        
-        .stat-card.scheduled {
-          background: linear-gradient(135deg,rgb(140, 168, 213) 0%, #2563eb 100%);
-        }
-        
-        .stat-card.completed {
-          background: linear-gradient(135deg,rgb(110, 204, 173) 0%, #059669 100%);
-        }
-        
-        .stat-card.leads {
-          background: linear-gradient(135deg,rgb(222, 187, 125) 0%, #d97706 100%);
-        }
-        
-        .stat-icon {
-          font-size: 2.5rem;
-          margin-right: 1.2rem;
-          opacity: 0.9;
-        }
-        
-       .stat-info h3 {
-  margin: 0 0 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: white;   /* ✅ force white text */
-  opacity: 1;     /* ✅ remove transparency */
-}
-
-.stat-value {
-  margin: 0;
-  font-size: 2rem;
-  font-weight: 700;
-  color: white;   /* ✅ ensure numbers are white */
-}
-
-        
-        /* Calendar Section */
-        .calendar-section {
-          background-color: white;
-          padding: 1.5rem;
-          border-radius: 12px;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-        }
-        
-        .section-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1.2rem;
-        }
-        
-        .section-header h2 {
-          margin: 0;
-          color: #1f2937;
-          font-size: 1.3rem;
-          font-weight: 600;
-        }
-        
-        .calendar-controls {
-          display: flex;
-          gap: 0.5rem;
-          align-items: center;
-        }
-        
-        .month-nav-btn {
-          padding: 0.5rem 0.8rem;
-          background-color: #f3f4f6;
-          border: none;
-          border-radius: 6px;
-          cursor: pointer;
-          font-weight: 500;
-          transition: all 0.2s ease;
-          font-size: 0.8rem;
-        }
-        
-        .month-nav-btn:hover {
-          background-color: #e5e7eb;
-        }
-        
-        .reset-filters-btn {
-          padding: 0.5rem 0.8rem;
-          background-color: #3b82f6;
-          color: white;
-          border: none;
-          border-radius: 6px;
-          cursor: pointer;
-          font-weight: 500;
-          transition: all 0.2s ease;
-          font-size: 0.8rem;
-        }
-        
-        .reset-filters-btn:hover {
-          background-color: #2563eb;
-        }
-        
-        .calendar-container {
-          margin-bottom: 1rem;
-        }
-        
-        .calendar-grid {
-          display: grid;
-          grid-template-columns: repeat(7, 1fr);
-          gap: 0.3rem;
-        }
-        
-        .calendar-weekday {
-          text-align: center;
-          font-size: 0.7rem;
-          font-weight: 600;
-          color: #6b7280;
-          padding: 0.3rem 0;
-        }
-        
-        .calendar-day {
-          aspect-ratio: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0.3rem;
-          border-radius: 6px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          background-color: #f9fafb;
-          position: relative;
-          border: 1px solid #e5e7eb;
-          font-size: 0.8rem;
-        }
-        
-        .calendar-day:hover {
-          background-color: #e5e7eb;
-        }
-        
-        .calendar-day.selected {
-          background-color: #3b82f6;
-          color: white;
-        }
-        
-        .calendar-day.other-month {
-          color: #9ca3af;
-          background-color: #f3f4f6;
-          cursor: not-allowed;
-        }
-        
-        .calendar-day.has-activities {
-          border: 2px solid #3b82f6;
-        }
-        
-        .day-number {
-          font-size: 0.8rem;
-          font-weight: 500;
-          align-self: flex-start;
-        }
-        
-        .day-activities {
-          display: flex;
-          flex-wrap: wrap;
-          justify-content: center;
-          gap: 0.1rem;
-          width: 100%;
-        }
-        
-        .activity-dot {
-          width: 0.4rem;
-          height: 0.4rem;
-          border-radius: 50%;
-        }
-        
-        .activity-dot.scheduled {
-          background-color: #3b82f6;
-        }
-        
-        .activity-dot.completed {
-          background-color: #10b981;
-        }
-        
-        .more-activities {
-          font-size: 0.6rem;
-          font-weight: 600;
-          color: #6b7280;
-        }
-        
-        .calendar-legend {
-          display: flex;
-          justify-content: center;
-          gap: 1rem;
-          margin-top: 1rem;
-          padding-top: 1rem;
-          border-top: 1px solid #e5e7eb;
-          font-size: 0.8rem;
-        }
-        
-        .legend-item {
-          display: flex;
-          align-items: center;
-          gap: 0.3rem;
-          color: #6b7280;
-        }
-        
-        .legend-dot {
-          width: 0.6rem;
-          height: 0.6rem;
-          border-radius: 50%;
-        }
-        
-        .legend-dot.scheduled {
-          background-color: #3b82f6;
-        }
-        
-        .legend-dot.completed {
-          background-color:rgb(1, 5, 3);
-        }
-        
-        /* Activities Section */
-        .field-activities {
-          background-color: white;
-          padding: 1.5rem;
-          border-radius: 12px;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-        }
-        
-        .activities-count {
-          color: #6b7280;
-          font-size: 0.9rem;
-          font-weight: 500;
-        }
-        
-        .activities-table {
-          display: flex;
-          flex-direction: column;
-          border: 1px solid #e5e7eb;
-          border-radius: 8px;
-          overflow: hidden;
-        }
-        
-        .table-header, .table-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
-          padding: 1rem;
-        }
-        
-        .table-header {
-          background: linear-gradient(135deg,rgb(188, 186, 231) 0%,rgb(88, 79, 219) 100%);
-          font-weight: 600;
-          color: white;
-          border-bottom: 1px solid #e5e7eb;
-        }
-        
-        .table-row {
-          border-bottom: 1px solid #f3f4f6;
-          transition: background 0.2s ease;
-        }
-        
-        .table-row:hover {
-          background-color: #f9fafb;
-        }
-        
-        .table-row:last-child {
-          border-bottom: none;
-        }
-        
-        .client-name {
-          font-weight: 500;
-          color: #1f2937;
-        }
-        
-        .no-data {
-          padding: 2.5rem;
-          text-align: center;
-          color: #6b7280;
-          font-style: italic;
-          grid-column: 1 / -1;
-        }
-        
-        .status {
-          padding: 0.4rem 0.8rem;
-          border-radius: 20px;
-          font-size: 0.8rem;
-          font-weight: 500;
-          text-align: center;
-          text-transform: capitalize;
-          width: fit-content;
-        }
-        
-        .status.completed {
-          background-color: #dcfce7;
-          color:rgb(40, 112, 30);
-        }
-        
-        .status.scheduled {
-          background-color: #dbeafe;
-          color:rgb(95, 129, 239);
-        }
-        
-        /* Quick Actions */
-        .quick-actions {
-          background-color: white;
-          padding: 1.5rem;
-          border-radius: 12px;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-        }
-        
-        .quick-actions h2 {
-          margin: 0 0 1.2rem;
-          color: #1f2937;
-          font-size: 1.3rem;
-          font-weight: 600;
-        }
-        
-        .action-buttons {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-          gap: 1rem;
-        }
-        
-        .action-btn {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 1.5rem 1rem;
-          border: none;
-          border-radius: 12px;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          gap: 0.8rem;
-        }
-        
-        .action-btn.primary {
-          background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-          color: white;
-        }
-        
-        .action-btn.secondary {
-          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-          color: white;
-        }
-        
-        .action-btn:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-        }
-        
-        .action-btn .icon {
-          font-size: 1.8rem;
-        }
-        
-        .action-btn span:last-child {
-          font-weight: 500;
-          font-size: 0.95rem;
-        }
-        
-        .loading {
-          text-align: center;
-          padding: 3rem;
-          font-size: 1.2rem;
-          color: #6b7280;
-        }
-        
-        /* Modal Styles */
-        .modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background-color: rgba(0, 0, 0, 0.5);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          z-index: 1000;
-          padding: 1rem;
-        }
-        
-        .modal {
-          background-color: white;
-          padding: 2rem;
-          border-radius: 12px;
-          width: 100%;
-          max-width: 500px;
-          max-height: 90vh;
-          overflow-y: auto;
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-        }
-        
-        .modal h2 {
-          margin-top: 0;
-          margin-bottom: 1.5rem;
-          color: #1f2937;
-          font-weight: 600;
-        }
-        
-        .form-group {
-          margin-bottom: 1.2rem;
-        }
-        
-        .form-group label {
-          display: block;
-          margin-bottom: 0.5rem;
-          font-weight: 500;
-          color: #374151;
-        }
-        
-        .form-group input,
-        .form-group textarea,
-        .form-group select {
-          width: 100%;
-          padding: 0.75rem;
-          border: 1px solid #d1d5db;
-          border-radius: 6px;
-          font-size: 1rem;
-          transition: border 0.2s ease;
-        }
-        
-        .form-group input:focus,
-        .form-group textarea:focus,
-        .form-group select:focus {
-          outline: none;
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-        }
-        
-        .form-group textarea {
-          min-height: 100px;
-          resize: vertical;
-        }
-        
-        .form-buttons {
-          display: flex;
-          gap: 1rem;
-          justify-content: flex-end;
-          margin-top: 1.5rem;
-        }
-        
-        .form-buttons button {
-          padding: 0.75rem 1.5rem;
-          border: none;
-          border-radius: 6px;
-          cursor: pointer;
-          font-weight: 500;
-          transition: all 0.2s ease;
-        }        
-        .form-buttons button[type="submit"] {
-          background-color: #3b82f6
-        
-        .form-buttons button[type="submit"] {
-          background-color: #3b82f6;
-          color: white;
-        }
-        
-        .form-buttons button[type="submit"]:hover {
-          background-color: #2563eb;
-        }
-        
-        .form-buttons button[type="button"] {
-          background-color: #f3f4f6;
-          color: #374151;
-        }
-        
-        @media (max-width: 1024px) {
-          .main-content-layout {
-            grid-template-columns: 1fr;
-          }
-        }
-        
-        @media (max-width: 768px) {
-          .field-executive-page {
-            padding: 1rem;
-          }
-          
-          .page-header {
-            flex-direction: column;
-            gap: 1rem;
-            text-align: center;
-          }
-          
-          .header-actions {
-            flex-direction: column;
-            gap: 0.5rem;
-          }
-          
-          .section-header {
-            flex-direction: column;
-            gap: 1rem;
-            align-items: flex-start;
-          }
-          
-          .calendar-controls {
-            width: 100%;
-            justify-content: space-between;
-          }
-          
-          .stats-grid {
-            grid-template-columns: 1fr;
-          }
-          
-          .calendar-grid {
-            gap: 0.3rem;
-          }
-          
-          .table-header, .table-row {
-            grid-template-columns: 1fr;
-            gap: 0.5rem;
-          }
-          
-          .action-buttons {
-            grid-template-columns: 1fr;
-          }
-          
-          .calendar-legend {
-            flex-wrap: wrap;
-            justify-content: flex-start;
-          }
-        }
-      `}</style>
+                .field-executive-page {
+                    padding: 1rem;
+                    background-color: #f8fafc;
+                    min-height: 100vh;
+                    position: relative;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                }
+                
+                .page-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin-bottom: 1.5rem;
+                    padding: 1rem;
+                    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+                    color: white;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                    position: relative;
+                }
+                
+                .header-left {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                }
+                
+                .mobile-menu-btn {
+                    display: none;
+                    background: none;
+                    border: none;
+                    color: white;
+                    font-size: 1.2rem;
+                    cursor: pointer;
+                    padding: 0.5rem;
+                }
+                
+                .page-header h1 {
+                    margin: 0;
+                    font-weight: 600;
+                    font-size: 1.5rem;
+                    text-align: center;
+                    flex: 1;
+                }
+                
+                .back-btn {
+                    padding: 0.5rem 1rem;
+                    background-color: rgba(255, 255, 255, 0.2);
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 0.9rem;
+                    font-weight: 500;
+                    transition: all 0.2s ease;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                }
+                
+                .back-btn:hover {
+                    background-color: rgba(255, 255, 255, 0.3);
+                    transform: translateY(-1px);
+                }
+                
+                .header-actions {
+                    display: flex;
+                    align-items: center;
+                    gap: 1rem;
+                    font-weight: 500;
+                }
+                
+                .welcome-text {
+                    display: block;
+                }
+                
+                .toggle-calendar-btn {
+                    padding: 0.5rem 0.8rem;
+                    background-color: rgba(255, 255, 255, 0.2);
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 0.8rem;
+                    font-weight: 500;
+                    transition: all 0.2s ease;
+                    white-space: nowrap;
+                }
+                
+                .toggle-calendar-btn:hover {
+                    background-color: rgba(255, 255, 255, 0.3);
+                }
+                
+                /* Mobile Menu */
+                .mobile-menu-overlay {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background-color: rgba(0, 0, 0, 0.5);
+                    z-index: 2000;
+                    display: flex;
+                    justify-content: flex-start;
+                }
+                
+                .mobile-menu {
+                    width: 280px;
+                    background: white;
+                    height: 100%;
+                    padding: 1rem;
+                    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+                }
+                
+                .mobile-menu-close {
+                    background: none;
+                    border: none;
+                    font-size: 1.5rem;
+                    cursor: pointer;
+                    margin-bottom: 1rem;
+                    color: #374151;
+                }
+                
+                .mobile-menu-content {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                }
+                
+                .mobile-menu-item {
+                    padding: 1rem;
+                    background: #f8fafc;
+                    border: none;
+                    border-radius: 8px;
+                    text-align: left;
+                    cursor: pointer;
+                    font-size: 1rem;
+                    transition: background 0.2s ease;
+                }
+                
+                .mobile-menu-item:hover {
+                    background: #e5e7eb;
+                }
+                
+                .field-content {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1.5rem;
+                }
+                
+                .main-content-layout {
+                    display: grid;
+                    grid-template-columns: ${showCalendar ? '2fr 1fr' : '1fr'};
+                    gap: 1.5rem;
+                    transition: grid-template-columns 0.3s ease;
+                }
+                
+                .left-column {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1.5rem;
+                }
+                
+                .right-column {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1.5rem;
+                }
+                
+                /* Stats Section */
+                .field-stats {
+                    background-color: white;
+                    padding: 1.2rem;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                }
+                
+                .stats-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 1rem;
+                    flex-wrap: wrap;
+                    gap: 0.5rem;
+                }
+                
+                .stats-header h2 {
+                    margin: 0;
+                    color: #1f2937;
+                    font-size: 1.2rem;
+                    font-weight: 600;
+                }
+                
+                .stats-filters {
+                    display: flex;
+                    gap: 0.5rem;
+                    flex-wrap: wrap;
+                }
+                
+                .stats-filter-select {
+                    padding: 0.4rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    background-color: white;
+                    font-size: 0.9rem;
+                    min-width: 120px;
+                }
+                
+                .stats-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                    gap: 1rem;
+                }
+                
+                .stat-card {
+                    display: flex;
+                    align-items: center;
+                    padding: 1.2rem;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                    color: white;
+                    transition: transform 0.2s ease;
+                }
+                
+                .stat-card:hover {
+                    transform: translateY(-2px);
+                }
+                
+                .stat-card.scheduled {
+                    background: linear-gradient(135deg, rgb(140, 168, 213) 0%, #2563eb 100%);
+                }
+                
+                .stat-card.completed {
+                    background: linear-gradient(135deg, rgb(110, 204, 173) 0%, #059669 100%);
+                }
+                
+                .stat-card.leads {
+                    background: linear-gradient(135deg, rgb(222, 187, 125) 0%, #d97706 100%);
+                }
+                
+                .stat-icon {
+                    font-size: 2rem;
+                    margin-right: 1rem;
+                    opacity: 0.9;
+                }
+                
+                .stat-info h3 {
+                    margin: 0 0 0.3rem;
+                    font-size: 0.85rem;
+                    font-weight: 500;
+                    color: white;
+                    opacity: 1;
+                }
+                
+                .stat-value {
+                    margin: 0;
+                    font-size: 1.5rem;
+                    font-weight: 700;
+                    color: white;
+                }
+                
+                /* Calendar Section */
+                .calendar-section {
+                    background-color: white;
+                    padding: 1.2rem;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                }
+                
+                .section-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 1rem;
+                    flex-wrap: wrap;
+                    gap: 0.5rem;
+                }
+                
+                .section-header h2 {
+                    margin: 0;
+                    color: #1f2937;
+                    font-size: 1.2rem;
+                    font-weight: 600;
+                }
+                
+                .calendar-controls {
+                    display: flex;
+                    gap: 0.3rem;
+                    align-items: center;
+                    flex-wrap: wrap;
+                }
+                
+                .month-nav-btn {
+                    padding: 0.4rem 0.6rem;
+                    background-color:rgb(39, 192, 74);
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-weight: 500;
+                    transition: all 0.2s ease;
+                    font-size: 0.75rem;
+                }
+                
+                .month-nav-btn:hover {
+                    background-color:rgb(199, 48, 162);
+                }
+                
+                .reset-filters-btn {
+                    padding: 0.4rem 0.6rem;
+                    background-color: #3b82f6;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-weight: 500;
+                    transition: all 0.2s ease;
+                    font-size: 0.75rem;
+                }
+                
+                .reset-filters-btn:hover {
+                    background-color: #2563eb;
+                }
+                
+                .calendar-container {
+                    margin-bottom: 1rem;
+                }
+                
+                .calendar-grid {
+                    display: grid;
+                    grid-template-columns: repeat(7, 1fr);
+                    gap: 0.2rem;
+                }
+                
+                .calendar-weekday {
+                    text-align: center;
+                    font-size: 0.65rem;
+                    font-weight: 600;
+                    color: #6b7280;
+                    padding: 0.2rem 0;
+                }
+                
+                .calendar-day {
+                    aspect-ratio: 1;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 0.2rem;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    background-color: #f9fafb;
+                    position: relative;
+                    border: 1px solid #e5e7eb;
+                    font-size: 0.7rem;
+                }
+                
+                .calendar-day:hover {
+                    background-color: #e5e7eb;
+                }
+                
+                .calendar-day.selected {
+                    background-color: #3b82f6;
+                    color: white;
+                }
+                
+                .calendar-day.other-month {
+                    color: #9ca3af;
+                    background-color: #f3f4f6;
+                    cursor: not-allowed;
+                }
+                
+                .calendar-day.has-activities {
+                    border: 1px solid #3b82f6;
+                }
+                
+                .day-number {
+                    font-size: 0.7rem;
+                    font-weight: 500;
+                    align-self: flex-start;
+                }
+                
+                .day-activities {
+                    display: flex;
+                    flex-wrap: wrap;
+                    justify-content: center;
+                    gap: 0.1rem;
+                    width: 100%;
+                }
+                
+                .activity-dot {
+                    width: 0.3rem;
+                    height: 0.3rem;
+                    border-radius: 50%;
+                }
+                
+                .activity-dot.scheduled {
+                    background-color: #3b82f6;
+                }
+                
+                .activity-dot.completed {
+                    background-color: #10b981;
+                }
+                
+                .more-activities {
+                    font-size: 0.5rem;
+                    font-weight: 600;
+                    color: #6b7280;
+                }
+                
+                .calendar-legend {
+                    display: flex;
+                    justify-content: center;
+                    gap: 1rem;
+                    margin-top: 1rem;
+                    padding-top: 1rem;
+                    border-top: 1px solid #e5e7eb;
+                    font-size: 0.7rem;
+                    flex-wrap: wrap;
+                }
+                
+                .legend-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.3rem;
+                    color: #6b7280;
+                }
+                
+                .legend-dot {
+                    width: 0.5rem;
+                    height: 0.5rem;
+                    border-radius: 50%;
+                }
+                
+                .legend-dot.scheduled {
+                    background-color: #3b82f6;
+                }
+                
+                .legend-dot.completed {
+                    background-color: #10b981;
+                }
+                
+                /* Activities Section */
+                .field-activities {
+                    background-color: white;
+                    padding: 1.2rem;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                }
+                
+                .activities-count {
+                    color: #6b7280;
+                    font-size: 0.85rem;
+                    font-weight: 500;
+                }
+                
+                .activities-table {
+                    display: flex;
+                    flex-direction: column;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 8px;
+                    overflow: hidden;
+                }
+                
+                .table-header, .table-row {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+                    padding: 0.8rem;
+                    gap: 0.5rem;
+                }
+                
+                .table-header {
+                    background: linear-gradient(135deg, rgb(188, 186, 231) 0%, rgb(88, 79, 219) 100%);
+                    font-weight: 600;
+                    color: white;
+                    border-bottom: 1px solid #e5e7eb;
+                }
+                
+                .table-row {
+                    border-bottom: 1px solid #f3f4f6;
+                    transition: background 0.2s ease;
+                    position: relative;
+                }
+                
+                .table-row:hover {
+                    background-color: #f9fafb;
+                }
+                
+                .table-row:last-child {
+                    border-bottom: none;
+                }
+                
+                .mobile-label {
+                    display: none;
+                    font-weight: 600;
+                    color: #374151;
+                }
+                
+                .client-name {
+                    font-weight: 500;
+                    color: #1f2937;
+                }
+                
+                .no-data {
+                    padding: 2rem;
+                    text-align: center;
+                    color: #6b7280;
+                    font-style: italic;
+                    grid-column: 1 / -1;
+                }
+                
+                .status {
+                    padding: 0.3rem 0.6rem;
+                    border-radius: 20px;
+                    font-size: 0.75rem;
+                    font-weight: 500;
+                    text-align: center;
+                    text-transform: capitalize;
+                    width: fit-content;
+                }
+                
+                .status.completed {
+                    background-color: #dcfce7;
+                    color: rgb(40, 112, 30);
+                }
+                
+                .status.scheduled {
+                    background-color: #dbeafe;
+                    color: rgb(95, 129, 239);
+                }
+                
+                /* Quick Actions */
+                .quick-actions {
+                    background-color: white;
+                    padding: 1.2rem;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                }
+                
+                .quick-actions h2 {
+                    margin: 0 0 1rem;
+                    color: #1f2937;
+                    font-size: 1.2rem;
+                    font-weight: 600;
+                }
+                
+                .action-buttons {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                    gap: 1rem;
+                }
+                
+                .action-btn {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 1.2rem 0.8rem;
+                    border: none;
+                    border-radius: 12px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    gap: 0.6rem;
+                    min-height: 80px;
+                }
+                
+                .action-btn.primary {
+                    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+                    color: white;
+                }
+                
+                .action-btn.secondary {
+                    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                    color: white;
+                }
+                
+                .action-btn:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+                }
+                
+                .action-btn .icon {
+                    font-size: 1.5rem;
+                }
+                
+                .action-btn span:last-child {
+                    font-weight: 500;
+                    font-size: 0.9rem;
+                    text-align: center;
+                }
+                
+                .loading {
+                    text-align: center;
+                    padding: 2rem;
+                    font-size: 1.1rem;
+                    color: #6b7280;
+                }
+                
+                /* Modal Styles */
+                .modal-overlay {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background-color: rgba(0, 0, 0, 0.5);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 1000;
+                    padding: 1rem;
+                }
+                
+                .modal {
+                    background-color: white;
+                    padding: 1.5rem;
+                    border-radius: 12px;
+                    width: 100%;
+                    max-width: 500px;
+                    max-height: 90vh;
+                    overflow-y: auto;
+                    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+                    position: relative;
+                }
+                
+                .modal-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 1.5rem;
+                }
+                
+                .modal h2 {
+                    margin: 0;
+                    color: #1f2937;
+                    font-weight: 600;
+                    font-size: 1.3rem;
+                }
+                
+                .modal-close {
+                    background: none;
+                    border: none;
+                    font-size: 1.5rem;
+                    cursor: pointer;
+                    color: #6b7280;
+                    padding: 0;
+                    width: 30px;
+                    height: 30px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                
+                .form-group {
+                    margin-bottom: 1rem;
+                }
+                
+                .form-group label {
+                    display: block;
+                    margin-bottom: 0.5rem;
+                    font-weight: 500;
+                    color: #374151;
+                    font-size: 0.95rem;
+                }
+                
+                .form-group input,
+                .form-group textarea,
+                .form-group select {
+                    width: 100%;
+                    padding: 0.7rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 0.95rem;
+                    transition: border 0.2s ease;
+                    box-sizing: border-box;
+                }
+                
+                .form-group input:focus,
+                .form-group textarea:focus,
+                .form-group select:focus {
+                    outline: none;
+                    border-color: #3b82f6;
+                    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+                }
+                
+                .form-group textarea {
+                    min-height: 80px;
+                    resize: vertical;
+                }
+                
+                .form-buttons {
+                    display: flex;
+                    gap: 1rem;
+                    justify-content: flex-end;
+                    margin-top: 1.5rem;
+                    flex-wrap: wrap;
+                }
+                
+                .form-buttons button {
+                    padding: 0.7rem 1.2rem;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-weight: 500;
+                    transition: all 0.2s ease;
+                    font-size: 0.9rem;
+                    min-width: 100px;
+                }
+                
+                .form-buttons button[type="submit"] {
+                    background-color: #3b82f6;
+                    color: white;
+                }
+                
+                .form-buttons button[type="submit"]:hover {
+                    background-color: #2563eb;
+                }
+                
+                .form-buttons button[type="button"] {
+                    background-color: #f3f4f6;
+                    color: #374151;
+                }
+                
+                .form-buttons button[type="button"]:hover {
+                    background-color: #e5e7eb;
+                }
+                
+                /* Responsive Design */
+                @media (max-width: 1200px) {
+                    .main-content-layout {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .right-column {
+                        order: -1;
+                    }
+                }
+                
+                @media (max-width: 768px) {
+                    .field-executive-page {
+                        padding: 0.5rem;
+                    }
+                    
+                    .page-header {
+                        flex-direction: row;
+                        padding: 0.8rem;
+                        margin-bottom: 1rem;
+                    }
+                    
+                    .mobile-menu-btn {
+                        display: block;
+                    }
+                    
+                    .page-header h1 {
+                        font-size: 1.2rem;
+                        text-align: center;
+                    }
+                    
+                    .welcome-text {
+                        display: none;
+                    }
+                    
+                    .header-actions {
+                        gap: 0.5rem;
+                    }
+                    
+                    .toggle-calendar-btn {
+                        padding: 0.4rem 0.6rem;
+                        font-size: 0.75rem;
+                    }
+                    
+                    .back-btn {
+                        padding: 0.4rem 0.8rem;
+                        font-size: 0.8rem;
+                    }
+                    
+                    .stats-header {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 0.8rem;
+                    }
+                    
+                    .stats-filters {
+                        width: 100%;
+                        justify-content: space-between;
+                    }
+                    
+                    .stats-filter-select {
+                        flex: 1;
+                        min-width: auto;
+                    }
+                    
+                    .stats-grid {
+                        grid-template-columns: 1fr;
+                        gap: 0.8rem;
+                    }
+                    
+                    .stat-card {
+                        padding: 1rem;
+                    }
+                    
+                    .stat-icon {
+                        font-size: 1.8rem;
+                        margin-right: 0.8rem;
+                    }
+                    
+                    .stat-value {
+                        font-size: 1.3rem;
+                    }
+                    
+                    .section-header {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 0.8rem;
+                    }
+                    
+                    .calendar-controls {
+                        width: 100%;
+                        justify-content: space-between;
+                    }
+                    
+                    .month-nav-btn,
+                    .reset-filters-btn {
+                        flex: 1;
+                        text-align: center;
+                    }
+                    
+                    .calendar-grid {
+                        gap: 0.1rem;
+                    }
+                    
+                    .calendar-day {
+                        padding: 0.1rem;
+                        font-size: 0.65rem;
+                    }
+                    
+                    .table-header {
+                        display: none;
+                    }
+                    
+                    .table-row {
+                        grid-template-columns: 1fr;
+                        gap: 0.3rem;
+                        padding: 1rem;
+                        border-bottom: 2px solid #e5e7eb;
+                    }
+                    
+                    .mobile-label {
+                        display: inline;
+                        font-size: 0.8rem;
+                    }
+                    
+                    .table-row span:not(.mobile-label) {
+                        padding-left: 0;
+                        font-size: 0.9rem;
+                    }
+                    
+                    .status {
+                        justify-self: start;
+                    }
+                    
+                    .action-buttons {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .action-btn {
+                        padding: 1rem 0.5rem;
+                        min-height: 70px;
+                    }
+                    
+                    .action-btn .icon {
+                        font-size: 1.3rem;
+                    }
+                    
+                    .action-btn span:last-child {
+                        font-size: 0.85rem;
+                    }
+                    
+                    .calendar-legend {
+                        justify-content: flex-start;
+                        gap: 0.8rem;
+                    }
+                    
+                    .modal {
+                        padding: 1.2rem;
+                        margin: 0.5rem;
+                    }
+                    
+                    .form-buttons {
+                        flex-direction: column;
+                    }
+                    
+                    .form-buttons button {
+                        width: 100%;
+                    }
+                }
+                
+                @media (max-width: 480px) {
+                    .page-header {
+                        flex-wrap: wrap;
+                        gap: 0.5rem;
+                    }
+                    
+                    .page-header h1 {
+                        font-size: 1.1rem;
+                        order: 3;
+                        flex-basis: 100%;
+                        margin-top: 0.5rem;
+                    }
+                    
+                    .stats-filter-select {
+                        font-size: 0.8rem;
+                    }
+                    
+                    .stat-card {
+                        flex-direction: column;
+                        text-align: center;
+                        gap: 0.5rem;
+                    }
+                    
+                    .stat-icon {
+                        margin-right: 0;
+                    }
+                    
+                    .calendar-weekday {
+                        font-size: 0.6rem;
+                    }
+                    
+                    .calendar-day {
+                        font-size: 0.6rem;
+                    }
+                    
+                    .day-number {
+                        font-size: 0.6rem;
+                    }
+                }
+                
+                @media (max-width: 360px) {
+                    .page-header {
+                        padding: 0.6rem;
+                    }
+                    
+                    .field-stats,
+                    .field-activities,
+                    .quick-actions,
+                    .calendar-section {
+                        padding: 1rem;
+                    }
+                    
+                    .stat-card {
+                        padding: 0.8rem;
+                    }
+                    
+                    .table-row {
+                        padding: 0.8rem;
+                    }
+                }
+            `}</style>
         </div>
     );
 };
