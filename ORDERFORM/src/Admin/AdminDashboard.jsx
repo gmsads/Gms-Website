@@ -55,6 +55,25 @@ function AdminDashboard() {
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
 
+  // Amount formatting helper function
+  const formatAmount = (amount) => {
+    const numAmount = parseFloat(amount) || 0;
+    
+    if (numAmount >= 10000000) {
+      // Crores
+      return (numAmount / 10000000).toFixed(1) + 'Cr';
+    } else if (numAmount >= 100000) {
+      // Lakhs
+      return (numAmount / 100000).toFixed(1) + 'L';
+    } else if (numAmount >= 1000) {
+      // Thousands
+      return (numAmount / 1000).toFixed(1) + 'K';
+    } else {
+      // Less than 1000
+      return numAmount.toString();
+    }
+  };
+
   // Toggle sidebar section
   const toggleSection = (section) => {
     setOpenSections(prev => ({
@@ -94,7 +113,7 @@ function AdminDashboard() {
 
         const [chartRes, prospectRes] = await Promise.all([
           axios.get(`/api/dashboard/chart-data?${params.toString()}`),
-          axios.get(`/api/prospective-clients/stats?${params.toString()}`) // Updated to include date filters
+          axios.get(`/api/prospective-clients/stats?${params.toString()}`)
         ]);
 
         setChartData(chartRes.data);
@@ -240,12 +259,10 @@ function AdminDashboard() {
       color: '#003366',
       padding: '20px',
       height: 'auto',
-      minHeight: '350px', // You can keep this or remove it
+      minHeight: '350px',
       width: '100%',
       boxSizing: 'border-box',
     },
-
-
     sidebarHeader: {
       padding: '20px',
       fontSize: '18px',
@@ -298,7 +315,6 @@ function AdminDashboard() {
       borderLeft: '3px solid #1890ff',
       fontWeight: '600',
     },
-
     burger: {
       fontSize: '24px',
       marginRight: '20px',
@@ -310,8 +326,6 @@ function AdminDashboard() {
       zIndex: 30,
       display: window.innerWidth <= 768 ? 'block' : 'none',
     },
-
-
     number: {
       fontSize: '40px',
       color: '#002244',
@@ -532,34 +546,7 @@ function AdminDashboard() {
               >
                 Dashboard
               </NavLink>
-              <NavLink
-                to="parties"
-                style={linkStyle('parties')}
-                onMouseEnter={() => setHoveredItem('parties')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-               Clients
-              </NavLink>
-              <NavLink
-                to="quotation"
-                style={linkStyle('quotation')}
-                onMouseEnter={() => setHoveredItem('quotation')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Quotation 
-              </NavLink>
-              <NavLink
-                to="ledger"
-                style={linkStyle('ledger')}
-                onMouseEnter={() => setHoveredItem('ledger')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Ledger
-              </NavLink>
-                
+             
             </>
           )}
         </div>
@@ -601,7 +588,24 @@ function AdminDashboard() {
               >
                 View All Orders
               </NavLink>
-
+ <NavLink
+                to="parties"
+                style={linkStyle('parties')}
+                onMouseEnter={() => setHoveredItem('parties')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Clients
+              </NavLink>
+              <NavLink
+                to="quotation"
+                style={linkStyle('quotation')}
+                onMouseEnter={() => setHoveredItem('quotation')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Quotation 
+              </NavLink>
               <NavLink
                 to="performance"
                 style={linkStyle('performance')}
@@ -682,7 +686,7 @@ function AdminDashboard() {
               >
                 Unit-Attendance
               </NavLink>
-               <NavLink
+              <NavLink
                 to="activity"
                 style={linkStyle('activity')}
                 onMouseEnter={() => setHoveredItem('activity')}
@@ -711,7 +715,15 @@ function AdminDashboard() {
               >
                 Daily Report
               </NavLink>
-             
+              <NavLink
+                to="fieldvisitsadmin"
+                style={linkStyle('fieldvisitsadmin')}
+                onMouseEnter={() => setHoveredItem('fieldvisitsadmin')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Field Visits
+              </NavLink>
             </>
           )}
         </div>
@@ -765,6 +777,15 @@ function AdminDashboard() {
               </NavLink>
 
               <NavLink
+                to="ledger"
+                style={linkStyle('ledger')}
+                onMouseEnter={() => setHoveredItem('ledger')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Ledger
+              </NavLink>
+              <NavLink
                 to="design-report"
                 style={linkStyle('design-report')}
                 onMouseEnter={() => setHoveredItem('design-report')}
@@ -780,7 +801,7 @@ function AdminDashboard() {
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
-                   Vendors
+                Vendors
               </NavLink>
             </>
           )}
@@ -918,9 +939,6 @@ function AdminDashboard() {
             </>
           )}
         </div>
-
-        {/* TRASH Section */}
-
       </div>
     );
   };
@@ -1124,8 +1142,7 @@ function AdminDashboard() {
                   <div>Error loading dashboard data.</div>
                 ) : (
                   <div style={styles.dashboardCards}>
-                    {/* Total Orders Bar Chart */}
-
+                    {/* Total Orders Bar Chart - UPDATED WITH AMOUNT TOOLTIP */}
                     <div style={styles.card}>
                       <div>Total Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : '(Monthly)'}</div>
                       <div style={styles.chartContainer}>
@@ -1155,7 +1172,29 @@ function AdminDashboard() {
                               legend: { display: false },
                               tooltip: {
                                 callbacks: {
-                                  label: (context) => `Orders: ${context.raw}`
+                                  label: (context) => {
+                                    const orders = context.raw;
+                                    let amount = 0;
+                                    
+                                    // Get the amount for this month
+                                    if (selectedMonth === null) {
+                                      // For monthly view
+                                      const monthIndex = context.dataIndex;
+                                      amount = safeArray(chartData?.amountByMonth)[monthIndex] || 0;
+                                    } else {
+                                      // For weekly view (selected month)
+                                      const weekIndex = context.dataIndex;
+                                      amount = chartData?.weeklyOrders?.[weekIndex]?.amount || 0;
+                                    }
+                                    
+                                    // Format the amount
+                                    const formattedAmount = formatAmount(amount);
+                                    
+                                    return [
+                                      `Orders: ${orders}`,
+                                      `Amount: ₹${formattedAmount}`
+                                    ];
+                                  }
                                 }
                               }
                             },
@@ -1226,42 +1265,43 @@ function AdminDashboard() {
                       )}
                     </div>
 
-                 {/* Pending Payment - SHOW ONLY PENDING AMOUNT */}
-<div style={styles.card}>
-  <div>Payment Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}</div>
-  <div style={styles.pieChart}>
-    <Doughnut
-      data={{
-        labels: ['Paid', 'Pending'],
-        datasets: [
-          {
-            data: pendingPayments,
-            backgroundColor: ['green', 'red'],
-          },
-        ],
-      }}
-      options={{
-        onClick: (e, elements) => {
-          if (elements.length > 0 && elements[0].index === 1) {
-            handleChartClick('pending-payment');
-          }
-        },
-      }}
-    />
-    <div
-      style={{
-        ...styles.clickableSection,
-        pointerEvents: pendingPayments[1] > 0 ? 'auto' : 'none'
-      }}
-      onClick={() => pendingPayments[1] > 0 && handleChartClick('pending-payment')}
-    />
-  </div>
-  {/* Show count and ONLY PENDING AMOUNT */}
-  <div style={styles.number}>{pendingPayments[1]}</div>
-  <div style={{ fontSize: '16px', color: 'red', marginTop: '5px', fontWeight: 'bold' }}>
-    Pending Amount: ₹{(chartData?.pendingAmount || 0).toLocaleString('en-IN')}
-  </div>
-</div>
+                    {/* Pending Payment - SHOW ONLY PENDING AMOUNT */}
+                    <div style={styles.card}>
+                      <div>Payment Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}</div>
+                      <div style={styles.pieChart}>
+                        <Doughnut
+                          data={{
+                            labels: ['Paid', 'Pending'],
+                            datasets: [
+                              {
+                                data: pendingPayments,
+                                backgroundColor: ['green', 'red'],
+                              },
+                            ],
+                          }}
+                          options={{
+                            onClick: (e, elements) => {
+                              if (elements.length > 0 && elements[0].index === 1) {
+                                handleChartClick('pending-payment');
+                              }
+                            },
+                          }}
+                        />
+                        <div
+                          style={{
+                            ...styles.clickableSection,
+                            pointerEvents: pendingPayments[1] > 0 ? 'auto' : 'none'
+                          }}
+                          onClick={() => pendingPayments[1] > 0 && handleChartClick('pending-payment')}
+                        />
+                      </div>
+                      {/* Show count and ONLY PENDING AMOUNT */}
+                      <div style={styles.number}>{pendingPayments[1]}</div>
+                      <div style={{ fontSize: '16px', color: 'red', marginTop: '5px', fontWeight: 'bold' }}>
+                        Pending Amount: ₹{(chartData?.pendingAmount || 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+
                     {/* Pending Service */}
                     <div style={styles.card}>
                       <div>Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}</div>
@@ -1342,18 +1382,16 @@ function AdminDashboard() {
                     </div>
 
                     {/* Client Types Bar Chart */}
-
                     <div style={styles.card}>
                       <div>Client Overview {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}</div>
                       <div style={styles.chartContainer}>
                         <Bar
                           data={{
-
-                            labels: ['Retail', 'Renewal', 'Agent', 'Renewal-Agent'], // Updated
+                            labels: ['Retail', 'Renewal', 'Agent', 'Renewal-Agent'],
                             datasets: [{
                               label: 'Client Types',
                               data: [
-                                clientTypes.Retail || 0, // Updated
+                                clientTypes.Retail || 0,
                                 clientTypes.Renewal || 0,
                                 clientTypes.Agent || 0,
                                 clientTypes['Renewal-Agent'] || 0,
@@ -1397,8 +1435,7 @@ function AdminDashboard() {
                             },
                             onClick: (event, elements) => {
                               if (elements.length > 0) {
-                                // Change from: const clientTypes = ['New', 'Renewal', 'Agent', 'Renewal-Agent'];
-                                const clientTypes = ['Retail', 'Renewal', 'Agent', 'Renewal-Agent']; // Updated
+                                const clientTypes = ['Retail', 'Renewal', 'Agent', 'Renewal-Agent'];
                                 const selectedType = clientTypes[elements[0].index];
 
                                 const queryParams = new URLSearchParams();
@@ -1418,8 +1455,7 @@ function AdminDashboard() {
                         />
                       </div>
                       <div style={styles.number}>
-                        {/* Change from: (clientTypes.New || 0) + */}
-                        {(clientTypes.Retail || 0) + // Updated
+                        {(clientTypes.Retail || 0) +
                           (clientTypes.Renewal || 0) +
                           (clientTypes.Agent || 0) +
                           (clientTypes['Renewal-Agent'] || 0)}

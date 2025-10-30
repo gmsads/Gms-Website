@@ -75,6 +75,11 @@ function ViewOrders() {
     return !rolesThatCanSeeAll.includes(userRole);
   };
 
+  // Check if user can delete orders (Admin only)
+  const canDeleteOrders = () => {
+    return userRole === 'Admin';
+  };
+
   // Format date to DD-MM-YYYY
   const formatDate = (dateString) => {
     if (!dateString) return '';
@@ -533,7 +538,7 @@ function ViewOrders() {
     }
   };
 
-  // Prepare payment form
+  // Prepare payment form (modified to include advance in history)
   const handleRecordPayment = async (order) => {
     if (shouldSeeOnlyOwnOrders() && order.executive !== executiveName) {
       toast.error('You can only record payments for your own orders');
@@ -544,7 +549,24 @@ function ViewOrders() {
       setPaymentLoading(true);
       setCurrentOrder(order);
 
-      const payments = order.paymentHistory || [];
+      // Create payment history that includes advance
+      const payments = [];
+      
+      // Add advance as first payment if it exists
+      if (order.advance > 0) {
+        payments.push({
+          date: order.advanceDate || order.orderDate,
+          amount: order.advance,
+          method: 'Advance',
+          reference: '',
+          note: 'Initial advance payment'
+        });
+      }
+      
+      // Add regular payment history
+      if (order.paymentHistory) {
+        payments.push(...order.paymentHistory);
+      }
 
       setPaymentHistory(payments);
 
@@ -559,6 +581,51 @@ function ViewOrders() {
       setShowPaymentsModal(true);
     } catch (err) {
       console.error('Error in handleRecordPayment:', err);
+      toast.error('Failed to load payment details. Please try again.');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  // New function to handle viewing payments only
+  const handleViewPayments = async (order) => {
+    try {
+      setPaymentLoading(true);
+      setCurrentOrder(order);
+
+      // Create payment history that includes advance
+      const payments = [];
+      
+      // Add advance as first payment if it exists
+      if (order.advance > 0) {
+        payments.push({
+          date: order.advanceDate || order.orderDate,
+          amount: order.advance,
+          method: 'Advance',
+          reference: '',
+          note: 'Initial advance payment'
+        });
+      }
+      
+      // Add regular payment history
+      if (order.paymentHistory) {
+        payments.push(...order.paymentHistory);
+      }
+
+      setPaymentHistory(payments);
+
+      // Set payment data to empty since we're just viewing
+      setPaymentData({
+        date: new Date().toISOString().split('T')[0],
+        amount: '',
+        method: 'Cash',
+        reference: '',
+        note: ''
+      });
+
+      setShowPaymentsModal(true);
+    } catch (err) {
+      console.error('Error in handleViewPayments:', err);
       toast.error('Failed to load payment details. Please try again.');
     } finally {
       setPaymentLoading(false);
@@ -963,7 +1030,6 @@ function ViewOrders() {
         </div>
       )}
 
-      {/* Rest of the component remains the same */}
       {/* Filter Display Section */}
       <div style={{
         display: 'flex',
@@ -1248,32 +1314,40 @@ function ViewOrders() {
                           <td style={{ padding: '10px 8px', textAlign: 'center' }}>{orderIndex + 1}</td>
                           <td style={{ padding: '10px 8px' }}>{order.executive}</td>
 
+                          {/* THIS IS THE CHANGED PART - Business name clickable only for Admin */}
                           <td style={{ padding: '10px 8px' }}>
-                            <button
-                              onClick={() => navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(order.business)}`)}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                color: '#003366',
-                                cursor: 'pointer',
-                                padding: '4px 8px',
-                                fontSize: 'inherit',
-                                fontFamily: 'inherit',
-                                borderRadius: '4px',
-                                transition: 'all 0.2s ease',
-                                fontWeight: '500'
-                              }}
-                              onMouseOver={(e) => {
-                                e.target.style.backgroundColor = '#e3f2fd';
-                                e.target.style.color = '#003366';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.target.style.backgroundColor = 'transparent';
-                                e.target.style.color = '#003366';
-                              }}
-                            >
-                              {order.business}
-                            </button>
+                            {userRole === 'Admin' ? (
+                              <button
+                                onClick={() => navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(order.business)}`)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#003366',
+                                  cursor: 'pointer',
+                                  padding: '4px 8px',
+                                  fontSize: 'inherit',
+                                  fontFamily: 'inherit',
+                                  borderRadius: '4px',
+                                  transition: 'all 0.2s ease',
+                                  fontWeight: '500'
+                                }}
+                                onMouseOver={(e) => {
+                                  e.target.style.backgroundColor = '#e3f2fd';
+                                  e.target.style.color = '#003366';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.backgroundColor = 'transparent';
+                                  e.target.style.color = '#003366';
+                                }}
+                              >
+                                {order.business}
+                              </button>
+                            ) : (
+                              // For non-admin users (executives), just show the business name as plain text
+                              <span style={{ color: '#003366', fontWeight: '500' }}>
+                                {order.business}
+                              </span>
+                            )}
                           </td>
 
                           <td style={{ padding: '10px 8px' }}>{order.contactPerson}</td>
@@ -1386,6 +1460,24 @@ function ViewOrders() {
                             justifyContent: 'center',
                             flexWrap: 'wrap'
                           }}>
+                            {/* Always show View Payments button */}
+                            <button
+                              onClick={() => handleViewPayments(order)}
+                              disabled={paymentLoading}
+                              style={{
+                                backgroundColor: '#3498db',
+                                color: 'white',
+                                padding: '6px 12px',
+                                border: 'none',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                cursor: paymentLoading ? 'not-allowed' : 'pointer',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {paymentLoading ? 'Loading...' : 'View Payments'}
+                            </button>
+
                             {order.balance <= 0 ? (
                               <span style={{
                                 backgroundColor: '#2ecc71',
@@ -1419,7 +1511,7 @@ function ViewOrders() {
                                 <button
                                   onClick={() => handleEdit(order)}
                                   style={{
-                                    backgroundColor: '#3498db',
+                                    backgroundColor: '#f39c12',
                                     color: 'white',
                                     padding: '6px 12px',
                                     border: 'none',
@@ -1432,7 +1524,8 @@ function ViewOrders() {
                                   Edit
                                 </button>
 
-                                {(userRole === 'Admin' || (shouldSeeOnlyOwnOrders() && order.executive === executiveName)) && (
+                                {/* DELETE BUTTON - ONLY SHOW FOR ADMIN USERS */}
+                                {canDeleteOrders() && (
                                   <button
                                     onClick={() => confirmDelete(order._id)}
                                     style={{
@@ -1503,7 +1596,9 @@ function ViewOrders() {
             maxHeight: '90vh',
             overflowY: 'auto'
           }}>
-            <h2 style={{ marginTop: 0, textAlign: 'center' }}>Record Payment</h2>
+            <h2 style={{ marginTop: 0, textAlign: 'center' }}>
+              {paymentData.amount ? 'Record Payment' : 'Payment History'}
+            </h2>
 
             <div style={{ marginBottom: '20px', border: '1px solid #eee', padding: '15px', borderRadius: '5px' }}>
               <h3 style={{ marginBottom: '10px', borderBottom: '1px solid #ddd', paddingBottom: '5px' }}>
@@ -1558,6 +1653,7 @@ function ViewOrders() {
                       <th style={{ padding: '8px', textAlign: 'right' }}>Amount</th>
                       <th style={{ padding: '8px', textAlign: 'left' }}>Method</th>
                       <th style={{ padding: '8px', textAlign: 'left' }}>Reference</th>
+                      <th style={{ padding: '8px', textAlign: 'left' }}>Note</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1569,6 +1665,7 @@ function ViewOrders() {
                         </td>
                         <td style={{ padding: '8px' }}>{payment.method}</td>
                         <td style={{ padding: '8px' }}>{payment.reference}</td>
+                        <td style={{ padding: '8px' }}>{payment.note}</td>
                       </tr>
                     ))}
                     <tr style={{ fontWeight: 'bold', backgroundColor: '#f9f9f9' }}>
@@ -1576,102 +1673,60 @@ function ViewOrders() {
                       <td style={{ padding: '8px', textAlign: 'right' }}>
                         ₹{paymentHistory.reduce((sum, payment) => sum + parseFloat(payment.amount || 0), 0).toLocaleString('en-IN')}
                       </td>
-                      <td style={{ padding: '8px' }} colSpan="2"></td>
+                      <td style={{ padding: '8px' }} colSpan="3"></td>
                     </tr>
                   </tbody>
                 </table>
               </div>
             )}
 
-            <form onSubmit={handlePaymentSubmit}>
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Pending Amount</label>
-                <input
-                  type="text"
-                  value={`₹${currentOrder.balance ? parseFloat(currentOrder.balance).toLocaleString('en-IN') : '0'}`}
-                  readOnly
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    backgroundColor: '#f5f5f5',
-                    fontWeight: 'bold',
-                    color: currentOrder.balance > 0 ? '#e74c3c' : '#2ecc71',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px'
-                  }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Amount to Pay *</label>
-                <input
-                  type="number"
-                  name="amount"
-                  value={paymentData.amount}
-                  onChange={handlePaymentChange}
-                  placeholder={`Enter amount (max: ₹${currentOrder.balance ? parseFloat(currentOrder.balance).toLocaleString('en-IN') : '0'}`}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px'
-                  }}
-                  required
-                  min="0.01"
-                  step="0.01"
-                  max={currentOrder.balance || 0}
-                />
-              </div>
-
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Payment Date *</label>
-                <input
-                  type="date"
-                  name="date"
-                  value={paymentData.date}
-                  onChange={handlePaymentChange}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px'
-                  }}
-                  required
-                />
-              </div>
-
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Payment Method *</label>
-                <select
-                  name="method"
-                  value={paymentData.method}
-                  onChange={handlePaymentChange}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px'
-                  }}
-                  required
-                >
-                  <option value="Cash">Cash</option>
-                  <option value="Cheque">Cheque</option>
-                  <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="UPI">UPI</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-
-              {['Cheque', 'Bank Transfer', 'UPI'].includes(paymentData.method) && (
+            {paymentData.amount && (
+              <form onSubmit={handlePaymentSubmit}>
                 <div style={{ marginBottom: '15px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>
-                    {paymentData.method === 'Cheque' ? 'Cheque Number' :
-                      paymentData.method === 'UPI' ? 'UPI Reference' : 'Transaction ID'} *
-                  </label>
+                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Pending Amount</label>
                   <input
                     type="text"
-                    name="reference"
-                    value={paymentData.reference}
+                    value={`₹${currentOrder.balance ? parseFloat(currentOrder.balance).toLocaleString('en-IN') : '0'}`}
+                    readOnly
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      backgroundColor: '#f5f5f5',
+                      fontWeight: 'bold',
+                      color: currentOrder.balance > 0 ? '#e74c3c' : '#2ecc71',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px'
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '15px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Amount to Pay *</label>
+                  <input
+                    type="number"
+                    name="amount"
+                    value={paymentData.amount}
+                    onChange={handlePaymentChange}
+                    placeholder={`Enter amount (max: ₹${currentOrder.balance ? parseFloat(currentOrder.balance).toLocaleString('en-IN') : '0'}`}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px'
+                    }}
+                    required
+                    min="0.01"
+                    step="0.01"
+                    max={currentOrder.balance || 0}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '15px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Payment Date *</label>
+                  <input
+                    type="date"
+                    name="date"
+                    value={paymentData.date}
                     onChange={handlePaymentChange}
                     style={{
                       width: '100%',
@@ -1682,25 +1737,102 @@ function ViewOrders() {
                     required
                   />
                 </div>
-              )}
 
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Notes</label>
-                <textarea
-                  name="note"
-                  value={paymentData.note}
-                  onChange={handlePaymentChange}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    minHeight: '60px'
-                  }}
-                  placeholder="Additional payment details"
-                />
-              </div>
+                <div style={{ marginBottom: '15px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Payment Method *</label>
+                  <select
+                    name="method"
+                    value={paymentData.method}
+                    onChange={handlePaymentChange}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px'
+                    }}
+                    required
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
 
+                {['Cheque', 'Bank Transfer', 'UPI'].includes(paymentData.method) && (
+                  <div style={{ marginBottom: '15px' }}>
+                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>
+                      {paymentData.method === 'Cheque' ? 'Cheque Number' :
+                        paymentData.method === 'UPI' ? 'UPI Reference' : 'Transaction ID'} *
+                    </label>
+                    <input
+                      type="text"
+                      name="reference"
+                      value={paymentData.reference}
+                      onChange={handlePaymentChange}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px'
+                      }}
+                      required
+                    />
+                  </div>
+                )}
+
+                <div style={{ marginBottom: '15px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Notes</label>
+                  <textarea
+                    name="note"
+                    value={paymentData.note}
+                    onChange={handlePaymentChange}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      minHeight: '60px'
+                    }}
+                    placeholder="Additional payment details"
+                  />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowPaymentsModal(false)}
+                    style={{
+                      padding: '10px 20px',
+                      backgroundColor: '#6c757d',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    style={{
+                      padding: '10px 20px',
+                      backgroundColor: '#28a745',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Record Payment
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {!paymentData.amount && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                 <button
                   type="button"
@@ -1714,24 +1846,32 @@ function ViewOrders() {
                     cursor: 'pointer'
                   }}
                 >
-                  Cancel
+                  Close
                 </button>
-                <button
-                  type="submit"
-                  style={{
-                    padding: '10px 20px',
-                    backgroundColor: '#28a745',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  Record Payment
-                </button>
+                {currentOrder.balance > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentData(prev => ({
+                        ...prev,
+                        amount: currentOrder.balance > 0 ? currentOrder.balance.toString() : ''
+                      }));
+                    }}
+                    style={{
+                      padding: '10px 20px',
+                      backgroundColor: '#9b59b6',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Record New Payment
+                  </button>
+                )}
               </div>
-            </form>
+            )}
           </div>
         </div>
       )}

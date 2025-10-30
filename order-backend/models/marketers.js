@@ -1,43 +1,35 @@
 // models/marketers.js
 const mongoose = require('mongoose');
 
-// ------------------- Visit Schema -------------------
 const visitSchema = new mongoose.Schema({
-  executive: {
+  executive: String,
+  client: String,
+  contactNumber: {
     type: String,
-    required: true
+    validate: {
+      validator: function(v) {
+        return /^\d{10}$/.test(v);
+      },
+      message: 'Phone number must be 10 digits'
+    }
   },
-  client: {
-    type: String,
-    required: true
-  },
+  businessName: String,
   location: {
-    type: String,
-    required: true
-  },
-  date: {
-    type: Date,
-    required: true
-  },
-  purpose: {
-    type: String,
-    required: true
-  },
-  notes: {
     type: String,
     default: ''
   },
+  date: Date,
+  purpose: String,
+  notes: String,
+  photo: String, // ✅ Photo field
   status: {
     type: String,
-    enum: ['scheduled', 'completed', 'pending', 'cancelled'],
+    enum: ['scheduled', 'completed', 'not-interested', 'follow-up', 'sale-close'],
     default: 'scheduled'
   },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
-});
-
+  followUpDate: Date,
+  remark: String
+}, { timestamps: true });
 // ------------------- Report Schema -------------------
 const reportSchema = new mongoose.Schema({
   visitId: {

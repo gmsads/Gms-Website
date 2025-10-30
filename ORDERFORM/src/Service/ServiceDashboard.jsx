@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Doughnut, Bar, Line } from 'react-chartjs-2';
+import { Doughnut, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -54,7 +54,7 @@ const mockWeeklyData = {
 
 const ServiceDashboard = () => {
   // State management for component
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [, setServices] = useState([]);
   const [stats, setStats] = useState({
     totalPending: 0,
@@ -95,6 +95,23 @@ const ServiceDashboard = () => {
   // Router hooks
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Auto-close sidebar on mobile when route changes
+  useEffect(() => {
+    if (window.innerWidth <= 768) {
+      setSidebarOpen(false);
+    }
+  }, [location.pathname]);
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setSidebarOpen(window.innerWidth > 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Toggle sidebar visibility
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
@@ -564,117 +581,185 @@ const ServiceDashboard = () => {
     }
   };
 
-  // Handle status toggle for current executive's services only
-  const handleStatusToggle = async (orderId, rowIndex, currentStatus) => {
-    try {
-      // First update the UI optimistically
-      const updatedStatus = !currentStatus;
+ const handleStatusToggle = async (orderId, rowIndex, currentStatus) => {
+  const updatedStatus = !currentStatus;
+  const newStatus = updatedStatus ? 'Completed' : 'Pending';
 
-      // Update the main services state
-      setServices(prevServices =>
-        prevServices.map(service => {
-          if (service._id === orderId) {
-            const updatedRows = [...service.rows];
-            updatedRows[rowIndex] = {
-              ...updatedRows[rowIndex],
-              isCompleted: updatedStatus,
-              status: updatedStatus ? 'Completed' : 'Pending'
-            };
-            return { ...service, rows: updatedRows };
-          }
-          return service;
-        })
-      );
+  console.log('🔄 Frontend: Starting status toggle', {
+    orderId,
+    rowIndex,
+    currentStatus,
+    updatedStatus,
+    newStatus,
+    executive: currentExecutive
+  });
 
-      // Find and update the service in the appropriate filtered lists
-      const findServiceInLists = () => {
-        const lists = [
-          todaysServices,
-          tomorrowsServices,
-          nextWeekServices,
-          pendingServices,
-          completedServices
-        ];
-
-        for (const list of lists) {
-          const foundService = list.find(
-            s => s.id === orderId && s.rowIndex === rowIndex
-          );
-          if (foundService) return { ...foundService, isCompleted: updatedStatus, status: updatedStatus ? 'Completed' : 'Pending' };
-        }
-        return null;
-      };
-
-      const updatedService = findServiceInLists();
-
-      // Update all filtered lists
-      const updateFilteredList = (list, shouldInclude) => {
-        return list.filter(service =>
-          !(service.id === orderId && service.rowIndex === rowIndex)
-        ).concat(shouldInclude && updatedService ? [updatedService] : []);
-      };
-
-      setTodaysServices(prev =>
-        updateFilteredList(prev, !updatedStatus && updatedService?.date && isToday(new Date(updatedService.date)))
-      );
-      setTomorrowsServices(prev =>
-        updateFilteredList(prev, !updatedStatus && updatedService?.date && isTomorrow(new Date(updatedService.date)))
-      );
-      setNextWeekServices(prev =>
-        updateFilteredList(prev, !updatedStatus && updatedService?.date && isNextWeek(new Date(updatedService.date)))
-      );
-      setPendingServices(prev =>
-        updateFilteredList(prev, !updatedStatus)
-      );
-      setCompletedServices(prev =>
-        updateFilteredList(prev, updatedStatus)
-      );
-
-      // Update stats
-      setStats(prev => ({
-        ...prev,
-        totalPending: updatedStatus ? prev.totalPending - 1 : prev.totalPending + 1,
-        totalCompleted: updatedStatus ? prev.totalCompleted + 1 : prev.totalCompleted - 1
-      }));
-
-      // Make the API call after UI updates
-      const response = await axios.put(
-        `/api/orders/${orderId}/rows/${rowIndex}/status`,
-        {
-          isCompleted: updatedStatus,
-          status: updatedStatus ? 'Completed' : 'Pending',
-          updatedBy: currentExecutive
-        }
-      );
-
-      // If the API call fails, revert the changes
-      if (!response.data?.success) {
-        throw new Error('API update failed');
-      }
-
-    } catch (error) {
-      console.error('Error updating status:', error);
-
-      // Revert the UI changes if the API call fails
-      setServices(prevServices =>
-        prevServices.map(service => {
-          if (service._id === orderId) {
-            const updatedRows = [...service.rows];
-            updatedRows[rowIndex] = {
-              ...updatedRows[rowIndex],
-              isCompleted: !currentStatus, // Revert to original status
-              status: currentStatus ? 'Completed' : 'Pending'
-            };
-            return { ...service, rows: updatedRows };
-          }
-          return service;
-        })
-      );
-
-      // Show error message to user
-      alert('Failed to update status. Please try again.');
-    }
+  // Store original state for rollback
+  const originalState = {
+    orderId,
+    rowIndex,
+    status: currentStatus ? 'Completed' : 'Pending',
+    isCompleted: currentStatus
   };
+
+  try {
+    // 1. Update UI optimistically
+    updateUIOptimistically(orderId, rowIndex, updatedStatus, newStatus);
+
+    // 2. Make API call
+    console.log('🌐 Making API call...');
+    const response = await axios.put(
+      `/api/orders/${orderId}/rows/${rowIndex}/status`,
+      {
+        isCompleted: updatedStatus,
+        status: newStatus,
+        updatedBy: currentExecutive
+      },
+      {
+        timeout: 10000,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      }
+    );
+
+    console.log('✅ API Response:', response.data);
+
+    if (response.data && response.data.success) {
+      console.log('🎉 Status updated successfully');
+      return;
+    } else {
+      throw new Error(response.data?.message || 'API returned unsuccessful response');
+    }
+
+  } catch (error) {
+    console.error('❌ Error in handleStatusToggle:', error);
+    
+    // Revert UI changes
+    revertUIChanges(originalState);
+    
+    // Show appropriate error message
+    showErrorMessage(error, originalState);
+  }
+};
+
+// Helper function to update UI
+const updateUIOptimistically = (orderId, rowIndex, updatedStatus, newStatus) => {
+  console.log('🎨 Updating UI optimistically');
+  
+  // Update main services state
+  setServices(prevServices =>
+    prevServices.map(service => {
+      if (service._id === orderId) {
+        const updatedRows = service.rows.map((row, idx) => 
+          idx === parseInt(rowIndex) 
+            ? {
+                ...row,
+                isCompleted: updatedStatus,
+                status: newStatus,
+                updatedBy: currentExecutive,
+                updatedAt: new Date().toISOString()
+              }
+            : row
+        );
+        return { ...service, rows: updatedRows };
+      }
+      return service;
+    })
+  );
+
+  // Update filtered lists
+  const updateServiceInList = (list) => 
+    list.map(service => 
+      service.id === orderId && service.rowIndex === parseInt(rowIndex)
+        ? { 
+            ...service, 
+            isCompleted: updatedStatus, 
+            status: newStatus,
+            updatedAt: new Date().toISOString()
+          }
+        : service
+    );
+
+  setTodaysServices(prev => updateServiceInList(prev));
+  setTomorrowsServices(prev => updateServiceInList(prev));
+  setNextWeekServices(prev => updateServiceInList(prev));
+  setPendingServices(prev => updateServiceInList(prev));
+  setCompletedServices(prev => updateServiceInList(prev));
+
+  // Update stats
+  setStats(prev => ({
+    ...prev,
+    totalPending: updatedStatus ? prev.totalPending - 1 : prev.totalPending + 1,
+    totalCompleted: updatedStatus ? prev.totalCompleted + 1 : prev.totalCompleted - 1
+  }));
+};
+
+// Helper function to revert UI changes
+const revertUIChanges = (originalState) => {
+  console.log('↩️ Reverting UI changes');
+  
+  const { orderId, rowIndex, status, isCompleted } = originalState;
+
+  setServices(prevServices =>
+    prevServices.map(service => {
+      if (service._id === orderId) {
+        const updatedRows = service.rows.map((row, idx) => 
+          idx === parseInt(rowIndex) 
+            ? { ...row, isCompleted, status }
+            : row
+        );
+        return { ...service, rows: updatedRows };
+      }
+      return service;
+    })
+  );
+
+  const revertServiceInList = (list) => 
+    list.map(service => 
+      service.id === orderId && service.rowIndex === parseInt(rowIndex)
+        ? { ...service, isCompleted, status }
+        : service
+    );
+
+  setTodaysServices(prev => revertServiceInList(prev));
+  setTomorrowsServices(prev => revertServiceInList(prev));
+  setNextWeekServices(prev => revertServiceInList(prev));
+  setPendingServices(prev => revertServiceInList(prev));
+  setCompletedServices(prev => revertServiceInList(prev));
+
+  // Revert stats
+  setStats(prev => ({
+    ...prev,
+    totalPending: isCompleted ? prev.totalPending + 1 : prev.totalPending - 1,
+    totalCompleted: isCompleted ? prev.totalCompleted - 1 : prev.totalCompleted + 1
+  }));
+};
+
+// Helper function to show error messages
+const showErrorMessage = (error, originalState) => {
+  let errorMessage = 'Failed to update status. ';
+  
+  if (error.response) {
+    // Server responded with error status
+    const serverMessage = error.response.data?.message;
+    if (serverMessage) {
+      errorMessage += serverMessage;
+    } else {
+      errorMessage += `Server error: ${error.response.status}`;
+    }
+  } else if (error.request) {
+    // Request was made but no response received
+    errorMessage += 'Network error. Please check your connection.';
+  } else {
+    // Something else happened
+    errorMessage += error.message;
+  }
+
+  console.error('💬 Error message:', errorMessage);
+  alert(`❌ ${errorMessage}`);
+};
 
   // Handle logout
   const handleLogout = () => {
@@ -756,12 +841,6 @@ const ServiceDashboard = () => {
     if (percentage <= 80)
       return "linear-gradient(to right, rgb(32, 210, 118), rgb(111, 192, 141))";
     return "linear-gradient(to right, rgb(16, 231, 34), rgb(11, 222, 25))";
-  };
-
-  // Get blink class for progress
-  // eslint-disable-next-line no-unused-vars
-  const getBlinkClass = (percentage) => {
-    return percentage < 100 ? "blink-progress" : "";
   };
 
   // Service card component for upcoming services
@@ -1051,6 +1130,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
           end
         >
           Dashboard
@@ -1074,6 +1154,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
           Create Expense ➕
         </NavLink>
@@ -1095,6 +1176,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
           View Services
         </NavLink>
@@ -1116,6 +1198,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
           Pending Services
         </NavLink>
@@ -1137,6 +1220,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
         Create Daily Report ➕
         </NavLink>
@@ -1158,6 +1242,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
         View Daily Report
         </NavLink>
@@ -1179,6 +1264,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
         Office Inventory
         </NavLink>
@@ -1200,6 +1286,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
           Create Report ➕
         </NavLink>
@@ -1221,6 +1308,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
           View Report
         </NavLink>
@@ -1242,6 +1330,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
           Create Order ➕
         </NavLink>
@@ -1263,6 +1352,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
          View Orders
         </NavLink>
@@ -1284,6 +1374,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
           Design Updates
         </NavLink>
@@ -1305,6 +1396,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
           Appointments
         </NavLink>
@@ -1326,6 +1418,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
           Ledger
         </NavLink>
@@ -1347,6 +1440,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
           View Appointments
         </NavLink>
@@ -1369,6 +1463,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
           Prospects ➕
         </NavLink>
@@ -1390,6 +1485,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
           View Prospects
         </NavLink>
@@ -1411,6 +1507,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
           Vendors
         </NavLink>
@@ -1432,6 +1529,7 @@ const ServiceDashboard = () => {
               fontSize: '16px',
             } : {})
           })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
           Price List
         </NavLink>
@@ -1458,7 +1556,7 @@ const ServiceDashboard = () => {
 
       {/* Main Content Area */}
       <div style={{
-        marginLeft: sidebarOpen ? '250px' : '0',
+        marginLeft: sidebarOpen && window.innerWidth > 768 ? '250px' : '0',
         marginTop: '60px',
         padding: '20px',
         transition: 'margin-left 0.3s ease',
@@ -1608,7 +1706,7 @@ const ServiceDashboard = () => {
             {/* Upcoming Services Section */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+              gridTemplateColumns: window.innerWidth <= 768 ? '1fr' : 'repeat(auto-fit, minmax(300px, 1fr))',
               gap: '20px',
               marginBottom: '20px'
             }}>
@@ -1639,158 +1737,85 @@ const ServiceDashboard = () => {
               />
             </div>
 
-            {/* First Row of Charts */}
+            {/* Service Status Card - Mobile Responsive */}
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '15px',
+              backgroundColor: 'white',
+              padding: window.innerWidth <= 768 ? '10px' : '15px',
+              borderRadius: '10px',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+              marginBottom: '20px',
+              width: '100%',
+              minHeight: window.innerWidth <= 768 ? '300px' : '350px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
             }}>
-              {/* Service Status Overview */}
               <div style={{
-                backgroundColor: 'white',
-                padding: '15px',
-                borderRadius: '10px',
-                boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center',
-                fontSize: '16px',
+                fontSize: window.innerWidth <= 768 ? '14px' : '16px',
                 fontWeight: 'bold',
                 color: '#003366',
-                minHeight: '350px',
+                marginBottom: '15px',
+                textAlign: 'center'
               }}>
-                <div>Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}</div>
-                <div style={{
-                  width: '100%',
-                  height: '180px',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  position: 'relative',
-                  margin: '15px 0'
-                }}>
-                  <Doughnut
-                    data={serviceStatusData}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: {
-                          position: 'right',
-                          labels: {
-                            boxWidth: 15,
-                            padding: 15
-                          }
-                        },
-                        tooltip: {
-                          callbacks: {
-                            label: (context) => {
-                              const label = context.label || '';
-                              const value = context.raw || 0;
-                              const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                              const percentage = Math.round((value / total) * 100);
-                              return `${label}: ${value} (${percentage}%)`;
-                            }
-                          }
-                        }
-                      },
-                      onClick: handlePieChartClick
-                    }}
-                  />
-                </div>
-                <div style={{
-                  fontSize: '40px',
-                  color: '#002244',
-                  marginTop: '10px'
-                }}>
-                  {stats.totalServices}
-                </div>
+                Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}
               </div>
-
-              {/* Service Trends Chart */}
               <div style={{
-                backgroundColor: 'white',
-                padding: '15px',
-                borderRadius: '8px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                marginTop: '20px',
+                width: '100%',
+                height: window.innerWidth <= 768 ? '200px' : '220px',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                position: 'relative',
+                margin: '10px 0'
               }}>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '10px'
-                }}>
-                  <div style={{
-                    marginBottom: '10px',
-                    fontSize: '16px',
-                    fontWeight: 'bold',
-                    color: '#003366',
-                  }}>
-                    {selectedMonth !== null
-                      ? `Service Trends - ${monthLabels[selectedMonth]} ${year}`
-                      : 'Monthly Service Trends'}
-                  </div>
-                </div>
-                <div style={{
-                  height: '250px',
-                  position: 'relative',
-                  marginBottom: '10px'
-                }}>
-                  <Bar
-                    data={serviceTrendsData}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                          callbacks: {
-                            label: (context) =>
-                              `${selectedMonth !== null ? 'Week' : 'Month'} ${context.label}: ${context.raw}`
+                <Doughnut
+                  data={serviceStatusData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: window.innerWidth <= 768 ? 'bottom' : 'right',
+                        labels: {
+                          boxWidth: 12,
+                          padding: window.innerWidth <= 768 ? 8 : 15,
+                          font: {
+                            size: window.innerWidth <= 768 ? 10 : 12
                           }
                         }
                       },
-                      onClick: (event, elements) => {
-                        if (elements.length > 0) {
-                          if (selectedMonth !== null) {
-                            navigate(`/service-dashboard/view-services?week=${elements[0].index + 1}&month=${selectedMonth + 1}&year=${year}`);
-                          } else {
-                            navigate(`/service-dashboard/view-services?month=${elements[0].index + 1}&year=${year}`);
+                      tooltip: {
+                        callbacks: {
+                          label: (context) => {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = Math.round((value / total) * 100);
+                            return `${label}: ${value} (${percentage}%)`;
                           }
-                        }
-                      },
-                      scales: {
-                        y: {
-                          beginAtZero: true,
-                          ticks: { precision: 0 }
                         }
                       }
-                    }}
-                  />
-                </div>
-                {selectedMonth !== null && (
-                  <button
-                    onClick={() => setSelectedMonth(null)}
-                    style={{
-                      padding: '5px 10px',
-                      backgroundColor: '#003366',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      marginTop: '10px',
-                      fontSize: '12px'
-                    }}
-                  >
-                    View All Months
-                  </button>
-                )}
+                    },
+                    onClick: handlePieChartClick
+                  }}
+                />
+              </div>
+              <div style={{
+                fontSize: window.innerWidth <= 768 ? '24px' : '40px',
+                color: '#002244',
+                marginTop: '10px',
+                fontWeight: 'bold'
+              }}>
+                {stats.totalServices}
+              </div>
+              <div style={{
+                fontSize: window.innerWidth <= 768 ? '10px' : '12px',
+                color: '#666',
+                marginTop: '5px'
+              }}>
+                Total Services
               </div>
             </div>
-
-
           </>
         ) : location.pathname.includes('create-order') ? (
           <>
@@ -1821,10 +1846,11 @@ const ServiceDashboard = () => {
                   style={{
                     padding: '8px',
                     fontSize: '1rem',
-                    width: '200px',
+                    width: window.innerWidth <= 768 ? '100%' : '200px',
                     marginRight: '10px',
                     border: '1px solid #ccc',
-                    borderRadius: '4px'
+                    borderRadius: '4px',
+                    marginBottom: '10px'
                   }}
                 />
 
@@ -1839,7 +1865,7 @@ const ServiceDashboard = () => {
                     border: 'none',
                     borderRadius: '4px',
                     cursor: 'pointer',
-                    marginTop: '10px'
+                    width: window.innerWidth <= 768 ? '100%' : 'auto'
                   }}
                 >
                   {isLoading ? 'Searching...' : 'Search Orders'}

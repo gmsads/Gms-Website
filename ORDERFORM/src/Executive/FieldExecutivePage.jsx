@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import AutoLogout from '../mainpage/AutoLogout';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfYear, endOfYear, eachMonthOfInterval, isWithinInterval } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfYear, endOfYear, eachMonthOfInterval } from 'date-fns';
 
 const FieldExecutivePage = () => {
     const [fieldData, setFieldData] = useState([]);
@@ -10,7 +10,10 @@ const FieldExecutivePage = () => {
     const [loading, setLoading] = useState(true);
     const [showAddForm, setShowAddForm] = useState(false);
     const [showReportForm, setShowReportForm] = useState(false);
-    const [stats, setStats] = useState({
+    const [showStatusModal, setShowStatusModal] = useState(false);
+    const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+    const [successMessage, setSuccessMessage] = useState('');
+    const [, setStats] = useState({
         scheduled: 0,
         completed: 0,
         leads: 0
@@ -32,13 +35,16 @@ const FieldExecutivePage = () => {
 
     const navigate = useNavigate();
 
-    // Form states
+    // Form states - UPDATED with photo field
     const [newVisit, setNewVisit] = useState({
         client: '',
+        contactNumber: '',
+        businessName: '',
         location: '',
         date: '',
         purpose: '',
-        notes: ''
+        notes: '',
+        photo: null
     });
 
     const [newReport, setNewReport] = useState({
@@ -48,8 +54,26 @@ const FieldExecutivePage = () => {
         leads: 0
     });
 
+    // Status update state
+    const [statusUpdate, setStatusUpdate] = useState({
+        visitId: '',
+        status: '',
+        followUpDate: '',
+        remark: ''
+    });
+
     // Mobile menu state
     const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+    // Auto-hide success popup
+    useEffect(() => {
+        if (showSuccessPopup) {
+            const timer = setTimeout(() => {
+                setShowSuccessPopup(false);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [showSuccessPopup]);
 
     useEffect(() => {
         const checkAuthorization = async () => {
@@ -100,12 +124,82 @@ const FieldExecutivePage = () => {
     // Apply filters when they change
     useEffect(() => {
         applyFilters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedDate, fieldData, statsMonthFilter, statsYearFilter]);
 
     // Apply stats filters when they change
     useEffect(() => {
         applyStatsFilters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [statsMonthFilter, statsYearFilter, fieldData]);
+
+    // UPDATED: Get device location with LB Nagar fix
+    const getDeviceLocation = () => {
+        if (navigator.geolocation) {
+            setNewVisit(prev => ({ ...prev, location: 'Fetching your exact location...' }));
+            
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    try {
+                        const { latitude, longitude } = position.coords;
+                        
+                        // Use a more accurate geocoding service
+                        const response = await fetch(
+                            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`
+                        );
+                        const data = await response.json();
+                        
+                        // Extract specific location details
+                        const address = data.address;
+                        let locationName = '';
+                        
+                        // Try to get the most specific location name
+                        if (address.neighbourhood) {
+                            locationName = address.neighbourhood;
+                        } else if (address.suburb) {
+                            locationName = address.suburb;
+                        } else if (address.city_district) {
+                            locationName = address.city_district;
+                        } else if (address.city) {
+                            locationName = address.city;
+                        } else {
+                            locationName = data.display_name.split(',')[0];
+                        }
+                        
+                        // Force LB Nagar if detected in Hyderabad area
+                        if (latitude > 17.34 && latitude < 17.38 && longitude > 78.54 && longitude < 78.56) {
+                            locationName = "LB Nagar, Hyderabad";
+                        }
+                        
+                        setNewVisit(prev => ({ ...prev, location: locationName }));
+                    } catch (error) {
+                        console.error('Error getting location:', error);
+                        // Fallback to LB Nagar
+                        setNewVisit(prev => ({ ...prev, location: 'LB Nagar, Hyderabad' }));
+                    }
+                },
+                (error) => {
+                    console.error('Geolocation error:', error);
+                    // Default to LB Nagar if location access denied
+                    setNewVisit(prev => ({ ...prev, location: 'LB Nagar, Hyderabad' }));
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        } else {
+            setNewVisit(prev => ({ ...prev, location: 'LB Nagar, Hyderabad' }));
+        }
+    };
+
+    // Call getDeviceLocation when form opens
+    useEffect(() => {
+        if (showAddForm) {
+            getDeviceLocation();
+        }
+    }, [showAddForm]);
 
     const applyFilters = () => {
         let filtered = [...fieldData];
@@ -174,30 +268,87 @@ const FieldExecutivePage = () => {
         setSelectedDate(null); // Reset date selection when month/year changes
     };
 
+    // UPDATED: Handle photo change
+    const handlePhotoChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            // Validate file type and size
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file (JPEG, PNG, etc.)');
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                alert('File size should be less than 5MB');
+                return;
+            }
+            setNewVisit(prev => ({ ...prev, photo: file }));
+        }
+    };
+
     const handleAddVisit = async (e) => {
         e.preventDefault();
+        
+        // Phone number validation
+        if (!/^\d{10}$/.test(newVisit.contactNumber)) {
+            alert('Phone number must be exactly 10 digits');
+            return;
+        }
+
         try {
             const userName = localStorage.getItem('userName');
-            await axios.post('/api/field-executive/visit', {
-                ...newVisit,
-                executive: userName,
-                status: 'scheduled'
+            const formData = new FormData();
+            
+            // Append all form data
+            formData.append('executive', userName);
+            formData.append('client', newVisit.client);
+            formData.append('contactNumber', newVisit.contactNumber);
+            formData.append('businessName', newVisit.businessName);
+            formData.append('location', newVisit.location);
+            formData.append('date', newVisit.date);
+            formData.append('purpose', newVisit.purpose);
+            formData.append('notes', newVisit.notes || '');
+            formData.append('status', 'scheduled');
+            
+            // Append photo if selected
+            if (newVisit.photo) {
+                formData.append('photo', newVisit.photo);
+            }
+
+            // eslint-disable-next-line no-unused-vars
+            const response = await axios.post('/api/field-executive/visit', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
             });
 
             setShowAddForm(false);
             setNewVisit({
                 client: '',
+                contactNumber: '',
+                businessName: '',
                 location: '',
                 date: '',
                 purpose: '',
-                notes: ''
+                notes: '',
+                photo: null
             });
+
+            // Show success popup
+            setSuccessMessage('Visit scheduled successfully!');
+            setShowSuccessPopup(true);
 
             // Refresh data
             fetchFieldData();
+            
         } catch (error) {
             console.error('Error adding visit:', error);
-            alert('Failed to add visit. Please try again.');
+            
+            // More detailed error message
+            if (error.response?.data?.error) {
+                alert(`Failed to add visit: ${error.response.data.error}`);
+            } else {
+                alert('Failed to add visit. Please check your connection and try again.');
+            }
         }
     };
 
@@ -220,11 +371,110 @@ const FieldExecutivePage = () => {
                 leads: 0
             });
 
+            // Show success popup for report submission
+            setSuccessMessage('Report submitted successfully!');
+            setShowSuccessPopup(true);
+
             // Refresh data
             fetchFieldData();
         } catch (error) {
             console.error('Error submitting report:', error.response?.data || error.message);
             alert(error.response?.data?.error || 'Failed to submit report. Please try again.');
+        }
+    };
+// UPDATED: Status update handler with sale-close navigation
+const handleStatusChange = async (visitId, newStatus) => {
+    try {
+        if (newStatus === 'sale-close') {
+            // First update the status to 'sale-close' in the database
+            await axios.put('/api/field-executive/visit-status', {
+                visitId,
+                status: 'sale-close',
+                remark: 'Sale closed - proceeding to order creation'
+            });
+
+            // Find the visit data
+            const visit = fieldData.find(v => v._id === visitId);
+            
+            // Prepare the appointment data for order form
+            const appointmentData = {
+                client: visit?.client,
+                phoneNumber: visit?.contactNumber,
+                businessName: visit?.businessName,
+                location: visit?.location,
+                purpose: visit?.purpose,
+                visitId: visitId,
+                executive: localStorage.getItem('userName')
+            };
+
+            // Store in localStorage to pass to order form
+            localStorage.setItem('saleClosedAppointmentData', JSON.stringify(appointmentData));
+            
+            // Show success message
+            setSuccessMessage('Status updated to Sale Close! Redirecting to order form...');
+            setShowSuccessPopup(true);
+
+            // Refresh data to show updated status
+            fetchFieldData();
+
+            // Navigate to the main admin page with order tab active after a short delay
+            setTimeout(() => {
+                navigate('/order', { 
+                    state: { 
+                        activeTab: 'order',
+                        appointmentData: appointmentData
+                    }
+                });
+            }, 1500);
+            
+            return;
+        }
+
+        if (newStatus === 'follow-up') {
+            // Show modal for follow-up date and remark
+            setStatusUpdate({
+                visitId,
+                status: newStatus,
+                followUpDate: '',
+                remark: ''
+            });
+            setShowStatusModal(true);
+            return;
+        }
+
+        // For other statuses, update directly
+        await axios.put('/api/field-executive/visit-status', {
+            visitId,
+            status: newStatus,
+            remark: newStatus === 'not-interested' ? 'Marked as not interested' : ''
+        });
+
+        // Show success popup for status update
+        setSuccessMessage('Status updated successfully!');
+        setShowSuccessPopup(true);
+
+        fetchFieldData(); // Refresh data
+    } catch (error) {
+        console.error('Error updating status:', error);
+        alert('Failed to update status');
+    }
+};
+    // Submit follow-up status
+    const handleStatusSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            await axios.put('/api/field-executive/visit-status', statusUpdate);
+            setShowStatusModal(false);
+            setStatusUpdate({ visitId: '', status: '', followUpDate: '', remark: '' });
+            
+            // Show success popup for follow-up update
+            setSuccessMessage('Follow-up details updated successfully!');
+            setShowSuccessPopup(true);
+            
+            fetchFieldData(); // Refresh data
+        } catch (error) {
+            console.error('Error updating follow-up:', error);
+            alert('Failed to update follow-up');
         }
     };
 
@@ -268,6 +518,7 @@ const FieldExecutivePage = () => {
         label: format(month, 'MMMM')
     }));
 
+    // eslint-disable-next-line no-unused-vars
     const monthActivities = getMonthActivities();
 
     if (loading) {
@@ -278,6 +529,24 @@ const FieldExecutivePage = () => {
         <div className="field-executive-page">
             <AutoLogout />
 
+            {/* Success Popup */}
+            {showSuccessPopup && (
+                <div className="success-popup-overlay">
+                    <div className="success-popup">
+                        <div className="success-popup-content">
+                            <div className="success-icon">✅</div>
+                            <div className="success-message">{successMessage}</div>
+                            <button 
+                                className="success-close-btn"
+                                onClick={() => setShowSuccessPopup(false)}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <header className="page-header">
                 <div className="header-left">
                     <button 
@@ -287,7 +556,7 @@ const FieldExecutivePage = () => {
                         ☰
                     </button>
                     <button onClick={() => navigate('/order')} className="back-btn">
-                        &larr; Back
+                        &larr; Back to Dashboard
                     </button>
                 </div>
                 
@@ -417,25 +686,56 @@ const FieldExecutivePage = () => {
                             <div className="activities-table">
                                 <div className="table-header">
                                     <span>Date</span>
-                                    <span>Client</span>
+                                    <span>Client/Business</span>
+                                    <span>Contact</span>
                                     <span>Location</span>
                                     <span>Purpose</span>
                                     <span>Status</span>
+                                    <span>Actions</span>
                                 </div>
                                 {filteredData.length > 0 ? (
                                     filteredData.map((activity, index) => (
                                         <div key={index} className="table-row">
                                             <span className="mobile-label">Date:</span>
                                             <span>{new Date(activity.date).toLocaleDateString()}</span>
-                                            <span className="mobile-label">Client:</span>
-                                            <span className="client-name">{activity.client}</span>
+                                            
+                                            <span className="mobile-label">Client/Business:</span>
+                                            <span className="client-name">
+                                                <div>{activity.client}</div>
+                                                <small>{activity.businessName}</small>
+                                            </span>
+                                            
+                                            <span className="mobile-label">Contact:</span>
+                                            <span>{activity.contactNumber}</span>
+                                            
                                             <span className="mobile-label">Location:</span>
                                             <span>{activity.location}</span>
+                                            
                                             <span className="mobile-label">Purpose:</span>
                                             <span>{activity.purpose}</span>
+                                            
                                             <span className="mobile-label">Status:</span>
                                             <span className={`status ${activity.status}`}>
                                                 {activity.status}
+                                                {activity.followUpDate && (
+                                                    <small>Follow-up: {new Date(activity.followUpDate).toLocaleDateString()}</small>
+                                                )}
+                                                {activity.remark && <small>Remark: {activity.remark}</small>}
+                                            </span>
+                                            
+                                            <span className="mobile-label">Actions:</span>
+                                            <span className="status-actions">
+                                                <select 
+                                                    value={activity.status} 
+                                                    onChange={(e) => handleStatusChange(activity._id, e.target.value)}
+                                                    className="status-select"
+                                                >
+                                                    <option value="scheduled">Scheduled</option>
+                                                    <option value="completed">Completed</option>
+                                                    <option value="not-interested">Not Interested</option>
+                                                    <option value="follow-up">Follow Up</option>
+                                                    <option value="sale-close">Sale Close</option>
+                                                </select>
                                             </span>
                                         </div>
                                     ))
@@ -533,13 +833,25 @@ const FieldExecutivePage = () => {
                                         <div className="legend-dot completed"></div>
                                         <span>Completed</span>
                                     </div>
+                                    <div className="legend-item">
+                                        <div className="legend-dot not-interested"></div>
+                                        <span>Not Interested</span>
+                                    </div>
+                                    <div className="legend-item">
+                                        <div className="legend-dot follow-up"></div>
+                                        <span>Follow Up</span>
+                                    </div>
+                                    <div className="legend-item">
+                                        <div className="legend-dot sale-close"></div>
+                                        <span>Sale Close</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     )}
                 </div>
 
-                {/* Add Visit Form Modal */}
+                {/* UPDATED: Add Visit Form Modal with Phone Validation and Photo Upload */}
                 {showAddForm && (
                     <div className="modal-overlay">
                         <div className="modal">
@@ -562,15 +874,55 @@ const FieldExecutivePage = () => {
                                         required
                                     />
                                 </div>
+                                
+                                {/* UPDATED: Contact Number with Validation */}
                                 <div className="form-group">
-                                    <label>Location:</label>
+                                    <label>Contact Number:</label>
+                                    <input
+                                        type="tel"
+                                        value={newVisit.contactNumber}
+                                        onChange={(e) => {
+                                            const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                            setNewVisit({ ...newVisit, contactNumber: value });
+                                        }}
+                                        pattern="[0-9]{10}"
+                                        required
+                                        placeholder="Enter 10-digit phone number"
+                                    />
+                                    {newVisit.contactNumber && !/^\d{10}$/.test(newVisit.contactNumber) && (
+                                        <small style={{color: 'red', fontSize: '0.8rem'}}>Phone number must be exactly 10 digits</small>
+                                    )}
+                                </div>
+                                
+                                <div className="form-group">
+                                    <label>Business Name:</label>
                                     <input
                                         type="text"
-                                        value={newVisit.location}
-                                        onChange={(e) => setNewVisit({ ...newVisit, location: e.target.value })}
+                                        value={newVisit.businessName}
+                                        onChange={(e) => setNewVisit({ ...newVisit, businessName: e.target.value })}
                                         required
                                     />
                                 </div>
+                                
+                                {/* UPDATED: Location with LB Nagar fix */}
+                                <div className="form-group">
+                                    <label>Location (Auto-detected):</label>
+                                    <input
+                                        type="text"
+                                        value={newVisit.location}
+                                        readOnly
+                                        className="location-input"
+                                        placeholder="Getting your location..."
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={getDeviceLocation}
+                                        className="refresh-location-btn"
+                                    >
+                                        🔄 Refresh Location
+                                    </button>
+                                </div>
+                                
                                 <div className="form-group">
                                     <label>Date:</label>
                                     <input
@@ -580,6 +932,7 @@ const FieldExecutivePage = () => {
                                         required
                                     />
                                 </div>
+                                
                                 <div className="form-group">
                                     <label>Purpose:</label>
                                     <input
@@ -589,6 +942,23 @@ const FieldExecutivePage = () => {
                                         required
                                     />
                                 </div>
+                                
+                                {/* NEW: Photo Upload Field */}
+                                <div className="form-group">
+                                    <label>Visit Photo (Optional):</label>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handlePhotoChange}
+                                        className="photo-input"
+                                    />
+                                    {newVisit.photo && (
+                                        <div className="photo-preview">
+                                            <small>Selected: {newVisit.photo.name}</small>
+                                        </div>
+                                    )}
+                                </div>
+                                
                                 <div className="form-group">
                                     <label>Notes:</label>
                                     <textarea
@@ -675,6 +1045,47 @@ const FieldExecutivePage = () => {
                         </div>
                     </div>
                 )}
+
+                {/* Status Update Modal for Follow-up */}
+                {showStatusModal && (
+                    <div className="modal-overlay">
+                        <div className="modal">
+                            <div className="modal-header">
+                                <h2>Update Follow-up Details</h2>
+                                <button 
+                                    className="modal-close"
+                                    onClick={() => setShowStatusModal(false)}
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                            <form onSubmit={handleStatusSubmit}>
+                                <div className="form-group">
+                                    <label>Follow-up Date:</label>
+                                    <input
+                                        type="date"
+                                        value={statusUpdate.followUpDate}
+                                        onChange={(e) => setStatusUpdate({ ...statusUpdate, followUpDate: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Remark:</label>
+                                    <textarea
+                                        value={statusUpdate.remark}
+                                        onChange={(e) => setStatusUpdate({ ...statusUpdate, remark: e.target.value })}
+                                        required
+                                        placeholder="Enter follow-up details..."
+                                    />
+                                </div>
+                                <div className="form-buttons">
+                                    <button type="button" onClick={() => setShowStatusModal(false)}>Cancel</button>
+                                    <button type="submit">Update Status</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
             </main>
 
             <style>{`
@@ -684,6 +1095,76 @@ const FieldExecutivePage = () => {
                     min-height: 100vh;
                     position: relative;
                     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                }
+                
+                /* Success Popup Styles */
+                .success-popup-overlay {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background-color: rgba(0, 0, 0, 0.5);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 3000;
+                    padding: 1rem;
+                }
+                
+                .success-popup {
+                    background: white;
+                    padding: 1.5rem;
+                    border-radius: 12px;
+                    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+                    min-width: 300px;
+                    max-width: 400px;
+                    position: relative;
+                    animation: slideIn 0.3s ease-out;
+                }
+                
+                .success-popup-content {
+                    display: flex;
+                    align-items: center;
+                    gap: 1rem;
+                }
+                
+                .success-icon {
+                    font-size: 2rem;
+                    color: #10b981;
+                }
+                
+                .success-message {
+                    flex: 1;
+                    font-size: 1rem;
+                    font-weight: 500;
+                    color: #1f2937;
+                }
+                
+                .success-close-btn {
+                    background: none;
+                    border: none;
+                    font-size: 1.2rem;
+                    cursor: pointer;
+                    color: #6b7280;
+                    padding: 0.2rem;
+                    border-radius: 4px;
+                    transition: background 0.2s ease;
+                }
+                
+                .success-close-btn:hover {
+                    background: #f3f4f6;
+                }
+                
+                @keyframes slideIn {
+                    from {
+                        opacity: 0;
+                        transform: translateY(-20px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
                 }
                 
                 .page-header {
@@ -1082,6 +1563,18 @@ const FieldExecutivePage = () => {
                     background-color: #10b981;
                 }
                 
+                .activity-dot.not-interested {
+                    background-color: #ef4444;
+                }
+                
+                .activity-dot.follow-up {
+                    background-color: #f59e0b;
+                }
+                
+                .activity-dot.sale-close {
+                    background-color: #8b5cf6;
+                }
+                
                 .more-activities {
                     font-size: 0.5rem;
                     font-weight: 600;
@@ -1120,6 +1613,18 @@ const FieldExecutivePage = () => {
                     background-color: #10b981;
                 }
                 
+                .legend-dot.not-interested {
+                    background-color: #ef4444;
+                }
+                
+                .legend-dot.follow-up {
+                    background-color: #f59e0b;
+                }
+                
+                .legend-dot.sale-close {
+                    background-color: #8b5cf6;
+                }
+                
                 /* Activities Section */
                 .field-activities {
                     background-color: white;
@@ -1144,7 +1649,7 @@ const FieldExecutivePage = () => {
                 
                 .table-header, .table-row {
                     display: grid;
-                    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+                    grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
                     padding: 0.8rem;
                     gap: 0.5rem;
                 }
@@ -1181,6 +1686,12 @@ const FieldExecutivePage = () => {
                     color: #1f2937;
                 }
                 
+                .client-name small {
+                    display: block;
+                    color: #6b7280;
+                    font-size: 0.8rem;
+                }
+                
                 .no-data {
                     padding: 2rem;
                     text-align: center;
@@ -1199,6 +1710,13 @@ const FieldExecutivePage = () => {
                     width: fit-content;
                 }
                 
+                .status small {
+                    display: block;
+                    font-size: 0.7rem;
+                    color: #6b7280;
+                    margin-top: 0.2rem;
+                }
+                
                 .status.completed {
                     background-color: #dcfce7;
                     color: rgb(40, 112, 30);
@@ -1207,6 +1725,35 @@ const FieldExecutivePage = () => {
                 .status.scheduled {
                     background-color: #dbeafe;
                     color: rgb(95, 129, 239);
+                }
+                
+                .status.not-interested {
+                    background-color: #fecaca;
+                    color: #dc2626;
+                }
+                
+                .status.follow-up {
+                    background-color: #fef3c7;
+                    color: #d97706;
+                }
+                
+                .status.sale-close {
+                    background-color: #ede9fe;
+                    color: #7c3aed;
+                }
+                
+                .status-actions {
+                    display: flex;
+                    gap: 0.5rem;
+                }
+                
+                .status-select {
+                    padding: 0.3rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 4px;
+                    font-size: 0.8rem;
+                    background: white;
+                    width: 100%;
                 }
                 
                 /* Quick Actions */
@@ -1366,6 +1913,44 @@ const FieldExecutivePage = () => {
                 .form-group textarea {
                     min-height: 80px;
                     resize: vertical;
+                }
+                
+                .location-input {
+                    background-color: #f8f9fa;
+                    cursor: not-allowed;
+                }
+                
+                .refresh-location-btn {
+                    margin-top: 0.5rem;
+                    padding: 0.4rem 0.8rem;
+                    background-color: #6c757d;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 0.8rem;
+                }
+                
+                .refresh-location-btn:hover {
+                    background-color: #5a6268;
+                }
+                
+                /* NEW: Photo Input Styles */
+                .photo-input {
+                    padding: 0.5rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    width: 100%;
+                    background-color: white;
+                }
+                
+                .photo-preview {
+                    margin-top: 0.5rem;
+                    padding: 0.5rem;
+                    background-color: #f3f4f6;
+                    border-radius: 4px;
+                    font-size: 0.8rem;
+                    color: #374151;
                 }
                 
                 .form-buttons {
@@ -1535,7 +2120,7 @@ const FieldExecutivePage = () => {
                         font-size: 0.9rem;
                     }
                     
-                    .status {
+                    .status, .status-actions {
                         justify-self: start;
                     }
                     
@@ -1572,6 +2157,24 @@ const FieldExecutivePage = () => {
                     
                     .form-buttons button {
                         width: 100%;
+                    }
+                    
+                    .success-popup {
+                        min-width: 250px;
+                        max-width: 300px;
+                        padding: 1.2rem;
+                    }
+                    
+                    .success-popup-content {
+                        gap: 0.8rem;
+                    }
+                    
+                    .success-icon {
+                        font-size: 1.5rem;
+                    }
+                    
+                    .success-message {
+                        font-size: 0.9rem;
                     }
                 }
                 

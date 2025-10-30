@@ -219,7 +219,8 @@ const ExecutiveDashboard = () => {
 
   // Helper functions
   const getInitials = (name) => {
-    return name ? name.split(' ').map(n => n[0]).join('').toUpperCase() : '';
+    if (!name) return '';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
   // Check if user is a field executive
@@ -251,7 +252,7 @@ const ExecutiveDashboard = () => {
   };
 
   const handleNewAppointmentsClick = () => {
-    localStorage.setItem('lastSeenAppointmentCount', appointmentCount);
+    localStorage.setItem('lastSeenAppointmentCount', appointmentCount.toString());
     setHasNewAppointments(false);
     navigate('/new-appointment');
   };
@@ -479,8 +480,16 @@ const ExecutiveDashboard = () => {
       fetchUserProfile();
       fetchProspects();
     }
-  }, [selectedExecutive, selectedDate, fetchExecutiveData, fetchPendingPayments,
-    fetchAppointmentCount, fetchFollowUpCount, fetchUserProfile, fetchProspects]);
+  }, [
+    selectedExecutive, 
+    selectedDate, 
+    fetchExecutiveData, 
+    fetchPendingPayments,
+    fetchAppointmentCount, 
+    fetchFollowUpCount, 
+    fetchUserProfile, 
+    fetchProspects
+  ]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -492,7 +501,12 @@ const ExecutiveDashboard = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [selectedExecutive, fetchAppointmentCount, fetchFollowUpCount, fetchProspects]);
+  }, [
+    selectedExecutive, 
+    fetchAppointmentCount, 
+    fetchFollowUpCount, 
+    fetchProspects
+  ]);
 
   // Add this useEffect to fetch initial user profile immediately
   useEffect(() => {
@@ -548,22 +562,54 @@ const ExecutiveDashboard = () => {
       {/* Header */}
       <header className="dashboard-header">
         <div className="header-left">
-          <h2 className="executive-name">{selectedExecutive}</h2>
-          <button onClick={handleCalendarClick} className="calendar-btn">
-            <span className="calendar-icon">📅</span>
-            <span className="date-display">
-              {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </span>
-          </button>
+          {/* Name positioned above calendar */}
+          <div className="name-calendar-container">
+            <h2 className="executive-name">{selectedExecutive}</h2>
+            <button onClick={handleCalendarClick} className="calendar-btn">
+              <span className="calendar-icon">📅</span>
+              <span className="date-display">
+                {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </span>
+            </button>
+          </div>
         </div>
 
-        <button
-          className="mobile-menu-btn"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-expanded={mobileMenuOpen}
-        >
-          {mobileMenuOpen ? '✕' : '☰'}
-        </button>
+        {/* Mobile Menu Button Container - Positioned lower */}
+     {/* Mobile Menu Button Container - Positioned much lower */}
+<div 
+  className="mobile-menu-wrapper" 
+  style={{
+    display: 'flex',
+    alignItems: 'center',
+    height: '50%',
+    paddingTop: '0.5rem'  // Increased from 2rem to 3.5rem
+  }}
+>
+  <button
+    className="mobile-menu-btn"
+    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+    aria-expanded={mobileMenuOpen}
+    style={{
+      display: 'none',
+      background: 'linear-gradient(135deg, #1976d2, #125ea3)',
+      border: 'none',
+      borderRadius: '5px',
+      fontSize: '1.5rem',
+      cursor: 'pointer',
+      padding: '0.75rem',
+      zIndex: 1001,
+      color: 'white',
+      width: '50px',
+      height: '50px',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxShadow: '0 4px 12px rgba(25, 118, 210, 0.3)',
+      transition: 'all 0.3s ease'
+    }}
+  >
+    {mobileMenuOpen ? '✕' : '☰'}
+  </button>
+</div>
 
         <div className={`header-right ${mobileMenuOpen ? 'mobile-open' : ''}`}>
           <div className="action-buttons">
@@ -602,12 +648,15 @@ const ExecutiveDashboard = () => {
             </button>
           </div>
 
-          <button
-            className="user-avatar"
-            onClick={() => setShowProfileModal(true)}
-          >
-            {getInitials(userName)}
-          </button>
+          {/* User Avatar positioned slightly lower */}
+          <div className="user-avatar-container">
+            <button
+              className="user-avatar"
+              onClick={() => setShowProfileModal(true)}
+            >
+              {getInitials(userName)}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -790,7 +839,7 @@ const ExecutiveDashboard = () => {
       )}
 
       {/* CSS Styles */}
-      <style>{`
+      <style jsx>{`
         :root {
           --primary: #1976d2;
           --primary-dark: #125ea3;
@@ -830,7 +879,7 @@ const ExecutiveDashboard = () => {
         .dashboard-header {
           display: flex;
           justify-content: space-between;
-          align-items: center;
+          align-items: flex-start;
           flex-wrap: wrap;
           gap: 1rem;
           padding: 0.5rem 0;
@@ -839,9 +888,17 @@ const ExecutiveDashboard = () => {
 
         .header-left {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           gap: 1rem;
           flex: 1;
+        }
+
+        /* Name and Calendar Container */
+        .name-calendar-container {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          align-items: flex-start;
         }
 
         .executive-name {
@@ -849,53 +906,67 @@ const ExecutiveDashboard = () => {
           font-weight: 600;
           color: var(--text);
           word-break: break-word;
+          margin: 0;
+          line-height: 1.2;
         }
 
+        /* Calendar Button */
         .calendar-btn {
           display: flex;
           align-items: center;
           gap: 0.5rem;
-          background: none;
-          border: 1px solid var(--border);
+          background: linear-gradient(135deg, #ff6b6b, #ffa726);
+          border: none;
           border-radius: var(--radius);
           padding: 0.5rem 1rem;
           cursor: pointer;
           transition: var(--transition);
           white-space: nowrap;
+          color: white;
+          font-weight: 500;
+          box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
         }
 
         .calendar-btn:hover {
-          background-color: rgba(0, 0, 0, 0.05);
+          background: linear-gradient(135deg, #ff5252, #ff9800);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+        }
+
+        .calendar-icon {
+          font-size: 1.1rem;
         }
 
         .date-display {
           font-size: 0.9rem;
-        }
-
-        .mobile-menu-btn {
-          display: none;
-          background: none;
-          border: none;
-          font-size: 1.5rem;
-          cursor: pointer;
-          padding: 0.5rem;
-          z-index: 1001;
+          font-weight: 500;
         }
 
         .header-right {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           gap: 1rem;
+          justify-content: flex-end;
+          flex: 1;
         }
 
         .action-buttons {
           display: flex;
           gap: 0.75rem;
+          align-items: center;
         }
 
-        .appointments-btn, .follow-ups-btn, .field-executive-btn {
+        /* User Avatar Container - Positioned slightly lower */
+        .user-avatar-container {
+          display: flex;
+          align-items: center;
+          margin-top: 0.5rem;
+        }
+
+        /* New Appointments Button - BLUE COLOR */
+        .appointments-btn {
           position: relative;
-          padding: 0.75rem 1.25rem;
+          padding: 0.75rem 1.5rem;
           border-radius: var(--radius);
           border: none;
           font-size: 0.9rem;
@@ -905,25 +976,73 @@ const ExecutiveDashboard = () => {
           display: flex;
           align-items: center;
           white-space: nowrap;
+          background: linear-gradient(135deg, #1976d2, #125ea3);
+          color: white;
+          box-shadow: 0 4px 15px rgba(25, 118, 210, 0.3);
+          min-width: 160px;
+          justify-content: center;
         }
 
-        .appointments-btn {
-          background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-          color: #fff;
+        .appointments-btn:hover {
+          background: linear-gradient(135deg, #1565c0, #0d47a1);
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(25, 118, 210, 0.4);
         }
 
+        /* Follow Ups Button - BLUE COLOR */
         .follow-ups-btn {
-          background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
-          color: #fff;
+          position: relative;
+          padding: 0.75rem 1.5rem;
+          border-radius: var(--radius);
+          border: none;
+          font-size: 0.9rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: var(--transition);
+          display: flex;
+          align-items: center;
+          white-space: nowrap;
+          background: linear-gradient(135deg, #2196F3, #1976D2);
+          color: white;
+          box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+          min-width: 140px;
+          justify-content: center;
         }
 
+        .follow-ups-btn:hover {
+          background: linear-gradient(135deg, #1e88e5, #1565c0);
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+        }
+
+        /* Field Executive Button - BLUE COLOR */
         .field-executive-btn {
-          background: linear-gradient(135deg, #9C27B0, #7B1FA2);
-          color: #fff;
+          position: relative;
+          padding: 0.75rem 1.5rem;
+          border-radius: var(--radius);
+          border: none;
+          font-size: 0.9rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: var(--transition);
+          display: flex;
+          align-items: center;
+          white-space: nowrap;
+          background: linear-gradient(135deg, #42a5f5, #1e88e5);
+          color: white;
+          box-shadow: 0 4px 15px rgba(66, 165, 245, 0.3);
+          min-width: 150px;
+          justify-content: center;
+        }
+
+        .field-executive-btn:hover {
+          background: linear-gradient(135deg, #1e88e5, #1565c0);
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(66, 165, 245, 0.4);
         }
 
         .appointment-count, .follow-up-count {
-          background-color: rgba(255, 255, 255, 0.2);
+          background-color: rgba(255, 255, 255, 0.3);
           color: #fff;
           border-radius: 50%;
           width: 1.5rem;
@@ -934,14 +1053,17 @@ const ExecutiveDashboard = () => {
           font-size: 0.75rem;
           font-weight: bold;
           margin-left: 0.5rem;
+          border: 2px solid rgba(255, 255, 255, 0.5);
         }
 
         .appointment-count.new {
           animation: blink 1s infinite;
+          background-color: #ffeb3b;
+          color: #333;
         }
 
         .user-avatar {
-          background-color: var(--primary);
+          background: linear-gradient(135deg, #1976d2, #125ea3);
           width: 3rem;
           height: 3rem;
           border-radius: 50%;
@@ -954,6 +1076,12 @@ const ExecutiveDashboard = () => {
           border: none;
           transition: var(--transition);
           flex-shrink: 0;
+          box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
+        }
+
+        .user-avatar:hover {
+          transform: scale(1.05);
+          box-shadow: 0 6px 16px rgba(25, 118, 210, 0.4);
         }
 
         /* Main Content Styles */
@@ -1013,7 +1141,7 @@ const ExecutiveDashboard = () => {
 
         .target-summary {
           display: flex;
-          flex-direction: column;
+          flexDirection: column;
           gap: 0.5rem;
           background: rgba(0, 0, 0, 0.02);
           border-radius: var(--radius);
@@ -1049,7 +1177,7 @@ const ExecutiveDashboard = () => {
         /* Prospects Chart Styles */
         .prospect-chart {
           flex: 1;
-          width: 100%;
+          width: '100%';
         }
 
         .prospect-chart h3 {
@@ -1106,7 +1234,7 @@ const ExecutiveDashboard = () => {
           font-size: 1rem;
         }
 
-        /* Month Picker Overlay */
+        /* Month Picker Overlay - Colorful */
         .month-picker-overlay {
           position: fixed;
           top: 0;
@@ -1121,12 +1249,13 @@ const ExecutiveDashboard = () => {
         }
 
         .month-picker {
-          background-color: var(--card-bg);
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           border-radius: var(--radius);
           padding: 1.5rem;
           box-shadow: var(--shadow);
           width: 300px;
           max-width: 90%;
+          color: white;
         }
 
         .month-picker-header {
@@ -1139,12 +1268,20 @@ const ExecutiveDashboard = () => {
         .month-select,
         .year-select {
           padding: 0.5rem;
-          border-radius: 4px;
-          border: 1px solid var(--border);
-          background-color: #fff;
-          color: #000;
+          border-radius: 8px;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          background-color: rgba(255, 255, 255, 0.9);
+          color: #333;
           flex: 1;
           font-size: 0.9rem;
+          font-weight: 500;
+        }
+
+        .month-select:focus,
+        .year-select:focus {
+          outline: none;
+          border-color: #ffa726;
+          background-color: white;
         }
 
         .month-picker-footer {
@@ -1156,21 +1293,34 @@ const ExecutiveDashboard = () => {
 
         .cancel-btn {
           padding: 0.5rem 1rem;
-          border-radius: 4px;
-          border: 1px solid var(--border);
-          background: var(--card-bg);
+          border-radius: 8px;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          background: transparent;
+          color: white;
           cursor: pointer;
           transition: var(--transition);
+          font-weight: 500;
+        }
+
+        .cancel-btn:hover {
+          background: rgba(255, 255, 255, 0.1);
+          border-color: rgba(255, 255, 255, 0.5);
         }
 
         .apply-btn, .save-btn {
           padding: 0.5rem 1rem;
-          border-radius: 4px;
+          border-radius: 8px;
           border: none;
-          background: var(--primary);
+          background: #ffa726;
           color: white;
           cursor: pointer;
           transition: var(--transition);
+          font-weight: 500;
+        }
+
+        .apply-btn:hover, .save-btn:hover {
+          background: #ff9800;
+          transform: translateY(-1px);
         }
 
         /* Modal Styles */
@@ -1223,33 +1373,57 @@ const ExecutiveDashboard = () => {
           }
 
           .dashboard-header {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 1rem;
-            padding: 1rem 0;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 0.5rem;
+            padding: 0.5rem 0;
           }
 
           .header-left {
-            justify-content: space-between;
-            width: 100%;
+            flex: 1;
+            justify-content: flex-start;
+          }
+
+          .name-calendar-container {
+            gap: 0.25rem;
           }
 
           .executive-name {
-            font-size: 1.3rem;
+            font-size: 1.2rem;
+            text-align: left;
           }
 
+          .calendar-btn {
+            padding: 0.5rem 0.8rem;
+            font-size: 0.8rem;
+          }
+
+          .date-display {
+            font-size: 0.8rem;
+          }
+
+          /* Mobile Menu Button display for mobile */
           .mobile-menu-btn {
-            display: block;
-            position: static;
+            display: flex !important;
+          }
+
+          .mobile-menu-wrapper {
+            padding-top: 3.5rem !important;
           }
 
           .header-right {
             display: none;
-            width: 100%;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
             flex-direction: column;
             gap: 1rem;
-            padding-top: 1rem;
+            padding: 1rem;
             border-top: 1px solid var(--border);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 1000;
           }
 
           .header-right.mobile-open {
@@ -1269,6 +1443,17 @@ const ExecutiveDashboard = () => {
             justify-content: center;
             font-size: 14px;
             padding: 1rem;
+          }
+
+          .user-avatar-container {
+            align-self: center;
+            margin-top: 0;
+          }
+
+          .user-avatar {
+            width: 2.5rem;
+            height: 2.5rem;
+            font-size: 1rem;
           }
 
           .dashboard-content {
@@ -1302,13 +1487,6 @@ const ExecutiveDashboard = () => {
           .chart-container {
             height: 250px !important;
           }
-
-          .user-avatar {
-            width: 2.5rem;
-            height: 2.5rem;
-            font-size: 1rem;
-            align-self: center;
-          }
         }
 
         @media (max-width: 480px) {
@@ -1316,17 +1494,21 @@ const ExecutiveDashboard = () => {
             padding: 0.25rem;
           }
 
+          .header-left {
+            gap: 0.5rem;
+          }
+
           .executive-name {
             font-size: 1.1rem;
           }
 
           .calendar-btn {
-            padding: 0.4rem 0.8rem;
-            font-size: 0.8rem;
+            padding: 0.4rem 0.7rem;
+            font-size: 0.75rem;
           }
 
           .date-display {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
           }
 
           .dashboard-card {
@@ -1362,7 +1544,8 @@ const ExecutiveDashboard = () => {
           }
 
           .calendar-btn {
-            padding: 0.3rem 0.6rem;
+            padding: 0.35rem 0.6rem;
+            font-size: 0.7rem;
           }
 
           .dashboard-card {

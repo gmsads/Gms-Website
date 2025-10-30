@@ -45,6 +45,45 @@ const Ledger = () => {
     fetchOrders();
   }, [location.search]);
 
+  // Calculate total amount for an order
+  const calculateTotal = (order) => {
+    return order.rows?.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0) || 0;
+  };
+
+  // Calculate running balance for payment history (latest first)
+  const calculatePaymentHistoryWithBalance = (order) => {
+    const orderTotal = calculateTotal(order);
+    const paymentHistory = order.paymentHistory || [];
+    const historyWithBalance = [];
+    
+    let runningBalance = orderTotal;
+    
+    // Add advance payment first if exists (this will be at the bottom after reverse)
+    if (order.advance > 0) {
+      runningBalance -= order.advance;
+      historyWithBalance.push({
+        type: 'advance',
+        date: order.orderDate,
+        amount: order.advance,
+        method: 'Advance',
+        balance: runningBalance
+      });
+    }
+    
+    // Add regular payments in chronological order
+    paymentHistory.forEach((payment, index) => {
+      runningBalance -= payment.amount;
+      historyWithBalance.push({
+        ...payment,
+        type: 'payment',
+        balance: runningBalance
+      });
+    });
+    
+    // Reverse the array to show latest payments first
+    return historyWithBalance.reverse();
+  };
+
   // Perform search with partial matching
   const performSearch = (orders, term) => {
     const searchTerm = term.trim().toLowerCase();
@@ -170,11 +209,6 @@ const Ledger = () => {
     return acc;
   }, {});
 
-  // Calculate total amount for an order
-  const calculateTotal = (order) => {
-    return order.rows?.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0) || 0;
-  };
-
   // Clear search
   const clearSearch = () => {
     setSearchTerm('');
@@ -253,6 +287,8 @@ const Ledger = () => {
 
           {orders.map(order => {
             const orderTotal = calculateTotal(order);
+            const paymentHistoryWithBalance = calculatePaymentHistoryWithBalance(order);
+            
             return (
               <div key={order._id} style={styles.card}>
                 {/* Order Header and Payment History */}
@@ -277,35 +313,48 @@ const Ledger = () => {
                   {/* Payment History */}
                   <div style={styles.paymentHistoryCard}>
                     <h4 style={{ marginTop: 0, marginBottom: 15 }}>Payment History</h4>
-                    {order.paymentHistory?.length > 0 ? (
+                    
+                    {paymentHistoryWithBalance.length > 0 ? (
                       <div style={styles.paymentHistoryList}>
-                        {order.paymentHistory.map((p, idx) => (
+                        {paymentHistoryWithBalance.map((payment, idx) => (
                           <div key={idx} style={styles.paymentItem}>
                             <div style={styles.paymentField}>
                               <span style={styles.paymentLabel}>Date:</span>
-                              <span style={styles.paymentValue}>{new Date(p.date).toLocaleDateString()}</span>
+                              <span style={styles.paymentValue}>
+                                {new Date(payment.date).toLocaleDateString()}
+                              </span>
                             </div>
                             <div style={styles.paymentField}>
                               <span style={styles.paymentLabel}>Amount:</span>
-                              <span style={styles.paymentValue}>₹{p.amount}</span>
+                              <span style={styles.paymentValue}>₹{payment.amount}</span>
                             </div>
                             <div style={styles.paymentField}>
                               <span style={styles.paymentLabel}>Method:</span>
-                              <span style={styles.paymentValue}>{p.method}</span>
+                              <span style={styles.paymentValue}>{payment.method}</span>
                             </div>
-                            {p.method === 'UPI' && p.upiNumber && (
+                            {payment.method === 'UPI' && payment.upiNumber && (
                               <div style={styles.paymentField}>
                                 <span style={styles.paymentLabel}>UPI Number:</span>
-                                <span style={styles.paymentValue}>{p.upiNumber}</span>
+                                <span style={styles.paymentValue}>{payment.upiNumber}</span>
                               </div>
                             )}
-                            {p.method === 'Cheque' && p.chequeNumber && (
+                            {payment.method === 'Cheque' && payment.chequeNumber && (
                               <div style={styles.paymentField}>
                                 <span style={styles.paymentLabel}>Cheque No:</span>
-                                <span style={styles.paymentValue}>{p.chequeNumber}</span>
+                                <span style={styles.paymentValue}>{payment.chequeNumber}</span>
                               </div>
                             )}
-                            {idx < order.paymentHistory.length - 1 && <div style={styles.paymentDivider} />}
+                            <div style={styles.paymentField}>
+                              <span style={styles.paymentLabel}>Balance:</span>
+                              <span style={{
+                                ...styles.paymentValue,
+                                color: payment.balance > 0 ? '#dc3545' : '#28a745',
+                                fontWeight: '600'
+                              }}>
+                                ₹{payment.balance.toFixed(2)}
+                              </span>
+                            </div>
+                            {idx < paymentHistoryWithBalance.length - 1 && <div style={styles.paymentDivider} />}
                           </div>
                         ))}
                       </div>
@@ -584,12 +633,12 @@ const styles = {
     fontSize: '14px',
   },
   paymentHistoryCard: {
-    flex: '0 0 350px',
+    flex: '0 0 380px',
     backgroundColor: '#f9f9f9',
     borderRadius: '8px',
     padding: '15px',
     boxShadow: 'inset 0 0 5px rgba(0,0,0,0.1)',
-    maxHeight: '250px',
+    maxHeight: '300px',
     overflowY: 'auto',
   },
   paymentHistoryList: {

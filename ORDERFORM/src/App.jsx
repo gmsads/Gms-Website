@@ -64,6 +64,7 @@ import AgentDashboard from './Agent/AgentDashboard.jsx'
 import Parties from './Admin/Parties';
 import Quotation from './Admin/Quotation';
 import InstallPWAButton from './components/InstallPWAButton';
+import FieldVisitsAdmin from './Admin/FieldVisitsAdmin';
 function App() {
   return (
     <BrowserRouter>
@@ -163,6 +164,7 @@ function App() {
           <Route path="design-report" element={<DesignReport />} />
           <Route path="parties" element={<Parties />} />
           <Route path="quotation" element={<Quotation/>}/>
+          <Route path="fieldvisitsadmin" element={<FieldVisitsAdmin/>} />
         </Route>
         <Route
           path="/agent-dashboard"
