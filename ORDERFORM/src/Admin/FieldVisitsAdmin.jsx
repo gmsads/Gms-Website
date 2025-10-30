@@ -16,15 +16,17 @@ const FieldVisitsAdmin = () => {
     date: ''
   });
 
-  // All possible statuses from field executive actions
-  // eslint-disable-next-line no-unused-vars
-  const allStatuses = [
-    'scheduled',
-    'completed', 
-    'not-interested',
-    'follow-up',
-    'sale-close'
-  ];
+  // Get base URL dynamically - safe for browser environment
+  const getBaseUrl = () => {
+    // Check if we're in development mode (Vite uses import.meta.env)
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV) {
+      return 'http://localhost:5000';
+    }
+    // For production, use empty string (same domain) or your production backend URL
+    return ''; // Empty string means same domain as frontend
+  };
+
+  const BASE_URL = getBaseUrl();
 
   useEffect(() => {
     fetchVisits();
@@ -35,27 +37,63 @@ const FieldVisitsAdmin = () => {
     applyFilters();
   }, [filters, visits]);
 
+  // Helper function to format image URLs correctly
+  const formatImageUrl = (photoUrl) => {
+    if (!photoUrl) return null;
+    
+    // If it's already a full URL, return as is
+    if (photoUrl.startsWith('http')) {
+      return photoUrl;
+    }
+    
+    // If it starts with /uploads, it's a relative path from backend
+    if (photoUrl.startsWith('/uploads')) {
+      // Only add BASE_URL if it's not empty (for different domains)
+      return BASE_URL ? `${BASE_URL}${photoUrl}` : photoUrl;
+    }
+    
+    // If it's just a filename, construct the full path
+    return BASE_URL ? `${BASE_URL}/uploads/visits/${photoUrl}` : `/uploads/visits/${photoUrl}`;
+  };
+
   const fetchVisits = async () => {
     try {
       setLoading(true);
       setError('');
       setServerError(null);
       console.log('Fetching visits from /api/field-executive/admin/visits');
+      console.log('Base URL:', BASE_URL);
       
+      // Try the main admin visits endpoint
       const response = await axios.get('/api/field-executive/admin/visits');
       console.log('Visits data received:', response.data);
       
-      setVisits(response.data);
-      setFilteredVisits(response.data);
+      // Process visits to ensure proper image URLs
+      const processedVisits = response.data.map(visit => ({
+        ...visit,
+        // Ensure photo URL is properly formatted for both dev and production
+        photo: visit.photo ? formatImageUrl(visit.photo) : null
+      }));
+      
+      setVisits(processedVisits);
+      setFilteredVisits(processedVisits);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching visits:', error);
       
+      // If main endpoint fails, try simple endpoint
       try {
         console.log('Trying simple endpoint...');
         const simpleResponse = await axios.get('/api/field-executive/admin/simple-visits');
-        setVisits(simpleResponse.data);
-        setFilteredVisits(simpleResponse.data);
+        
+        // Process visits for simple endpoint too
+        const processedVisits = simpleResponse.data.map(visit => ({
+          ...visit,
+          photo: visit.photo ? formatImageUrl(visit.photo) : null
+        }));
+        
+        setVisits(processedVisits);
+        setFilteredVisits(processedVisits);
         setLoading(false);
         return;
       } catch (simpleError) {
@@ -79,6 +117,7 @@ const FieldVisitsAdmin = () => {
       setExecutives(response.data);
     } catch (error) {
       console.error('Error fetching executives:', error);
+      // If executives endpoint fails, extract from visits data
       const uniqueExecutives = [...new Set(visits.map(visit => visit.executive).filter(Boolean))];
       setExecutives(uniqueExecutives);
     }
@@ -87,16 +126,19 @@ const FieldVisitsAdmin = () => {
   const applyFilters = () => {
     let filtered = [...visits];
 
+    // Filter by executive
     if (filters.executive && filters.executive !== 'all') {
       filtered = filtered.filter(visit => 
         visit.executive && visit.executive.toLowerCase().includes(filters.executive.toLowerCase())
       );
     }
 
+    // Filter by status
     if (filters.status && filters.status !== 'all') {
       filtered = filtered.filter(visit => visit.status === filters.status);
     }
 
+    // Filter by date
     if (filters.date) {
       const selectedDate = new Date(filters.date);
       filtered = filtered.filter(visit => {
@@ -127,9 +169,8 @@ const FieldVisitsAdmin = () => {
 
   const openImageModal = (imageUrl) => {
     if (imageUrl) {
-      // Handle both relative and absolute URLs
-      const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `http://localhost:5000${imageUrl}`;
-      setSelectedImage(fullImageUrl);
+      console.log('Opening image:', imageUrl);
+      setSelectedImage(imageUrl);
     }
   };
 
@@ -138,22 +179,18 @@ const FieldVisitsAdmin = () => {
   };
 
   const exportToCSV = () => {
-    const headers = ['Date', 'Executive', 'Client', 'Contact', 'Business Name', 'Location', 'Purpose', 'Status', 'Notes', 'Photo', 'Follow-up Date', 'Remark', 'Outcome', 'Leads'];
+    const headers = ['Date', 'Executive', 'Client', 'Location', 'Purpose', 'Status', 'Notes', 'Photo', 'Outcome', 'Leads'];
     const csvData = filteredVisits.map(visit => {
       const report = visit.reports && visit.reports[0] ? visit.reports[0] : {};
       return [
         visit.date ? format(new Date(visit.date), 'yyyy-MM-dd') : 'N/A',
         visit.executive || 'Unknown',
         visit.client || 'N/A',
-        visit.contactNumber || 'N/A',
-        visit.businessName || 'N/A',
         visit.location || 'N/A',
         visit.purpose || 'N/A',
         visit.status || 'scheduled',
         visit.notes || '',
         visit.photo ? 'Yes' : 'No',
-        visit.followUpDate ? format(new Date(visit.followUpDate), 'yyyy-MM-dd') : '',
-        visit.remark || '',
         report.outcome || '',
         report.leads || ''
       ];
@@ -181,19 +218,13 @@ const FieldVisitsAdmin = () => {
     const stats = {
       scheduled: 0,
       completed: 0,
-      'not-interested': 0,
-      'follow-up': 0,
-      'sale-close': 0,
       total: filteredVisits.length,
       withPhotos: filteredVisits.filter(visit => visit.photo).length
     };
 
     filteredVisits.forEach(visit => {
-      const status = visit.status || 'scheduled';
-      // eslint-disable-next-line no-prototype-builtins
-      if (stats.hasOwnProperty(status)) {
-        stats[status]++;
-      }
+      if (visit.status === 'scheduled') stats.scheduled++;
+      if (visit.status === 'completed') stats.completed++;
     });
 
     return stats;
@@ -208,13 +239,13 @@ const FieldVisitsAdmin = () => {
   return (
     <div className="field-visits-admin">
       <header className="page-header">
-        <h1>Field Visits Management</h1>
+        <h1>Field Visits</h1>
         <div className="header-actions">
           <button onClick={fetchVisits} className="refresh-btn">
-            🔄 Refresh Data
+            Refresh Data
           </button>
           <button onClick={exportToCSV} className="export-btn">
-            📊 Export to CSV
+            Export to CSV
           </button>
         </div>
       </header>
@@ -237,7 +268,7 @@ const FieldVisitsAdmin = () => {
 
       {/* Stats Overview */}
       <div className="stats-overview">
-        <div className="stat-card total">
+        <div className="stat-card">
           <h3>Total Visits</h3>
           <p className="stat-value">{stats.total}</p>
         </div>
@@ -249,23 +280,11 @@ const FieldVisitsAdmin = () => {
           <h3>Completed</h3>
           <p className="stat-value">{stats.completed}</p>
         </div>
-        <div className="stat-card not-interested">
-          <h3>Not Interested</h3>
-          <p className="stat-value">{stats['not-interested']}</p>
-        </div>
-        <div className="stat-card follow-up">
-          <h3>Follow Up</h3>
-          <p className="stat-value">{stats['follow-up']}</p>
-        </div>
-        <div className="stat-card sale-close">
-          <h3>Sale Close</h3>
-          <p className="stat-value">{stats['sale-close']}</p>
-        </div>
         <div className="stat-card photos">
           <h3>With Photos</h3>
           <p className="stat-value">{stats.withPhotos}</p>
         </div>
-        <div className="stat-card completion-rate">
+        <div className="stat-card">
           <h3>Completion Rate</h3>
           <p className="stat-value">
             {stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}%
@@ -301,9 +320,6 @@ const FieldVisitsAdmin = () => {
               <option value="all">All Statuses</option>
               <option value="scheduled">Scheduled</option>
               <option value="completed">Completed</option>
-              <option value="not-interested">Not Interested</option>
-              <option value="follow-up">Follow Up</option>
-              <option value="sale-close">Sale Close</option>
             </select>
           </div>
 
@@ -318,7 +334,7 @@ const FieldVisitsAdmin = () => {
           </div>
 
           <button onClick={resetFilters} className="reset-filters-btn">
-            🗑️ Reset Filters
+            Reset Filters
           </button>
         </div>
       </div>
@@ -328,12 +344,6 @@ const FieldVisitsAdmin = () => {
         <small>Showing {filteredVisits.length} of {visits.length} visits</small>
         {filters.date && (
           <small> | Filtered by: {format(new Date(filters.date), 'MMM dd, yyyy')}</small>
-        )}
-        {filters.status !== 'all' && (
-          <small> | Status: {filters.status}</small>
-        )}
-        {filters.executive !== 'all' && (
-          <small> | Executive: {filters.executive}</small>
         )}
       </div>
 
@@ -347,14 +357,10 @@ const FieldVisitsAdmin = () => {
                 <th>Date</th>
                 <th>Executive</th>
                 <th>Client</th>
-                <th>Contact</th>
-                <th>Business</th>
                 <th>Location</th>
                 <th>Purpose</th>
                 <th>Status</th>
                 <th>Photo</th>
-                <th>Follow-up Date</th>
-                <th>Remark</th>
                 <th>Notes</th>
                 <th>Outcome</th>
                 <th>Leads</th>
@@ -369,8 +375,6 @@ const FieldVisitsAdmin = () => {
                       <td>{visit.date ? format(new Date(visit.date), 'MMM dd, yyyy') : 'N/A'}</td>
                       <td>{visit.executive || 'Unknown'}</td>
                       <td>{visit.client || 'N/A'}</td>
-                      <td>{visit.contactNumber || 'N/A'}</td>
-                      <td>{visit.businessName || 'N/A'}</td>
                       <td>{visit.location || 'N/A'}</td>
                       <td>{visit.purpose || 'N/A'}</td>
                       <td>
@@ -391,10 +395,6 @@ const FieldVisitsAdmin = () => {
                           <span className="no-photo">No Photo</span>
                         )}
                       </td>
-                      <td>
-                        {visit.followUpDate ? format(new Date(visit.followUpDate), 'MMM dd, yyyy') : '-'}
-                      </td>
-                      <td className="remark-cell">{visit.remark || '-'}</td>
                       <td className="notes-cell">{visit.notes || '-'}</td>
                       <td>{report.outcome || '-'}</td>
                       <td>{report.leads || '-'}</td>
@@ -403,7 +403,7 @@ const FieldVisitsAdmin = () => {
                 })
               ) : (
                 <tr>
-                  <td colSpan="14" className="no-data">
+                  <td colSpan="10" className="no-data">
                     {filters.date || filters.executive !== 'all' || filters.status !== 'all' 
                       ? 'No field visits found matching your filters' 
                       : 'No field visits found'
@@ -433,7 +433,9 @@ const FieldVisitsAdmin = () => {
                 onError={(e) => {
                   e.target.onerror = null;
                   e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjEwMCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5Y2E0YWYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIwLjM1ZW0iPkltYWdlIG5vdCBmb3VuZDwvdGV4dD48L3N2Zz4=';
+                  console.error('Failed to load image:', selectedImage);
                 }}
+                onLoad={() => console.log('Image loaded successfully:', selectedImage)}
               />
             </div>
             <div className="image-modal-footer">
@@ -541,63 +543,42 @@ const FieldVisitsAdmin = () => {
         
         .stats-overview {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-          gap: 1rem;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 1.5rem;
           margin-bottom: 2rem;
         }
         
         .stat-card {
           background-color: white;
-          padding: 1.2rem;
+          padding: 1.5rem;
           border-radius: 12px;
           box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
           text-align: center;
-          border-top: 4px solid #e5e7eb;
-        }
-        
-        .stat-card.total {
-          border-top-color: #6b7280;
         }
         
         .stat-card.scheduled {
-          border-top-color: #3b82f6;
+          border-top: 4px solid #3b82f6;
         }
         
         .stat-card.completed {
-          border-top-color: #10b981;
-        }
-        
-        .stat-card.not-interested {
-          border-top-color: #ef4444;
-        }
-        
-        .stat-card.follow-up {
-          border-top-color: #f59e0b;
-        }
-        
-        .stat-card.sale-close {
-          border-top-color: #8b5cf6;
+          border-top: 4px solid #10b981;
         }
         
         .stat-card.photos {
-          border-top-color: #ec4899;
-        }
-        
-        .stat-card.completion-rate {
-          border-top-color: #06b6d4;
+          border-top: 4px solid #f59e0b;
         }
         
         .stat-card h3 {
           margin: 0 0 0.5rem;
           color: #6b7280;
-          font-size: 0.8rem;
+          font-size: 0.9rem;
           font-weight: 500;
           text-transform: uppercase;
         }
         
         .stat-value {
           margin: 0;
-          font-size: 2rem;
+          font-size: 2.5rem;
           font-weight: 700;
           color: #1f2937;
         }
@@ -680,7 +661,6 @@ const FieldVisitsAdmin = () => {
         .visits-table {
           width: 100%;
           border-collapse: collapse;
-          font-size: 0.9rem;
         }
         
         .visits-table th {
@@ -690,13 +670,11 @@ const FieldVisitsAdmin = () => {
           font-weight: 600;
           color: #374151;
           border-bottom: 1px solid #e5e7eb;
-          white-space: nowrap;
         }
         
         .visits-table td {
-          padding: 0.8rem;
+          padding: 1rem;
           border-bottom: 1px solid #f3f4f6;
-          white-space: nowrap;
         }
         
         .visits-table tr:hover {
@@ -704,14 +682,11 @@ const FieldVisitsAdmin = () => {
         }
         
         .status-badge {
-          padding: 0.3rem 0.6rem;
+          padding: 0.4rem 0.8rem;
           border-radius: 20px;
-          font-size: 0.75rem;
+          font-size: 0.8rem;
           font-weight: 500;
           text-transform: capitalize;
-          display: inline-block;
-          min-width: 80px;
-          text-align: center;
         }
         
         .status-badge.scheduled {
@@ -724,29 +699,14 @@ const FieldVisitsAdmin = () => {
           color: #16a34a;
         }
         
-        .status-badge.not-interested {
-          background-color: #fecaca;
-          color: #dc2626;
-        }
-        
-        .status-badge.follow-up {
-          background-color: #fef3c7;
-          color: #d97706;
-        }
-        
-        .status-badge.sale-close {
-          background-color: #ede9fe;
-          color: #7c3aed;
-        }
-        
         .view-photo-btn {
-          padding: 0.3rem 0.6rem;
+          padding: 0.4rem 0.8rem;
           background-color: #f59e0b;
           color: white;
           border: none;
           border-radius: 4px;
           cursor: pointer;
-          font-size: 0.75rem;
+          font-size: 0.8rem;
           font-weight: 500;
           transition: all 0.2s ease;
         }
@@ -758,11 +718,11 @@ const FieldVisitsAdmin = () => {
         .no-photo {
           color: #9ca3af;
           font-style: italic;
-          font-size: 0.75rem;
+          font-size: 0.8rem;
         }
         
-        .notes-cell, .remark-cell {
-          max-width: 150px;
+        .notes-cell {
+          max-width: 200px;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
@@ -879,18 +839,6 @@ const FieldVisitsAdmin = () => {
             flex-direction: column;
             gap: 1rem;
             text-align: center;
-          }
-          
-          .stats-overview {
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-          }
-          
-          .stat-card {
-            padding: 1rem;
-          }
-          
-          .stat-value {
-            font-size: 1.5rem;
           }
           
           .filter-controls {
