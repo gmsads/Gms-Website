@@ -108,7 +108,7 @@ function ViewOrders() {
     }
   };
 
-  // Group orders by month for 2025 only
+  // Group orders by month for 2025 only - FIXED VERSION
   const groupOrdersByMonth = (orders) => {
     const grouped = {};
 
@@ -150,18 +150,29 @@ function ViewOrders() {
           orders: [],
           totals: {
             amount: 0,
-            advance: 0,
+            received: 0,
             balance: 0
           }
         };
       }
 
+      // Calculate order total from rows
       let orderAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+      
+      // Calculate total received (advance + payment history)
       const orderAdvance = parseFloat(order.advance) || 0;
-      const orderBalance = parseFloat(order.balance) || 0;
+      let paymentHistoryTotal = 0;
+      
+      if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
+        paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) => 
+          sum + (parseFloat(payment.amount) || 0), 0);
+      }
+      
+      const orderReceived = orderAdvance + paymentHistoryTotal;
+      const orderBalance = orderAmount - orderReceived;
 
       grouped[monthYearKey].totals.amount += orderAmount;
-      grouped[monthYearKey].totals.advance += orderAdvance;
+      grouped[monthYearKey].totals.received += orderReceived;
       grouped[monthYearKey].totals.balance += orderBalance;
 
       grouped[monthYearKey].orders.push(order);
@@ -170,32 +181,46 @@ function ViewOrders() {
     return grouped;
   };
 
-  // Calculate totals for summary cards
+  // Calculate totals for summary cards - FIXED VERSION
   const calculateTotals = () => {
     let totalAmount = 0;
-    let totalAdvance = 0;
+    let totalReceived = 0;
     let totalBalance = 0;
 
     orders.forEach(order => {
       const orderDate = new Date(order.orderDate);
       if (orderDate.getFullYear() === 2025) {
-        order.rows.forEach(row => {
-          totalAmount += parseFloat(row.total) || 0;
-        });
-        totalAdvance += parseFloat(order.advance) || 0;
-        totalBalance += parseFloat(order.balance) || 0;
+        // Calculate order total from rows
+        const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+        totalAmount += orderTotal;
+        
+        // Calculate total received (advance + all payments)
+        const advanceReceived = parseFloat(order.advance) || 0;
+        let paymentHistoryTotal = 0;
+        
+        if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
+          paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) => 
+            sum + (parseFloat(payment.amount) || 0), 0);
+        }
+        
+        totalReceived += advanceReceived + paymentHistoryTotal;
+        
+        // Calculate balance (should be orderTotal - totalReceived for this order)
+        const orderBalance = orderTotal - (advanceReceived + paymentHistoryTotal);
+        totalBalance += orderBalance;
       }
     });
 
     return {
       totalAmount: totalAmount.toFixed(2),
-      totalAdvance: totalAdvance.toFixed(2),
+      totalReceived: totalReceived.toFixed(2),
       totalBalance: totalBalance.toFixed(2)
     };
   };
 
   const {
     totalAmount,
+    totalReceived,
     totalBalance
   } = calculateTotals();
 
@@ -929,7 +954,7 @@ function ViewOrders() {
         }
       </div>
 
-      {/* Summary Cards - Only show for Admin, Account, and Service Executive */}
+      {/* Summary Cards - Only show for Admin, Account, and Service Executive - FIXED VERSION */}
       {shouldShowSummaryCards() && (
         <div style={{
           display: 'flex',
@@ -949,6 +974,19 @@ function ViewOrders() {
           }}>
             <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Amount</div>
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3498db' }}>₹{totalAmount}</div>
+          </div>
+
+          <div style={{
+            backgroundColor: 'rgba(39, 174, 96, 0.1)',
+            padding: '20px',
+            borderRadius: '12px',
+            minWidth: '220px',
+            textAlign: 'center',
+            border: '1px solid rgba(39, 174, 96, 0.3)',
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Received</div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#27ae60' }}>₹{totalReceived}</div>
           </div>
 
           <div style={{
@@ -1235,7 +1273,7 @@ function ViewOrders() {
           })
           .map(([monthYearKey, group]) => (
             <div key={monthYearKey} style={{ marginBottom: '30px' }}>
-              {/* Month Header */}
+              {/* Month Header - FIXED VERSION */}
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -1251,6 +1289,13 @@ function ViewOrders() {
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Amount</div>
                     <div style={{ fontWeight: 'bold', fontSize: '16px' }}>₹{group.totals.amount.toLocaleString('en-IN')}</div>
+                  </div>
+                  
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Received</div>
+                    <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#ffeb3b' }}>
+                      ₹{group.totals.received.toLocaleString('en-IN')}
+                    </div>
                   </div>
 
                   <div style={{ textAlign: 'center' }}>
