@@ -282,5 +282,61 @@ router.put('/visit-status', async (req, res) => {
         res.status(500).json({ error: 'Failed to update status' });
     }
 });
+// ================== ADMIN EDIT & DELETE ROUTES ==================
 
+// Delete visit
+router.delete('/admin/visits/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Find and delete the visit
+        const visit = await Visit.findById(id);
+        if (!visit) {
+            return res.status(404).json({ error: 'Visit not found' });
+        }
+
+        // Delete associated reports
+        await Report.deleteMany({ visitId: id });
+
+        // Delete the visit
+        await Visit.findByIdAndDelete(id);
+
+        res.json({ message: 'Visit deleted successfully' });
+    } catch (err) {
+        console.error('Error deleting visit:', err);
+        res.status(500).json({ error: 'Failed to delete visit', details: err.message });
+    }
+});
+
+// Update visit
+router.put('/admin/visits/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { client, location, purpose, status, notes } = req.body;
+
+        const updatedVisit = await Visit.findByIdAndUpdate(
+            id,
+            {
+                client,
+                location,
+                purpose,
+                status,
+                notes
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedVisit) {
+            return res.status(404).json({ error: 'Visit not found' });
+        }
+
+        res.json({ 
+            message: 'Visit updated successfully', 
+            visit: updatedVisit 
+        });
+    } catch (err) {
+        console.error('Error updating visit:', err);
+        res.status(500).json({ error: 'Failed to update visit', details: err.message });
+    }
+});
 module.exports = router;

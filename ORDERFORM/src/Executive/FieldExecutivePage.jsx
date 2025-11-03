@@ -9,7 +9,6 @@ const FieldExecutivePage = () => {
     const [filteredData, setFilteredData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showAddForm, setShowAddForm] = useState(false);
-    const [showReportForm, setShowReportForm] = useState(false);
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [showSuccessPopup, setShowSuccessPopup] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
@@ -35,7 +34,7 @@ const FieldExecutivePage = () => {
 
     const navigate = useNavigate();
 
-    // Form states - UPDATED with photo field
+    // Form states
     const [newVisit, setNewVisit] = useState({
         client: '',
         contactNumber: '',
@@ -45,13 +44,6 @@ const FieldExecutivePage = () => {
         purpose: '',
         notes: '',
         photo: null
-    });
-
-    const [newReport, setNewReport] = useState({
-        visitId: '',
-        outcome: '',
-        details: '',
-        leads: 0
     });
 
     // Status update state
@@ -133,7 +125,7 @@ const FieldExecutivePage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [statsMonthFilter, statsYearFilter, fieldData]);
 
-    // UPDATED: Get device location with LB Nagar fix
+    // Get device location with LB Nagar fix
     const getDeviceLocation = () => {
         if (navigator.geolocation) {
             setNewVisit(prev => ({ ...prev, location: 'Fetching your exact location...' }));
@@ -268,7 +260,7 @@ const FieldExecutivePage = () => {
         setSelectedDate(null); // Reset date selection when month/year changes
     };
 
-    // UPDATED: Handle photo change
+    // Handle photo change
     const handlePhotoChange = (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -352,113 +344,87 @@ const FieldExecutivePage = () => {
         }
     };
 
-    const handleSubmitReport = async (e) => {
-        e.preventDefault();
+    // Status update handler with sale-close navigation
+    const handleStatusChange = async (visitId, newStatus) => {
         try {
-            const userName = localStorage.getItem('userName');
+            if (newStatus === 'sale-close') {
+                // First update the status to 'sale-close' in the database
+                await axios.put('/api/field-executive/visit-status', {
+                    visitId,
+                    status: 'sale-close',
+                    remark: 'Sale closed - proceeding to order creation'
+                });
 
-            await axios.post('/api/field-executive/report', {
-                ...newReport,
-                executive: userName,
-                leads: Number.isNaN(newReport.leads) ? 0 : newReport.leads,
-            });
+                // Find the visit data
+                const visit = fieldData.find(v => v._id === visitId);
+                
+                // Prepare the appointment data for order form
+                const appointmentData = {
+                    client: visit?.client,
+                    phoneNumber: visit?.contactNumber,
+                    businessName: visit?.businessName,
+                    location: visit?.location,
+                    purpose: visit?.purpose,
+                    visitId: visitId,
+                    executive: localStorage.getItem('userName')
+                };
 
-            setShowReportForm(false);
-            setNewReport({
-                visitId: '',
-                outcome: '',
-                details: '',
-                leads: 0
-            });
+                // Store in localStorage to pass to order form
+                localStorage.setItem('saleClosedAppointmentData', JSON.stringify(appointmentData));
+                
+                // Show success message
+                setSuccessMessage('Status updated to Sale Close! Redirecting to order form...');
+                setShowSuccessPopup(true);
 
-            // Show success popup for report submission
-            setSuccessMessage('Report submitted successfully!');
-            setShowSuccessPopup(true);
+                // Refresh data to show updated status
+                fetchFieldData();
 
-            // Refresh data
-            fetchFieldData();
+                // Navigate to the main admin page with order tab active after a short delay
+                setTimeout(() => {
+                    navigate('/order', { 
+                        state: { 
+                            activeTab: 'order',
+                            appointmentData: appointmentData
+                        }
+                    });
+                }, 1500);
+                
+                return;
+            }
+
+            if (newStatus === 'follow-up') {
+                // Show modal for follow-up date and remark
+                setStatusUpdate({
+                    visitId,
+                    status: newStatus,
+                    followUpDate: '',
+                    remark: ''
+                });
+                setShowStatusModal(true);
+                return;
+            }
+
+            // For not-interested status, update directly
+            if (newStatus === 'not-interested') {
+                await axios.put('/api/field-executive/visit-status', {
+                    visitId,
+                    status: newStatus,
+                    remark: 'Marked as not interested'
+                });
+
+                // Show success popup for status update
+                setSuccessMessage('Status updated to Not Interested!');
+                setShowSuccessPopup(true);
+
+                fetchFieldData(); // Refresh data
+                return;
+            }
         } catch (error) {
-            console.error('Error submitting report:', error.response?.data || error.message);
-            alert(error.response?.data?.error || 'Failed to submit report. Please try again.');
+            console.error('Error updating status:', error);
+            alert('Failed to update status');
         }
     };
-// UPDATED: Status update handler with sale-close navigation
-const handleStatusChange = async (visitId, newStatus) => {
-    try {
-        if (newStatus === 'sale-close') {
-            // First update the status to 'sale-close' in the database
-            await axios.put('/api/field-executive/visit-status', {
-                visitId,
-                status: 'sale-close',
-                remark: 'Sale closed - proceeding to order creation'
-            });
 
-            // Find the visit data
-            const visit = fieldData.find(v => v._id === visitId);
-            
-            // Prepare the appointment data for order form
-            const appointmentData = {
-                client: visit?.client,
-                phoneNumber: visit?.contactNumber,
-                businessName: visit?.businessName,
-                location: visit?.location,
-                purpose: visit?.purpose,
-                visitId: visitId,
-                executive: localStorage.getItem('userName')
-            };
-
-            // Store in localStorage to pass to order form
-            localStorage.setItem('saleClosedAppointmentData', JSON.stringify(appointmentData));
-            
-            // Show success message
-            setSuccessMessage('Status updated to Sale Close! Redirecting to order form...');
-            setShowSuccessPopup(true);
-
-            // Refresh data to show updated status
-            fetchFieldData();
-
-            // Navigate to the main admin page with order tab active after a short delay
-            setTimeout(() => {
-                navigate('/order', { 
-                    state: { 
-                        activeTab: 'order',
-                        appointmentData: appointmentData
-                    }
-                });
-            }, 1500);
-            
-            return;
-        }
-
-        if (newStatus === 'follow-up') {
-            // Show modal for follow-up date and remark
-            setStatusUpdate({
-                visitId,
-                status: newStatus,
-                followUpDate: '',
-                remark: ''
-            });
-            setShowStatusModal(true);
-            return;
-        }
-
-        // For other statuses, update directly
-        await axios.put('/api/field-executive/visit-status', {
-            visitId,
-            status: newStatus,
-            remark: newStatus === 'not-interested' ? 'Marked as not interested' : ''
-        });
-
-        // Show success popup for status update
-        setSuccessMessage('Status updated successfully!');
-        setShowSuccessPopup(true);
-
-        fetchFieldData(); // Refresh data
-    } catch (error) {
-        console.error('Error updating status:', error);
-        alert('Failed to update status');
-    }
-};
     // Submit follow-up status
     const handleStatusSubmit = async (e) => {
         e.preventDefault();
@@ -592,15 +558,6 @@ const handleStatusChange = async (visitId, newStatus) => {
                                 }}
                             >
                                 Add New Visit
-                            </button>
-                            <button 
-                                className="mobile-menu-item"
-                                onClick={() => {
-                                    setShowReportForm(true);
-                                    setShowMobileMenu(false);
-                                }}
-                            >
-                                Submit Report
                             </button>
                             <button 
                                 className="mobile-menu-item"
@@ -757,10 +714,6 @@ const handleStatusChange = async (visitId, newStatus) => {
                                     <span className="icon">➕</span>
                                     <span>Add New Visit</span>
                                 </button>
-                                <button className="action-btn secondary" onClick={() => setShowReportForm(true)}>
-                                    <span className="icon">📝</span>
-                                    <span>Submit Report</span>
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -851,7 +804,7 @@ const handleStatusChange = async (visitId, newStatus) => {
                     )}
                 </div>
 
-                {/* UPDATED: Add Visit Form Modal with Phone Validation and Photo Upload */}
+                {/* Add Visit Form Modal with Phone Validation and Photo Upload */}
                 {showAddForm && (
                     <div className="modal-overlay">
                         <div className="modal">
@@ -875,7 +828,7 @@ const handleStatusChange = async (visitId, newStatus) => {
                                     />
                                 </div>
                                 
-                                {/* UPDATED: Contact Number with Validation */}
+                                {/* Contact Number with Validation */}
                                 <div className="form-group">
                                     <label>Contact Number:</label>
                                     <input
@@ -904,7 +857,7 @@ const handleStatusChange = async (visitId, newStatus) => {
                                     />
                                 </div>
                                 
-                                {/* UPDATED: Location with LB Nagar fix */}
+                                {/* Location with LB Nagar fix */}
                                 <div className="form-group">
                                     <label>Location (Auto-detected):</label>
                                     <input
@@ -943,7 +896,7 @@ const handleStatusChange = async (visitId, newStatus) => {
                                     />
                                 </div>
                                 
-                                {/* NEW: Photo Upload Field */}
+                                {/* Photo Upload Field */}
                                 <div className="form-group">
                                     <label>Visit Photo (Optional):</label>
                                     <input
@@ -969,77 +922,6 @@ const handleStatusChange = async (visitId, newStatus) => {
                                 <div className="form-buttons">
                                     <button type="button" onClick={() => setShowAddForm(false)}>Cancel</button>
                                     <button type="submit">Schedule Visit</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {/* Submit Report Form Modal */}
-                {showReportForm && (
-                    <div className="modal-overlay">
-                        <div className="modal">
-                            <div className="modal-header">
-                                <h2>Submit Visit Report</h2>
-                                <button 
-                                    className="modal-close"
-                                    onClick={() => setShowReportForm(false)}
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                            <form onSubmit={handleSubmitReport}>
-                                <div className="form-group">
-                                    <label>Visit ID:</label>
-                                    <select
-                                        value={newReport.visitId}
-                                        onChange={(e) => setNewReport({ ...newReport, visitId: e.target.value })}
-                                        required
-                                    >
-                                        <option value="">Select a visit</option>
-                                        {fieldData
-                                            .filter(activity => 
-                                                activity.status === 'scheduled' &&
-                                                new Date(activity.date).getMonth() === statsMonthFilter.getMonth() &&
-                                                new Date(activity.date).getFullYear() === statsYearFilter
-                                            )
-                                            .map(activity => (
-                                                <option key={activity._id} value={activity._id}>
-                                                    {activity.client} - {new Date(activity.date).toLocaleDateString()}
-                                                </option>
-                                            ))
-                                        }
-                                    </select>
-                                </div>
-                                <div className="form-group">
-                                    <label>Outcome:</label>
-                                    <input
-                                        type="text"
-                                        value={newReport.outcome}
-                                        onChange={(e) => setNewReport({ ...newReport, outcome: e.target.value })}
-                                        required
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>Details:</label>
-                                    <textarea
-                                        value={newReport.details}
-                                        onChange={(e) => setNewReport({ ...newReport, details: e.target.value })}
-                                        required
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>Leads Generated:</label>
-                                    <input
-                                        type="number"
-                                        value={newReport.leads}
-                                        onChange={(e) => setNewReport({ ...newReport, leads: parseInt(e.target.value) })}
-                                        min="0"
-                                    />
-                                </div>
-                                <div className="form-buttons">
-                                    <button type="button" onClick={() => setShowReportForm(false)}>Cancel</button>
-                                    <button type="submit">Submit Report</button>
                                 </div>
                             </form>
                         </div>
@@ -1796,11 +1678,6 @@ const handleStatusChange = async (visitId, newStatus) => {
                     color: white;
                 }
                 
-                .action-btn.secondary {
-                    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-                    color: white;
-                }
-                
                 .action-btn:hover {
                     transform: translateY(-2px);
                     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
@@ -1935,7 +1812,7 @@ const handleStatusChange = async (visitId, newStatus) => {
                     background-color: #5a6268;
                 }
                 
-                /* NEW: Photo Input Styles */
+                /* Photo Input Styles */
                 .photo-input {
                     padding: 0.5rem;
                     border: 1px solid #d1d5db;

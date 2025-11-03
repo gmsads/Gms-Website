@@ -226,6 +226,44 @@ function AssignService() {
     }, 3000);
   };
 
+  // NEW: Generate WhatsApp message with company name
+  const generateWhatsAppMessage = (order, row, executive) => {
+    const deliveryDate = row.deliveryDate ? new Date(row.deliveryDate).toLocaleDateString() : 'Not specified';
+    
+    return `Your order has been assigned to service executive!
+
+Order Details:
+📋 Order No: ${order.orderNo}
+👤 Executive: ${executive.name}
+📞 Contact: ${executive.phone}
+🛠️ Requirement: ${row.requirement}
+📅 Delivery Date: ${deliveryDate}
+📦 Quantity: ${row.quantity || '1'}
+
+*Global Marketing Solution*
+Please contact your service executive for any queries. Thank you!`;
+  };
+
+  // NEW: Send WhatsApp message automatically
+  const sendWhatsAppMessage = (phoneNumber, message) => {
+    try {
+      // Remove any non-digit characters except + for international numbers
+      const cleanPhone = phoneNumber.replace(/[^\d+]/g, '');
+      
+      // Create WhatsApp API URL
+      const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+      
+      // Open WhatsApp automatically in new tab
+      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+      
+      console.log('WhatsApp opened for:', cleanPhone);
+      return true;
+    } catch (error) {
+      console.error('Error opening WhatsApp:', error);
+      return false;
+    }
+  };
+
   // Auto-assign all unassigned services (only to active executives)
   const autoAssignAllServices = async () => {
     const activeExecutives = getActiveExecutives();
@@ -244,7 +282,9 @@ function AssignService() {
               orderId: order._id,
               rowIndex,
               orderNo: order.orderNo,
-              requirement: row.requirement
+              requirement: row.requirement,
+              orderData: order,
+              rowData: row
             });
           }
         });
@@ -290,6 +330,15 @@ function AssignService() {
             executivePhone: executive.phone,
             requirement: service.requirement
           });
+
+          // NEW: Automatically send WhatsApp message for auto-assigned services
+          if (service.orderData.phone) {
+            setTimeout(() => {
+              const message = generateWhatsAppMessage(service.orderData, service.rowData, executive);
+              sendWhatsAppMessage(service.orderData.phone, message);
+              showExecutiveStatusMessage(`WhatsApp opened for ${service.orderData.contactPerson || 'customer'}`);
+            }, 1000);
+          }
 
         } catch (err) {
           console.error(`Failed to assign ${service.orderNo}:`, err);
@@ -456,6 +505,8 @@ function AssignService() {
     }
 
     const executive = getActiveExecutives().find(exec => exec._id === selectedExecutive);
+    const order = orders.find(o => o._id === orderId);
+    const row = order.rows[rowIndex];
 
     try {
       await axios.put(`/api/orders/${orderId}`, {
@@ -485,12 +536,11 @@ function AssignService() {
       
       setOrders(formattedOrders);
       
-      const order = orders.find(o => o._id === orderId);
       setAssignedInfo({
         orderNo: order.orderNo,
         executiveName: executive.name,
         executivePhone: executive.phone,
-        requirement: order.rows[rowIndex].requirement
+        requirement: row.requirement
       });
       
       setShowSuccess(true);
@@ -498,6 +548,16 @@ function AssignService() {
       setSelectedOrder(null);
       
       setTimeout(() => setShowSuccess(false), 3000);
+
+      // NEW: Automatically send WhatsApp message for manual assignment
+      if (order.phone) {
+        setTimeout(() => {
+          const message = generateWhatsAppMessage(order, row, executive);
+          sendWhatsAppMessage(order.phone, message);
+          showExecutiveStatusMessage(`WhatsApp opened for ${order.contactPerson || 'customer'}`);
+        }, 500);
+      }
+
     } catch (err) {
       showExecutiveStatusMessage(err.response?.data?.error || 'Assignment failed');
     }
@@ -560,6 +620,24 @@ function AssignService() {
       case STATUS.CUSTOMIZE: return { ...baseStyle, ...styles.statusCustomize };
       default: return { ...baseStyle, ...styles.statusPending };
     }
+  };
+
+  // NEW: Send WhatsApp for already assigned service
+  const handleSendWhatsAppForAssigned = (order, row) => {
+    const executive = getActiveExecutives().find(exec => exec.name === row.assignedExecutive);
+    if (!executive) {
+      showExecutiveStatusMessage('Executive not found for WhatsApp message');
+      return;
+    }
+
+    if (!order.phone) {
+      showExecutiveStatusMessage('Customer phone number not available for WhatsApp');
+      return;
+    }
+
+    const message = generateWhatsAppMessage(order, row, executive);
+    sendWhatsAppMessage(order.phone, message);
+    showExecutiveStatusMessage(`WhatsApp opened for ${order.contactPerson || 'customer'}`);
   };
 
   // Styles definition
@@ -947,6 +1025,16 @@ function AssignService() {
       borderRadius: '4px',
       cursor: 'pointer',
       marginTop: '10px',
+    },
+    whatsappButton: {
+      padding: '8px 16px',
+      backgroundColor: '#25D366',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      marginTop: '10px',
+      marginLeft: '10px',
     },
     assignSection: {
       marginTop: '15px',
@@ -1469,13 +1557,25 @@ function AssignService() {
                     </select>
                   </div>
 
-                  <button
-                    style={styles.assignButton}
-                    disabled={!selectedExecutive || selectedOrder !== rowKey}
-                    onClick={() => handleAssignService(order._id, row.originalIndex)}
-                  >
-                    {row.assignedExecutive ? 'Reassign Service' : 'Assign Service'}
-                  </button>
+                  <div style={{display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap'}}>
+                    <button
+                      style={styles.assignButton}
+                      disabled={!selectedExecutive || selectedOrder !== rowKey}
+                      onClick={() => handleAssignService(order._id, row.originalIndex)}
+                    >
+                      {row.assignedExecutive ? 'Reassign Service' : 'Assign Service'}
+                    </button>
+
+                    {/* NEW: Send WhatsApp Button for already assigned services */}
+                    {row.assignedExecutive && order.phone && (
+                      <button
+                        style={styles.whatsappButton}
+                        onClick={() => handleSendWhatsAppForAssigned(order, row)}
+                      >
+                        Send WhatsApp
+                      </button>
+                    )}
+                  </div>
 
                   {/* Show assigned executive info if already assigned */}
                   {row.assignedExecutive && (

@@ -67,6 +67,8 @@ function OrderForm({
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [advanceError, setAdvanceError] = useState("");
   const [createdBy, setCreatedBy] = useState("");
+  // Add WhatsApp state variable
+  const [whatsappSent, setWhatsappSent] = useState(false);
   const printRef = useRef();
   const invoiceRef = useRef();
 
@@ -87,6 +89,56 @@ function OrderForm({
       gstIncluded: false,
     };
   }
+
+  // Add WhatsApp message function
+  const sendWhatsAppMessage = (phoneNumber, orderData) => {
+    try {
+      const cleanNumber = phoneNumber.replace(/\D/g, '');
+      const finalNumber = cleanNumber.slice(-10);
+      
+      if (finalNumber.length !== 10) {
+        throw new Error('Invalid phone number');
+      }
+
+      const message = `🎉 *Order Confirmation* 🎉
+
+Dear ${orderData.contactPerson},
+
+Your order has been successfully placed with *Global Marketing Solutions*!
+
+*Order Details:*
+🏢 *Business:* ${orderData.business}
+📋 *Order Number:* ${orderData.orderNumber}
+👤 *Contact Person:* ${orderData.contactPerson}
+📅 *Order Date:* ${new Date(orderData.orderDate).toLocaleDateString()}
+
+*Requirements:*
+${orderData.requirements}
+
+*Payment Summary:*
+💰 *Total Amount:* ₹${orderData.total}
+💳 *Advance Paid:* ₹${orderData.advance}
+⚖️ *Balance:* ₹${orderData.balance}
+
+Thank you for your business! We'll keep you updated on your order status.
+
+For any queries, please contact us.
+
+Best regards,
+Global Marketing Solutions Team`;
+
+      const encodedMessage = encodeURIComponent(message);
+      const whatsappUrl = `https://wa.me/91${finalNumber}?text=${encodedMessage}`;
+      
+      window.open(whatsappUrl, '_blank');
+      
+      setWhatsappSent(true);
+      return { success: true, message: 'WhatsApp opened successfully' };
+    } catch (error) {
+      console.error('WhatsApp error:', error);
+      return { success: false, message: error.message };
+    }
+  };
 
   useEffect(() => {
     const currentUser = localStorage.getItem("userName") || "Admin";
@@ -243,6 +295,8 @@ function OrderForm({
     setSplitCommission(false);
     setCommissionSplitInfo(null);
     setAdvanceError("");
+    // Reset WhatsApp state
+    setWhatsappSent(false);
     setIsCreatingNew(true);
     if (onNewOrder) onNewOrder();
   };
@@ -501,6 +555,24 @@ function OrderForm({
         await axios.post("/api/submit", duplicateOrderData);
       }
 
+      // ADD WHATSAPP MESSAGE AFTER SUCCESSFUL SUBMISSION
+      const orderDataForWhatsApp = {
+        business: business,
+        contactPerson: contactPerson,
+        orderNumber: orderResponse.data.orderNumber || `ORD-${Date.now()}`,
+        requirements: rows
+          .filter((row) => row.requirement)
+          .map((row) => row.requirement === "other" ? row.customRequirement : row.requirement)
+          .join(", "),
+        total: discountedTotal,
+        advance: advance,
+        balance: balance,
+        orderDate: orderDate
+      };
+
+      // Send WhatsApp message automatically
+      sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
+
       setShowSuccessModal(true);
       setTimeout(() => {
         setShowSuccessModal(false);
@@ -697,6 +769,20 @@ function OrderForm({
           <div className="success-modal">
             <div className="success-checkmark">✓</div>
             <h2>Order {existingData && !isCreatingNew ? "Updated" : "Submitted"} Successfully!</h2>
+            {/* Add WhatsApp success message */}
+            {whatsappSent && (
+              <div style={{ 
+                marginTop: '15px', 
+                padding: '10px', 
+                backgroundColor: '#e8f5e8', 
+                borderRadius: '4px',
+                border: '1px solid #4caf50'
+              }}>
+                <p style={{ margin: 0, color: '#2e7d32' }}>
+                  ✅ WhatsApp message has been sent to the customer!
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}

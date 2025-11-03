@@ -10,6 +10,14 @@ const FieldVisitsAdmin = () => {
   const [error, setError] = useState('');
   const [serverError, setServerError] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [editingVisit, setEditingVisit] = useState(null);
+  const [editForm, setEditForm] = useState({
+    client: '',
+    location: '',
+    purpose: '',
+    status: '',
+    notes: ''
+  });
   const [filters, setFilters] = useState({
     executive: 'all',
     status: 'all',
@@ -18,12 +26,10 @@ const FieldVisitsAdmin = () => {
 
   // Get base URL dynamically - safe for browser environment
   const getBaseUrl = () => {
-    // Check if we're in development mode (Vite uses import.meta.env)
     if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV) {
       return 'http://localhost:5000';
     }
-    // For production, use empty string (same domain) or your production backend URL
-    return ''; // Empty string means same domain as frontend
+    return '';
   };
 
   const BASE_URL = getBaseUrl();
@@ -41,18 +47,14 @@ const FieldVisitsAdmin = () => {
   const formatImageUrl = (photoUrl) => {
     if (!photoUrl) return null;
     
-    // If it's already a full URL, return as is
     if (photoUrl.startsWith('http')) {
       return photoUrl;
     }
     
-    // If it starts with /uploads, it's a relative path from backend
     if (photoUrl.startsWith('/uploads')) {
-      // Only add BASE_URL if it's not empty (for different domains)
       return BASE_URL ? `${BASE_URL}${photoUrl}` : photoUrl;
     }
     
-    // If it's just a filename, construct the full path
     return BASE_URL ? `${BASE_URL}/uploads/visits/${photoUrl}` : `/uploads/visits/${photoUrl}`;
   };
 
@@ -61,17 +63,11 @@ const FieldVisitsAdmin = () => {
       setLoading(true);
       setError('');
       setServerError(null);
-      console.log('Fetching visits from /api/field-executive/admin/visits');
-      console.log('Base URL:', BASE_URL);
       
-      // Try the main admin visits endpoint
       const response = await axios.get('/api/field-executive/admin/visits');
-      console.log('Visits data received:', response.data);
       
-      // Process visits to ensure proper image URLs
       const processedVisits = response.data.map(visit => ({
         ...visit,
-        // Ensure photo URL is properly formatted for both dev and production
         photo: visit.photo ? formatImageUrl(visit.photo) : null
       }));
       
@@ -81,12 +77,9 @@ const FieldVisitsAdmin = () => {
     } catch (error) {
       console.error('Error fetching visits:', error);
       
-      // If main endpoint fails, try simple endpoint
       try {
-        console.log('Trying simple endpoint...');
         const simpleResponse = await axios.get('/api/field-executive/admin/simple-visits');
         
-        // Process visits for simple endpoint too
         const processedVisits = simpleResponse.data.map(visit => ({
           ...visit,
           photo: visit.photo ? formatImageUrl(visit.photo) : null
@@ -117,7 +110,6 @@ const FieldVisitsAdmin = () => {
       setExecutives(response.data);
     } catch (error) {
       console.error('Error fetching executives:', error);
-      // If executives endpoint fails, extract from visits data
       const uniqueExecutives = [...new Set(visits.map(visit => visit.executive).filter(Boolean))];
       setExecutives(uniqueExecutives);
     }
@@ -126,19 +118,16 @@ const FieldVisitsAdmin = () => {
   const applyFilters = () => {
     let filtered = [...visits];
 
-    // Filter by executive
     if (filters.executive && filters.executive !== 'all') {
       filtered = filtered.filter(visit => 
         visit.executive && visit.executive.toLowerCase().includes(filters.executive.toLowerCase())
       );
     }
 
-    // Filter by status
     if (filters.status && filters.status !== 'all') {
       filtered = filtered.filter(visit => visit.status === filters.status);
     }
 
-    // Filter by date
     if (filters.date) {
       const selectedDate = new Date(filters.date);
       filtered = filtered.filter(visit => {
@@ -169,13 +158,81 @@ const FieldVisitsAdmin = () => {
 
   const openImageModal = (imageUrl) => {
     if (imageUrl) {
-      console.log('Opening image:', imageUrl);
       setSelectedImage(imageUrl);
     }
   };
 
   const closeImageModal = () => {
     setSelectedImage(null);
+  };
+
+  // Delete visit function
+  const deleteVisit = async (visitId) => {
+    if (!window.confirm('Are you sure you want to delete this visit? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await axios.delete(`/api/field-executive/admin/visits/${visitId}`);
+      setVisits(prev => prev.filter(visit => visit._id !== visitId));
+      setFilteredVisits(prev => prev.filter(visit => visit._id !== visitId));
+    } catch (error) {
+      console.error('Error deleting visit:', error);
+      alert('Failed to delete visit. Please try again.');
+    }
+  };
+
+  // Edit visit functions
+  const startEdit = (visit) => {
+    setEditingVisit(visit);
+    setEditForm({
+      client: visit.client || '',
+      location: visit.location || '',
+      purpose: visit.purpose || '',
+      status: visit.status || 'scheduled',
+      notes: visit.notes || ''
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingVisit(null);
+    setEditForm({
+      client: '',
+      location: '',
+      purpose: '',
+      status: '',
+      notes: ''
+    });
+  };
+
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const saveEdit = async () => {
+    if (!editingVisit) return;
+
+    try {
+      const response = await axios.put(`/api/field-executive/admin/visits/${editingVisit._id}`, editForm);
+      
+      // Update the visits state with the updated visit
+      setVisits(prev => prev.map(visit => 
+        visit._id === editingVisit._id ? response.data.visit : visit
+      ));
+      
+      setFilteredVisits(prev => prev.map(visit => 
+        visit._id === editingVisit._id ? response.data.visit : visit
+      ));
+      
+      cancelEdit();
+    } catch (error) {
+      console.error('Error updating visit:', error);
+      alert('Failed to update visit. Please try again.');
+    }
   };
 
   const exportToCSV = () => {
@@ -347,6 +404,77 @@ const FieldVisitsAdmin = () => {
         )}
       </div>
 
+      {/* Edit Modal */}
+      {editingVisit && (
+        <div className="edit-modal-overlay" onClick={cancelEdit}>
+          <div className="edit-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="edit-modal-header">
+              <h3>Edit Visit</h3>
+              <button className="modal-close-btn" onClick={cancelEdit}>
+                ✕
+              </button>
+            </div>
+            <div className="edit-form">
+              <div className="form-group">
+                <label>Client:</label>
+                <input
+                  type="text"
+                  name="client"
+                  value={editForm.client}
+                  onChange={handleEditChange}
+                />
+              </div>
+              <div className="form-group">
+                <label>Location:</label>
+                <input
+                  type="text"
+                  name="location"
+                  value={editForm.location}
+                  onChange={handleEditChange}
+                />
+              </div>
+              <div className="form-group">
+                <label>Purpose:</label>
+                <input
+                  type="text"
+                  name="purpose"
+                  value={editForm.purpose}
+                  onChange={handleEditChange}
+                />
+              </div>
+              <div className="form-group">
+                <label>Status:</label>
+                <select
+                  name="status"
+                  value={editForm.status}
+                  onChange={handleEditChange}
+                >
+                  <option value="scheduled">Scheduled</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Notes:</label>
+                <textarea
+                  name="notes"
+                  value={editForm.notes}
+                  onChange={handleEditChange}
+                  rows="3"
+                />
+              </div>
+            </div>
+            <div className="edit-modal-footer">
+              <button onClick={cancelEdit} className="cancel-btn">
+                Cancel
+              </button>
+              <button onClick={saveEdit} className="save-btn">
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Visits Table */}
       <div className="visits-table-section">
         <h2>Field Visits ({filteredVisits.length} records)</h2>
@@ -364,6 +492,7 @@ const FieldVisitsAdmin = () => {
                 <th>Notes</th>
                 <th>Outcome</th>
                 <th>Leads</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -398,12 +527,30 @@ const FieldVisitsAdmin = () => {
                       <td className="notes-cell">{visit.notes || '-'}</td>
                       <td>{report.outcome || '-'}</td>
                       <td>{report.leads || '-'}</td>
+                      <td>
+                        <div className="action-buttons">
+                          <button 
+                            className="edit-btn"
+                            onClick={() => startEdit(visit)}
+                            title="Edit Visit"
+                          >
+                            ✏️
+                          </button>
+                          <button 
+                            className="delete-btn"
+                            onClick={() => deleteVisit(visit._id)}
+                            title="Delete Visit"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan="10" className="no-data">
+                  <td colSpan="11" className="no-data">
                     {filters.date || filters.executive !== 'all' || filters.status !== 'all' 
                       ? 'No field visits found matching your filters' 
                       : 'No field visits found'
@@ -433,9 +580,7 @@ const FieldVisitsAdmin = () => {
                 onError={(e) => {
                   e.target.onerror = null;
                   e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjEwMCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5Y2E0YWYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIwLjM1ZW0iPkltYWdlIG5vdCBmb3VuZDwvdGV4dD48L3N2Zz4=';
-                  console.error('Failed to load image:', selectedImage);
                 }}
-                onLoad={() => console.log('Image loaded successfully:', selectedImage)}
               />
             </div>
             <div className="image-modal-footer">
@@ -728,6 +873,38 @@ const FieldVisitsAdmin = () => {
           white-space: nowrap;
         }
         
+        .action-buttons {
+          display: flex;
+          gap: 0.5rem;
+        }
+        
+        .edit-btn, .delete-btn {
+          padding: 0.4rem 0.6rem;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 0.9rem;
+          transition: all 0.2s ease;
+        }
+        
+        .edit-btn {
+          background-color: #3b82f6;
+          color: white;
+        }
+        
+        .edit-btn:hover {
+          background-color: #2563eb;
+        }
+        
+        .delete-btn {
+          background-color: #ef4444;
+          color: white;
+        }
+        
+        .delete-btn:hover {
+          background-color: #dc2626;
+        }
+        
         .no-data {
           text-align: center;
           padding: 2rem;
@@ -740,6 +917,124 @@ const FieldVisitsAdmin = () => {
           padding: 3rem;
           font-size: 1.2rem;
           color: #6b7280;
+        }
+        
+        /* Edit Modal Styles */
+        .edit-modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: rgba(0, 0, 0, 0.8);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+          padding: 2rem;
+        }
+        
+        .edit-modal-content {
+          background-color: white;
+          border-radius: 12px;
+          max-width: 500px;
+          width: 100%;
+          max-height: 90vh;
+          overflow-y: auto;
+        }
+        
+        .edit-modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 1.5rem;
+          border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .edit-modal-header h3 {
+          margin: 0;
+          color: #1f2937;
+          font-weight: 600;
+        }
+        
+        .modal-close-btn {
+          background: none;
+          border: none;
+          font-size: 1.5rem;
+          cursor: pointer;
+          color: #6b7280;
+          padding: 0.5rem;
+        }
+        
+        .modal-close-btn:hover {
+          color: #374151;
+        }
+        
+        .edit-form {
+          padding: 1.5rem;
+        }
+        
+        .form-group {
+          margin-bottom: 1rem;
+        }
+        
+        .form-group label {
+          display: block;
+          margin-bottom: 0.5rem;
+          font-weight: 500;
+          color: #374151;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+          width: 100%;
+          padding: 0.75rem;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          font-size: 1rem;
+          box-sizing: border-box;
+        }
+        
+        .form-group textarea {
+          resize: vertical;
+          min-height: 80px;
+        }
+        
+        .edit-modal-footer {
+          padding: 1.5rem;
+          border-top: 1px solid #e5e7eb;
+          display: flex;
+          justify-content: flex-end;
+          gap: 1rem;
+        }
+        
+        .cancel-btn {
+          padding: 0.75rem 1.5rem;
+          background-color: #6b7280;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: 500;
+        }
+        
+        .cancel-btn:hover {
+          background-color: #4b5563;
+        }
+        
+        .save-btn {
+          padding: 0.75rem 1.5rem;
+          background-color: #10b981;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: 500;
+        }
+        
+        .save-btn:hover {
+          background-color: #059669;
         }
         
         /* Image Modal Styles */
@@ -779,19 +1074,6 @@ const FieldVisitsAdmin = () => {
           margin: 0;
           color: #1f2937;
           font-weight: 600;
-        }
-        
-        .modal-close-btn {
-          background: none;
-          border: none;
-          font-size: 1.5rem;
-          cursor: pointer;
-          color: #6b7280;
-          padding: 0.5rem;
-        }
-        
-        .modal-close-btn:hover {
-          color: #374151;
         }
         
         .image-container {
@@ -854,13 +1136,20 @@ const FieldVisitsAdmin = () => {
             padding: 0.5rem;
           }
           
+          .edit-modal-overlay,
           .image-modal-overlay {
             padding: 1rem;
           }
           
+          .edit-modal-content,
           .image-modal-content {
             max-width: 95vw;
             max-height: 95vh;
+          }
+          
+          .action-buttons {
+            flex-direction: column;
+            gap: 0.3rem;
           }
         }
       `}</style>
