@@ -567,83 +567,83 @@ const ViewProspective = () => {
               {canSeeAllProspects && <th style={styles.th}>Delete</th>}
             </tr>
           </thead>
-          <tbody>
-            {filteredProspectives.length > 0 ? (
-              filteredProspectives.map((p) => (
-                <tr key={p._id} style={styles.tableRow}>
-                  <td style={styles.td}>
-                    {p.createdAt ? format(new Date(p.createdAt), 'MMM dd, yyyy') : 'N/A'}
-                  </td>
-                  <td style={styles.td}>{p.ExcutiveName || p.executiveName}</td>
-                  <td style={styles.td}>{p.businessName}</td>
-                  <td style={styles.td}>{p.contactPerson}</td>
-                  <td style={styles.td}>{p.phoneNumber}</td>
-                  <td style={styles.td}>{p.location}</td>
-                  <td style={styles.td}>{p.leadFrom || 'N/A'}</td>
-                  <td style={styles.td}>{p.requirementDescription || 'N/A'}</td>
-                  <td style={styles.td}>
-                    {p.followUpDate ? format(new Date(p.followUpDate), 'MMM dd, yyyy') : 'N/A'}
-                  </td>
-                  <td style={styles.td}>
-                    <span style={getStatusStyle(p.status)}>
-                      {p.status || 'New'}
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    <select
-                      value=""
-                      onChange={(e) => handleStatusChange(p._id, e.target.value)}
-                      style={styles.select}
-                      disabled={sending[p._id]}
-                    >
-                      <option value="">Update Status</option>
-                      <option value="sale closed">Sale Closed</option>
-                      <option value="not interested">Not Interested</option>
-                      <option value="next month">Next Month</option>
-                      <option value="followup">Follow Up</option>
-                    </select>
-                    {sending[p._id] && (
-                      <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
-                        Updating...
-                      </div>
-                    )}
-                    {success[p._id] && p.status === 'sale closed' && (
-                      <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
-                        ✓ Sale closed! Redirecting to order form...
-                      </div>
-                    )}
-                    {success[p._id] && p.status !== 'sale closed' && success[p._id] !== 'moved_to_trash' && (
-                      <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
-                        ✓ Status updated successfully!
-                      </div>
-                    )}
-                  </td>
-                  {canSeeAllProspects && (
-                    <td style={styles.td}>
-                      <button
-                        onClick={() => handleDelete(p._id)}
-                        style={styles.deleteButton}
-                        disabled={sending[p._id]}
-                      >
-                        {sending[p._id] ? 'Deleting...' : 'Delete'}
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={canSeeAllProspects ? 12 : 11} style={{ padding: '20px', textAlign: 'center' }}>
-                  {searchTerm || filters.year || filters.month || filters.leadSource 
-                    ? 'No matching results found with current filters' 
-                    : !canSeeAllProspects 
-                      ? `No prospective clients assigned to ${userName}`
-                      : 'No prospective clients available'
-                  }
-                </td>
-              </tr>
-            )}
-          </tbody>
+         <tbody>
+  {filteredProspectives.length > 0 ? (
+    filteredProspectives.map((p) => (
+      <tr key={p._id} style={styles.tableRow}>
+        <td style={styles.td}>
+          {p.createdAt ? format(new Date(p.createdAt), 'MMM dd, yyyy') : 'N/A'}
+        </td>
+        <td style={styles.td}>{p.ExcutiveName || p.executiveName}</td>
+        <td style={styles.td}>{p.businessName}</td>
+        <td style={styles.td}>{p.contactPerson}</td>
+        <td style={styles.td}>{p.phoneNumber}</td>
+        <td style={styles.td}>{p.location}</td>
+        <td style={styles.td}>{p.leadFrom || 'N/A'}</td>
+        <td style={styles.td}>{p.requirementDescription || 'N/A'}</td>
+        <td style={styles.td}>
+          {p.followUpDate ? format(new Date(p.followUpDate), 'MMM dd, yyyy') : 'N/A'}
+        </td>
+        <td style={styles.td}>
+          <span style={getStatusStyle(p.status)}>
+            {p.status || 'New'}
+          </span>
+        </td>
+        <td style={styles.td}>
+          <select
+            value=""
+            onChange={(e) => handleStatusChange(p._id, e.target.value)}
+            style={styles.select}
+            disabled={sending[p._id]}
+          >
+            <option value="">Update Status</option>
+            <option value="sale closed">Sale Closed</option>
+            <option value="not interested">Not Interested</option>
+            <option value="next month">Next Month</option>
+            <option value="followup">Follow Up</option>
+          </select>
+          {sending[p._id] && (
+            <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
+              Updating...
+            </div>
+          )}
+          {success[p._id] && p.status === 'sale closed' && (
+            <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
+              ✓ Sale closed! Redirecting to order form...
+            </div>
+          )}
+          {success[p._id] && p.status !== 'sale closed' && success[p._id] !== 'moved_to_trash' && (
+            <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
+              ✓ Status updated successfully!
+            </div>
+          )}
+        </td>
+        {canSeeAllProspects && (
+          <td style={styles.td}>
+            <button
+              onClick={() => handleDelete(p._id)}
+              style={styles.deleteButton}
+              disabled={sending[p._id]}
+            >
+              {sending[p._id] ? 'Deleting...' : 'Delete'}
+            </button>
+          </td>
+        )}
+      </tr>
+    ))
+  ) : (
+    <tr>
+      <td colSpan={canSeeAllProspects ? 12 : 11} style={{ padding: '20px', textAlign: 'center' }}>
+        {searchTerm || filters.year || filters.month || filters.leadSource 
+          ? 'No matching results found with current filters' 
+          : !canSeeAllProspects 
+            ? `No prospective clients assigned to ${userName}`
+            : 'No prospective clients available'
+        }
+      </td>
+    </tr>
+  )}
+</tbody>
         </table>
       </div>
     </div>
