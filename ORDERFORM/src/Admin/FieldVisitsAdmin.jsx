@@ -42,22 +42,30 @@ const FieldVisitsAdmin = () => {
   useEffect(() => {
     applyFilters();
   }, [filters, visits]);
-
-  // Helper function to format image URLs correctly
-  const formatImageUrl = (photoUrl) => {
-    if (!photoUrl) return null;
-    
-    if (photoUrl.startsWith('http')) {
-      return photoUrl;
-    }
-    
+const formatImageUrl = (photoUrl) => {
+  if (!photoUrl) return null;
+  
+  console.log('Original photo URL:', photoUrl);
+  
+  // If it's already a full URL, return as is
+  if (photoUrl.startsWith('http')) {
+    return photoUrl;
+  }
+  
+  // For production domain
+  if (window.location.hostname === 'gms.globalmarketingsolutions.in') {
     if (photoUrl.startsWith('/uploads')) {
-      return BASE_URL ? `${BASE_URL}${photoUrl}` : photoUrl;
+      return `https://gms.globalmarketingsolutions.in${photoUrl}`;
     }
-    
-    return BASE_URL ? `${BASE_URL}/uploads/visits/${photoUrl}` : `/uploads/visits/${photoUrl}`;
-  };
-
+    return `https://gms.globalmarketingsolutions.in/uploads/visits/${photoUrl}`;
+  }
+  
+  // For local development
+  if (photoUrl.startsWith('/uploads')) {
+    return `http://localhost:5000${photoUrl}`;
+  }
+  return `http://localhost:5000/uploads/visits/${photoUrl}`;
+};
   const fetchVisits = async () => {
     try {
       setLoading(true);

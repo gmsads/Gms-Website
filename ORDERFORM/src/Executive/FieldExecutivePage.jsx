@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -56,6 +57,13 @@ const FieldExecutivePage = () => {
 
     // Mobile menu state
     const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+    // NEW STATES FOR PHONE VALIDATION
+    const [showPhoneInput, setShowPhoneInput] = useState(false);
+    const [phoneNumber, setPhoneNumber] = useState('');
+    const [checkingPhone, setCheckingPhone] = useState(false);
+    const [existingClient, setExistingClient] = useState(null);
+    const [phoneError, setPhoneError] = useState('');
 
     // Auto-hide success popup
     useEffect(() => {
@@ -116,35 +124,35 @@ const FieldExecutivePage = () => {
     // Apply filters when they change
     useEffect(() => {
         applyFilters();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedDate, fieldData, statsMonthFilter, statsYearFilter]);
 
     // Apply stats filters when they change
     useEffect(() => {
         applyStatsFilters();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [statsMonthFilter, statsYearFilter, fieldData]);
 
     // Get device location with LB Nagar fix
     const getDeviceLocation = () => {
         if (navigator.geolocation) {
             setNewVisit(prev => ({ ...prev, location: 'Fetching your exact location...' }));
-            
+
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
                     try {
                         const { latitude, longitude } = position.coords;
-                        
+
                         // Use a more accurate geocoding service
                         const response = await fetch(
                             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`
                         );
                         const data = await response.json();
-                        
+
                         // Extract specific location details
                         const address = data.address;
                         let locationName = '';
-                        
+
                         // Try to get the most specific location name
                         if (address.neighbourhood) {
                             locationName = address.neighbourhood;
@@ -157,12 +165,12 @@ const FieldExecutivePage = () => {
                         } else {
                             locationName = data.display_name.split(',')[0];
                         }
-                        
+
                         // Force LB Nagar if detected in Hyderabad area
                         if (latitude > 17.34 && latitude < 17.38 && longitude > 78.54 && longitude < 78.56) {
                             locationName = "LB Nagar, Hyderabad";
                         }
-                        
+
                         setNewVisit(prev => ({ ...prev, location: locationName }));
                     } catch (error) {
                         console.error('Error getting location:', error);
@@ -186,12 +194,102 @@ const FieldExecutivePage = () => {
         }
     };
 
-    // Call getDeviceLocation when form opens
+    // NEW FUNCTION: Check if phone number exists
+    const checkPhoneNumber = async () => {
+        if (!phoneNumber || !/^\d{10}$/.test(phoneNumber)) {
+            setPhoneError('Please enter a valid 10-digit phone number');
+            return;
+        }
+
+        setCheckingPhone(true);
+        setPhoneError('');
+
+        try {
+            // Check if this phone number exists in our data
+            const existingVisits = fieldData.filter(visit => 
+                visit.contactNumber === phoneNumber
+            );
+
+            if (existingVisits.length > 0) {
+                // Get the most recent visit with this number
+                const latestVisit = existingVisits.reduce((latest, current) => {
+                    return new Date(current.date) > new Date(latest.date) ? current : latest;
+                });
+
+                setExistingClient(latestVisit);
+                setNewVisit({
+                    client: latestVisit.client,
+                    contactNumber: phoneNumber,
+                    businessName: latestVisit.businessName,
+                    location: latestVisit.location,
+                    date: '',
+                    purpose: '',
+                    notes: '',
+                    photo: null
+                });
+                
+                // Auto-fill location from existing data
+                setNewVisit(prev => ({ ...prev, location: latestVisit.location }));
+            } else {
+                setExistingClient(null);
+                setNewVisit({
+                    client: '',
+                    contactNumber: phoneNumber,
+                    businessName: '',
+                    location: '',
+                    date: '',
+                    purpose: '',
+                    notes: '',
+                    photo: null
+                });
+                // Get location for new client
+                getDeviceLocation();
+            }
+            
+            setShowPhoneInput(false);
+            setShowAddForm(true);
+            
+        } catch (error) {
+            console.error('Error checking phone number:', error);
+            setPhoneError('Error checking phone number. Please try again.');
+        } finally {
+            setCheckingPhone(false);
+        }
+    };
+
+    // NEW FUNCTION: Start add visit process
+    const startAddVisit = () => {
+        setPhoneNumber('');
+        setExistingClient(null);
+        setPhoneError('');
+        setShowPhoneInput(true);
+    };
+
+    // NEW FUNCTION: Reset phone validation and close all modals
+    const resetAddVisitProcess = () => {
+        setShowPhoneInput(false);
+        setShowAddForm(false);
+        setPhoneNumber('');
+        setExistingClient(null);
+        setPhoneError('');
+        setNewVisit({
+            client: '',
+            contactNumber: '',
+            businessName: '',
+            location: '',
+            date: '',
+            purpose: '',
+            notes: '',
+            photo: null
+        });
+    };
+
+    // Call getDeviceLocation when form opens for new clients
     useEffect(() => {
-        if (showAddForm) {
+        if (showAddForm && !existingClient) {
             getDeviceLocation();
         }
-    }, [showAddForm]);
+    }, [showAddForm, existingClient]);
 
     const applyFilters = () => {
         let filtered = [...fieldData];
@@ -279,7 +377,7 @@ const FieldExecutivePage = () => {
 
     const handleAddVisit = async (e) => {
         e.preventDefault();
-        
+
         // Phone number validation
         if (!/^\d{10}$/.test(newVisit.contactNumber)) {
             alert('Phone number must be exactly 10 digits');
@@ -289,7 +387,7 @@ const FieldExecutivePage = () => {
         try {
             const userName = localStorage.getItem('userName');
             const formData = new FormData();
-            
+
             // Append all form data
             formData.append('executive', userName);
             formData.append('client', newVisit.client);
@@ -300,7 +398,7 @@ const FieldExecutivePage = () => {
             formData.append('purpose', newVisit.purpose);
             formData.append('notes', newVisit.notes || '');
             formData.append('status', 'scheduled');
-            
+
             // Append photo if selected
             if (newVisit.photo) {
                 formData.append('photo', newVisit.photo);
@@ -313,28 +411,19 @@ const FieldExecutivePage = () => {
                 }
             });
 
-            setShowAddForm(false);
-            setNewVisit({
-                client: '',
-                contactNumber: '',
-                businessName: '',
-                location: '',
-                date: '',
-                purpose: '',
-                notes: '',
-                photo: null
-            });
+            // Reset everything and close modals
+            resetAddVisitProcess();
 
             // Show success popup
             setSuccessMessage('Visit scheduled successfully!');
             setShowSuccessPopup(true);
 
-            // Refresh data
-            fetchFieldData();
-            
+            // Refresh data WITHOUT page reload
+            await fetchFieldData();
+
         } catch (error) {
             console.error('Error adding visit:', error);
-            
+
             // More detailed error message
             if (error.response?.data?.error) {
                 alert(`Failed to add visit: ${error.response.data.error}`);
@@ -357,7 +446,7 @@ const FieldExecutivePage = () => {
 
                 // Find the visit data
                 const visit = fieldData.find(v => v._id === visitId);
-                
+
                 // Prepare the appointment data for order form
                 const appointmentData = {
                     client: visit?.client,
@@ -371,24 +460,24 @@ const FieldExecutivePage = () => {
 
                 // Store in localStorage to pass to order form
                 localStorage.setItem('saleClosedAppointmentData', JSON.stringify(appointmentData));
-                
+
                 // Show success message
                 setSuccessMessage('Status updated to Sale Close! Redirecting to order form...');
                 setShowSuccessPopup(true);
 
-                // Refresh data to show updated status
-                fetchFieldData();
+                // Refresh data to show updated status WITHOUT page reload
+                await fetchFieldData();
 
                 // Navigate to the main admin page with order tab active after a short delay
                 setTimeout(() => {
-                    navigate('/order', { 
-                        state: { 
+                    navigate('/order', {
+                        state: {
                             activeTab: 'order',
                             appointmentData: appointmentData
                         }
                     });
                 }, 1500);
-                
+
                 return;
             }
 
@@ -416,7 +505,7 @@ const FieldExecutivePage = () => {
                 setSuccessMessage('Status updated to Not Interested!');
                 setShowSuccessPopup(true);
 
-                fetchFieldData(); // Refresh data
+                await fetchFieldData(); // Refresh data WITHOUT page reload
                 return;
             }
         } catch (error) {
@@ -432,12 +521,12 @@ const FieldExecutivePage = () => {
             await axios.put('/api/field-executive/visit-status', statusUpdate);
             setShowStatusModal(false);
             setStatusUpdate({ visitId: '', status: '', followUpDate: '', remark: '' });
-            
+
             // Show success popup for follow-up update
             setSuccessMessage('Follow-up details updated successfully!');
             setShowSuccessPopup(true);
-            
-            fetchFieldData(); // Refresh data
+
+            await fetchFieldData(); // Refresh data WITHOUT page reload
         } catch (error) {
             console.error('Error updating follow-up:', error);
             alert('Failed to update follow-up');
@@ -502,7 +591,7 @@ const FieldExecutivePage = () => {
                         <div className="success-popup-content">
                             <div className="success-icon">✅</div>
                             <div className="success-message">{successMessage}</div>
-                            <button 
+                            <button
                                 className="success-close-btn"
                                 onClick={() => setShowSuccessPopup(false)}
                             >
@@ -515,7 +604,7 @@ const FieldExecutivePage = () => {
 
             <header className="page-header">
                 <div className="header-left">
-                    <button 
+                    <button
                         className="mobile-menu-btn"
                         onClick={() => setShowMobileMenu(!showMobileMenu)}
                     >
@@ -525,9 +614,9 @@ const FieldExecutivePage = () => {
                         &larr; Back to Dashboard
                     </button>
                 </div>
-                
-                <h1>Field Executive Dashboard</h1>
-                
+
+                <h1>Daily Report Dashboard</h1>
+
                 <div className="header-actions">
                     <span className="welcome-text">Welcome, {localStorage.getItem('userName')}</span>
                     <button
@@ -543,23 +632,23 @@ const FieldExecutivePage = () => {
             {showMobileMenu && (
                 <div className="mobile-menu-overlay">
                     <div className="mobile-menu">
-                        <button 
+                        <button
                             className="mobile-menu-close"
                             onClick={() => setShowMobileMenu(false)}
                         >
                             ✕
                         </button>
                         <div className="mobile-menu-content">
-                            <button 
+                            <button
                                 className="mobile-menu-item"
                                 onClick={() => {
-                                    setShowAddForm(true);
+                                    startAddVisit();
                                     setShowMobileMenu(false);
                                 }}
                             >
                                 Add New Visit
                             </button>
-                            <button 
+                            <button
                                 className="mobile-menu-item"
                                 onClick={() => setShowCalendar(!showCalendar)}
                             >
@@ -655,22 +744,22 @@ const FieldExecutivePage = () => {
                                         <div key={index} className="table-row">
                                             <span className="mobile-label">Date:</span>
                                             <span>{new Date(activity.date).toLocaleDateString()}</span>
-                                            
+
                                             <span className="mobile-label">Client/Business:</span>
                                             <span className="client-name">
                                                 <div>{activity.client}</div>
                                                 <small>{activity.businessName}</small>
                                             </span>
-                                            
+
                                             <span className="mobile-label">Contact:</span>
                                             <span>{activity.contactNumber}</span>
-                                            
+
                                             <span className="mobile-label">Location:</span>
                                             <span>{activity.location}</span>
-                                            
+
                                             <span className="mobile-label">Purpose:</span>
                                             <span>{activity.purpose}</span>
-                                            
+
                                             <span className="mobile-label">Status:</span>
                                             <span className={`status ${activity.status}`}>
                                                 {activity.status}
@@ -679,16 +768,21 @@ const FieldExecutivePage = () => {
                                                 )}
                                                 {activity.remark && <small>Remark: {activity.remark}</small>}
                                             </span>
-                                            
+
                                             <span className="mobile-label">Actions:</span>
                                             <span className="status-actions">
-                                                <select 
-                                                    value={activity.status} 
-                                                    onChange={(e) => handleStatusChange(activity._id, e.target.value)}
+                                                <select
+                                                    value=""
+                                                    onChange={(e) => {
+                                                        if (e.target.value) {
+                                                            handleStatusChange(activity._id, e.target.value);
+                                                            // Reset the dropdown to "Select" after selection
+                                                            e.target.value = "";
+                                                        }
+                                                    }}
                                                     className="status-select"
                                                 >
-                                                    <option value="scheduled">Scheduled</option>
-                                                    <option value="completed">Completed</option>
+                                                    <option value="">Select</option>
                                                     <option value="not-interested">Not Interested</option>
                                                     <option value="follow-up">Follow Up</option>
                                                     <option value="sale-close">Sale Close</option>
@@ -710,7 +804,7 @@ const FieldExecutivePage = () => {
                         <div className="quick-actions">
                             <h2>Quick Actions</h2>
                             <div className="action-buttons">
-                                <button className="action-btn primary" onClick={() => setShowAddForm(true)}>
+                                <button className="action-btn primary" onClick={startAddVisit}>
                                     <span className="icon">➕</span>
                                     <span>Add New Visit</span>
                                 </button>
@@ -804,19 +898,87 @@ const FieldExecutivePage = () => {
                     )}
                 </div>
 
+                {/* PHONE NUMBER INPUT MODAL */}
+                {showPhoneInput && (
+                    <div className="modal-overlay">
+                        <div className="modal">
+                            <div className="modal-header">
+                                <h2>Enter Phone Number</h2>
+                                <button
+                                    className="modal-close"
+                                    onClick={resetAddVisitProcess}
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                            <div className="form-group">
+                                <label>Contact Number:</label>
+                                <input
+                                    type="tel"
+                                    value={phoneNumber}
+                                    onChange={(e) => {
+                                        const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                        setPhoneNumber(value);
+                                        setPhoneError('');
+                                    }}
+                                    pattern="[0-9]{10}"
+                                    required
+                                    placeholder="Enter 10-digit phone number"
+                                    autoFocus
+                                />
+                                {phoneError && (
+                                    <small style={{ color: 'red', fontSize: '0.8rem' }}>{phoneError}</small>
+                                )}
+                                {!phoneError && phoneNumber && !/^\d{10}$/.test(phoneNumber) && (
+                                    <small style={{ color: 'red', fontSize: '0.8rem' }}>Phone number must be exactly 10 digits</small>
+                                )}
+                            </div>
+                            <div className="form-buttons">
+                                <button type="button" onClick={resetAddVisitProcess}>Cancel</button>
+                                <button 
+                                    type="button" 
+                                    onClick={checkPhoneNumber}
+                                    disabled={checkingPhone || !/^\d{10}$/.test(phoneNumber)}
+                                >
+                                    {checkingPhone ? 'Checking...' : 'Continue'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Add Visit Form Modal with Phone Validation and Photo Upload */}
                 {showAddForm && (
                     <div className="modal-overlay">
                         <div className="modal">
                             <div className="modal-header">
-                                <h2>Schedule New Visit</h2>
-                                <button 
+                                <h2>
+                                    {existingClient ? 'Existing Client - Schedule New Visit' : 'Schedule New Visit'}
+                                </h2>
+                                <button
                                     className="modal-close"
-                                    onClick={() => setShowAddForm(false)}
+                                    onClick={resetAddVisitProcess}
                                 >
                                     ✕
                                 </button>
                             </div>
+                            
+                            {/* Existing Client Notice */}
+                            {existingClient && (
+                                <div className="existing-client-notice">
+                                    <div className="notice-icon">ℹ️</div>
+                                    <div className="notice-content">
+                                        <strong>Existing Client Found</strong>
+                                        <p>This phone number is already associated with a client. Some fields are pre-filled.</p>
+                                        <div className="client-details">
+                                            <span><strong>Client:</strong> {existingClient.client}</span>
+                                            <span><strong>Business:</strong> {existingClient.businessName}</span>
+                                            <span><strong>Previous Location:</strong> {existingClient.location}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <form onSubmit={handleAddVisit}>
                                 <div className="form-group">
                                     <label>Client Name:</label>
@@ -825,28 +987,24 @@ const FieldExecutivePage = () => {
                                         value={newVisit.client}
                                         onChange={(e) => setNewVisit({ ...newVisit, client: e.target.value })}
                                         required
+                                        readOnly={!!existingClient}
+                                        className={existingClient ? 'readonly-field' : ''}
                                     />
                                 </div>
-                                
-                                {/* Contact Number with Validation */}
+
+                                {/* Contact Number - Readonly */}
                                 <div className="form-group">
                                     <label>Contact Number:</label>
                                     <input
                                         type="tel"
                                         value={newVisit.contactNumber}
-                                        onChange={(e) => {
-                                            const value = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                            setNewVisit({ ...newVisit, contactNumber: value });
-                                        }}
-                                        pattern="[0-9]{10}"
-                                        required
-                                        placeholder="Enter 10-digit phone number"
+                                        readOnly
+                                        className="readonly-field"
+                                        style={{backgroundColor: '#f8f9fa', color: '#6c757d'}}
                                     />
-                                    {newVisit.contactNumber && !/^\d{10}$/.test(newVisit.contactNumber) && (
-                                        <small style={{color: 'red', fontSize: '0.8rem'}}>Phone number must be exactly 10 digits</small>
-                                    )}
+                                    <small style={{color: '#6c757d'}}>Phone number cannot be changed</small>
                                 </div>
-                                
+
                                 <div className="form-group">
                                     <label>Business Name:</label>
                                     <input
@@ -854,12 +1012,14 @@ const FieldExecutivePage = () => {
                                         value={newVisit.businessName}
                                         onChange={(e) => setNewVisit({ ...newVisit, businessName: e.target.value })}
                                         required
+                                        readOnly={!!existingClient}
+                                        className={existingClient ? 'readonly-field' : ''}
                                     />
                                 </div>
-                                
+
                                 {/* Location with LB Nagar fix */}
                                 <div className="form-group">
-                                    <label>Location (Auto-detected):</label>
+                                    <label>Location {existingClient && '(Auto-detected for new visit)'}:</label>
                                     <input
                                         type="text"
                                         value={newVisit.location}
@@ -867,15 +1027,17 @@ const FieldExecutivePage = () => {
                                         className="location-input"
                                         placeholder="Getting your location..."
                                     />
-                                    <button 
-                                        type="button" 
-                                        onClick={getDeviceLocation}
-                                        className="refresh-location-btn"
-                                    >
-                                        🔄 Refresh Location
-                                    </button>
+                                    {!existingClient && (
+                                        <button
+                                            type="button"
+                                            onClick={getDeviceLocation}
+                                            className="refresh-location-btn"
+                                        >
+                                            🔄 Refresh Location
+                                        </button>
+                                    )}
                                 </div>
-                                
+
                                 <div className="form-group">
                                     <label>Date:</label>
                                     <input
@@ -885,7 +1047,7 @@ const FieldExecutivePage = () => {
                                         required
                                     />
                                 </div>
-                                
+
                                 <div className="form-group">
                                     <label>Purpose:</label>
                                     <input
@@ -895,7 +1057,7 @@ const FieldExecutivePage = () => {
                                         required
                                     />
                                 </div>
-                                
+
                                 {/* Photo Upload Field */}
                                 <div className="form-group">
                                     <label>Visit Photo (Optional):</label>
@@ -911,7 +1073,7 @@ const FieldExecutivePage = () => {
                                         </div>
                                     )}
                                 </div>
-                                
+
                                 <div className="form-group">
                                     <label>Notes:</label>
                                     <textarea
@@ -920,7 +1082,7 @@ const FieldExecutivePage = () => {
                                     />
                                 </div>
                                 <div className="form-buttons">
-                                    <button type="button" onClick={() => setShowAddForm(false)}>Cancel</button>
+                                    <button type="button" onClick={resetAddVisitProcess}>Cancel</button>
                                     <button type="submit">Schedule Visit</button>
                                 </div>
                             </form>
@@ -934,7 +1096,7 @@ const FieldExecutivePage = () => {
                         <div className="modal">
                             <div className="modal-header">
                                 <h2>Update Follow-up Details</h2>
-                                <button 
+                                <button
                                     className="modal-close"
                                     onClick={() => setShowStatusModal(false)}
                                 >
@@ -1232,7 +1394,57 @@ const FieldExecutivePage = () => {
                     color: #1f2937;
                     font-size: 1.2rem;
                     font-weight: 600;
+                } /* ADD THESE NEW STYLES */
+                .existing-client-notice {
+                    background: #e3f2fd;
+                    border: 1px solid #90caf9;
+                    border-radius: 8px;
+                    padding: 1rem;
+                    margin-bottom: 1.5rem;
+                    display: flex;
+                    gap: 0.8rem;
                 }
+                
+                .notice-icon {
+                    font-size: 1.2rem;
+                    flex-shrink: 0;
+                }
+                
+                .notice-content {
+                    flex: 1;
+                }
+                
+                .notice-content strong {
+                    color: #1565c0;
+                    display: block;
+                    margin-bottom: 0.3rem;
+                }
+                
+                .notice-content p {
+                    margin: 0 0 0.8rem 0;
+                    color: #37474f;
+                    font-size: 0.9rem;
+                }
+                
+                .client-details {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.3rem;
+                    font-size: 0.85rem;
+                    color: #455a64;
+                }
+                
+                .client-details span {
+                    display: block;
+                }
+                
+                .readonly-field {
+                    background-color: #f8f9fa !important;
+                    color: #6c757d !important;
+                    cursor: not-allowed !important;
+                    border-color: #dee2e6 !important;
+                }
+                
                 
                 .stats-filters {
                     display: flex;

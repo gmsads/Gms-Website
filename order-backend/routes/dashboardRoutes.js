@@ -59,7 +59,7 @@ router.get('/chart-data', async (req, res) => {
       }
     });
 
-    // Initialize counters - COMBINED APPROACH
+    // Initialize counters - UPDATED CLIENT TYPES WITH AMOUNTS
     const result = {
       totalOrdersByMonth: selectedMonth !== null ? [filteredOrders.length] : Array(12).fill(0),
       amountByMonth: selectedMonth !== null ? [0] : Array(12).fill(0), // For total amount display
@@ -69,14 +69,19 @@ router.get('/chart-data', async (req, res) => {
       pendingAmount: 0, // Track only pending amount
       pendingServices: [0, 0],
       appointments: [0, 0],
-      clientTypes: { Retail: 0, Renewal: 0, Agent: 0, 'Renewal-Agent': 0 },
+      clientTypes: { 
+        Retail: { count: 0, amount: 0 },
+        Renewal: { count: 0, amount: 0 },
+        Agent: { count: 0, amount: 0 },
+        'Renewal-Agent': { count: 0, amount: 0 }
+      },
       timePeriod: {
         year: selectedYear,
         month: selectedMonth !== null ? selectedMonth + 1 : null
       }
     };
 
-    // Process filtered orders - COMBINED LOGIC
+    // Process filtered orders - UPDATED CLIENT TYPE CALCULATION WITH AMOUNTS
     filteredOrders.forEach(order => {
       try {
         const orderDate = new Date(order.orderDate);
@@ -117,9 +122,10 @@ router.get('/chart-data', async (req, res) => {
           result.pendingPayments[0]++; // Count paid orders
         }
 
-        // Client type
+        // Client type with amounts - UPDATED
         if (order.clientType && result.clientTypes.hasOwnProperty(order.clientType)) {
-          result.clientTypes[order.clientType]++;
+          result.clientTypes[order.clientType].count++;
+          result.clientTypes[order.clientType].amount += orderTotal;
         }
 
         // Service status
@@ -237,6 +243,7 @@ router.get('/chart-data', async (req, res) => {
       totalOrdersByMonth: result.totalOrdersByMonth,
       amountByMonth: result.amountByMonth,
       pendingAmount: result.pendingAmount,
+      clientTypes: result.clientTypes,
       timePeriod: result.timePeriod
     });
 

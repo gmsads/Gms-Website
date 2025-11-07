@@ -15,7 +15,7 @@ import AutoLogout from "../mainpage/AutoLogout";
 import PendingPayment from "../Admin/PendingPayment"; // Import PendingPayment
 import "../Executive/order.css";
 import "../app.css";
-
+import TeleCRM from "./TeleCRM";
 function Admin() {
  
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
@@ -516,6 +516,7 @@ function Admin() {
               { key: "viewProspects", icon: "👁️", text: "View Prospects" },
               { key: "price-list", icon: "💰", text: "Price List" },
               { key: "pending-payments", icon: "💰", text: "Pending Payments" },
+               { key: "tele", icon: "📞", text: "Tele-CRM" },
             ].map(({ key, icon, text }) => (
               <div
                 key={key}
@@ -546,6 +547,7 @@ function Admin() {
           )}
 
           {activeTab === "record" && <Record />}
+          {activeTab === "tele" && <TeleCRM />}
           {activeTab === "appointment" && <Appointment />}
           {activeTab === "viewOrders" && <ViewOrders userRole={userRole} />}
           {activeTab === "price-list" && <Pricelist />}

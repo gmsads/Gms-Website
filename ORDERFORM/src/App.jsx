@@ -166,14 +166,44 @@ function App() {
           <Route path="quotation" element={<Quotation/>}/>
           <Route path="fieldvisitsadmin" element={<FieldVisitsAdmin/>} />
         </Route>
-        <Route
-          path="/agent-dashboard"
-          element={
-            <ProtectedRoute allowedRoles={['Agent']}>
-              <AgentDashboard />
-            </ProtectedRoute>
-          }
-        />
+       // Add these imports at the top with other imports
+import AgentDashboard from './Agent/AgentDashboard';
+import FieldExecutivePage from './Executive/FieldExecutivePage';
+import Record from './Executive/Record';
+import DailyReport from './Admin/DailyRecord';
+import Pricelist from './Service/Pricelist';
+import Prospective from './Executive/Prospective';
+import Viewprospective from './Admin/Viewprospective';
+import CreateOrder from './Admin/CreatOrder';
+import ViewOrders from './Admin/ViewOrders';
+
+// Then in the Routes section:
+<Route
+  path="/agent-dashboard"
+  element={
+    <ProtectedRoute allowedRoles={['Agent']}>
+      <AgentDashboard />
+    </ProtectedRoute>
+  }
+>
+  <Route index element={<div>Agent Dashboard Home</div>} />
+  <Route path="create-order" element={<CreateOrder />} />
+  <Route path="view-orders" element={<ViewOrders />} />
+  <Route path="record" element={<Record />} />
+  <Route path="view-record" element={<DailyReport />} />
+  <Route path="price-list" element={<Pricelist />} />
+  <Route path="create-prospect" element={<Prospective />} />
+  <Route path="view-prospects" element={<Viewprospective />} />
+</Route>
+
+<Route
+  path="/field-executive"
+  element={
+    <ProtectedRoute allowedRoles={['Agent']}>
+      <FieldExecutivePage />
+    </ProtectedRoute>
+  }
+/>
 
         <Route
           path="/service-manager-dashboard"

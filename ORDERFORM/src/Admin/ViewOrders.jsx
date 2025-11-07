@@ -80,6 +80,12 @@ function ViewOrders() {
     return userRole === 'Admin';
   };
 
+  // Check if user can export to Excel (Admin, Account, Service Executive only - NOT regular executives)
+  const canExportToExcel = () => {
+    const rolesThatCanExport = ['Admin', 'Account', 'Service Executive'];
+    return rolesThatCanExport.includes(userRole);
+  };
+
   // Format date to DD-MM-YYYY
   const formatDate = (dateString) => {
     if (!dateString) return '';
@@ -714,6 +720,93 @@ function ViewOrders() {
     setPaymentData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Print payment history
+  const handlePrintPaymentHistory = () => {
+    const printWindow = window.open('', '_blank');
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Payment History - ${currentOrder.orderNo}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+          .order-info { margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 5px; }
+          .order-info h3 { margin-top: 0; }
+          .payment-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          .payment-table th, .payment-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+          .payment-table th { background-color: #f2f2f2; font-weight: bold; }
+          .total-row { font-weight: bold; background-color: #e8f5e8; }
+          .no-print { display: none; }
+          @media print {
+            body { margin: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Payment History</h1>
+          <h2>Order: ${currentOrder.orderNo}</h2>
+          <p>Generated on: ${new Date().toLocaleDateString()}</p>
+        </div>
+        
+        <div class="order-info">
+          <h3>Order Summary</h3>
+          <p><strong>Customer:</strong> ${currentOrder.contactPerson}</p>
+          <p><strong>Business:</strong> ${currentOrder.business}</p>
+          <p><strong>Location:</strong> ${currentOrder.location}</p>
+          <p><strong>Total Amount:</strong> ₹${currentOrder.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0).toFixed(2)}</p>
+          <p><strong>Discount:</strong> ₹${parseFloat(currentOrder.discount || 0).toFixed(2)}</p>
+          <p><strong>Final Amount:</strong> ₹${parseFloat(currentOrder.discountedTotal || 0).toFixed(2)}</p>
+          <p><strong>Current Balance:</strong> ₹${parseFloat(currentOrder.balance || 0).toFixed(2)}</p>
+        </div>
+        
+        <h3>Payment History</h3>
+        <table class="payment-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Amount (₹)</th>
+              <th>Method</th>
+              <th>Reference</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${paymentHistory.map((payment, ) => `
+              <tr>
+                <td>${formatDate(payment.date)}</td>
+                <td>${parseFloat(payment.amount || 0).toLocaleString('en-IN')}</td>
+                <td>${payment.method}</td>
+                <td>${payment.reference || '-'}</td>
+                <td>${payment.note || '-'}</td>
+              </tr>
+            `).join('')}
+            <tr class="total-row">
+              <td colspan="5"><strong>Total Paid: ₹${paymentHistory.reduce((sum, payment) => sum + parseFloat(payment.amount || 0), 0).toLocaleString('en-IN')}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <div class="no-print" style="margin-top: 30px; text-align: center;">
+          <button onclick="window.print()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Print</button>
+          <button onclick="window.close()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">Close</button>
+        </div>
+        
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `;
+    
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+  };
+
   // Export orders to Excel
   const handleExportToExcel = () => {
     let ordersToExport = orders;
@@ -1217,22 +1310,24 @@ function ViewOrders() {
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '10px' }}>
-          {/* Export to Excel Button */}
-          <button
-            onClick={handleExportToExcel}
-            disabled={orders.length === 0}
-            style={{
-              backgroundColor: orders.length === 0 ? '#ccc' : '#16a085',
-              color: 'white',
-              padding: '12px 20px',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: orders.length === 0 ? 'not-allowed' : 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            Export to Excel
-          </button>
+          {/* Export to Excel Button - Only show for Admin, Account, and Service Executive */}
+          {canExportToExcel() && (
+            <button
+              onClick={handleExportToExcel}
+              disabled={orders.length === 0}
+              style={{
+                backgroundColor: orders.length === 0 ? '#ccc' : '#16a085',
+                color: 'white',
+                padding: '12px 20px',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: orders.length === 0 ? 'not-allowed' : 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Export to Excel
+            </button>
+          )}
 
           {/* Import from Excel Button - Only show for Admin, Account, and Service Executive */}
           {!shouldSeeOnlyOwnOrders() && (
@@ -1892,6 +1987,21 @@ function ViewOrders() {
                   }}
                 >
                   Close
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrintPaymentHistory}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: '#007bff',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Print Payment History
                 </button>
                 {currentOrder.balance > 0 && (
                   <button

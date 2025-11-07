@@ -339,4 +339,43 @@ router.put('/admin/visits/:id', async (req, res) => {
         res.status(500).json({ error: 'Failed to update visit', details: err.message });
     }
 });
+// Add this route to your existing backend (field-executive.js)
+router.get('/check-phone', async (req, res) => {
+    try {
+        const { phone } = req.query;
+
+        if (!phone || !/^\d{10}$/.test(phone)) {
+            return res.status(400).json({ error: 'Invalid phone number format' });
+        }
+
+        // Check if phone number exists
+        const existingVisit = await Visit.findOne({ contactNumber: phone })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        if (existingVisit) {
+            return res.json({
+                exists: true,
+                message: 'Phone number already exists',
+                existingData: {
+                    client: existingVisit.client,
+                    businessName: existingVisit.businessName,
+                    location: existingVisit.location,
+                    lastVisitDate: existingVisit.date,
+                    purpose: existingVisit.purpose,
+                    status: existingVisit.status
+                }
+            });
+        }
+
+        res.json({
+            exists: false,
+            message: 'Phone number not found, you can create new visit'
+        });
+
+    } catch (err) {
+        console.error('Error checking phone:', err);
+        res.status(500).json({ error: 'Failed to check phone number' });
+    }
+});
 module.exports = router;

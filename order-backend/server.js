@@ -41,6 +41,10 @@ const parties = require("./routes/parties");
 const attendanceRoutes = require('./routes/attendance');// Cron Jobs
 const quotationRoutes = require('./routes/quotations');
 // Initialize Express
+const leadsRoutes = require('./routes/Lead.js');
+const callLogsRoutes = require('./routes/Calllog.js'); 
+
+
 const salaryRoutes = require('./routes/salaryRoutes');
 
 const app = express();
@@ -55,6 +59,8 @@ app.use('/api/salaries', salaryRoutes);
 // Upload endpoint
 app.use("/api/upload", uploadRoute);
 app.use("/api/trash-orders",trashOrdersRoutes);
+app.use('/api/leads',leadsRoutes);
+app.use('/api/call-logs', callLogsRoutes);
 // Routes - SPECIFIC ROUTES FIRST
 app.use('/api/quotations', quotationRoutes);
 app.use('/api/attendance', attendanceRoutes);

@@ -5,10 +5,10 @@ import OrderForm from '../Executive/OrderForm';
 import DigitalMarketingOrderForm from '../Executive/Digitalform';
 import axios from 'axios';
 import GMSLogo from '../assets/GMS_LOGO_.png'
-import { Chart as ChartJS, Title, Tooltip, LineElement, PointElement, Legend, ArcElement, BarElement, CategoryScale, LinearScale, RadialLinearScale, } from 'chart.js';
+import { Chart as ChartJS, Title, Tooltip, LineElement, PointElement, Legend, ArcElement, BarElement, CategoryScale, LinearScale, RadialLinearScale, Filler } from 'chart.js';
 import { Bar, Doughnut, PolarArea, Line } from 'react-chartjs-2';
 
-// Register ChartJS components
+// Register ChartJS components - ADDED Filler PLUGIN
 ChartJS.register(
   LineElement,
   PointElement,
@@ -19,7 +19,8 @@ ChartJS.register(
   BarElement,
   CategoryScale,
   LinearScale,
-  RadialLinearScale
+  RadialLinearScale,
+  Filler
 );
 
 function AdminDashboard() {
@@ -31,7 +32,9 @@ function AdminDashboard() {
     sales: false,
     services: false,
     clients: false,
-    events: false
+    events: false,
+    manageUsers: false,
+    accounts: false
   });
   const location = useLocation();
   const navigate = useNavigate();
@@ -49,11 +52,48 @@ function AdminDashboard() {
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [selectedFormType, setSelectedFormType] = useState('order');
 
+  // Daily report states - UPDATED STATE
+  const [dailyReportData, setDailyReportData] = useState({
+    totalCalls: 0,
+    totalWhatsapp: 0,
+    totalFollowUp: 0,
+    executiveReports: []
+  });
+  const [dailyReportLoading, setDailyReportLoading] = useState(true);
+
   // Month labels
   const monthLabels = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
+
+  // Helper function to get client type data in consistent format
+  const getClientTypeData = () => {
+    const defaultTypes = { 
+      Retail: { count: 0, amount: 0 }, 
+      Renewal: { count: 0, amount: 0 }, 
+      Agent: { count: 0, amount: 0 }, 
+      'Renewal-Agent': { count: 0, amount: 0 } 
+    };
+    
+    if (!chartData?.clientTypes) return defaultTypes;
+    
+    // If clientTypes is already in the new format, return it
+    if (chartData.clientTypes.Retail && typeof chartData.clientTypes.Retail === 'object') {
+      return chartData.clientTypes;
+    }
+    
+    // If clientTypes is in the old format (just numbers), convert to new format
+    return {
+      Retail: { count: chartData.clientTypes.Retail || 0, amount: 0 },
+      Renewal: { count: chartData.clientTypes.Renewal || 0, amount: 0 },
+      Agent: { count: chartData.clientTypes.Agent || 0, amount: 0 },
+      'Renewal-Agent': { count: chartData.clientTypes['Renewal-Agent'] || 0, amount: 0 }
+    };
+  };
+
+  // Get client types data
+  const clientTypes = getClientTypeData();
 
   // Amount formatting helper function
   const formatAmount = (amount) => {
@@ -72,6 +112,12 @@ function AdminDashboard() {
       // Less than 1000
       return numAmount.toString();
     }
+  };
+
+  // Format amount with full display
+  const formatAmountFull = (amount) => {
+    const numAmount = parseFloat(amount) || 0;
+    return '₹' + numAmount.toLocaleString('en-IN');
   };
 
   // Toggle sidebar section
@@ -129,6 +175,82 @@ function AdminDashboard() {
     fetchDashboardData();
   }, [year, selectedMonth]);
 
+  // Fetch daily report data - UPDATED FUNCTION
+  const fetchDailyReportData = async () => {
+    setDailyReportLoading(true);
+    try {
+      const response = await axios.get('/api/reports');
+      const reports = response.data;
+      
+      // Calculate totals from all reports
+      const totals = {
+        totalCalls: 0,
+        totalWhatsapp: 0,
+        totalFollowUp: 0,
+        executiveReports: []
+      };
+
+      if (Array.isArray(reports) && reports.length > 0) {
+        // Group data by executive
+        const executiveMap = new Map();
+        
+        reports.forEach(report => {
+          const executiveName = report.executiveName || 'Unknown';
+          if (!executiveMap.has(executiveName)) {
+            executiveMap.set(executiveName, {
+              executiveName: executiveName,
+              totalCalls: 0,
+              totalWhatsapp: 0,
+              totalFollowUp: 0
+            });
+          }
+          
+          const execData = executiveMap.get(executiveName);
+          execData.totalCalls += report.totalCalls || 0;
+          execData.totalWhatsapp += report.whatsapp || 0;
+          execData.totalFollowUp += report.followUps || 0;
+        });
+
+        // Calculate totals
+        executiveMap.forEach(execData => {
+          totals.totalCalls += execData.totalCalls;
+          totals.totalWhatsapp += execData.totalWhatsapp;
+          totals.totalFollowUp += execData.totalFollowUp;
+        });
+
+        totals.executiveReports = Array.from(executiveMap.values())
+          .sort((a, b) => b.totalCalls - a.totalCalls)
+          .slice(0, 8); // Top 8 executives by calls for better chart display
+      }
+
+      setDailyReportData(totals);
+    } catch (err) {
+      console.error('Daily Report API Error:', err.response?.data || err.message);
+      setDailyReportData({
+        totalCalls: 0,
+        totalWhatsapp: 0,
+        totalFollowUp: 0,
+        executiveReports: []
+      });
+    } finally {
+      setDailyReportLoading(false);
+    }
+  };
+
+  // Fetch daily reports when component mounts
+  useEffect(() => {
+    fetchDailyReportData();
+  }, []);
+
+  // Refresh daily reports data periodically (every 5 minutes)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchDailyReportData();
+    }, 300000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Handle order search
   const handleSearch = async () => {
     if (orderNumber.length !== 10) {
@@ -172,7 +294,26 @@ function AdminDashboard() {
   const pendingPayments = safeArray(chartData?.pendingPayments);
   const pendingServices = safeArray(chartData?.pendingServices);
   const appointments = safeArray(chartData?.appointments);
-  const clientTypes = chartData?.clientTypes || { Retail: 0, Renewal: 0, Agent: 0, 'Renewal-Agent': 0 };
+
+  // Calculate total revenue
+  const calculateTotalRevenue = () => {
+    if (!chartData) return 0;
+    
+    if (selectedMonth !== null) {
+      // For monthly view - use the total amount for the selected month
+      return safeArray(chartData.amountByMonth)[0] || 0;
+    } else {
+      // For yearly view - sum all monthly amounts
+      return safeArray(chartData.amountByMonth).reduce((sum, amount) => sum + amount, 0);
+    }
+  };
+
+  // Calculate revenue growth percentage (you might want to implement this with historical data)
+  const calculateRevenueGrowth = () => {
+    // This is a placeholder - you would need to compare with previous period
+    // For now, returning a static positive growth
+    return 12.5; // 12.5% growth
+  };
 
   // Generate year options
   const years = [];
@@ -187,6 +328,10 @@ function AdminDashboard() {
       navigate('/admin-dashboard/pending-payment');
     } else if (chartType === 'pending-service') {
       navigate('/admin-dashboard/pending-service');
+    } else if (chartType === 'revenue') {
+      navigate('/admin-dashboard/view-orders');
+    } else if (chartType === 'daily-report') {
+      navigate('/admin-dashboard/daily-report');
     }
   };
 
@@ -206,7 +351,226 @@ function AdminDashboard() {
     return `Year ${year}`;
   };
 
-  // Styles
+  // Get current date for display
+  const getCurrentDate = () => {
+    return new Date().toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  // Prepare chart data for daily activities - NEW FUNCTION
+  const prepareDailyActivitiesChartData = () => {
+    const executives = dailyReportData.executiveReports.map(exec => 
+      exec.executiveName.length > 8 ? exec.executiveName.substring(0, 8) + '...' : exec.executiveName
+    );
+    
+    const callsData = dailyReportData.executiveReports.map(exec => exec.totalCalls);
+    const whatsappData = dailyReportData.executiveReports.map(exec => exec.totalWhatsapp);
+    const followUpData = dailyReportData.executiveReports.map(exec => exec.totalFollowUp);
+
+    return {
+      labels: executives,
+      datasets: [
+        {
+          label: 'Calls',
+          data: callsData,
+          backgroundColor: 'rgba(54, 162, 235, 0.8)',
+          borderColor: 'rgba(54, 162, 235, 1)',
+          borderWidth: 1,
+          barPercentage: 0.6,
+          categoryPercentage: 0.7
+        },
+        {
+          label: 'WhatsApp',
+          data: whatsappData,
+          backgroundColor: 'rgba(75, 192, 192, 0.8)',
+          borderColor: 'rgba(75, 192, 192, 1)',
+          borderWidth: 1,
+          barPercentage: 0.6,
+          categoryPercentage: 0.7
+        },
+        {
+          label: 'Follow Ups',
+          data: followUpData,
+          backgroundColor: 'rgba(255, 159, 64, 0.8)',
+          borderColor: 'rgba(255, 159, 64, 1)',
+          borderWidth: 1,
+          barPercentage: 0.6,
+          categoryPercentage: 0.7
+        }
+      ]
+    };
+  };
+
+  // Chart options for daily activities - UPDATED TOOLTIP FUNCTION
+  const dailyActivitiesChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top',
+        labels: {
+          boxWidth: 12,
+          font: {
+            size: 10
+          }
+        }
+      },
+      tooltip: {
+        mode: 'index',
+        intersect: false,
+        callbacks: {
+          title: function(tooltipItems) {
+            // Show executive name in title
+            const executiveIndex = tooltipItems[0].dataIndex;
+            const executive = dailyReportData.executiveReports[executiveIndex];
+            return executive ? executive.executiveName : 'Executive';
+          },
+          label: function() {
+            // Don't show individual dataset labels in the default tooltip
+            return '';
+          },
+          afterBody: function(tooltipItems) {
+            // Show all three metrics in the tooltip body
+            const executiveIndex = tooltipItems[0].dataIndex;
+            const executive = dailyReportData.executiveReports[executiveIndex];
+            
+            if (executive) {
+              return [
+                `📞 Calls: ${executive.totalCalls}`,
+                `💬 WhatsApp: ${executive.totalWhatsapp}`,
+                `🔄 Follow Ups: ${executive.totalFollowUp}`,
+                '',
+                `📊 Total: ${executive.totalCalls + executive.totalWhatsapp + executive.totalFollowUp} activities`
+              ];
+            }
+            return [];
+          }
+        },
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        borderColor: 'rgba(255, 255, 255, 0.2)',
+        borderWidth: 1,
+        padding: 10,
+        cornerRadius: 6
+      }
+    },
+    onClick: (event, elements) => {
+      if (elements.length > 0) {
+        handleChartClick('daily-report');
+      }
+    },
+    scales: {
+      x: {
+        grid: { 
+          display: false 
+        },
+        ticks: { 
+          autoSkip: false,
+          maxRotation: 45,
+          minRotation: 45,
+          font: {
+            size: 10
+          }
+        }
+      },
+      y: {
+        beginAtZero: true,
+        ticks: { 
+          precision: 0, 
+          stepSize: 1,
+          font: {
+            size: 10
+          }
+        },
+        grid: { 
+          color: 'rgba(0,0,0,0.05)' 
+        },
+        title: {
+          display: true,
+          text: 'Number of Activities',
+          font: {
+            size: 11
+          }
+        }
+      }
+    },
+    interaction: {
+      intersect: false,
+      mode: 'index'
+    }
+  };
+
+  // Revenue chart options with FIXED TOOLTIP
+  const revenueChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          title: function(tooltipItems) {
+            // Show month name in title
+            const dataIndex = tooltipItems[0].dataIndex;
+            if (selectedMonth !== null) {
+              return `Week ${dataIndex + 1}`;
+            } else {
+              return monthLabels[dataIndex];
+            }
+          },
+          label: function(context) {
+            const amount = context.raw;
+            const formattedAmount = formatAmount(amount);
+            const fullAmount = formatAmountFull(amount);
+            return [
+              `Revenue: ₹${formattedAmount}`,
+              `Amount: ${fullAmount}`
+            ];
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { 
+          autoSkip: false,
+          color: '#666',
+          maxRotation: 45
+        }
+      },
+      y: {
+        display: true,
+        beginAtZero: true,
+        ticks: {
+          callback: function(value) {
+            if (value >= 100000) {
+              return (value / 100000) + 'L';
+            } else if (value >= 1000) {
+              return (value / 1000) + 'K';
+            }
+            return value;
+          },
+          color: '#666'
+        },
+        grid: {
+          color: 'rgba(0,0,0,0.05)'
+        }
+      }
+    },
+    elements: {
+      point: {
+        radius: 3,
+        hoverRadius: 6
+      }
+    }
+  };
+
+  // Styles - FIXED STYLE PROPERTIES TO AVOID CONFLICTS
   const styles = {
     container: {
       display: 'flex',
@@ -215,7 +579,8 @@ function AdminDashboard() {
     },
     sidebar: {
       width: sidebarOpen ? '250px' : '0',
-      background: 'linear-gradient(to bottom, #001529, #003366)',
+      backgroundColor: '#001529',
+      backgroundImage: 'linear-gradient(to bottom, #001529, #003366)',
       color: '#fff',
       overflowX: 'hidden',
       transition: 'width 0.3s',
@@ -233,7 +598,8 @@ function AdminDashboard() {
       padding: '20px',
       transition: 'margin-left 0.3s',
       overflowY: 'auto',
-      background: 'linear-gradient(to bottom right, #f0f2f5, #e6e9ed)',
+      backgroundColor: '#f0f2f5',
+      backgroundImage: 'linear-gradient(to bottom right, #f0f2f5, #e6e9ed)',
       height: '100vh',
       position: 'relative',
     },
@@ -262,6 +628,56 @@ function AdminDashboard() {
       minHeight: '350px',
       width: '100%',
       boxSizing: 'border-box',
+      position: 'relative',
+    },
+    revenueCard: {
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderRadius: '10px',
+      boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      fontSize: '16px',
+      fontWeight: 'bold',
+      color: '#003366',
+      padding: '20px',
+      height: 'auto',
+      minHeight: '350px',
+      width: '100%',
+      boxSizing: 'border-box',
+      position: 'relative',
+    },
+    revenueAmount: {
+      fontSize: '32px',
+      color: '#003366',
+      marginTop: '10px',
+      fontWeight: 'bold',
+    },
+    revenueSubtext: {
+      fontSize: '14px',
+      color: '#666',
+      marginTop: '5px',
+    },
+    growthBadge: {
+      position: 'absolute',
+      top: '15px',
+      right: '15px',
+      backgroundColor: '#e6f7ff',
+      color: '#003366',
+      padding: '4px 8px',
+      borderRadius: '12px',
+      fontSize: '12px',
+      fontWeight: 'bold',
+    },
+    revenueChart: {
+      width: '100%',
+      height: '180px',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      position: 'relative',
+      marginTop: '10px',
     },
     sidebarHeader: {
       padding: '20px',
@@ -270,7 +686,7 @@ function AdminDashboard() {
       color: '#fff',
       borderBottom: '1px solid rgba(255,255,255,0.1)',
       marginBottom: '10px',
-      background: 'rgba(0,0,0,0.1)',
+      backgroundColor: 'rgba(0,0,0,0.1)',
       cursor: 'pointer',
       display: 'flex',
       justifyContent: 'space-between',
@@ -289,11 +705,8 @@ function AdminDashboard() {
       justifyContent: 'space-between',
       alignItems: 'center',
       cursor: 'pointer',
-      background: 'rgba(0,0,0,0.1)',
+      backgroundColor: 'rgba(0,0,0,0.1)',
       borderBottom: '1px solid rgba(255,255,255,0.05)',
-      ':hover': {
-        background: 'rgba(0,0,0,0.2)',
-      }
     },
     sidebarItem: {
       padding: '12px 30px',
@@ -304,14 +717,14 @@ function AdminDashboard() {
       transition: 'all 0.3s',
       fontSize: '14px',
       borderLeft: '3px solid transparent',
-      background: 'rgba(0,0,0,0.05)',
+      backgroundColor: 'rgba(0,0,0,0.05)',
     },
     hoverEffect: {
-      background: 'rgba(255,255,255,0.1)',
+      backgroundColor: 'rgba(255,255,255,0.1)',
       borderLeft: '3px solid #1890ff',
     },
     activeSidebarItem: {
-      background: 'rgba(255,255,255,0.1)',
+      backgroundColor: 'rgba(255,255,255,0.1)',
       borderLeft: '3px solid #1890ff',
       fontWeight: '600',
     },
@@ -346,7 +759,7 @@ function AdminDashboard() {
       marginBottom: '15px',
       gap: '10px',
       flexWrap: 'wrap',
-      background: 'white',
+      backgroundColor: 'white',
       padding: '15px',
       borderRadius: '8px',
       boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
@@ -434,7 +847,8 @@ function AdminDashboard() {
       width: '32px',
       height: '32px',
       borderRadius: '50%',
-      background: 'linear-gradient(to bottom right, #1890ff, #0050b3)',
+      backgroundColor: '#1890ff',
+      backgroundImage: 'linear-gradient(to bottom right, #1890ff, #0050b3)',
       color: '#fff',
       display: 'flex',
       alignItems: 'center',
@@ -445,7 +859,8 @@ function AdminDashboard() {
       boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
     },
     logoutButton: {
-      background: 'linear-gradient(to bottom right, #ff4d4f, #cf1322)',
+      backgroundColor: '#ff4d4f',
+      backgroundImage: 'linear-gradient(to bottom right, #ff4d4f, #cf1322)',
       color: '#fff',
       border: 'none',
       padding: '6px 12px',
@@ -453,10 +868,6 @@ function AdminDashboard() {
       cursor: 'pointer',
       whiteSpace: 'nowrap',
       fontSize: '14px',
-      transition: 'all 0.3s',
-      ':hover': {
-        opacity: 0.9,
-      },
       boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
     },
     dropdownIcon: {
@@ -467,12 +878,12 @@ function AdminDashboard() {
       position: 'fixed',
       left: '10px',
       top: '15px',
-      zIndex: 30,
+      zIndex: '30',
       fontSize: '24px',
       cursor: 'pointer',
       color: '#003366',
       display: window.innerWidth <= 768 ? 'block' : 'none',
-      background: 'white',
+      backgroundColor: 'white',
       borderRadius: '4px',
       padding: '5px 10px',
       boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
@@ -481,6 +892,64 @@ function AdminDashboard() {
       fontSize: '14px',
       color: '#666',
       marginTop: '5px',
+      fontStyle: 'italic'
+    },
+    // NEW STYLES FOR DAILY ACTIVITIES CARD
+    dailyActivitiesCard: {
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderRadius: '10px',
+      boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      fontSize: '16px',
+      fontWeight: 'bold',
+      color: '#003366',
+      padding: '20px',
+      height: 'auto',
+      minHeight: '350px',
+      width: '100%',
+      boxSizing: 'border-box',
+      position: 'relative',
+    },
+    dailyActivitiesChart: {
+      width: '100%',
+      height: '220px',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      position: 'relative',
+      marginTop: '10px',
+    },
+    totalStats: {
+      display: 'flex',
+      justifyContent: 'space-around',
+      width: '100%',
+      marginTop: '10px',
+      padding: '8px',
+      backgroundColor: '#f8f9fa',
+      borderRadius: '6px',
+    },
+    statItem: {
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+    },
+    statValue: {
+      fontSize: '16px',
+      fontWeight: 'bold',
+      color: '#003366',
+    },
+    statLabel: {
+      fontSize: '10px',
+      color: '#666',
+      marginTop: '2px',
+    },
+    dateDisplay: {
+      fontSize: '11px',
+      color: '#666',
+      marginTop: '8px',
       fontStyle: 'italic'
     }
   };
@@ -496,7 +965,7 @@ function AdminDashboard() {
     return (
       <div style={{
         ...styles.sidebar,
-        ...(window.innerWidth <= 768 && !sidebarOpen ? styles.sidebarHidden : {})
+        ...(window.innerWidth <= 768 && !sidebarOpen ? { display: 'none' } : {})
       }}>
         {/* Logo Header */}
         <div
@@ -546,7 +1015,6 @@ function AdminDashboard() {
               >
                 Dashboard
               </NavLink>
-             
             </>
           )}
         </div>
@@ -588,7 +1056,7 @@ function AdminDashboard() {
               >
                 View All Orders
               </NavLink>
- <NavLink
+              <NavLink
                 to="parties"
                 style={linkStyle('parties')}
                 onMouseEnter={() => setHoveredItem('parties')}
@@ -957,6 +1425,7 @@ function AdminDashboard() {
 
       {/* Sidebar */}
       <Sidebar />
+
       {/* Main Content Area */}
       <div style={styles.content}>
         {location.pathname.includes('create-order') ? (
@@ -1142,7 +1611,56 @@ function AdminDashboard() {
                   <div>Error loading dashboard data.</div>
                 ) : (
                   <div style={styles.dashboardCards}>
-                    {/* Total Orders Bar Chart - UPDATED WITH AMOUNT TOOLTIP */}
+                    {/* REVENUE CARD - FIXED WITH PROPER TOOLTIP */}
+                    <div 
+                      style={styles.card}
+                      onClick={() => handleChartClick('revenue')}
+                    >
+                      <div>Total Revenue</div>
+                      <div style={styles.growthBadge}>
+                        ↑ {calculateRevenueGrowth()}%
+                      </div>
+                      <div style={styles.revenueAmount}>
+                        {formatAmount(calculateTotalRevenue())}
+                      </div>
+                      <div style={styles.revenueSubtext}>
+                        {formatAmountFull(calculateTotalRevenue())}
+                      </div>
+                      <div style={styles.revenueSubtext}>
+                        {getTimePeriodText()}
+                      </div>
+                      <div style={styles.revenueChart}>
+                        <Line
+                          data={{
+                            labels: selectedMonth !== null
+                              ? chartData?.weeklyOrders?.map((_, i) => `Week ${i + 1}`) || ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
+                              : monthLabels,
+                            datasets: [
+                              {
+                                label: 'Revenue',
+                                data: selectedMonth !== null
+                                  ? chartData?.weeklyOrders?.map(w => w.amount || 0) || []
+                                  : safeArray(chartData?.amountByMonth),
+                                borderColor: 'rgba(54, 162, 235, 0.8)',
+                                backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                                tension: 0.4,
+                                fill: {
+                                  target: 'origin',
+                                  above: 'rgba(54, 162, 235, 0.1)',
+                                },
+                                pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+                                pointBorderColor: 'white',
+                                pointBorderWidth: 2,
+                              }
+                            ]
+                          }}
+                          options={revenueChartOptions}
+                        />
+                      </div>
+                      <div style={styles.clickableSection} />
+                    </div>
+
+                    {/* Total Orders Bar Chart - WITH AMOUNT TOOLTIP */}
                     <div style={styles.card}>
                       <div>Total Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : '(Monthly)'}</div>
                       <div style={styles.chartContainer}>
@@ -1172,6 +1690,15 @@ function AdminDashboard() {
                               legend: { display: false },
                               tooltip: {
                                 callbacks: {
+                                  title: function(tooltipItems) {
+                                    // Show month/week name in title
+                                    const dataIndex = tooltipItems[0].dataIndex;
+                                    if (selectedMonth !== null) {
+                                      return `Week ${dataIndex + 1}`;
+                                    } else {
+                                      return monthLabels[dataIndex];
+                                    }
+                                  },
                                   label: (context) => {
                                     const orders = context.raw;
                                     let amount = 0;
@@ -1189,10 +1716,12 @@ function AdminDashboard() {
                                     
                                     // Format the amount
                                     const formattedAmount = formatAmount(amount);
+                                    const fullAmount = formatAmountFull(amount);
                                     
                                     return [
                                       `Orders: ${orders}`,
-                                      `Amount: ₹${formattedAmount}`
+                                      `Revenue: ₹${formattedAmount}`,
+                                      `Amount: ${fullAmount}`
                                     ];
                                   }
                                 }
@@ -1381,7 +1910,7 @@ function AdminDashboard() {
                       <div style={styles.number}>{appointments[1]}</div>
                     </div>
 
-                    {/* Client Types Bar Chart */}
+                    {/* Client Types Bar Chart - FIXED VERSION */}
                     <div style={styles.card}>
                       <div>Client Overview {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}</div>
                       <div style={styles.chartContainer}>
@@ -1389,12 +1918,13 @@ function AdminDashboard() {
                           data={{
                             labels: ['Retail', 'Renewal', 'Agent', 'Renewal-Agent'],
                             datasets: [{
-                              label: 'Client Types',
+                              label: 'Orders',
                               data: [
-                                clientTypes.Retail || 0,
-                                clientTypes.Renewal || 0,
-                                clientTypes.Agent || 0,
-                                clientTypes['Renewal-Agent'] || 0,
+                                // Handle both formats: {count, amount} objects or direct numbers
+                                clientTypes.Retail?.count !== undefined ? clientTypes.Retail.count : (clientTypes.Retail || 0),
+                                clientTypes.Renewal?.count !== undefined ? clientTypes.Renewal.count : (clientTypes.Renewal || 0),
+                                clientTypes.Agent?.count !== undefined ? clientTypes.Agent.count : (clientTypes.Agent || 0),
+                                clientTypes['Renewal-Agent']?.count !== undefined ? clientTypes['Renewal-Agent'].count : (clientTypes['Renewal-Agent'] || 0),
                               ],
                               backgroundColor: [
                                 '#36A2EB',
@@ -1419,7 +1949,24 @@ function AdminDashboard() {
                               tooltip: {
                                 callbacks: {
                                   label: function (context) {
-                                    return `${context.label}: ${context.raw}`;
+                                    const clientType = context.label;
+                                    const count = context.raw;
+                                    
+                                    // Handle both formats for amount display
+                                    let amount = 0;
+                                    if (clientTypes[clientType]?.amount !== undefined) {
+                                      amount = clientTypes[clientType].amount;
+                                    } else if (clientTypes[clientType]?.count !== undefined) {
+                                      amount = clientTypes[clientType].amount || 0;
+                                    }
+                                    
+                                    const formattedAmount = formatAmount(amount);
+                                    const fullAmount = formatAmountFull(amount);
+                                    return [
+                                      `Orders: ${count}`,
+                                      `Revenue: ₹${formattedAmount}`,
+                                      `Amount: ${fullAmount}`
+                                    ];
                                   }
                                 }
                               }
@@ -1435,8 +1982,8 @@ function AdminDashboard() {
                             },
                             onClick: (event, elements) => {
                               if (elements.length > 0) {
-                                const clientTypes = ['Retail', 'Renewal', 'Agent', 'Renewal-Agent'];
-                                const selectedType = clientTypes[elements[0].index];
+                                const clientTypesList = ['Retail', 'Renewal', 'Agent', 'Renewal-Agent'];
+                                const selectedType = clientTypesList[elements[0].index];
 
                                 const queryParams = new URLSearchParams();
                                 queryParams.append('clientType', selectedType);
@@ -1455,10 +2002,13 @@ function AdminDashboard() {
                         />
                       </div>
                       <div style={styles.number}>
-                        {(clientTypes.Retail || 0) +
-                          (clientTypes.Renewal || 0) +
-                          (clientTypes.Agent || 0) +
-                          (clientTypes['Renewal-Agent'] || 0)}
+                        {(
+                          // Handle both formats for total count calculation
+                          (clientTypes.Retail?.count !== undefined ? clientTypes.Retail.count : (clientTypes.Retail || 0)) +
+                          (clientTypes.Renewal?.count !== undefined ? clientTypes.Renewal.count : (clientTypes.Renewal || 0)) +
+                          (clientTypes.Agent?.count !== undefined ? clientTypes.Agent.count : (clientTypes.Agent || 0)) +
+                          (clientTypes['Renewal-Agent']?.count !== undefined ? clientTypes['Renewal-Agent'].count : (clientTypes['Renewal-Agent'] || 0))
+                        )}
                       </div>
                     </div>
 
@@ -1500,7 +2050,39 @@ function AdminDashboard() {
                                   legend: { display: false },
                                   tooltip: {
                                     callbacks: {
-                                      label: (context) => `Agent Orders: ${context.raw}`
+                                      title: function(tooltipItems) {
+                                        // Show month/week name in title
+                                        const dataIndex = tooltipItems[0].dataIndex;
+                                        if (selectedMonth !== null) {
+                                          return `Week ${dataIndex + 1}`;
+                                        } else {
+                                          return monthLabels[dataIndex];
+                                        }
+                                      },
+                                      label: (context) => {
+                                        const orders = context.raw;
+                                        let amount = 0;
+                                        
+                                        // Get the amount for this month/week
+                                        if (selectedMonth === null) {
+                                          // For monthly view
+                                          const monthIndex = context.dataIndex;
+                                          amount = safeArray(chartData?.amountByMonth)[monthIndex] || 0;
+                                        } else {
+                                          // For weekly view (selected month)
+                                          const weekIndex = context.dataIndex;
+                                          amount = chartData?.weeklyAgentOrders?.[weekIndex]?.amount || 0;
+                                        }
+                                        
+                                        const formattedAmount = formatAmount(amount);
+                                        const fullAmount = formatAmountFull(amount);
+                                        
+                                        return [
+                                          `Agent Orders: ${orders}`,
+                                          `Revenue: ₹${formattedAmount}`,
+                                          `Amount: ${fullAmount}`
+                                        ];
+                                      }
                                     }
                                   }
                                 },
@@ -1556,6 +2138,78 @@ function AdminDashboard() {
                               View All Months
                             </button>
                           )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* Daily Activities Card - UPDATED WITH ENHANCED TOOLTIP */}
+                    <div style={styles.dailyActivitiesCard}>
+                      <div>Daily Activities</div>
+                      {dailyReportLoading ? (
+                        <div style={{ 
+                          height: '220px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          color: '#666',
+                          fontSize: '14px'
+                        }}>
+                          Loading daily activities...
+                        </div>
+                      ) : dailyReportData.executiveReports.length === 0 ? (
+                        <div style={{ 
+                          height: '220px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          color: '#666',
+                          fontSize: '14px'
+                        }}>
+                          No daily activities data available
+                        </div>
+                      ) : (
+                        <>
+                          {/* Total Stats Summary */}
+                          <div style={styles.totalStats}>
+                            <div style={styles.statItem}>
+                              <div style={{...styles.statValue, color: '#36A2EB'}}>
+                                {dailyReportData.totalCalls}
+                              </div>
+                              <div style={styles.statLabel}>Total Calls</div>
+                            </div>
+                            <div style={styles.statItem}>
+                              <div style={{...styles.statValue, color: '#4BC0C0'}}>
+                                {dailyReportData.totalWhatsapp}
+                              </div>
+                              <div style={styles.statLabel}>Total WhatsApp</div>
+                            </div>
+                            <div style={styles.statItem}>
+                              <div style={{...styles.statValue, color: '#FF9F40'}}>
+                                {dailyReportData.totalFollowUp}
+                              </div>
+                              <div style={styles.statLabel}>Total Follow Ups</div>
+                            </div>
+                          </div>
+
+                          {/* Executive Activities Bar Chart */}
+                          <div style={styles.dailyActivitiesChart}>
+                            <Bar
+                              data={prepareDailyActivitiesChartData()}
+                              options={dailyActivitiesChartOptions}
+                            />
+                          </div>
+
+                          {/* Date Display */}
+                          <div style={styles.dateDisplay}>
+                            Updated: {getCurrentDate()}
+                          </div>
+                          
+                          {/* Clickable Overlay */}
+                          <div 
+                            style={styles.clickableSection} 
+                            onClick={() => handleChartClick('daily-report')}
+                            title="Click to view detailed daily reports"
+                          />
                         </>
                       )}
                     </div>

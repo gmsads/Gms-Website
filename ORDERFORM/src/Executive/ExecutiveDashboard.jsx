@@ -631,7 +631,7 @@ const ExecutiveDashboard = () => {
                 onClick={handleFieldExecutivePage}
                 className="field-executive-btn"
               >
-                Field Executive
+                Daily Report
               </button>
             )}
 
