@@ -1,171 +1,220 @@
+// Import React and necessary hooks from React library
 import React, { useState, useEffect } from 'react';
+// Import axios for making HTTP requests to the backend API
 import axios from 'axios';
+// Import jsPDF for generating PDF documents
 import jsPDF from 'jspdf';
+// Import html2canvas for converting HTML content to canvas/images
 import html2canvas from 'html2canvas';
-// Configure axios base URL
+
+// Configure the base URL for API requests
 const API_BASE_URL = '/api';
+// Create an axios instance with custom configuration
 const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
+  baseURL: API_BASE_URL, // Set base URL for all requests
+  timeout: 10000, // Set timeout to 10 seconds
 });
 
+// Main Quotation component function
 const Quotation = () => {
+  // State for storing list of parties/customers
   const [parties, setParties] = useState([]);
+  // State for currently selected party ID
   const [selectedParty, setSelectedParty] = useState('');
+  // State for storing product/service requirements/items
   const [requirements, setRequirements] = useState([]);
+  // State to control visibility of "Add Items" modal
   const [showAddItems, setShowAddItems] = useState(false);
+  // State for search term when filtering items
   const [searchTerm, setSearchTerm] = useState('');
+  // State for additional notes on the quotation
   const [notes, setNotes] = useState('');
+  // State for additional charges (shipping, taxes, etc.)
   const [additionalCharges, setAdditionalCharges] = useState([]);
+  // State for terms and conditions
   const [terms, setTerms] = useState(`1) Payment should be Covered and Made to "GLOBAL MARKETING SOLUTIONS", AND BANK, BRANCH: Champagne, A/C: 9127000007166090, IFSCode:UTIB0001336`);
+  // State to track if quotation is being submitted
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // State to control success modal visibility
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  // State to store saved quotation data
   const [savedQuotation, setSavedQuotation] = useState(null);
+  // State for hover effects on buttons
   const [hoverStates, setHoverStates] = useState({
-    addItem: false,
-    submitButton: false,
-    downloadButton: false,
-    printButton: false,
-    removeButtons: {}
+    addItem: false, // Hover state for add item button
+    submitButton: false, // Hover state for submit button
+    downloadButton: false, // Hover state for download button
+    printButton: false, // Hover state for print button
+    removeButtons: {} // Hover states for remove buttons (dynamic)
   });
+  // State to control visibility of "View Quotations" modal
   const [showViewQuotations, setShowViewQuotations] = useState(false);
+  // State to store all quotations from the database
   const [allQuotations, setAllQuotations] = useState([]);
+  // State to detect if user is on mobile device
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  // State for selected quotation details
+  const [selectedQuotation, setSelectedQuotation] = useState(null);
+  // State to control visibility of quotation details modal
+  const [showQuotationDetails, setShowQuotationDetails] = useState(false);
+  // State for company logo - using your specific image
+  const [companyLogo] = useState('/images/Logo GMS.png');
 
-  // Tax options
+  // Tax options configuration with rates and labels - Only GST 18%
   const taxOptions = [
-    { value: 0, label: 'None', type: 'none' },
-    { value: 0, label: 'Exempted', type: 'exempted' },
-    { value: 0, label: 'GST@0%', type: 'gst' },
-    { value: 0.1, label: 'GST@0.1%', type: 'gst' },
-    { value: 0.25, label: 'GST@0.25%', type: 'gst' },
-    { value: 1.5, label: 'GST@1.5%', type: 'gst' },
-    { value: 3, label: 'GST@3%', type: 'gst' },
-    { value: 5, label: 'GST@5%', type: 'gst' },
-    { value: 6, label: 'GST@6%', type: 'gst' },
-    { value: 13.8, label: 'GST@13.8%', type: 'gst' },
-    { value: 18, label: 'GST@18%', type: 'gst' },
-    { value: 14, label: 'GST@14% + Cess@12%', type: 'gst_with_cess' },
-    { value: 28, label: 'GST@28% + Cess@5%', type: 'gst_with_cess' },
-    { value: 40, label: 'GST@40%', type: 'gst' },
-    { value: 28, label: 'GST@28% + Cess@36%', type: 'gst_with_cess' },
-    { value: 28, label: 'GST@28% + Cess@60%', type: 'gst_with_cess' }
+    { value: 18, label: 'GST@18%', type: 'gst' }
   ];
 
-  // Header state
+  // State for quotation header information
   const [quotationHeader, setQuotationHeader] = useState({
-    quotationNo: '',
-    validFor: '10',
-    poNo: '',
-    quotationDate: new Date().toISOString().split('T')[0],
-    validityDate: ''
+    quotationNo: '', // Quotation number
+    validFor: '10', // Validity period in days
+    poNo: '', // Purchase order number
+    quotationDate: new Date().toISOString().split('T')[0], // Current date
+    validityDate: '' // Calculated validity date
   });
 
-  // Form state
+  // State for quotation data and calculations
   const [quotationData, setQuotationData] = useState({
-    items: [],
-    subtotal: 0,
-    discount: 0,
-    tax: 0,
-    taxableAmount: 0,
-    totalAmount: 0,
-    additionalCharges: 0,
-    autoRoundOff: 0
+    items: [], // Array of quotation items
+    subtotal: 0, // Total before discounts and taxes
+    discount: 0, // Total discount amount
+    tax: 0, // Total tax amount
+    taxableAmount: 0, // Amount subject to tax
+    totalAmount: 0, // Final total amount
+    additionalCharges: 0, // Sum of additional charges
+    autoRoundOff: 0 // Auto round off amount
   });
 
-  // Handle window resize for mobile detection
+  // Effect to handle window resize and detect mobile devices
   useEffect(() => {
+    // Function to handle window resize
     const handleResize = () => {
+      // Check if window width is less than 768px (mobile)
       setIsMobile(window.innerWidth < 768);
     };
 
+    // Add event listener for window resize
     window.addEventListener('resize', handleResize);
+    // Cleanup: remove event listener when component unmounts
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, []); // Empty dependency array means this runs only on mount/unmount
 
-  // Calculate validity date based on quotation date and validFor days
+  // Effect to calculate validity date based on quotation date and validity period
   useEffect(() => {
+    // Check if both quotation date and validity period are available
     if (quotationHeader.quotationDate && quotationHeader.validFor) {
+      // Create Date object from quotation date
       const quotationDate = new Date(quotationHeader.quotationDate);
+      // Create new Date object for validity date
       const validityDate = new Date(quotationDate);
+      // Add validity period days to the quotation date
       validityDate.setDate(validityDate.getDate() + parseInt(quotationHeader.validFor));
       
+      // Format validity date as YYYY-MM-DD
       const formattedValidityDate = validityDate.toISOString().split('T')[0];
+      // Update quotation header with calculated validity date
       setQuotationHeader(prev => ({ ...prev, validityDate: formattedValidityDate }));
     }
-  }, [quotationHeader.quotationDate, quotationHeader.validFor]);
+  }, [quotationHeader.quotationDate, quotationHeader.validFor]); // Run when these values change
 
-  // Set initial validity date and fetch next quotation number
+  // Effect to initialize quotation dates and fetch next quotation number
   useEffect(() => {
+    // Get current date
     const today = new Date();
+    // Create validity date (10 days from today)
     const validityDate = new Date(today);
     validityDate.setDate(validityDate.getDate() + 10);
     
+    // Set initial quotation header values
     setQuotationHeader(prev => ({
       ...prev,
-      quotationDate: today.toISOString().split('T')[0],
-      validityDate: validityDate.toISOString().split('T')[0]
+      quotationDate: today.toISOString().split('T')[0], // Today's date
+      validityDate: validityDate.toISOString().split('T')[0] // Validity date
     }));
 
+    // Fetch next available quotation number
     fetchNextQuotationNumber();
-  }, []);
+  }, []); // Run only once when component mounts
 
-  // Fetch next quotation number
+  // Function to fetch next quotation number from API
   const fetchNextQuotationNumber = async () => {
     try {
+      // Make API request to get next quotation number
       const response = await api.get('/quotations/next-number');
+      // Update quotation header with new number
       setQuotationHeader(prev => ({ ...prev, quotationNo: response.data.nextNumber }));
     } catch (error) {
+      // Log error if API call fails
       console.error('Error fetching next quotation number:', error);
-      // Generate fallback number
+      // Generate fallback quotation number
       const fallbackNumber = `GMS${String(1).padStart(3, '0')}`;
+      // Use fallback number
       setQuotationHeader(prev => ({ ...prev, quotationNo: fallbackNumber }));
     }
   };
 
-  // Fetch parties and requirements
+  // Effect to fetch parties and requirements when component mounts
   useEffect(() => {
-    fetchParties();
-    fetchRequirements();
-  }, []);
+    fetchParties(); // Fetch parties list
+    fetchRequirements(); // Fetch requirements/items list
+  }, []); // Run only once when component mounts
 
+  // Function to fetch parties from API
   const fetchParties = async () => {
     try {
+      // Make API request to get parties
       const response = await api.get('/parties');
+      // Update parties state with response data
       setParties(response.data);
     } catch (error) {
+      // Log error if API call fails
       console.error('Error fetching parties:', error);
     }
   };
 
+  // Function to fetch requirements/items from API
   const fetchRequirements = async () => {
     try {
+      // Make API request to get requirements
       const response = await api.get('/requirements');
+      // Update requirements state with response data (or empty array if null)
       setRequirements(response.data || []);
     } catch (error) {
+      // Log error if API call fails
       console.error('Error fetching requirements:', error);
+      // Set empty array if error occurs
       setRequirements([]);
     }
   };
 
-  // Fetch all quotations
+  // Function to fetch all quotations from API
   const fetchAllQuotations = async () => {
     try {
+      // Make API request to get all quotations
       const response = await api.get('/quotations');
+      // Update allQuotations state with response data
       setAllQuotations(response.data);
     } catch (error) {
+      // Log error if API call fails
       console.error('Error fetching quotations:', error);
     }
   };
 
-  // Calculate totals
+  // Function to calculate totals based on items and charges
   const calculateTotals = (itemsList) => {
+    // Calculate subtotal (sum of quantity * price for all items)
     const subtotal = itemsList.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+    // Calculate total discount amount
     const totalDiscount = itemsList.reduce((sum, item) => sum + (item.discountAmount || 0), 0);
+    // Calculate total tax amount
     const totalTax = itemsList.reduce((sum, item) => sum + (item.taxAmount || 0), 0);
+    // Calculate taxable amount (subtotal - discount)
     const taxableAmount = subtotal - totalDiscount;
+    // Calculate total amount (taxable + tax + additional charges)
     const totalAmount = taxableAmount + totalTax + quotationData.additionalCharges;
 
+    // Update quotation data with calculated values
     setQuotationData(prev => ({
       ...prev,
       subtotal,
@@ -176,142 +225,184 @@ const Quotation = () => {
     }));
   };
 
-  // Update item calculations
+  // Function to update item calculations (discount, tax, amount)
   const updateItemCalculations = (item) => {
+    // Get quantity and price (default to 0 if undefined)
     const quantity = item.quantity || 0;
     const price = item.price || 0;
     
+    // Calculate discount amount based on discount type
     const discountAmount = item.discountType === 'percentage' 
-      ? (quantity * price * (item.discount || 0) / 100)
-      : (item.discount || 0);
+      ? (quantity * price * (item.discount || 0) / 100) // Percentage discount
+      : (item.discount || 0); // Fixed amount discount
 
+    // Calculate taxable amount (after discount)
     const taxableAmount = (quantity * price) - discountAmount;
 
+    // Calculate tax amount based on tax type
     let taxAmount = 0;
     if (item.taxType === 'percentage') {
-      taxAmount = taxableAmount * (item.tax || 0) / 100;
+      taxAmount = taxableAmount * (item.tax || 0) / 100; // Percentage tax
     } else {
-      taxAmount = item.tax || 0;
+      taxAmount = item.tax || 0; // Fixed tax amount
     }
 
+    // Calculate final amount (taxable amount + tax)
     const amount = taxableAmount + taxAmount;
 
+    // Update item with calculated values
     item.discountAmount = discountAmount;
     item.taxAmount = taxAmount;
     item.amount = amount;
 
+    // Return updated item
     return item;
   };
 
-  // Add item to quotation
+  // Function to add item to quotation from requirements
   const addItemToQuotation = (requirement) => {
+    // Create new item object
     const newItem = {
-      id: Date.now(),
-      name: requirement.itemName || requirement.name || 'Unnamed Item',
+      id: Date.now(), // Unique ID using timestamp
+      name: requirement.itemName || requirement.name || 'Unnamed Item', // Item name
       description: '', // Initialize empty description
-      quantity: 1,
-      price: requirement.salesPrice || requirement.price || 0,
-      discount: 0,
-      discountType: 'percentage',
-      tax: 1.5,
-      taxType: 'percentage',
-      discountAmount: 0,
-      taxAmount: 0,
-      amount: requirement.salesPrice || requirement.price || 0,
-      unit: requirement.unit || 'PCS'
+      quantity: 1, // Default quantity
+      price: requirement.salesPrice || requirement.price || 0, // Item price
+      discount: 0, // Default discount
+      discountType: 'percentage', // Default discount type
+      tax: 18, // Default tax set to 18% GST
+      taxType: 'percentage', // Default tax type
+      discountAmount: 0, // Initialize discount amount
+      taxAmount: 0, // Initialize tax amount
+      amount: requirement.salesPrice || requirement.price || 0, // Initial amount
+      unit: requirement.unit || 'PCS' // Unit of measurement
     };
 
+    // Calculate item amounts
     updateItemCalculations(newItem);
 
+    // Add new item to quotation items array
     const updatedItems = [...quotationData.items, newItem];
+    // Update quotation data with new items array
     setQuotationData(prev => ({ ...prev, items: updatedItems }));
+    // Recalculate totals with new items
     calculateTotals(updatedItems);
+    // Close add items modal
     setShowAddItems(false);
+    // Clear search term
     setSearchTerm('');
   };
 
-  // Update item in quotation
+  // Function to update item field value
   const updateItem = (index, field, value) => {
+    // Create copy of current items array
     const updatedItems = [...quotationData.items];
+    // Get the item to update
     let item = updatedItems[index];
     
+    // Handle NaN values for numbers
     if (typeof value === 'number' && isNaN(value)) {
-      value = 0;
+      value = 0; // Set to 0 if NaN
     }
     
+    // Update the specific field
     item[field] = value;
+    // Recalculate item amounts
     item = updateItemCalculations(item);
 
+    // Update quotation data with modified items
     setQuotationData(prev => ({ ...prev, items: updatedItems }));
+    // Recalculate totals
     calculateTotals(updatedItems);
   };
 
-  // Remove item from quotation
+  // Function to remove item from quotation
   const removeItem = (index) => {
+    // Filter out the item at specified index
     const updatedItems = quotationData.items.filter((_, i) => i !== index);
+    // Update quotation data with filtered items
     setQuotationData(prev => ({ ...prev, items: updatedItems }));
+    // Recalculate totals
     calculateTotals(updatedItems);
   };
 
-  // Add additional charge
+  // Function to add additional charge row
   const addAdditionalCharge = () => {
+    // Create new charge object
     const newCharge = {
-      id: Date.now(),
-      description: '',
-      amount: 0
+      id: Date.now(), // Unique ID
+      description: '', // Empty description
+      amount: 0 // Zero amount
     };
+    // Add new charge to additional charges array
     setAdditionalCharges(prev => [...prev, newCharge]);
   };
 
-  // Remove additional charge
+  // Function to remove additional charge
   const removeAdditionalCharge = (index) => {
+    // Filter out the charge at specified index
     const updatedCharges = additionalCharges.filter((_, i) => i !== index);
+    // Update additional charges state
     setAdditionalCharges(updatedCharges);
     
+    // Calculate total of remaining additional charges
     const totalAdditionalCharges = updatedCharges.reduce((sum, charge) => sum + parseFloat(charge.amount || 0), 0);
+    // Update quotation data with new additional charges total
     setQuotationData(prev => ({ ...prev, additionalCharges: totalAdditionalCharges }));
+    // Recalculate totals
     calculateTotals(quotationData.items);
   };
 
-  // Update additional charge
+  // Function to update additional charge field
   const updateAdditionalCharge = (index, field, value) => {
+    // Create copy of current additional charges
     const updatedCharges = [...additionalCharges];
     
+    // Handle invalid amount values
     if (field === 'amount' && (isNaN(value) || value === '')) {
-      value = 0;
+      value = 0; // Set to 0 if invalid
     }
     
+    // Update the specific field
     updatedCharges[index][field] = value;
+    // Update additional charges state
     setAdditionalCharges(updatedCharges);
     
+    // Calculate total of all additional charges
     const totalAdditionalCharges = updatedCharges.reduce((sum, charge) => sum + parseFloat(charge.amount || 0), 0);
+    // Update quotation data with new total
     setQuotationData(prev => ({ ...prev, additionalCharges: totalAdditionalCharges }));
+    // Recalculate totals
     calculateTotals(quotationData.items);
   };
 
-  // Submit quotation
+  // Function to submit quotation to backend
   const submitQuotation = async () => {
+    // Validate that a party is selected
     if (!selectedParty) {
       alert('Please select a party');
-      return;
+      return; // Stop execution if no party selected
     }
 
+    // Validate that at least one item is added
     if (quotationData.items.length === 0) {
       alert('Please add at least one item to the quotation');
-      return;
+      return; // Stop execution if no items
     }
 
+    // Set submitting state to true (shows loading)
     setIsSubmitting(true);
 
+    // Prepare quotation data for API
     const quotationPayload = {
-      ...quotationHeader,
-      partyId: selectedParty,
-      partyDetails: parties.find(party => party._id === selectedParty),
-      items: quotationData.items,
-      additionalCharges,
-      notes,
-      terms,
-      summary: {
+      ...quotationHeader, // Spread quotation header fields
+      partyId: selectedParty, // Selected party ID
+      partyDetails: parties.find(party => party._id === selectedParty), // Party details
+      items: quotationData.items, // Quotation items
+      additionalCharges, // Additional charges
+      notes, // Notes
+      terms, // Terms and conditions
+      summary: { // Calculated summary
         subtotal: quotationData.subtotal,
         discount: quotationData.discount,
         tax: quotationData.tax,
@@ -320,14 +411,18 @@ const Quotation = () => {
         totalAmount: quotationData.totalAmount,
         autoRoundOff: quotationData.autoRoundOff
       },
-      status: 'draft',
-      createdAt: new Date().toISOString()
+      status: 'draft', // Default status
+      createdAt: new Date().toISOString() // Current timestamp
     };
 
     try {
+      // Make API request to save quotation
       const response = await api.post('/quotations', quotationPayload);
+      // Store saved quotation
       setSavedQuotation(response.data);
+      // Show success modal
       setShowSuccessModal(true);
+      // Log success
       console.log('Quotation saved:', response.data);
       
       // Reset form after successful submission
@@ -346,186 +441,417 @@ const Quotation = () => {
       setNotes('');
       fetchNextQuotationNumber(); // Get next quotation number
     } catch (error) {
+      // Log error and show alert
       console.error('Error saving quotation:', error);
       alert(`Error saving quotation: ${error.response?.data?.message || error.message}`);
     } finally {
+      // Reset submitting state regardless of success/failure
       setIsSubmitting(false);
     }
   };
 
-const downloadPDF = async () => {
-  if (quotationData.items.length === 0 || !selectedParty) {
-    alert('Please add items and select a party before downloading PDF');
-    return;
-  }
+  // Function to download current quotation as PDF
+  const downloadPDF = async () => {
+    // Validate that items are added and party is selected
+    if (quotationData.items.length === 0 || !selectedParty) {
+      alert('Please add items and select a party before downloading PDF');
+      return; // Stop execution if validation fails
+    }
 
-  try {
-    // Create a printable version of the quotation
-    const printContent = document.createElement('div');
-    printContent.style.cssText = `
-      width: 210mm;
-      min-height: 297mm;
-      padding: 20mm;
-      background: white;
-      color: black;
-      font-family: Arial, sans-serif;
-      box-sizing: border-box;
-    `;
+    try {
+      // Create a div element for PDF content
+      const printContent = document.createElement('div');
+      // Apply styles for PDF printing
+      printContent.style.cssText = `
+        width: 210mm;
+        min-height: 297mm;
+        padding: 15mm;
+        background: white;
+        color: black;
+        font-family: Arial, sans-serif;
+        box-sizing: border-box;
+      `;
 
-    const party = parties.find(p => p._id === selectedParty);
-    
-    printContent.innerHTML = `
-      <div style="text-align: center; margin-bottom: 30px;">
-        <h1 style="margin: 0; color: #2c3e50; font-size: 24px;">GLOBAL MARKETING SOLUTIONS</h1>
-        <h2 style="margin: 5px 0 0 0; color: #7f8c8d; font-size: 18px;">QUOTATION</h2>
-      </div>
+      // Find selected party details
+      const party = parties.find(p => p._id === selectedParty);
       
-      <hr style="border: 1px solid #ddd; margin: 20px 0;">
-      
-      <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
-        <div>
-          <p><strong>Quotation No:</strong> ${quotationHeader.quotationNo}</p>
-          <p><strong>Date:</strong> ${quotationHeader.quotationDate}</p>
-          <p><strong>Valid Until:</strong> ${quotationHeader.validityDate}</p>
-          <p><strong>PO No:</strong> ${quotationHeader.poNo || 'N/A'}</p>
-        </div>
-        <div style="text-align: right;">
-          <p><strong>GLOBAL MARKETING SOLUTIONS</strong></p>
-          <p>Champagne Branch</p>
-          <p>A/C: 9127000007166090</p>
-          <p>IFSC: UTIB0001336</p>
-        </div>
-      </div>
-      
-      ${party ? `
-        <div style="margin-bottom: 20px;">
-          <h3 style="color: #2c3e50; margin-bottom: 10px;">Bill To:</h3>
-          <p style="margin: 2px 0;"><strong>${party.partyName}</strong></p>
-          ${party.mobileNumber ? `<p style="margin: 2px 0;">Mobile: ${party.mobileNumber}</p>` : ''}
-          ${party.billingAddress ? `<p style="margin: 2px 0;">${party.billingAddress}</p>` : ''}
-          ${party.gstin ? `<p style="margin: 2px 0;">GSTIN: ${party.gstin}</p>` : ''}
-        </div>
-      ` : ''}
-      
-      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-        <thead>
-          <tr style="background-color: #2c3e50; color: white;">
-            <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">No</th>
-            <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Item Description</th>
-            <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Qty</th>
-            <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Unit</th>
-            <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">Price</th>
-            <th style="padding: 10px; border: 1px solid #ddd; text-align: right;">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${quotationData.items.map((item, index) => `
-            <tr>
-              <td style="padding: 8px; border: 1px solid #ddd;">${index + 1}</td>
-              <td style="padding: 8px; border: 1px solid #ddd;">
-                <strong>${item.name}</strong>
-                ${item.description ? `<br><small>${item.description}</small>` : ''}
-              </td>
-              <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${item.quantity}</td>
-              <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${item.unit}</td>
-              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">₹${item.price.toFixed(2)}</td>
-              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">₹${item.amount.toFixed(2)}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-      
-      <div style="display: flex; justify-content: flex-end; margin-top: 30px;">
-        <div style="background: #f8f9fa; padding: 20px; border: 1px solid #ddd; width: 300px;">
-          <h3 style="margin-top: 0; color: #2c3e50;">SUMMARY</h3>
-          <div style="display: flex; justify-content: space-between; margin: 8px 0;">
-            <span>Subtotal:</span>
-            <span>₹${quotationData.subtotal.toFixed(2)}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; margin: 8px 0; color: #e74c3c;">
-            <span>Discount:</span>
-            <span>-₹${quotationData.discount.toFixed(2)}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; margin: 8px 0;">
-            <span>Tax:</span>
-            <span>₹${quotationData.tax.toFixed(2)}</span>
-          </div>
-          ${additionalCharges.map(charge => charge.amount > 0 ? `
-            <div style="display: flex; justify-content: space-between; margin: 8px 0;">
-              <span>${charge.description}:</span>
-              <span>₹${parseFloat(charge.amount).toFixed(2)}</span>
+      // Create HTML content for PDF with your specific image as logo
+      printContent.innerHTML = `
+        <!-- Header section with your logo and title -->
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; border-bottom: 2px solid #3498db; padding-bottom: 15px;">
+          <!-- Logo section with your image -->
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center;">
+              <img src="${companyLogo}" alt="Company Logo" style="height: 80px; width: auto; margin-right: 15px; border-radius: 8px;" />
+              <div>
+                <h1 style="margin: 0; color: #2c3e50; font-size: 24px; font-weight: bold;">GLOBAL MARKETING SOLUTIONS</h1>
+                <p style="margin: 5px 0 0 0; color: #7f8c8d; font-size: 14px;">One Stop Solution For Your Problem</p>
+              </div>
             </div>
-          ` : '').join('')}
-          <hr style="border-top: 2px solid #2c3e50; margin: 15px 0;">
-          <div style="display: flex; justify-content: space-between; font-size: 18px; font-weight: bold;">
-            <span>Total:</span>
-            <span>₹${quotationData.totalAmount.toFixed(2)}</span>
+          </div>
+          <!-- Title section -->
+          <div style="text-align: center; flex: 1;">
+            <h2 style="margin: 5px 0 0 0; color: #2c3e50; font-size: 28px; font-weight: bold;">QUOTATION</h2>
+          </div>
+          <!-- Empty section for layout balance -->
+          <div style="flex: 1; text-align: right;">
           </div>
         </div>
-      </div>
-      
-      ${terms ? `
-        <div style="margin-top: 40px;">
-          <h3 style="color: #2c3e50;">Terms & Conditions:</h3>
-          <p style="font-size: 14px; line-height: 1.4;">${terms.replace(/\n/g, '<br>')}</p>
+        
+        <!-- Quotation details section -->
+        <div style="display: flex; justify-content: space-between; margin-bottom: 25px;">
+          <!-- Left side: Quotation information -->
+          <div style="flex: 1;">
+            <p style="margin: 5px 0; font-size: 14px;"><strong>Quotation No:</strong> ${quotationHeader.quotationNo}</p>
+            <p style="margin: 5px 0; font-size: 14px;"><strong>Date:</strong> ${quotationHeader.quotationDate}</p>
+            <p style="margin: 5px 0; font-size: 14px;"><strong>Valid Until:</strong> ${quotationHeader.validityDate}</p>
+            <p style="margin: 5px 0; font-size: 14px;"><strong>PO No:</strong> ${quotationHeader.poNo || 'N/A'}</p>
+          </div>
+          <!-- Right side: Company bank details -->
+          <div style="flex: 1; text-align: right;">
+            <p style="margin: 5px 0; font-size: 14px;"><strong>GLOBAL MARKETING SOLUTIONS</strong></p>
+            <p style="margin: 5px 0; font-size: 14px;">Champagne Branch</p>
+            <p style="margin: 5px 0; font-size: 14px;">A/C: 9127000007166090</p>
+            <p style="margin: 5px 0; font-size: 14px;">IFSC: UTIB0001336</p>
+          </div>
         </div>
-      ` : ''}
-      
-      ${notes ? `
-        <div style="margin-top: 20px;">
-          <h3 style="color: #2c3e50;">Notes:</h3>
-          <p style="font-size: 14px;">${notes}</p>
+        
+        <!-- Party details section -->
+        ${party ? `
+          <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+            <h3 style="color: #2c3e50; margin-bottom: 10px; border-bottom: 1px solid #3498db; padding-bottom: 5px; font-size: 16px;">Bill To:</h3>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>${party.partyName}</strong></p>
+            ${party.mobileNumber ? `<p style="margin: 4px 0; font-size: 14px;">Mobile: ${party.mobileNumber}</p>` : ''}
+            ${party.billingAddress ? `<p style="margin: 4px 0; font-size: 14px;">${party.billingAddress}</p>` : ''}
+            ${party.gstin ? `<p style="margin: 4px 0; font-size: 14px;">GSTIN: ${party.gstin}</p>` : ''}
+          </div>
+        ` : ''}
+        
+        <!-- Items table -->
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px;">
+          <thead>
+            <tr style="background-color: #2c3e50; color: white;">
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: left; font-size: 12px;">#</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: left; font-size: 12px;">Item Description</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 12px;">Qty</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 12px;">Unit</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: right; font-size: 12px;">Price (₹)</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: right; font-size: 12px;">Amount (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${quotationData.items.map((item, index) => `
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-size: 12px;">${index + 1}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; font-size: 12px;">
+                  <strong>${item.name}</strong>
+                  ${item.description ? `<br><small style="color: #666; font-size: 11px;">${item.description}</small>` : ''}
+                </td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-size: 12px;">${item.quantity}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-size: 12px;">${item.unit}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-size: 12px;">₹${item.price.toFixed(2)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-size: 12px;">₹${item.amount.toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        
+        <!-- Summary section -->
+        <div style="display: flex; justify-content: flex-end; margin-top: 25px;">
+          <div style="background: #f8f9fa; padding: 20px; border: 2px solid #3498db; border-radius: 8px; width: 300px;">
+            <h3 style="margin-top: 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 8px; font-size: 16px;">SUMMARY</h3>
+            <div style="display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px;">
+              <span>Subtotal:</span>
+              <span>₹${quotationData.subtotal.toFixed(2)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin: 10px 0; color: #e74c3c; font-size: 13px;">
+              <span>Discount:</span>
+              <span>-₹${quotationData.discount.toFixed(2)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px;">
+              <span>Tax (18% GST):</span>
+              <span>₹${quotationData.tax.toFixed(2)}</span>
+            </div>
+            ${additionalCharges.map(charge => charge.amount > 0 ? `
+              <div style="display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px;">
+                <span>${charge.description}:</span>
+                <span>₹${parseFloat(charge.amount).toFixed(2)}</span>
+              </div>
+            ` : '').join('')}
+            <hr style="border-top: 2px solid #2c3e50; margin: 15px 0;">
+            <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; color: #2c3e50;">
+              <span>Total Amount:</span>
+              <span>₹${quotationData.totalAmount.toFixed(2)}</span>
+            </div>
+          </div>
         </div>
-      ` : ''}
-      
-      <div style="margin-top: 60px; text-align: center; color: #7f8c8d;">
-        <p>Thank you for your business!</p>
-        <p><strong>Authorized Signatory</strong><br>Global Marketing Solutions</p>
-      </div>
-    `;
+        
+        <!-- Terms and conditions section -->
+        ${terms ? `
+          <div style="margin-top: 30px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+            <h3 style="color: #2c3e50; margin-bottom: 10px; border-bottom: 1px solid #3498db; padding-bottom: 5px; font-size: 16px;">Terms & Conditions:</h3>
+            <p style="font-size: 12px; line-height: 1.5;">${terms.replace(/\n/g, '<br>')}</p>
+          </div>
+        ` : ''}
+        
+        <!-- Notes section -->
+        ${notes ? `
+          <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+            <h3 style="color: #2c3e50; margin-bottom: 8px; font-size: 14px;">Notes:</h3>
+            <p style="font-size: 12px;">${notes}</p>
+          </div>
+        ` : ''}
+        
+        <!-- Footer section -->
+        <div style="margin-top: 40px; text-align: center; color: #7f8c8d; padding-top: 15px; border-top: 2px solid #3498db;">
+          <p style="font-size: 14px; margin-bottom: 8px;">Thank you for your business!</p>
+          <p style="font-size: 12px;"><strong>Authorized Signatory</strong><br>Global Marketing Solutions</p>
+          <div style="margin-top: 15px; font-size: 10px; color: #95a5a6;">
+            <p>GLOBAL MARKETING SOLUTIONS • Champagne Branch</p>
+            <p>Phone: +91 XXXXX XXXXX • Email: info@globalmarketingsolutions.com</p>
+          </div>
+        </div>
+      `;
 
-    // Add to document temporarily
-    document.body.appendChild(printContent);
-    
-    // Convert to canvas then to PDF
-    const canvas = await html2canvas(printContent, {
-      scale: 2,
-      useCORS: true,
-      logging: false
-    });
-    
-    // Remove temporary element
-    document.body.removeChild(printContent);
-    
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgWidth = 210;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    
-    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-    pdf.save(`quotation_${quotationHeader.quotationNo}.pdf`);
-    
-  } catch (error) {
-    console.error('PDF Generation Error:', error);
-    alert('Error creating PDF. Please try again.');
-  }
-};
-  // Print Quotation
+      // Add the content to document body temporarily
+      document.body.appendChild(printContent);
+      
+      // Convert HTML content to canvas
+      const canvas = await html2canvas(printContent, {
+        scale: 2, // High resolution for better print quality
+        useCORS: true, // Allow cross-origin images
+        logging: false, // Disable console logging
+        allowTaint: true // Allow tainted images
+      });
+      
+      // Remove temporary element from document
+      document.body.removeChild(printContent);
+      
+      // Convert canvas to image data URL
+      const imgData = canvas.toDataURL('image/png');
+      // Create new PDF document
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210; // A4 width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width; // Calculate height to maintain aspect ratio
+      
+      // Add image to PDF
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      // Download PDF with quotation number in filename
+      pdf.save(`quotation_${quotationHeader.quotationNo}.pdf`);
+      
+    } catch (error) {
+      // Log error and show alert
+      console.error('PDF Generation Error:', error);
+      alert('Error creating PDF. Please try again.');
+    }
+  };
+
+  // Function to download specific quotation as PDF
+  const downloadQuotationPDF = async (quotation) => {
+    try {
+      // Create div element for PDF content
+      const printContent = document.createElement('div');
+      // Apply PDF styles
+      printContent.style.cssText = `
+        width: 210mm;
+        min-height: 297mm;
+        padding: 15mm;
+        background: white;
+        color: black;
+        font-family: Arial, sans-serif;
+        box-sizing: border-box;
+      `;
+
+      // Get party details from quotation
+      const party = quotation.partyDetails || quotation.partyId;
+      
+      // Create HTML content with your specific image as logo
+      printContent.innerHTML = `
+        <!-- Header with your logo -->
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; border-bottom: 2px solid #3498db; padding-bottom: 15px;">
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center;">
+              <img src="${companyLogo}" alt="Company Logo" style="height: 80px; width: auto; margin-right: 15px; border-radius: 8px;" />
+              <div>
+                <h1 style="margin: 0; color: #2c3e50; font-size: 24px; font-weight: bold;">GLOBAL MARKETING SOLUTIONS</h1>
+                <p style="margin: 5px 0 0 0; color: #7f8c8d; font-size: 14px;">One Stop Solution For Your Problem</p>
+              </div>
+            </div>
+          </div>
+          <div style="text-align: center; flex: 1;">
+            <h2 style="margin: 5px 0 0 0; color: #2c3e50; font-size: 28px; font-weight: bold;">QUOTATION</h2>
+          </div>
+          <div style="flex: 1; text-align: right;">
+          </div>
+        </div>
+        
+        <!-- Quotation details -->
+        <div style="display: flex; justify-content: space-between; margin-bottom: 25px;">
+          <div style="flex: 1;">
+            <p style="margin: 5px 0; font-size: 14px;"><strong>Quotation No:</strong> ${quotation.quotationNo}</p>
+            <p style="margin: 5px 0; font-size: 14px;"><strong>Date:</strong> ${quotation.quotationDate}</p>
+            <p style="margin: 5px 0; font-size: 14px;"><strong>Valid Until:</strong> ${quotation.validityDate}</p>
+            <p style="margin: 5px 0; font-size: 14px;"><strong>PO No:</strong> ${quotation.poNo || 'N/A'}</p>
+          </div>
+          <div style="flex: 1; text-align: right;">
+            <p style="margin: 5px 0; font-size: 14px;"><strong>GLOBAL MARKETING SOLUTIONS</strong></p>
+            <p style="margin: 5px 0; font-size: 14px;">Champagne Branch</p>
+            <p style="margin: 5px 0; font-size: 14px;">A/C: 9127000007166090</p>
+            <p style="margin: 5px 0; font-size: 14px;">IFSC: UTIB0001336</p>
+          </div>
+        </div>
+        
+        <!-- Party details -->
+        ${party ? `
+          <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+            <h3 style="color: #2c3e50; margin-bottom: 10px; border-bottom: 1px solid #3498db; padding-bottom: 5px; font-size: 16px;">Bill To:</h3>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>${party.partyName}</strong></p>
+            ${party.mobileNumber ? `<p style="margin: 4px 0; font-size: 14px;">Mobile: ${party.mobileNumber}</p>` : ''}
+            ${party.billingAddress ? `<p style="margin: 4px 0; font-size: 14px;">${party.billingAddress}</p>` : ''}
+            ${party.gstin ? `<p style="margin: 4px 0; font-size: 14px;">GSTIN: ${party.gstin}</p>` : ''}
+          </div>
+        ` : ''}
+        
+        <!-- Items table -->
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px;">
+          <thead>
+            <tr style="background-color: #2c3e50; color: white;">
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: left; font-size: 12px;">#</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: left; font-size: 12px;">Item Description</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 12px;">Qty</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 12px;">Unit</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: right; font-size: 12px;">Price (₹)</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: right; font-size: 12px;">Amount (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${quotation.items.map((item, index) => `
+              <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-size: 12px;">${index + 1}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; font-size: 12px;">
+                  <strong>${item.name}</strong>
+                  ${item.description ? `<br><small style="color: #666; font-size: 11px;">${item.description}</small>` : ''}
+                </td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-size: 12px;">${item.quantity}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-size: 12px;">${item.unit}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-size: 12px;">₹${item.price.toFixed(2)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-size: 12px;">₹${item.amount.toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        
+        <!-- Summary section -->
+        <div style="display: flex; justify-content: flex-end; margin-top: 25px;">
+          <div style="background: #f8f9fa; padding: 20px; border: 2px solid #3498db; border-radius: 8px; width: 300px;">
+            <h3 style="margin-top: 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 8px; font-size: 16px;">SUMMARY</h3>
+            <div style="display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px;">
+              <span>Subtotal:</span>
+              <span>₹${quotation.summary?.subtotal?.toFixed(2) || '0.00'}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin: 10px 0; color: #e74c3c; font-size: 13px;">
+              <span>Discount:</span>
+              <span>-₹${quotation.summary?.discount?.toFixed(2) || '0.00'}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px;">
+              <span>Tax (18% GST):</span>
+              <span>₹${quotation.summary?.tax?.toFixed(2) || '0.00'}</span>
+            </div>
+            ${quotation.additionalCharges?.map(charge => charge.amount > 0 ? `
+              <div style="display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px;">
+                <span>${charge.description}:</span>
+                <span>₹${parseFloat(charge.amount).toFixed(2)}</span>
+              </div>
+            ` : '').join('')}
+            <hr style="border-top: 2px solid #2c3e50; margin: 15px 0;">
+            <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; color: #2c3e50;">
+              <span>Total Amount:</span>
+              <span>₹${quotation.summary?.totalAmount?.toFixed(2) || '0.00'}</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Terms and conditions -->
+        ${quotation.terms ? `
+          <div style="margin-top: 30px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+            <h3 style="color: #2c3e50; margin-bottom: 10px; border-bottom: 1px solid #3498db; padding-bottom: 5px; font-size: 16px;">Terms & Conditions:</h3>
+            <p style="font-size: 12px; line-height: 1.5;">${quotation.terms.replace(/\n/g, '<br>')}</p>
+          </div>
+        ` : ''}
+        
+        <!-- Notes -->
+        ${quotation.notes ? `
+          <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+            <h3 style="color: #2c3e50; margin-bottom: 8px; font-size: 14px;">Notes:</h3>
+            <p style="font-size: 12px;">${quotation.notes}</p>
+          </div>
+        ` : ''}
+        
+        <!-- Footer -->
+        <div style="margin-top: 40px; text-align: center; color: #7f8c8d; padding-top: 15px; border-top: 2px solid #3498db;">
+          <p style="font-size: 14px; margin-bottom: 8px;">Thank you for your business!</p>
+          <p style="font-size: 12px;"><strong>Authorized Signatory</strong><br>Global Marketing Solutions</p>
+          <div style="margin-top: 15px; font-size: 10px; color: #95a5a6;">
+            <p>GLOBAL MARKETING SOLUTIONS • Champagne Branch</p>
+            <p>Phone: +91 XXXXX XXXXX • Email: info@globalmarketingsolutions.com</p>
+          </div>
+        </div>
+      `;
+
+      // Add to document and convert to PDF
+      document.body.appendChild(printContent);
+      
+      const canvas = await html2canvas(printContent, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        allowTaint: true
+      });
+      
+      document.body.removeChild(printContent);
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      pdf.save(`quotation_${quotation.quotationNo}.pdf`);
+      
+    } catch (error) {
+      console.error('PDF Generation Error:', error);
+      alert('Error creating PDF. Please try again.');
+    }
+  };
+
+  // Function to view quotation details
+  const viewQuotation = (quotation) => {
+    // Set selected quotation
+    setSelectedQuotation(quotation);
+    // Show quotation details modal
+    setShowQuotationDetails(true);
+  };
+
+  // Function to print quotation
   const printQuotation = () => {
+    // Validate that items are added
     if (quotationData.items.length === 0) {
       alert('Please add items to the quotation before printing');
       return;
     }
 
+    // Validate that party is selected
     if (!selectedParty) {
       alert('Please select a party before printing');
       return;
     }
 
-    // Create a print-friendly version
+    // Create new window for printing
     const printWindow = window.open('', '_blank');
+    // Find selected party details
     const party = parties.find(p => p._id === selectedParty);
     
+    // Write HTML content to print window with your logo
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -534,64 +860,107 @@ const downloadPDF = async () => {
         <style>
           body { 
             font-family: Arial, sans-serif; 
-            margin: 20px; 
+            margin: 15px; 
             color: #333;
+            font-size: 12px;
           }
           .header { 
-            text-align: center; 
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             border-bottom: 2px solid #3498db; 
-            padding-bottom: 10px;
-            margin-bottom: 20px;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+          }
+          .logo-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+          }
+          .logo {
+            height: 70px;
+            width: auto;
+            margin-right: 12px;
+            border-radius: 6px;
+          }
+          .company-info {
+            flex: 1;
           }
           .company-name { 
-            font-size: 24px; 
+            font-size: 20px; 
             font-weight: bold; 
             color: #2c3e50;
+            margin: 0;
+          }
+          .company-tagline {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin: 3px 0 0 0;
+          }
+          .title-container {
+            text-align: center;
+            flex: 1;
           }
           .quotation-title { 
-            font-size: 18px; 
-            color: #7f8c8d;
+            font-size: 24px; 
+            color: #2c3e50;
+            font-weight: bold;
+            margin: 0;
           }
           .details-section { 
             display: flex; 
             justify-content: space-between; 
-            margin-bottom: 20px;
+            margin-bottom: 15px;
           }
           .party-details, .quotation-details { 
             width: 48%; 
           }
+          .party-details {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+          }
           table { 
             width: 100%; 
             border-collapse: collapse; 
-            margin: 20px 0;
+            margin: 15px 0;
+            font-size: 11px;
           }
           th { 
             background-color: #2c3e50; 
             color: white; 
-            padding: 10px; 
+            padding: 8px; 
             text-align: left;
+            border: 1px solid #ddd;
           }
           td { 
-            padding: 8px 10px; 
+            padding: 6px; 
             border: 1px solid #ddd;
           }
           .summary { 
             float: right; 
-            width: 300px; 
-            border: 1px solid #ddd; 
+            width: 280px; 
+            border: 2px solid #3498db; 
             padding: 15px; 
             background-color: #f8f9fa;
+            border-radius: 6px;
+            font-size: 11px;
           }
           .total { 
             font-weight: bold; 
-            font-size: 16px; 
+            font-size: 14px; 
             border-top: 2px solid #2c3e50; 
-            padding-top: 10px;
+            padding-top: 8px;
+            color: #2c3e50;
           }
           .footer { 
-            margin-top: 50px; 
+            margin-top: 30px; 
             text-align: center; 
             color: #7f8c8d;
+            padding-top: 12px;
+            border-top: 2px solid #3498db;
+            font-size: 10px;
           }
           @media print {
             body { margin: 0; }
@@ -600,11 +969,24 @@ const downloadPDF = async () => {
         </style>
       </head>
       <body>
+        <!-- Header with your logo -->
         <div class="header">
-          <div class="company-name">GLOBAL MARKETING SOLUTIONS</div>
-          <div class="quotation-title">QUOTATION</div>
+          <div class="logo-container">
+            <img src="${companyLogo}" alt="Company Logo" class="logo" />
+            <div class="company-info">
+              <h1 class="company-name">GLOBAL MARKETING SOLUTIONS</h1>
+              <p class="company-tagline">One Stop Solution For Your Problem</p>
+            </div>
+          </div>
+          <div class="title-container">
+            <div class="quotation-title">QUOTATION</div>
+          </div>
+          <div style="flex: 1;">
+            <!-- Empty for balance -->
+          </div>
         </div>
 
+        <!-- Quotation and party details -->
         <div class="details-section">
           <div class="quotation-details">
             <strong>Quotation Details:</strong><br>
@@ -624,16 +1006,15 @@ const downloadPDF = async () => {
           </div>
         </div>
 
+        <!-- Items table -->
         <table>
           <thead>
             <tr>
-              <th>Sr.No</th>
+              <th>#</th>
               <th>Item Description</th>
               <th>Qty</th>
               <th>Unit</th>
               <th>Rate (₹)</th>
-              <th>Discount</th>
-              <th>Tax</th>
               <th>Amount (₹)</th>
             </tr>
           </thead>
@@ -641,56 +1022,63 @@ const downloadPDF = async () => {
             ${quotationData.items.map((item, index) => `
               <tr>
                 <td>${index + 1}</td>
-                <td>${item.name}${item.description ? '<br><small>' + item.description + '</small>' : ''}</td>
+                <td>${item.name}${item.description ? '<br><small style="color: #666;">' + item.description + '</small>' : ''}</td>
                 <td>${item.quantity}</td>
                 <td>${item.unit}</td>
                 <td>${item.price.toFixed(2)}</td>
-                <td>${item.discount || 0}${item.discountType === 'percentage' ? '%' : '₹'}</td>
-                <td>${item.tax || 0}${item.taxType === 'percentage' ? '%' : '₹'}</td>
                 <td>${item.amount.toFixed(2)}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
 
+        <!-- Summary section -->
         <div class="summary">
-          <strong>SUMMARY</strong><br><br>
+          <strong style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 8px; display: block; margin-bottom: 12px;">SUMMARY</strong>
           Subtotal: ₹${quotationData.subtotal.toFixed(2)}<br>
           Discount: -₹${quotationData.discount.toFixed(2)}<br>
-          Tax: ₹${quotationData.tax.toFixed(2)}<br>
+          Tax (18% GST): ₹${quotationData.tax.toFixed(2)}<br>
           ${additionalCharges.map(charge => 
             charge.description && charge.amount ? 
             `${charge.description}: ₹${parseFloat(charge.amount).toFixed(2)}<br>` : ''
           ).join('')}
-          <div class="total">Total: ₹${quotationData.totalAmount.toFixed(2)}</div>
+          <div class="total">Total Amount: ₹${quotationData.totalAmount.toFixed(2)}</div>
         </div>
 
         <div style="clear: both;"></div>
 
+        <!-- Terms and conditions -->
         ${terms ? `
-          <div style="margin-top: 30px;">
+          <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef;">
             <strong>Terms & Conditions:</strong><br>
             ${terms.replace(/\n/g, '<br>')}
           </div>
         ` : ''}
 
+        <!-- Notes -->
         ${notes ? `
-          <div style="margin-top: 20px;">
+          <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef;">
             <strong>Notes:</strong><br>
             ${notes}
           </div>
         ` : ''}
 
+        <!-- Footer -->
         <div class="footer">
           <p>Thank you for your business!</p>
-          <p>Authorized Signatory<br>Global Marketing Solutions</p>
+          <p><strong>Authorized Signatory</strong><br>Global Marketing Solutions</p>
+          <div style="margin-top: 15px;">
+            <p>GLOBAL MARKETING SOLUTIONS • Champagne Branch</p>
+            <p>Phone: +91 XXXXX XXXXX • Email: info@globalmarketingsolutions.com</p>
+          </div>
         </div>
 
-        <div class="no-print" style="margin-top: 20px; text-align: center;">
-          <button onclick="window.print()" style="padding: 10px 20px; background: #3498db; color: white; border: none; cursor: pointer;">
+        <!-- Print buttons (hidden when printing) -->
+        <div class="no-print" style="margin-top: 15px; text-align: center;">
+          <button onclick="window.print()" style="padding: 8px 16px; background: #3498db; color: white; border: none; cursor: pointer; font-size: 11px;">
             Print Quotation
           </button>
-          <button onclick="window.close()" style="padding: 10px 20px; background: #95a5a6; color: white; border: none; cursor: pointer; margin-left: 10px;">
+          <button onclick="window.close()" style="padding: 8px 16px; background: #95a5a6; color: white; border: none; cursor: pointer; margin-left: 8px; font-size: 11px;">
             Close
           </button>
         </div>
@@ -698,71 +1086,79 @@ const downloadPDF = async () => {
       </html>
     `);
     
+    // Close the document writing
     printWindow.document.close();
   };
 
-  // Filter requirements based on search
+  // Filter requirements based on search term
   const filteredRequirements = requirements.filter(req => {
+    // Skip if requirement is null/undefined
     if (!req) return false;
     
+    // Convert search term to lowercase for case-insensitive search
     const searchLower = searchTerm.toLowerCase();
+    // Check if search term matches any of these fields
     return (
-      (req.itemName?.toLowerCase().includes(searchLower)) ||
-      (req.name?.toLowerCase().includes(searchLower)) ||
-      (req.itemCode?.toLowerCase().includes(searchLower)) ||
-      (req.code?.toLowerCase().includes(searchLower)) ||
-      (req.description?.toLowerCase().includes(searchLower))
+      (req.itemName?.toLowerCase().includes(searchLower)) || // Item name
+      (req.name?.toLowerCase().includes(searchLower)) || // Alternative name field
+      (req.itemCode?.toLowerCase().includes(searchLower)) || // Item code
+      (req.code?.toLowerCase().includes(searchLower)) || // Alternative code field
+      (req.description?.toLowerCase().includes(searchLower)) // Description
     );
   });
 
-  // Get selected party details
+  // Get selected party details for display
   const selectedPartyDetails = parties.find(party => party._id === selectedParty);
 
   // Mobile responsive styles
   const containerStyle = {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: isMobile ? '10px' : '20px',
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-    backgroundColor: '#f8f9fa',
-    minHeight: '100vh',
-    fontSize: isMobile ? '14px' : '16px'
+    maxWidth: '1200px', // Maximum width for large screens
+    margin: '0 auto', // Center the container
+    padding: isMobile ? '10px' : '20px', // Responsive padding
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", // Font stack
+    backgroundColor: '#f8f9fa', // Light background color
+    minHeight: '100vh', // Full viewport height
+    fontSize: isMobile ? '14px' : '16px' // Responsive font size
   };
 
+  // Card style for consistent UI elements
   const cardStyle = {
-    backgroundColor: 'white',
-    borderRadius: isMobile ? '8px' : '12px',
-    padding: isMobile ? '16px' : '24px',
-    marginBottom: isMobile ? '16px' : '24px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-    border: '1px solid #e9ecef'
+    backgroundColor: 'white', // White background
+    borderRadius: isMobile ? '8px' : '12px', // Responsive border radius
+    padding: isMobile ? '16px' : '24px', // Responsive padding
+    marginBottom: isMobile ? '16px' : '24px', // Responsive margin
+    boxShadow: '0 2px 10px rgba(0,0,0,0.08)', // Subtle shadow
+    border: '1px solid #e9ecef' // Light border
   };
 
+  // Reusable button style function
   const buttonStyle = (color, ) => ({
-    backgroundColor: color,
-    color: 'white',
-    border: 'none',
-    padding: isMobile ? '10px 16px' : '14px 28px',
-    borderRadius: isMobile ? '6px' : '8px',
-    cursor: 'pointer',
-    fontSize: isMobile ? '13px' : '15px',
-    fontWeight: '600',
-    transition: 'all 0.3s ease',
-    width: isMobile ? '100%' : 'auto',
-    marginBottom: isMobile ? '8px' : '0'
+    backgroundColor: color, // Base color
+    color: 'white', // Text color
+    border: 'none', // No border
+    padding: isMobile ? '10px 16px' : '14px 28px', // Responsive padding
+    borderRadius: isMobile ? '6px' : '8px', // Responsive border radius
+    cursor: 'pointer', // Pointer cursor on hover
+    fontSize: isMobile ? '13px' : '15px', // Responsive font size
+    fontWeight: '600', // Bold text
+    transition: 'all 0.3s ease', // Smooth transitions
+    width: isMobile ? '100%' : 'auto', // Full width on mobile
+    marginBottom: isMobile ? '8px' : '0' // Margin on mobile
   });
 
+  // Main component return (JSX)
   return (
     <div style={containerStyle}>
-      {/* Header with View Quotations Button */}
+      {/* Header section with title and view quotations button */}
       <div style={{
         display: 'flex',
-        flexDirection: isMobile ? 'column' : 'row',
+        flexDirection: isMobile ? 'column' : 'row', // Column on mobile, row on desktop
         justifyContent: 'space-between',
         alignItems: isMobile ? 'stretch' : 'center',
         marginBottom: '20px',
         gap: isMobile ? '12px' : '0'
       }}>
+        {/* Main title */}
         <h1 style={{ 
           color: '#2c3e50', 
           fontSize: isMobile ? '22px' : '28px', 
@@ -773,29 +1169,30 @@ const downloadPDF = async () => {
           Create Quotation
         </h1>
         
+        {/* View quotations button */}
         <button 
           onClick={() => {
-            setShowViewQuotations(true);
-            fetchAllQuotations();
+            setShowViewQuotations(true); // Show quotations modal
+            fetchAllQuotations(); // Fetch quotations data
           }}
-          style={buttonStyle('#3498db', '#2980b9')}
-          onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'}
-          onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'}
+          style={buttonStyle('#3498db', '#2980b9')} // Blue button
+          onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'} // Hover effect
+          onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'} // Reset on leave
         >
           View Quotations
         </button>
       </div>
 
-      {/* Main Card */}
+      {/* Main quotation form card */}
       <div style={cardStyle}>
-        {/* Header Section - Mobile Responsive Grid */}
+        {/* Header section with Bill To and Quotation Details */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', // Single column on mobile
           gap: isMobile ? '20px' : '30px',
           marginBottom: '0'
         }}>
-          {/* Left Side - Bill To */}
+          {/* Left side - Bill To section */}
           <div>
             <h2 style={{
               marginBottom: '16px',
@@ -805,6 +1202,8 @@ const downloadPDF = async () => {
               borderBottom: '2px solid #3498db',
               paddingBottom: '8px'
             }}>Bill To</h2>
+            
+            {/* Party selection dropdown */}
             <select 
               value={selectedParty} 
               onChange={(e) => setSelectedParty(e.target.value)}
@@ -818,8 +1217,8 @@ const downloadPDF = async () => {
                 transition: 'border-color 0.3s ease',
                 outline: 'none'
               }}
-              onFocus={(e) => e.target.style.borderColor = '#3498db'}
-              onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
+              onFocus={(e) => e.target.style.borderColor = '#3498db'} // Focus effect
+              onBlur={(e) => e.target.style.borderColor = '#e9ecef'} // Blur effect
             >
               <option value="">+ Add Party</option>
               {parties.map(party => (
@@ -829,6 +1228,7 @@ const downloadPDF = async () => {
               ))}
             </select>
 
+            {/* Display selected party details */}
             {selectedPartyDetails && (
               <div style={{
                 marginTop: '15px',
@@ -856,7 +1256,7 @@ const downloadPDF = async () => {
             )}
           </div>
 
-          {/* Right Side - Improved Quotation Details */}
+          {/* Right side - Quotation Details section */}
           <div>
             <h2 style={{
               marginBottom: '16px',
@@ -866,11 +1266,14 @@ const downloadPDF = async () => {
               borderBottom: '2px solid #3498db',
               paddingBottom: '8px'
             }}>Quotation Details</h2>
+            
+            {/* Quotation details grid */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', // Responsive grid
               gap: isMobile ? '12px' : '16px'
             }}>
+              {/* Quotation Number */}
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -886,7 +1289,7 @@ const downloadPDF = async () => {
                 <input
                   type="text"
                   value={quotationHeader.quotationNo}
-                  readOnly
+                  readOnly // Read-only as it's auto-generated
                   style={{
                     padding: isMobile ? '8px 10px' : '10px 12px',
                     border: '2px solid #e9ecef',
@@ -901,6 +1304,7 @@ const downloadPDF = async () => {
                 />
               </div>
               
+              {/* Validity Period */}
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -929,10 +1333,11 @@ const downloadPDF = async () => {
                   }}
                   onFocus={(e) => e.target.style.borderColor = '#3498db'}
                   onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-                  min="1"
+                  min="1" // Minimum 1 day
                 />
               </div>
               
+              {/* PO Number */}
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -965,6 +1370,7 @@ const downloadPDF = async () => {
                 />
               </div>
               
+              {/* Quotation Date */}
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -996,6 +1402,7 @@ const downloadPDF = async () => {
                 />
               </div>
               
+              {/* Validity Date (auto-calculated) */}
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -1011,7 +1418,7 @@ const downloadPDF = async () => {
                 <input
                   type="date"
                   value={quotationHeader.validityDate}
-                  readOnly
+                  readOnly // Read-only as it's auto-calculated
                   style={{
                     padding: isMobile ? '8px 10px' : '10px 12px',
                     border: '2px solid #e9ecef',
@@ -1053,6 +1460,7 @@ const downloadPDF = async () => {
                   marginBottom: '12px',
                   backgroundColor: '#f8f9fa'
                 }}>
+                  {/* Item header with name and remove button */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
                     <div>
                       <strong style={{ fontSize: '14px' }}>{item.name}</strong>
@@ -1078,6 +1486,7 @@ const downloadPDF = async () => {
                     </button>
                   </div>
                   
+                  {/* Item details grid */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '13px' }}>
                     <div>Qty: {item.quantity} {item.unit}</div>
                     <div>Price: ₹{item.price.toFixed(2)}</div>
@@ -1088,6 +1497,7 @@ const downloadPDF = async () => {
                     </div>
                   </div>
                   
+                  {/* Description input */}
                   <div style={{ marginTop: '8px' }}>
                     <input
                       type="text"
@@ -1196,6 +1606,7 @@ const downloadPDF = async () => {
               <tbody>
                 {quotationData.items.map((item, index) => (
                   <React.Fragment key={item.id}>
+                    {/* Main item row */}
                     <tr>
                       <td style={{
                         border: '1px solid #dee2e6',
@@ -1431,6 +1842,7 @@ const downloadPDF = async () => {
             </table>
           )}
 
+          {/* Add Item Button */}
           <button 
             onClick={() => setShowAddItems(true)}
             style={{
@@ -1454,10 +1866,11 @@ const downloadPDF = async () => {
       <div style={cardStyle}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '1fr 400px',
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 400px', // Responsive layout
           gap: isMobile ? '20px' : '40px',
           marginTop: '0'
         }}>
+          {/* Left side - Additional Information */}
           <div style={{
             display: 'flex',
             flexDirection: 'column',
@@ -1472,6 +1885,7 @@ const downloadPDF = async () => {
               paddingBottom: '8px'
             }}>Additional Information</h2>
             
+            {/* Notes section */}
             <div style={{ margin: '0' }}>
               <h3 style={{
                 marginBottom: '12px',
@@ -1501,6 +1915,7 @@ const downloadPDF = async () => {
               />
             </div>
             
+            {/* Add Additional Charges button */}
             <button 
               onClick={addAdditionalCharge}
               style={buttonStyle('#6c757d', '#5a6268')}
@@ -1508,6 +1923,7 @@ const downloadPDF = async () => {
               + Add Additional Charges
             </button>
             
+            {/* Terms and Conditions section */}
             <div style={{ margin: '0' }}>
               <h3 style={{
                 marginBottom: '12px',
@@ -1536,6 +1952,7 @@ const downloadPDF = async () => {
               />
             </div>
             
+            {/* Authorized signatory note */}
             <div style={{
               marginTop: '30px',
               fontWeight: '600',
@@ -1551,6 +1968,7 @@ const downloadPDF = async () => {
             </div>
           </div>
 
+          {/* Right side - Summary Panel */}
           <div style={{
             backgroundColor: '#f8f9fa',
             padding: isMobile ? '16px' : '24px',
@@ -1564,6 +1982,7 @@ const downloadPDF = async () => {
               fontWeight: '600'
             }}>Summary</h3>
             
+            {/* Subtotal */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -1641,6 +2060,7 @@ const downloadPDF = async () => {
               </div>
             ))}
 
+            {/* Taxable Amount */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -1652,6 +2072,7 @@ const downloadPDF = async () => {
               <span>₹{quotationData.taxableAmount.toFixed(2)}</span>
             </div>
 
+            {/* Discount */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -1665,6 +2086,7 @@ const downloadPDF = async () => {
               <span>- ₹{quotationData.discount.toFixed(2)}</span>
             </div>
 
+            {/* Tax */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -1672,10 +2094,11 @@ const downloadPDF = async () => {
               borderBottom: '1px solid #dee2e6',
               fontSize: isMobile ? '13px' : '14px'
             }}>
-              <span>Tax</span>
+              <span>Tax (18% GST)</span>
               <span>₹{quotationData.tax.toFixed(2)}</span>
             </div>
 
+            {/* Additional Charges Total */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -1687,6 +2110,7 @@ const downloadPDF = async () => {
               <span>₹{quotationData.additionalCharges.toFixed(2)}</span>
             </div>
 
+            {/* Total Amount */}
             <div style={{
               fontWeight: '700',
               fontSize: isMobile ? '16px' : '18px',
@@ -1698,7 +2122,7 @@ const downloadPDF = async () => {
               padding: '16px 0'
             }}>
               <span>Total Amount</span>
-              <span>₹{quotationData.totalAmount.toFixed(2)}</span>
+              <span>₹${quotationData.totalAmount.toFixed(2)}</span>
             </div>
 
             {/* Action Buttons */}
@@ -1710,6 +2134,7 @@ const downloadPDF = async () => {
               marginTop: '24px',
               flexWrap: 'wrap'
             }}>
+              {/* Save Quotation Button */}
               <button 
                 onClick={submitQuotation}
                 disabled={isSubmitting}
@@ -1723,6 +2148,7 @@ const downloadPDF = async () => {
                 {isSubmitting ? 'Saving...' : 'Save Quotation'}
               </button>
               
+              {/* Download PDF Button */}
               <button 
                 onClick={downloadPDF}
                 style={buttonStyle('#3498db', '#2980b9')}
@@ -1732,6 +2158,7 @@ const downloadPDF = async () => {
                 Download PDF
               </button>
               
+              {/* Print Button */}
               <button 
                 onClick={printQuotation}
                 style={buttonStyle('#9b59b6', '#8e44ad')}
@@ -1745,7 +2172,7 @@ const downloadPDF = async () => {
         </div>
       </div>
 
-      {/* Add Items Modal - Mobile Responsive */}
+      {/* Add Items Modal */}
       {showAddItems && (
         <div style={{
           position: 'fixed',
@@ -1770,6 +2197,7 @@ const downloadPDF = async () => {
             overflow: 'hidden',
             boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
           }}>
+            {/* Modal Header */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -1810,6 +2238,7 @@ const downloadPDF = async () => {
               </button>
             </div>
             
+            {/* Search Input */}
             <div style={{
               padding: isMobile ? '16px' : '20px 24px',
               borderBottom: '1px solid #e9ecef'
@@ -1833,6 +2262,7 @@ const downloadPDF = async () => {
               />
             </div>
 
+            {/* Items List */}
             <div style={{
               maxHeight: isMobile ? '300px' : '400px',
               overflowY: 'auto'
@@ -1867,9 +2297,9 @@ const downloadPDF = async () => {
                           fontSize: '12px',
                           marginBottom: '12px'
                         }}>
-                          <div>Price: ₹{req.salesPrice || req.price || '0.00'}</div>
-                          <div>Stock: {req.currentStock || '0'}</div>
-                          <div>Unit: {req.unit || 'PCS'}</div>
+                          <div>Price: ₹${req.salesPrice || req.price || '0.00'}</div>
+                          <div>Stock: ${req.currentStock || '0'}</div>
+                          <div>Unit: ${req.unit || 'PCS'}</div>
                         </div>
                         <button 
                           onClick={() => addItemToQuotation(req)}
@@ -1918,9 +2348,7 @@ const downloadPDF = async () => {
                         backgroundColor: '#34495e',
                         fontWeight: '600',
                         color: 'white',
-                        fontSize: '13px',
-                        position: 'sticky',
-                        top: 0
+                        fontSize: '13px'
                       }}>ITEM NAME</th>
                       <th style={{
                         border: '1px solid #dee2e6',
@@ -1929,9 +2357,7 @@ const downloadPDF = async () => {
                         backgroundColor: '#34495e',
                         fontWeight: '600',
                         color: 'white',
-                        fontSize: '13px',
-                        position: 'sticky',
-                        top: 0
+                        fontSize: '13px'
                       }}>ITEM CODE</th>
                       <th style={{
                         border: '1px solid #dee2e6',
@@ -1940,9 +2366,7 @@ const downloadPDF = async () => {
                         backgroundColor: '#34495e',
                         fontWeight: '600',
                         color: 'white',
-                        fontSize: '13px',
-                        position: 'sticky',
-                        top: 0
+                        fontSize: '13px'
                       }}>DESCRIPTION</th>
                       <th style={{
                         border: '1px solid #dee2e6',
@@ -1951,9 +2375,7 @@ const downloadPDF = async () => {
                         backgroundColor: '#34495e',
                         fontWeight: '600',
                         color: 'white',
-                        fontSize: '13px',
-                        position: 'sticky',
-                        top: 0
+                        fontSize: '13px'
                       }}>SALES PRICE (₹)</th>
                       <th style={{
                         border: '1px solid #dee2e6',
@@ -1962,9 +2384,7 @@ const downloadPDF = async () => {
                         backgroundColor: '#34495e',
                         fontWeight: '600',
                         color: 'white',
-                        fontSize: '13px',
-                        position: 'sticky',
-                        top: 0
+                        fontSize: '13px'
                       }}>CURRENT STOCK</th>
                       <th style={{
                         border: '1px solid #dee2e6',
@@ -1973,9 +2393,7 @@ const downloadPDF = async () => {
                         backgroundColor: '#34495e',
                         fontWeight: '600',
                         color: 'white',
-                        fontSize: '13px',
-                        position: 'sticky',
-                        top: 0
+                        fontSize: '13px'
                       }}>UNIT</th>
                       <th style={{
                         border: '1px solid #dee2e6',
@@ -1984,9 +2402,7 @@ const downloadPDF = async () => {
                         backgroundColor: '#34495e',
                         fontWeight: '600',
                         color: 'white',
-                        fontSize: '13px',
-                        position: 'sticky',
-                        top: 0
+                        fontSize: '13px'
                       }}>ACTION</th>
                     </tr>
                   </thead>
@@ -2000,38 +2416,38 @@ const downloadPDF = async () => {
                             textAlign: 'left',
                             fontSize: '13px'
                           }}>
-                            <strong>{req.itemName || req.name || 'Unnamed Item'}</strong>
+                            <strong>${req.itemName || req.name || 'Unnamed Item'}</strong>
                           </td>
                           <td style={{
                             border: '1px solid #dee2e6',
                             padding: '12px',
                             textAlign: 'left',
                             fontSize: '13px'
-                          }}>{req.itemCode || req.code || '-'}</td>
+                          }}>${req.itemCode || req.code || '-'}</td>
                           <td style={{
                             border: '1px solid #dee2e6',
                             padding: '12px',
                             textAlign: 'left',
                             fontSize: '13px'
-                          }}>{req.description || '-'}</td>
+                          }}>${req.description || '-'}</td>
                           <td style={{
                             border: '1px solid #dee2e6',
                             padding: '12px',
                             textAlign: 'left',
                             fontSize: '13px'
-                          }}>₹{req.salesPrice || req.price || '0.00'}</td>
+                          }}>₹${req.salesPrice || req.price || '0.00'}</td>
                           <td style={{
                             border: '1px solid #dee2e6',
                             padding: '12px',
                             textAlign: 'left',
                             fontSize: '13px'
-                          }}>{req.currentStock || '0'}</td>
+                          }}>${req.currentStock || '0'}</td>
                           <td style={{
                             border: '1px solid #dee2e6',
                             padding: '12px',
                             textAlign: 'left',
                             fontSize: '13px'
-                          }}>{req.unit || 'PCS'}</td>
+                          }}>${req.unit || 'PCS'}</td>
                           <td style={{
                             border: '1px solid #dee2e6',
                             padding: '12px',
@@ -2079,6 +2495,7 @@ const downloadPDF = async () => {
               )}
             </div>
 
+            {/* Modal Footer */}
             <div style={{
               display: 'flex',
               justifyContent: 'flex-end',
@@ -2138,6 +2555,7 @@ const downloadPDF = async () => {
             boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
             textAlign: 'center'
           }}>
+            {/* Success Icon */}
             <div style={{
               width: isMobile ? '50px' : '60px',
               height: isMobile ? '50px' : '60px',
@@ -2153,6 +2571,7 @@ const downloadPDF = async () => {
               ✓
             </div>
             
+            {/* Success Message */}
             <h2 style={{
               margin: '0 0 15px 0',
               color: '#2c3e50',
@@ -2168,9 +2587,10 @@ const downloadPDF = async () => {
               fontSize: isMobile ? '14px' : '16px',
               lineHeight: '1.5'
             }}>
-              Your quotation <strong>{savedQuotation?.quotationNo}</strong> has been saved successfully.
+              Your quotation <strong>${savedQuotation?.quotationNo}</strong> has been saved successfully.
             </p>
             
+            {/* Action Buttons */}
             <div style={{
               display: 'flex',
               flexDirection: isMobile ? 'column' : 'row',
@@ -2203,7 +2623,7 @@ const downloadPDF = async () => {
         </div>
       )}
 
-      {/* View Quotations Modal - Mobile Responsive */}
+      {/* View Quotations Modal */}
       {showViewQuotations && (
         <div style={{
           position: 'fixed',
@@ -2228,6 +2648,7 @@ const downloadPDF = async () => {
             overflow: 'hidden',
             boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
           }}>
+            {/* Modal Header */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -2265,6 +2686,7 @@ const downloadPDF = async () => {
               </button>
             </div>
             
+            {/* Quotations List */}
             <div style={{
               maxHeight: isMobile ? '400px' : '500px',
               overflowY: 'auto',
@@ -2283,9 +2705,9 @@ const downloadPDF = async () => {
                         backgroundColor: index % 2 === 0 ? 'white' : '#f8f9fa'
                       }}>
                         <div style={{ marginBottom: '8px' }}>
-                          <strong style={{ fontSize: '14px' }}>{quotation.quotationNo}</strong>
+                          <strong style={{ fontSize: '14px' }}>${quotation.quotationNo}</strong>
                           <div style={{ fontSize: '12px', color: '#6c757d' }}>
-                            {quotation.partyDetails?.partyName || quotation.partyId?.partyName || 'N/A'}
+                            ${quotation.partyDetails?.partyName || quotation.partyId?.partyName || 'N/A'}
                           </div>
                         </div>
                         <div style={{ 
@@ -2295,8 +2717,8 @@ const downloadPDF = async () => {
                           fontSize: '12px',
                           marginBottom: '12px'
                         }}>
-                          <div>Date: {new Date(quotation.quotationDate).toLocaleDateString()}</div>
-                          <div>Total: ₹{quotation.summary?.totalAmount?.toFixed(2) || '0.00'}</div>
+                          <div>Date: ${new Date(quotation.quotationDate).toLocaleDateString()}</div>
+                          <div>Total: ₹${quotation.summary?.totalAmount?.toFixed(2) || '0.00'}</div>
                           <div>
                             Status: <span style={{
                               padding: '2px 6px',
@@ -2310,13 +2732,13 @@ const downloadPDF = async () => {
                                 quotation.status === 'rejected' ? '#e74c3c' : '#95a5a6',
                               color: 'white'
                             }}>
-                              {quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1)}
+                              ${quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1)}
                             </span>
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button 
-                            onClick={() => alert(`View/Edit quotation: ${quotation.quotationNo}`)}
+                            onClick={() => viewQuotation(quotation)}
                             style={{
                               backgroundColor: '#3498db',
                               color: 'white',
@@ -2331,7 +2753,7 @@ const downloadPDF = async () => {
                             View
                           </button>
                           <button 
-                            onClick={() => alert(`Download quotation: ${quotation.quotationNo}`)}
+                            onClick={() => downloadQuotationPDF(quotation)}
                             style={{
                               backgroundColor: '#27ae60',
                               color: 'white',
@@ -2422,7 +2844,7 @@ const downloadPDF = async () => {
                             textAlign: 'left',
                             fontSize: '13px'
                           }}>
-                            <strong>{quotation.quotationNo}</strong>
+                            <strong>${quotation.quotationNo}</strong>
                           </td>
                           <td style={{
                             border: '1px solid #dee2e6',
@@ -2430,7 +2852,7 @@ const downloadPDF = async () => {
                             textAlign: 'left',
                             fontSize: '13px'
                           }}>
-                            {quotation.partyDetails?.partyName || quotation.partyId?.partyName || 'N/A'}
+                            ${quotation.partyDetails?.partyName || quotation.partyId?.partyName || 'N/A'}
                           </td>
                           <td style={{
                             border: '1px solid #dee2e6',
@@ -2438,7 +2860,7 @@ const downloadPDF = async () => {
                             textAlign: 'left',
                             fontSize: '13px'
                           }}>
-                            {new Date(quotation.quotationDate).toLocaleDateString()}
+                            ${new Date(quotation.quotationDate).toLocaleDateString()}
                           </td>
                           <td style={{
                             border: '1px solid #dee2e6',
@@ -2446,7 +2868,7 @@ const downloadPDF = async () => {
                             textAlign: 'left',
                             fontSize: '13px'
                           }}>
-                            ₹{quotation.summary?.totalAmount?.toFixed(2) || '0.00'}
+                            ₹${quotation.summary?.totalAmount?.toFixed(2) || '0.00'}
                           </td>
                           <td style={{
                             border: '1px solid #dee2e6',
@@ -2466,7 +2888,7 @@ const downloadPDF = async () => {
                                 quotation.status === 'rejected' ? '#e74c3c' : '#95a5a6',
                               color: 'white'
                             }}>
-                              {quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1)}
+                              ${quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1)}
                             </span>
                           </td>
                           <td style={{
@@ -2476,7 +2898,7 @@ const downloadPDF = async () => {
                             fontSize: '13px'
                           }}>
                             <button 
-                              onClick={() => alert(`View/Edit quotation: ${quotation.quotationNo}`)}
+                              onClick={() => viewQuotation(quotation)}
                               style={{
                                 backgroundColor: '#3498db',
                                 color: 'white',
@@ -2491,7 +2913,7 @@ const downloadPDF = async () => {
                               View
                             </button>
                             <button 
-                              onClick={() => alert(`Download quotation: ${quotation.quotationNo}`)}
+                              onClick={() => downloadQuotationPDF(quotation)}
                               style={{
                                 backgroundColor: '#27ae60',
                                 color: 'white',
@@ -2522,6 +2944,7 @@ const downloadPDF = async () => {
               )}
             </div>
 
+            {/* Modal Footer */}
             <div style={{
               display: 'flex',
               justifyContent: 'flex-end',
@@ -2541,8 +2964,274 @@ const downloadPDF = async () => {
           </div>
         </div>
       )}
+
+      {/* Quotation Details Modal */}
+      {showQuotationDetails && selectedQuotation && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          padding: isMobile ? '10px' : '20px'
+        }}>
+          <div style={{
+            background: 'white',
+            padding: '0',
+            borderRadius: '12px',
+            width: '95%',
+            maxWidth: isMobile ? '100%' : '900px',
+            maxHeight: isMobile ? '90vh' : '85vh',
+            overflow: 'hidden',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: isMobile ? '16px' : '24px',
+              borderBottom: '1px solid #e9ecef',
+              backgroundColor: '#f8f9fa'
+            }}>
+              <h2 style={{ 
+                margin: 0, 
+                color: '#2c3e50', 
+                fontSize: isMobile ? '18px' : '20px', 
+                fontWeight: '600' 
+              }}>Quotation Details - {selectedQuotation.quotationNo}</h2>
+              <button 
+                onClick={() => setShowQuotationDetails(false)}
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  fontSize: '24px', 
+                  cursor: 'pointer',
+                  color: '#6c757d',
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background-color 0.3s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#e9ecef'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+              >
+                ×
+              </button>
+            </div>
+            
+            {/* Quotation Details Content */}
+            <div style={{
+              maxHeight: isMobile ? '400px' : '500px',
+              overflowY: 'auto',
+              padding: isMobile ? '16px' : '24px'
+            }}>
+              {/* Quotation Header Info */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                gap: '20px',
+                marginBottom: '24px',
+                padding: '16px',
+                backgroundColor: '#f8f9fa',
+                borderRadius: '8px',
+                border: '1px solid #e9ecef'
+              }}>
+                <div>
+                  <h3 style={{ margin: '0 0 12px 0', color: '#2c3e50', fontSize: '16px' }}>Quotation Information</h3>
+                  <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
+                    <div><strong>Quotation No:</strong> {selectedQuotation.quotationNo}</div>
+                    <div><strong>Date:</strong> {selectedQuotation.quotationDate}</div>
+                    <div><strong>Valid Until:</strong> {selectedQuotation.validityDate}</div>
+                    <div><strong>PO No:</strong> {selectedQuotation.poNo || 'N/A'}</div>
+                    <div><strong>Status:</strong> 
+                      <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        backgroundColor: 
+                          selectedQuotation.status === 'draft' ? '#f39c12' :
+                          selectedQuotation.status === 'sent' ? '#3498db' :
+                          selectedQuotation.status === 'accepted' ? '#27ae60' :
+                          selectedQuotation.status === 'rejected' ? '#e74c3c' : '#95a5a6',
+                        color: 'white',
+                        marginLeft: '8px'
+                      }}>
+                        {selectedQuotation.status?.charAt(0).toUpperCase() + selectedQuotation.status?.slice(1)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <h3 style={{ margin: '0 0 12px 0', color: '#2c3e50', fontSize: '16px' }}>Party Information</h3>
+                  <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
+                    <div><strong>Party:</strong> {selectedQuotation.partyDetails?.partyName || selectedQuotation.partyId?.partyName || 'N/A'}</div>
+                    {selectedQuotation.partyDetails?.mobileNumber && (
+                      <div><strong>Mobile:</strong> {selectedQuotation.partyDetails.mobileNumber}</div>
+                    )}
+                    {selectedQuotation.partyDetails?.billingAddress && (
+                      <div><strong>Address:</strong> {selectedQuotation.partyDetails.billingAddress}</div>
+                    )}
+                    {selectedQuotation.partyDetails?.gstin && (
+                      <div><strong>GSTIN:</strong> {selectedQuotation.partyDetails.gstin}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <h3 style={{ margin: '0 0 16px 0', color: '#2c3e50', fontSize: '16px' }}>Items</h3>
+              <div style={{
+                overflowX: 'auto',
+                marginBottom: '24px'
+              }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: '14px'
+                }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#34495e', color: 'white' }}>
+                      <th style={{ padding: '12px', border: '1px solid #dee2e6', textAlign: 'left' }}>#</th>
+                      <th style={{ padding: '12px', border: '1px solid #dee2e6', textAlign: 'left' }}>Item Name</th>
+                      <th style={{ padding: '12px', border: '1px solid #dee2e6', textAlign: 'center' }}>Qty</th>
+                      <th style={{ padding: '12px', border: '1px solid #dee2e6', textAlign: 'center' }}>Unit</th>
+                      <th style={{ padding: '12px', border: '1px solid #dee2e6', textAlign: 'right' }}>Price (₹)</th>
+                      <th style={{ padding: '12px', border: '1px solid #dee2e6', textAlign: 'right' }}>Amount (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedQuotation.items.map((item, index) => (
+                      <tr key={index} style={{ backgroundColor: index % 2 === 0 ? 'white' : '#f8f9fa' }}>
+                        <td style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'center' }}>{index + 1}</td>
+                        <td style={{ padding: '10px', border: '1px solid #dee2e6' }}>
+                          <div><strong>{item.name}</strong></div>
+                          {item.description && (
+                            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>{item.description}</div>
+                          )}
+                        </td>
+                        <td style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'center' }}>{item.quantity}</td>
+                        <td style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'center' }}>{item.unit}</td>
+                        <td style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'right' }}>₹{item.price.toFixed(2)}</td>
+                        <td style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'right' }}>₹{item.amount.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Summary Section */}
+              <div style={{
+                backgroundColor: '#f8f9fa',
+                padding: '20px',
+                borderRadius: '8px',
+                border: '1px solid #e9ecef',
+                marginBottom: '24px'
+              }}>
+                <h3 style={{ margin: '0 0 16px 0', color: '#2c3e50', fontSize: '16px' }}>Summary</h3>
+                <div style={{ display: 'grid', gap: '8px', fontSize: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Subtotal:</span>
+                    <span>₹{selectedQuotation.summary?.subtotal?.toFixed(2) || '0.00'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#e74c3c' }}>
+                    <span>Discount:</span>
+                    <span>-₹{selectedQuotation.summary?.discount?.toFixed(2) || '0.00'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Tax (18% GST):</span>
+                    <span>₹{selectedQuotation.summary?.tax?.toFixed(2) || '0.00'}</span>
+                  </div>
+                  {selectedQuotation.additionalCharges?.map((charge, index) => (
+                    charge.amount > 0 && (
+                      <div key={index} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{charge.description}:</span>
+                        <span>₹{parseFloat(charge.amount).toFixed(2)}</span>
+                      </div>
+                    )
+                  ))}
+                  <hr style={{ border: 'none', borderTop: '2px solid #2c3e50', margin: '12px 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '16px', color: '#2c3e50' }}>
+                    <span>Total Amount:</span>
+                    <span>₹{selectedQuotation.summary?.totalAmount?.toFixed(2) || '0.00'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes and Terms */}
+              {selectedQuotation.notes && (
+                <div style={{ marginBottom: '16px' }}>
+                  <h3 style={{ margin: '0 0 8px 0', color: '#2c3e50', fontSize: '16px' }}>Notes</h3>
+                  <div style={{
+                    padding: '12px',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '6px',
+                    border: '1px solid #e9ecef',
+                    fontSize: '14px'
+                  }}>
+                    {selectedQuotation.notes}
+                  </div>
+                </div>
+              )}
+
+              {selectedQuotation.terms && (
+                <div>
+                  <h3 style={{ margin: '0 0 8px 0', color: '#2c3e50', fontSize: '16px' }}>Terms & Conditions</h3>
+                  <div style={{
+                    padding: '12px',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '6px',
+                    border: '1px solid #e9ecef',
+                    fontSize: '14px',
+                    whiteSpace: 'pre-line'
+                  }}>
+                    {selectedQuotation.terms}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              padding: isMobile ? '16px' : '20px 24px',
+              borderTop: '1px solid #e9ecef',
+              backgroundColor: '#f8f9fa'
+            }}>
+              <button 
+                onClick={() => setShowQuotationDetails(false)}
+                style={buttonStyle('#6c757d', '#5a6268')}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#5a6268'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#6c757d'}
+              >
+                Close
+              </button>
+              <button 
+                onClick={() => downloadQuotationPDF(selectedQuotation)}
+                style={buttonStyle('#27ae60', '#219a52')}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#219a52'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#27ae60'}
+              >
+                Download PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
+// Export the component as default
 export default Quotation;

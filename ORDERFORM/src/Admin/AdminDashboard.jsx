@@ -603,6 +603,7 @@ function AdminDashboard() {
       height: '100vh',
       position: 'relative',
     },
+    
     dashboardCards: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
@@ -1015,6 +1016,15 @@ function AdminDashboard() {
               >
                 Dashboard
               </NavLink>
+              <NavLink
+                to="advance-approvals"
+                style={linkStyle('advance-approvals')}
+                onMouseEnter={() => setHoveredItem('advance-approvals')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+              Advance-Approvals
+              </NavLink>
             </>
           )}
         </div>
@@ -1108,6 +1118,7 @@ function AdminDashboard() {
         </div>
 
         {/* MANAGE USERS Section */}
+      {/* MANAGE USERS Section */}
         <div style={styles.sidebarSection}>
           <div
             style={styles.sidebarSectionTitle}
@@ -1196,6 +1207,48 @@ function AdminDashboard() {
           )}
         </div>
 
+        
+        {/* Reports  Section */}
+        <div style={styles.sidebarSection}>
+          <div
+            style={styles.sidebarSectionTitle}
+            onClick={() => toggleSection('reports')}
+          >
+        Reports
+            <span
+              style={{
+                ...styles.dropdownIcon,
+                transform: openSections.reports ? 'rotate(180deg)' : 'rotate(0deg)',
+              }}
+            >
+              ▼
+            </span>
+          </div>
+          {openSections.reports && (
+            <>
+
+
+              <NavLink
+                to="daily-report"
+                style={linkStyle('daily-report')}
+                onMouseEnter={() => setHoveredItem('daily-report')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Daily Report
+              </NavLink>
+              <NavLink
+                to="fieldvisitsadmin"
+                style={linkStyle('fieldvisitsadmin')}
+                onMouseEnter={() => setHoveredItem('fieldvisitsadmin')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Field Visits
+              </NavLink>
+            </>
+          )}
+        </div>
         {/* SERVICES Section */}
         <div style={styles.sidebarSection}>
           <div

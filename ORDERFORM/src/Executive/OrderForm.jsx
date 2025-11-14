@@ -16,8 +16,7 @@ function OrderForm({
 }) {
   const routerLocation = useLocation();
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  // eslint-disable-next-line no-unused-vars
-  const [showAdvanceWarning, setShowAdvanceWarning] = useState(false);
+  const [showAdvanceApprovalModal, setShowAdvanceApprovalModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingTarget, setLoadingTarget] = useState(true);
   const [targetChanged, setTargetChanged] = useState(false);
@@ -69,8 +68,16 @@ function OrderForm({
   const [createdBy, setCreatedBy] = useState("");
   // Add WhatsApp state variable
   const [whatsappSent, setWhatsappSent] = useState(false);
+  // Add advance approval states
+  const [approvalReason, setApprovalReason] = useState("");
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const [hasAdvanceApproval, setHasAdvanceApproval] = useState(false);
+  const [approvalRequested, setApprovalRequested] = useState(false);
+
   const printRef = useRef();
   const invoiceRef = useRef();
+  // Add polling interval reference for automatic approval checking
+  const approvalPollingRef = useRef(null);
 
   function getEmptyRow() {
     const delivery = new Date(orderDate);
@@ -144,6 +151,65 @@ Global Marketing Solutions Team`;
     const currentUser = localStorage.getItem("userName") || "Admin";
     setCreatedBy(currentUser);
   }, []);
+
+  // Enhanced checkAdvanceApproval function with automatic detection
+  const checkAdvanceApproval = async () => {
+    try {
+      const response = await axios.get(
+        `/api/advance-approval-requests/check/${selectedExecutive}`,
+        { params: { business, contactPerson } }
+      );
+      
+      const previousApprovalStatus = hasAdvanceApproval;
+      const newApprovalStatus = response.data.hasApproval;
+      
+      setHasAdvanceApproval(newApprovalStatus);
+      
+      // Show success message if approval was just granted
+      if (!previousApprovalStatus && newApprovalStatus && approvalRequested) {
+        alert("🎉 Your advance approval request has been approved! You can now submit the order.");
+        
+        // Stop polling since we got approval
+        if (approvalPollingRef.current) {
+          clearInterval(approvalPollingRef.current);
+          approvalPollingRef.current = null;
+        }
+      }
+    } catch (error) {
+      console.error("Error checking advance approval:", error);
+    }
+  };
+
+  // Check for existing approval when form loads
+  useEffect(() => {
+    if (!isAdmin && business && contactPerson) {
+      checkAdvanceApproval();
+    }
+  }, [business, contactPerson, isAdmin]);
+
+  // Poll for approval status when waiting for approval - AUTOMATIC DETECTION
+  useEffect(() => {
+    if (approvalRequested && !hasAdvanceApproval && !isAdmin && business && contactPerson) {
+      // Start polling every 5 seconds
+      approvalPollingRef.current = setInterval(async () => {
+        await checkAdvanceApproval();
+      }, 5000); // Check every 5 seconds
+
+      // Cleanup on unmount or when approval is granted
+      return () => {
+        if (approvalPollingRef.current) {
+          clearInterval(approvalPollingRef.current);
+          approvalPollingRef.current = null;
+        }
+      };
+    } else {
+      // Stop polling if we have approval or user is admin
+      if (approvalPollingRef.current) {
+        clearInterval(approvalPollingRef.current);
+        approvalPollingRef.current = null;
+      }
+    }
+  }, [approvalRequested, hasAdvanceApproval, isAdmin, business, contactPerson]);
 
   const isTimeBasedRequirement = (requirementName) => {
     return requirementName === "Mobile Vans" || requirementName === "Try Cycles";
@@ -297,19 +363,71 @@ Global Marketing Solutions Team`;
     setAdvanceError("");
     // Reset WhatsApp state
     setWhatsappSent(false);
+    // Reset approval states
+    setHasAdvanceApproval(false);
+    setApprovalRequested(false);
+    setApprovalReason("");
+    // Stop polling when form is reset
+    if (approvalPollingRef.current) {
+      clearInterval(approvalPollingRef.current);
+      approvalPollingRef.current = null;
+    }
     setIsCreatingNew(true);
     if (onNewOrder) onNewOrder();
   };
 
-  // eslint-disable-next-line no-unused-vars
-  const validateAdvance = (advanceAmount, totalAmount) => {
-    const advanceNum = parseFloat(advanceAmount) || 0;
-    const totalNum = parseFloat(totalAmount) || 0;
+  const submitAdvanceApprovalRequest = async () => {
+    if (!approvalReason.trim()) {
+      alert("Please provide a reason for low advance payment");
+      return;
+    }
 
-    if (totalNum === 0) return true; 
+    setIsSubmittingApproval(true);
+    try {
+      const advanceNum = parseFloat(advance) || 0;
+      const totalNum = parseFloat(total) || 0;
+      const advancePercentage = (advanceNum / totalNum) * 100;
 
-    const percentage = (advanceNum / totalNum) * 100;
-    return percentage >= 50;
+      const requestData = {
+        executive: selectedExecutive,
+        business,
+        contactPerson,
+        contactNumber,
+        totalAmount: totalNum,
+        advanceAmount: advanceNum,
+        advancePercentage: advancePercentage.toFixed(1),
+        reason: approvalReason,
+        orderData: {
+          clientLocation,
+          saleClosedBy,
+          orderDate,
+          clientType,
+          target,
+          rows: rows.map(row => ({
+            requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
+            description: row.description,
+            quantity: row.quantity,
+            rate: row.rate,
+            total: row.total
+          })),
+          discount,
+          paymentMethods
+        }
+      };
+
+      await axios.post("/api/advance-approval-requests", requestData);
+      
+      setShowAdvanceApprovalModal(false);
+      setApprovalRequested(true);
+      setApprovalReason("");
+      
+      alert("Advance approval request submitted! The system will automatically check for approval every 5 seconds. You'll be notified when approved.");
+    } catch (error) {
+      console.error("Error submitting approval request:", error);
+      alert("Failed to submit approval request. Please try again.");
+    } finally {
+      setIsSubmittingApproval(false);
+    }
   };
 
   useEffect(() => {
@@ -412,28 +530,21 @@ Global Marketing Solutions Team`;
       return;
     }
 
-    // Debug: Check what's being sent
-    console.log('Submitting order with:', {
-      executive: selectedExecutive,
-      createdBy: createdBy,
-      isAdmin: isAdmin,
-      currentUser: localStorage.getItem("userName")
-    });
-
     const advanceNum = parseFloat(advance) || 0;
     const totalNum = parseFloat(total) || 0;
+    const advancePercentage = (advanceNum / totalNum) * 100;
 
-    if (totalNum > 0 && !isAdmin) {
-      const advancePercentage = (advanceNum / totalNum) * 100;
-
-      if (advancePercentage < 50) {
-        setAdvanceError("Advance payment must be at least 50% of the total amount");
-        return;
-      } else {
-        setAdvanceError("");
-      }
+    // Check if advance is less than 50% for non-admin users
+    if (totalNum > 0 && !isAdmin && advancePercentage < 50 && !hasAdvanceApproval) {
+      setShowAdvanceApprovalModal(true);
+      return;
     }
 
+    // Continue with normal submission...
+    await submitOrder();
+  };
+
+  const submitOrder = async () => {
     setIsSubmitting(true);
     try {
       const phone = contactNumber.replace(/\D/g, "").slice(-10);
@@ -507,7 +618,7 @@ Global Marketing Solutions Team`;
         chequeNumber,
         chequeImage,
         designStatus: design === "no" ? "pending" : "provided",
-        createdBy: finalCreatedBy, // FIXED: Use the corrected createdBy value
+        createdBy: finalCreatedBy,
         commissionSplit: shouldSplitCommission ? {
           executive1: selectedExecutive,
           executive2: saleClosedBy,
@@ -738,6 +849,82 @@ Global Marketing Solutions Team`;
     return digits.length <= 10;
   };
 
+  // Render advance validation section - UPDATED for automatic approval
+  const renderAdvanceValidation = () => {
+    const advanceNum = parseFloat(advance) || 0;
+    const totalNum = parseFloat(total) || 0;
+    const advancePercentage = totalNum > 0 ? (advanceNum / totalNum) * 100 : 0;
+
+    if (totalNum > 0 && !isAdmin) {
+      return (
+        <div style={{ 
+          marginTop: "10px", 
+          padding: "10px", 
+          backgroundColor: advancePercentage < 50 ? "#fff3cd" : "#d4edda", 
+          borderRadius: "4px",
+          border: `1px solid ${advancePercentage < 50 ? "#ffeaa7" : "#c3e6cb"}`
+        }}>
+          <strong>Advance Payment:</strong> {advancePercentage.toFixed(1)}% of total
+          
+          {advancePercentage < 50 ? (
+            <div>
+              <span style={{ color: "#856404", marginLeft: "10px" }}>
+                ❌ Minimum 50% required
+              </span>
+              {!hasAdvanceApproval && !approvalRequested && (
+                <div style={{ marginTop: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanceApprovalModal(true)}
+                    style={{
+                      padding: "6px 12px",
+                      backgroundColor: "#007bff",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontSize: "12px"
+                    }}
+                  >
+                    📨 Request Approval for Low Advance
+                  </button>
+                </div>
+              )}
+              {approvalRequested && !hasAdvanceApproval && (
+                <div style={{ marginTop: "8px", color: "#856404" }}>
+                  <div>⏳ Approval request submitted - Waiting for admin approval</div>
+                  <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+                    🔄 Auto-checking every 5 seconds...
+                  </div>
+                </div>
+              )}
+              {hasAdvanceApproval && (
+                <div style={{ marginTop: "8px", color: "#155724" }}>
+                  ✅ Approved by admin - You can now submit this order
+                </div>
+              )}
+            </div>
+          ) : (
+            <span style={{ color: "#155724", marginLeft: "10px" }}>
+              ✅ Minimum requirement met
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    if (totalNum > 0 && isAdmin) {
+      return (
+        <div style={{ marginTop: "10px", padding: "10px", backgroundColor: "#d1ecf1", borderRadius: "4px" }}>
+          <strong>Advance Payment:</strong> {advancePercentage.toFixed(1)}% of total
+          <span style={{ color: "#0c5460", marginLeft: "10px" }}>ℹ️ Admin override enabled</span>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   if (showInvoice) {
     return (
       <div ref={invoiceRef}>
@@ -783,6 +970,92 @@ Global Marketing Solutions Team`;
                 </p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Advance Approval Modal */}
+      {showAdvanceApprovalModal && (
+        <div className="modal-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div className="modal-content" style={{
+            background: 'white',
+            padding: '30px',
+            borderRadius: '8px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
+          }}>
+            <h3>Request Advance Payment Approval</h3>
+            <p>
+              Your advance payment is less than 50% of the total amount. 
+              Please provide a reason for the low advance payment to request admin approval.
+            </p>
+            
+            <div style={{ margin: "15px 0", padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+              <strong>Order Details:</strong>
+              <div>Business: {business}</div>
+              <div>Contact: {contactPerson}</div>
+              <div>Total Amount: ₹{total}</div>
+              <div>Advance Paid: ₹{advance} ({((parseFloat(advance) || 0) / parseFloat(total) * 100).toFixed(1)}%)</div>
+            </div>
+
+            <label style={{ display: 'block', marginBottom: '15px' }}>
+              Reason for Low Advance:
+              <textarea
+                value={approvalReason}
+                onChange={(e) => setApprovalReason(e.target.value)}
+                placeholder="Please explain why the advance payment is less than 50%..."
+                rows="4"
+                style={{ width: "100%", marginTop: "8px", padding: "8px", border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+            </label>
+
+            <div className="modal-actions" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowAdvanceApprovalModal(false);
+                  setApprovalReason("");
+                }}
+                className="btn btn-secondary"
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitAdvanceApprovalRequest}
+                disabled={isSubmittingApproval || !approvalReason.trim()}
+                className="btn btn-primary"
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: isSubmittingApproval ? 'not-allowed' : 'pointer',
+                  opacity: isSubmittingApproval || !approvalReason.trim() ? 0.6 : 1
+                }}
+              >
+                {isSubmittingApproval ? "Submitting..." : "Submit Request"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1217,23 +1490,8 @@ Global Marketing Solutions Team`;
           </div>
         </div>
 
-        {total > 0 && !isAdmin && (
-          <div style={{ marginTop: "10px", padding: "10px", backgroundColor: "#f5f5f5", borderRadius: "4px" }}>
-            <strong>Advance Payment:</strong> {((parseFloat(advance) || 0) / parseFloat(total) * 100).toFixed(1)}% of total
-            {((parseFloat(advance) || 0) / parseFloat(total) * 100) < 50 ? (
-              <span style={{ color: "red", marginLeft: "10px" }}>❌ Minimum 50% required</span>
-            ) : (
-              <span style={{ color: "green", marginLeft: "10px" }}>✅ Minimum requirement met</span>
-            )}
-          </div>
-        )}
-
-        {total > 0 && isAdmin && (
-          <div style={{ marginTop: "10px", padding: "10px", backgroundColor: "#f0f8ff", borderRadius: "4px" }}>
-            <strong>Advance Payment:</strong> {((parseFloat(advance) || 0) / parseFloat(total) * 100).toFixed(1)}% of total
-            <span style={{ color: "blue", marginLeft: "10px" }}>ℹ️ Admin override enabled</span>
-          </div>
-        )}
+        {/* Replace the existing advance validation with the new one */}
+        {renderAdvanceValidation()}
       </div>
 
       <div className="payment-method-section">
@@ -1376,7 +1634,7 @@ Global Marketing Solutions Team`;
         </button>
         <button
           onClick={handleSubmit}
-          disabled={isSubmitting || (!isAdmin && advanceError)}
+          disabled={isSubmitting || (!isAdmin && advanceError && !hasAdvanceApproval)}
           className="btn btn-primary"
         >
           {isSubmitting ? "Submitting..." : (existingData && !isCreatingNew) ? "Update Order" : "Submit Order"}
@@ -1431,30 +1689,6 @@ Global Marketing Solutions Team`;
         .success-checkmark {
           font-size: 48px;
           color: #4CAF50;
-          margin-bottom: 15px;
-        }
-        .warning-modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background-color: rgba(0, 0, 0, 0.5);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          z-index: 1000;
-        }
-        .warning-modal {
-          background: white;
-          padding: 30px;
-          border-radius: 8px;
-          text-align: center;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-          max-width: 400px;
-        }
-        .warning-icon {
-          font-size: 48px;
           margin-bottom: 15px;
         }
         .existing-order-notice {

@@ -17,6 +17,7 @@ import AutoLogout from '../mainpage/AutoLogout';
 import OrderForm from '../Executive/OrderForm';
 import DigitalMarketingOrderForm from '../Executive/Digitalform';
 
+// Register Chart.js components to make them available
 ChartJS.register(
   Title,
   Tooltip,
@@ -29,22 +30,43 @@ ChartJS.register(
 );
 
 function AccountDashboard({ loggedInUser }) {
+  // State for sidebar open/close - default open on large screens
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
+  
+  // State to track which sidebar item is hovered
   const [hoveredItem, setHoveredItem] = useState('');
+  
+  // Get current location for routing
   const location = useLocation();
+  
+  // State for chart data from API
   const [chartData, setChartData] = useState(null);
+  
+  // Loading state for API calls
   const [loading, setLoading] = useState(true);
+  
+  // State for selected year filter
   const [year, setYear] = useState(new Date().getFullYear());
+  
+  // Navigation function
   const navigate = useNavigate();
+  
+  // State for today's orders count
   const [todayOrdersCount, setTodayOrdersCount] = useState(0);
+  
+  // State for pending payments count
   const [pendingPaymentsCount, setPendingPaymentsCount] = useState(0);
+  
+  // State to control notification popup visibility
   const [showNotification, setShowNotification] = useState(false);
+  
+  // State for notification data
   const [notificationData, setNotificationData] = useState({
     todayCount: 0,
     pendingCount: 0
   });
 
-  // Add state for order form validation
+  // States for order form functionality
   const [orderNumber, setOrderNumber] = useState("");
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [existingOrderData, setExistingOrderData] = useState(null);
@@ -52,6 +74,32 @@ function AccountDashboard({ loggedInUser }) {
   const [searchError, setSearchError] = useState("");
   const [selectedFormType, setSelectedFormType] = useState("order");
 
+  // Amount formatting helper function
+  const formatAmount = (amount) => {
+    const numAmount = parseFloat(amount) || 0;
+    
+    if (numAmount >= 10000000) {
+      // Crores
+      return (numAmount / 10000000).toFixed(1) + 'Cr';
+    } else if (numAmount >= 100000) {
+      // Lakhs
+      return (numAmount / 100000).toFixed(1) + 'L';
+    } else if (numAmount >= 1000) {
+      // Thousands
+      return (numAmount / 1000).toFixed(1) + 'K';
+    } else {
+      // Less than 1000
+      return numAmount.toString();
+    }
+  };
+
+  // Format amount with full display
+  const formatAmountFull = (amount) => {
+    const numAmount = parseFloat(amount) || 0;
+    return '₹' + numAmount.toLocaleString('en-IN');
+  };
+
+  // Effect to handle window resize for responsive sidebar
   useEffect(() => {
     const handleResize = () => {
       setSidebarOpen(window.innerWidth > 768);
@@ -61,6 +109,7 @@ function AccountDashboard({ loggedInUser }) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Effect to fetch chart data when year changes
   useEffect(() => {
     async function fetchChartData() {
       setLoading(true);
@@ -68,13 +117,33 @@ function AccountDashboard({ loggedInUser }) {
         console.log(`Fetching data for year: ${year}`);
         const res = await axios.get(`/api/dashboard/chart-data?year=${year}&_=${Date.now()}`);
         console.log('Data received:', res.data);
-        setChartData(res.data);
+        
+        // Validate and set chart data with proper structure
+        const validatedData = {
+          totalOrdersByMonth: safeArray(res.data.totalOrdersByMonth),
+          pendingPayments: safeArray(res.data.pendingPayments).slice(0, 2),
+          pendingServices: safeArray(res.data.pendingServices).slice(0, 2),
+          clientTypes: safeObject(res.data.clientTypes)
+        };
+        
+        setChartData(validatedData);
         
         // Also fetch today and pending counts with year filter
         fetchTodayAndPendingCounts();
       } catch (err) {
         console.error('API Error:', err.response?.data || err.message);
-        setChartData(null);
+        // Set default empty data structure on error
+        setChartData({
+          totalOrdersByMonth: Array(12).fill(0),
+          pendingPayments: [0, 0],
+          pendingServices: [0, 0],
+          clientTypes: { 
+            Retail: { count: 0, amount: 0 },
+            Renewal: { count: 0, amount: 0 },
+            Agent: { count: 0, amount: 0 },
+            'Renewal-Agent': { count: 0, amount: 0 }
+          }
+        });
       } finally {
         setLoading(false);
       }
@@ -83,9 +152,10 @@ function AccountDashboard({ loggedInUser }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year]);
 
+  // Function to fetch today's orders and pending payments counts
   const fetchTodayAndPendingCounts = async () => {
     try {
-      // Fetch all orders for the selected year
+      // Fetch all orders from API
       const ordersRes = await axios.get('/api/orders');
       let orders = ordersRes.data;
 
@@ -96,7 +166,7 @@ function AccountDashboard({ loggedInUser }) {
         return orderYear === year;
       });
 
-      // Get today's date
+      // Get today's date in YYYY-MM-DD format
       const today = new Date();
       const todayString = today.toISOString().split('T')[0];
 
@@ -131,6 +201,7 @@ function AccountDashboard({ loggedInUser }) {
         return !hasTodayDelivery; // Exclude today's deliveries
       });
 
+      // Update state with counts
       setTodayOrdersCount(todayOrders.length);
       setPendingPaymentsCount(pendingPayments.length);
 
@@ -158,8 +229,40 @@ function AccountDashboard({ loggedInUser }) {
     }
   }, [showNotification]);
 
-  // Add phone number validation and search function
+  // Helper function to safely handle arrays - prevents [object Object] errors
+  const safeArray = (arr) => {
+    if (!arr || !Array.isArray(arr)) return Array(12).fill(0); // Return array of 12 zeros for monthly data
+    return arr.map(item => typeof item === 'number' ? item : 0);
+  };
+
+  // Helper function to safely handle objects - prevents [object Object] errors
+  const safeObject = (obj) => {
+    if (!obj || typeof obj !== 'object') {
+      return { 
+        Retail: { count: 0, amount: 0 },
+        Renewal: { count: 0, amount: 0 },
+        Agent: { count: 0, amount: 0 },
+        'Renewal-Agent': { count: 0, amount: 0 }
+      };
+    }
+    
+    // If clientTypes is already in the new format, return it
+    if (obj.Retail && typeof obj.Retail === 'object') {
+      return obj;
+    }
+    
+    // If clientTypes is in the old format (just numbers), convert to new format
+    return {
+      Retail: { count: obj.Retail || 0, amount: 0 },
+      Renewal: { count: obj.Renewal || 0, amount: 0 },
+      Agent: { count: obj.Agent || 0, amount: 0 },
+      'Renewal-Agent': { count: obj['Renewal-Agent'] || 0, amount: 0 }
+    };
+  };
+
+  // Phone number validation and search function
   const handleSearch = async () => {
+    // Validate phone number length
     if (orderNumber.length !== 10) {
       setSearchError("Please enter exactly 10 digits");
       return;
@@ -170,6 +273,7 @@ function AccountDashboard({ loggedInUser }) {
 
     try {
       if (selectedFormType === "order") {
+        // Search for existing order by phone
         const response = await axios.get(`/api/by-phone?phone=${orderNumber}`);
 
         if (response.data) {
@@ -182,6 +286,7 @@ function AccountDashboard({ loggedInUser }) {
           }
         }
       } else {
+        // For digital marketing form, just show the form
         setShowOrderForm(true);
         setExistingOrderData(null);
       }
@@ -191,6 +296,7 @@ function AccountDashboard({ loggedInUser }) {
         error.response.status === 404 &&
         selectedFormType === "order"
       ) {
+        // Order not found - create new one
         setShowOrderForm(true);
         setExistingOrderData(null);
       } else {
@@ -204,6 +310,7 @@ function AccountDashboard({ loggedInUser }) {
     }
   };
 
+  // Toggle sidebar open/close
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
@@ -215,13 +322,78 @@ function AccountDashboard({ loggedInUser }) {
     }
   };
 
+  // Check if we're on the main dashboard route
   const showDashboardCards = location.pathname === '/account-dashboard';
 
+  // Month labels for charts
   const monthLabels = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
 
+  // Process chart data with safe functions to prevent errors
+  const totalOrdersSum = safeArray(chartData?.totalOrdersByMonth).reduce((a, b) => a + b, 0);
+  const pendingPayments = safeArray(chartData?.pendingPayments).slice(0, 2); // Ensure only 2 values
+  const pendingServices = safeArray(chartData?.pendingServices).slice(0, 2); // Ensure only 2 values
+  const clientTypes = safeObject(chartData?.clientTypes);
+
+  // Generate years for dropdown (2000-3000)
+  const years = [];
+  for (let y = 2000; y <= 3000; y++) {
+    years.push(y);
+  }
+
+  // Handle chart click navigation
+  const handleChartClick = (chartType) => {
+    if (chartType === 'pending-payment') {
+      navigate('pending-payment');
+    } else if (chartType === 'pending-service') {
+      navigate('pending-service');
+    }
+  };
+
+  // Handle today's delivery card click
+  const handleTodayCardClick = () => {
+    navigate('pending-payment', { 
+      state: { 
+        filterType: 'today-delivery',
+        year: year
+      } 
+    });
+  };
+
+  // Handle pending payments card click
+  const handlePendingPaymentsCardClick = () => {
+    navigate('pending-payment', { 
+      state: { 
+        filterType: 'exclude-today',
+        year: year
+      } 
+    });
+  };
+
+  // Close notification popup
+  const handleCloseNotification = () => {
+    setShowNotification(false);
+  };
+
+  // View all payments navigation
+  const handleViewAllPayments = () => {
+    setShowNotification(false);
+    navigate('pending-payment', { state: { year: year } });
+  };
+
+  // Logout function
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userData');
+    navigate('/');
+  };
+
+  // Check if we're on the create-order route
+  const isCreateOrderRoute = location.pathname === '/account-dashboard/create-order';
+
+  // CSS Styles object
   const styles = {
     container: {
       display: 'flex',
@@ -574,77 +746,27 @@ function AccountDashboard({ loggedInUser }) {
     }
   };
 
+  // Function to style sidebar links with active and hover states
   const linkStyle = (name) => ({ isActive }) => ({
     ...styles.sidebarItem,
     ...(isActive ? styles.activeSidebarItem : {}),
     ...(hoveredItem === name ? styles.hoverEffect : {}),
   });
 
-  const safeArray = (arr) => (Array.isArray(arr) ? arr : []);
-
-  const totalOrdersSum = safeArray(chartData?.totalOrdersByMonth).reduce((a, b) => a + b, 0);
-  const pendingPayments = safeArray(chartData?.pendingPayments);
-  const pendingServices = safeArray(chartData?.pendingServices);
-  const clientTypes = chartData?.clientTypes || {};
-
-  const years = [];
-  for (let y = 2000; y <= 3000; y++) {
-    years.push(y);
-  }
-
-  const handleChartClick = (chartType) => {
-    if (chartType === 'pending-payment') {
-      navigate('pending-payment');
-    } else if (chartType === 'pending-service') {
-      navigate('pending-service');
-    }
-  };
-
-  const handleTodayCardClick = () => {
-    navigate('pending-payment', { 
-      state: { 
-        filterType: 'today-delivery',
-        year: year
-      } 
-    });
-  };
-
-  const handlePendingPaymentsCardClick = () => {
-    navigate('pending-payment', { 
-      state: { 
-        filterType: 'exclude-today',
-        year: year
-      } 
-    });
-  };
-
-  const handleCloseNotification = () => {
-    setShowNotification(false);
-  };
-
-  const handleViewAllPayments = () => {
-    setShowNotification(false);
-    navigate('pending-payment', { state: { year: year } });
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userData');
-    navigate('/');
-  };
-
-  // Check if we're on the create-order route
-  const isCreateOrderRoute = location.pathname === '/account-dashboard/create-order';
-
   return (
     <div>
+      {/* Auto logout component for session management */}
       <AutoLogout />
+      
       {/* Navbar */}
       <div style={styles.navbar}>
+        {/* Hamburger menu for mobile */}
         <span style={styles.burger} onClick={toggleSidebar}>
           &#9776;
         </span>
+        {/* Dashboard title */}
         <span style={styles.brand}>ACCOUNTS DASHBOARD</span>
+        {/* User avatar */}
         <div
           style={{
             marginLeft: 'auto',
@@ -722,9 +844,11 @@ function AccountDashboard({ loggedInUser }) {
         </div>
       )}
 
+      {/* Main container with sidebar and content */}
       <div style={styles.container}>
-        {/* Sidebar */}
+        {/* Sidebar Navigation */}
         <div style={styles.sidebar}>
+          {/* Dashboard link */}
           <NavLink
             to="/account-dashboard"
             style={linkStyle('dashboard')}
@@ -734,6 +858,8 @@ function AccountDashboard({ loggedInUser }) {
           >
             Dashboard
           </NavLink>
+          
+          {/* Create Order link */}
           <NavLink
             to="create-order"
             style={linkStyle('create-orders')}
@@ -749,6 +875,8 @@ function AccountDashboard({ loggedInUser }) {
           >
             Create Order ➕
           </NavLink>
+          
+          {/* View Orders link */}
           <NavLink
             to="view-orders"
             style={linkStyle('view-orders')}
@@ -758,6 +886,8 @@ function AccountDashboard({ loggedInUser }) {
           >
             View All Orders
           </NavLink>
+          
+          {/* Create Daily Report link */}
           <NavLink
             to="daily-record"
             style={linkStyle('daily-record')}
@@ -767,6 +897,8 @@ function AccountDashboard({ loggedInUser }) {
           >
             Create Daily Report ➕
           </NavLink>
+          
+          {/* View Daily Report link */}
           <NavLink
             to="daily-report" 
             style={linkStyle('daily-report')}
@@ -776,6 +908,8 @@ function AccountDashboard({ loggedInUser }) {
           >
             View Daily Report 
           </NavLink>
+          
+          {/* Create Expense link */}
           <NavLink
             to="expenses"
             style={linkStyle('expenses')}
@@ -785,6 +919,8 @@ function AccountDashboard({ loggedInUser }) {
           >
             Create Expense
           </NavLink>
+          
+          {/* View Expenses link */}
           <NavLink
             to="view-expenses"
             style={linkStyle('view-expenses')}
@@ -794,7 +930,9 @@ function AccountDashboard({ loggedInUser }) {
           >
             View Expense
           </NavLink>
-           <NavLink
+          
+          {/* Office Inventory link */}
+          <NavLink
             to="inventory"
             style={linkStyle('inventory')}
             onMouseEnter={() => setHoveredItem('inventory')}
@@ -807,8 +945,10 @@ function AccountDashboard({ loggedInUser }) {
               setSearchError("");
             }}
           >
-         Office Inventory
+            Office Inventory
           </NavLink>
+          
+          {/* Create Report link */}
           <NavLink
             to="hour"
             style={linkStyle('hour')}
@@ -818,6 +958,8 @@ function AccountDashboard({ loggedInUser }) {
           >
             Create Report
           </NavLink>
+          
+          {/* View Report link */}
           <NavLink
             to="hour-reeport"
             style={linkStyle('hour-reeport')}
@@ -827,6 +969,8 @@ function AccountDashboard({ loggedInUser }) {
           >
             View Report
           </NavLink>
+          
+          {/* Assign Service link */}
           <NavLink
             to="assign-service"
             style={linkStyle('assign-service')}
@@ -836,6 +980,8 @@ function AccountDashboard({ loggedInUser }) {
           >
             Assign Service
           </NavLink>
+          
+          {/* Pending Payment link */}
           <NavLink
             to="pending-payment"
             style={linkStyle('pending-payment')}
@@ -845,6 +991,8 @@ function AccountDashboard({ loggedInUser }) {
           >
             Pending Payment
           </NavLink>
+          
+          {/* Pending Service link */}
           <NavLink
             to="pending-service"
             style={linkStyle('pending-service')}
@@ -854,6 +1002,8 @@ function AccountDashboard({ loggedInUser }) {
           >
             Pending Service
           </NavLink>
+          
+          {/* Target link */}
           <NavLink
             to="activity"
             style={linkStyle('activity')}
@@ -863,6 +1013,8 @@ function AccountDashboard({ loggedInUser }) {
           >
             Target
           </NavLink>
+          
+          {/* Logout button */}
           <button
             onClick={handleLogout}
             style={{
@@ -896,6 +1048,7 @@ function AccountDashboard({ loggedInUser }) {
                         value={orderNumber}
                         onChange={(e) => {
                           const val = e.target.value;
+                          // Only allow numbers and limit to 10 digits
                           if (/^\d*$/.test(val) && val.length <= 10) {
                             setOrderNumber(val);
                             if (searchError) setSearchError("");
@@ -914,6 +1067,7 @@ function AccountDashboard({ loggedInUser }) {
                       />
                     </div>
 
+                    {/* Form type selector */}
                     <div style={styles.formTypeSelector}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <input
@@ -937,9 +1091,12 @@ function AccountDashboard({ loggedInUser }) {
                       </label>
                     </div>
 
+                    {/* Error message display */}
                     {searchError && (
                       <div style={styles.errorMessage}>{searchError}</div>
                     )}
+                    
+                    {/* Search button */}
                     <button
                       onClick={handleSearch}
                       disabled={isLoading || orderNumber.length !== 10}
@@ -958,6 +1115,7 @@ function AccountDashboard({ loggedInUser }) {
                 </div>
               ) : (
                 selectedFormType === "order" ? (
+                  // Render OrderForm component
                   <OrderForm
                     orderNumber={orderNumber}
                     existingData={existingOrderData}
@@ -973,6 +1131,7 @@ function AccountDashboard({ loggedInUser }) {
                     }}
                   />
                 ) : (
+                  // Render Digital Marketing Form
                   <div>
                     <button
                       onClick={() => setShowOrderForm(false)}
@@ -1069,6 +1228,7 @@ function AccountDashboard({ loggedInUser }) {
                     </div>
                   </div>
 
+                  {/* Loading state */}
                   {loading ? (
                     <div>Loading dashboard data...</div>
                   ) : !chartData ? (
@@ -1100,7 +1260,7 @@ function AccountDashboard({ loggedInUser }) {
                         <div style={styles.number}>{totalOrdersSum}</div>
                       </div>
 
-                      {/* Pending Payment */}
+                      {/* Pending Payment Doughnut Chart */}
                       <div style={styles.card}>
                         <div>Pending Payment</div>
                         <div style={styles.pieChart}>
@@ -1109,7 +1269,7 @@ function AccountDashboard({ loggedInUser }) {
                               labels: ['Paid', 'Pending'],
                               datasets: [
                                 {
-                                  data: pendingPayments,
+                                  data: pendingPayments.length === 2 ? pendingPayments : [0, 0],
                                   backgroundColor: ['green', 'red'],
                                 },
                               ],
@@ -1122,18 +1282,19 @@ function AccountDashboard({ loggedInUser }) {
                               },
                             }}
                           />
+                          {/* Clickable overlay for pending section */}
                           <div
                             style={{
                               ...styles.clickableSection,
-                              pointerEvents: pendingPayments[1] > 0 ? 'auto' : 'none'
+                              pointerEvents: (pendingPayments[1] || 0) > 0 ? 'auto' : 'none'
                             }}
-                            onClick={() => pendingPayments[1] > 0 && handleChartClick('pending-payment')}
+                            onClick={() => (pendingPayments[1] || 0) > 0 && handleChartClick('pending-payment')}
                           />
                         </div>
-                        <div style={styles.number}>{pendingPayments[1]}</div>
+                        <div style={styles.number}>{pendingPayments[1] || 0}</div>
                       </div>
 
-                      {/* Pending Service */}
+                      {/* Pending Service Doughnut Chart */}
                       <div style={styles.card}>
                         <div>Pending Service</div>
                         <div style={styles.pieChart}>
@@ -1142,7 +1303,7 @@ function AccountDashboard({ loggedInUser }) {
                               labels: ['Completed', 'Pending'],
                               datasets: [
                                 {
-                                  data: pendingServices,
+                                  data: pendingServices.length === 2 ? pendingServices : [0, 0],
                                   backgroundColor: ['green', 'red'],
                                 },
                               ],
@@ -1155,44 +1316,77 @@ function AccountDashboard({ loggedInUser }) {
                               },
                             }}
                           />
+                          {/* Clickable overlay for pending section */}
                           <div
                             style={{
                               ...styles.clickableSection,
-                              pointerEvents: pendingServices[1] > 0 ? 'auto' : 'none'
+                              pointerEvents: (pendingServices[1] || 0) > 0 ? 'auto' : 'none'
                             }}
-                            onClick={() => pendingServices[1] > 0 && handleChartClick('pending-service')}
+                            onClick={() => (pendingServices[1] || 0) > 0 && handleChartClick('pending-service')}
                           />
                         </div>
-                        <div style={styles.number}>{pendingServices[1]}</div>
+                        <div style={styles.number}>{pendingServices[1] || 0}</div>
                       </div>
 
-                      {/* Client Types Doughnut */}
+                      {/* Client Types Doughnut Chart - FIXED VERSION */}
                       <div style={styles.card}>
                         <div>Client Types</div>
                         <div style={styles.pieChart}>
                           <Doughnut
                             data={{
-                              labels: ['New', 'Renewal', 'Agent'],
+                              labels: ['Retail', 'Renewal', 'Agent', 'Renewal-Agent'],
                               datasets: [{
                                 data: [
-                                  clientTypes.New || 0,
-                                  clientTypes.Renewal || 0,
-                                  clientTypes.Agent || 0,
+                                  // Handle both formats: {count, amount} objects or direct numbers
+                                  clientTypes.Retail?.count !== undefined ? clientTypes.Retail.count : (clientTypes.Retail || 0),
+                                  clientTypes.Renewal?.count !== undefined ? clientTypes.Renewal.count : (clientTypes.Renewal || 0),
+                                  clientTypes.Agent?.count !== undefined ? clientTypes.Agent.count : (clientTypes.Agent || 0),
+                                  clientTypes['Renewal-Agent']?.count !== undefined ? clientTypes['Renewal-Agent'].count : (clientTypes['Renewal-Agent'] || 0),
                                 ],
-                                backgroundColor: ['#36A2EB', '#FFCE56', '#FF6384'],
+                                backgroundColor: ['#36A2EB', '#FFCE56', '#FF6384', '#9966FF'],
                               }],
                             }}
                             options={{
                               responsive: true,
                               maintainAspectRatio: false,
-                              plugins: { legend: { position: 'right' } },
+                              plugins: { 
+                                legend: { position: 'right' },
+                                tooltip: {
+                                  callbacks: {
+                                    label: function (context) {
+                                      const clientType = context.label;
+                                      const count = context.raw;
+                                      
+                                      // Handle both formats for amount display
+                                      let amount = 0;
+                                      if (clientTypes[clientType]?.amount !== undefined) {
+                                        amount = clientTypes[clientType].amount;
+                                      } else if (clientTypes[clientType]?.count !== undefined) {
+                                        amount = clientTypes[clientType].amount || 0;
+                                      }
+                                      
+                                      const formattedAmount = formatAmount(amount);
+                                      const fullAmount = formatAmountFull(amount);
+                                      return [
+                                        `Orders: ${count}`,
+                                        `Revenue: ₹${formattedAmount}`,
+                                        `Amount: ${fullAmount}`
+                                      ];
+                                    }
+                                  }
+                                }
+                              },
                             }}
                           />
                         </div>
                         <div style={styles.number}>
-                          {(clientTypes.New || 0) +
-                            (clientTypes.Renewal || 0) +
-                            (clientTypes.Agent || 0)}
+                          {(
+                            // Handle both formats for total count calculation
+                            (clientTypes.Retail?.count !== undefined ? clientTypes.Retail.count : (clientTypes.Retail || 0)) +
+                            (clientTypes.Renewal?.count !== undefined ? clientTypes.Renewal.count : (clientTypes.Renewal || 0)) +
+                            (clientTypes.Agent?.count !== undefined ? clientTypes.Agent.count : (clientTypes.Agent || 0)) +
+                            (clientTypes['Renewal-Agent']?.count !== undefined ? clientTypes['Renewal-Agent'].count : (clientTypes['Renewal-Agent'] || 0))
+                          )}
                         </div>
                       </div>
                     </div>

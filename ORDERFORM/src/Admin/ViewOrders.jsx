@@ -80,10 +80,16 @@ function ViewOrders() {
     return userRole === 'Admin';
   };
 
-  // Check if user can export to Excel (Admin, Account, Service Executive only - NOT regular executives)
+  // Check if user can export to Excel (Admin, Account, Service Executive AND regular executives)
   const canExportToExcel = () => {
-    const rolesThatCanExport = ['Admin', 'Account', 'Service Executive'];
+    const rolesThatCanExport = ['Admin', 'Account', 'Service Executive', 'Executive'];
     return rolesThatCanExport.includes(userRole);
+  };
+
+  // Check if user can import from Excel (Admin, Account, Service Executive AND regular executives)
+  const canImportFromExcel = () => {
+    const rolesThatCanImport = ['Admin', 'Account', 'Service Executive', 'Executive'];
+    return rolesThatCanImport.includes(userRole);
   };
 
   // Format date to DD-MM-YYYY
@@ -859,18 +865,40 @@ function ViewOrders() {
     const worksheet = XLSX.utils.json_to_sheet(flattenedOrders);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
-    XLSX.writeFile(workbook, shouldSeeOnlyOwnOrders() ? `my_orders_2025_export.xlsx` : 'orders_2025_export.xlsx');
+    
+    // Generate filename based on user role
+    let filename;
+    if (shouldSeeOnlyOwnOrders()) {
+      filename = `my_orders_2025_${executiveName}_export.xlsx`;
+    } else {
+      filename = 'orders_2025_export.xlsx';
+    }
+    
+    XLSX.writeFile(workbook, filename);
+    toast.success(`Excel file "${filename}" downloaded successfully!`);
   };
 
   // Import orders from Excel
   const handleImportFromExcel = async (e) => {
-    if (shouldSeeOnlyOwnOrders()) {
+    if (!canImportFromExcel()) {
       toast.error('You do not have permission to import orders');
       return;
     }
     
     const file = e.target.files[0];
     if (!file) return;
+
+    // Show confirmation for executives
+    if (shouldSeeOnlyOwnOrders()) {
+      const confirmed = window.confirm(
+        `You are about to import orders. These orders will be assigned to you (${executiveName}). Continue?`
+      );
+      if (!confirmed) {
+        // Reset the file input
+        e.target.value = '';
+        return;
+      }
+    }
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -880,50 +908,74 @@ function ViewOrders() {
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        const ordersToImport = jsonData.map(item => ({
-          executive: item['Executive'],
-          business: item['Business'],
-          contactPerson: item['Customer'],
-          location: item['Location'],
-          saleClosedBy: item['Sale Closed By'],
-          contactCode: item['Contact']?.split(' ')[0] || '+91',
-          phone: item['Contact']?.split(' ')[1] || '',
-          orderNo: item['Order No'] || `ORDER-${Math.random().toString(36).substr(2, 8)}`,
-          orderDate: item['Order Date'],
-          clientType: item['Client Type'],
-          rows: [{
-            description: item['Description'],
-            requirement: item['Requirement'],
-            customRequirement: item['Custom Requirement'],
-            quantity: item['Qty'],
-            rate: item['Rate'],
-            total: item['Total'] || (item['Qty'] * item['Rate']).toFixed(2),
-            deliveryDate: item['Delivery Date'],
-            assignedExecutive: item['Service Assigned'],
-            status: item['Status'],
-            remark: item['Remark'],
-            isCompleted: item['Is Completed'] === 'Yes'
-          }],
-          discount: item['Discount'] || 0,
-          discountedTotal: item['Final Amount'] || 0,
-          advance: item['Advance'] || 0,
-          balance: item['Balance'] || 0,
-          advanceDate: item['Advance Date'],
-          paymentDate: item['Payment Date'],
-          paymentMethod: item['Payment Method'] || 'Cash',
-          chequeNumber: item['Cheque Number'] || '',
-          createdBy: item['Created By'] || item['Executive']
-        }));
+        // For executives, automatically assign their name to executive field
+        const ordersToImport = jsonData.map(item => {
+          const baseOrder = {
+            business: item['Business'],
+            contactPerson: item['Customer'],
+            location: item['Location'],
+            saleClosedBy: item['Sale Closed By'],
+            contactCode: item['Contact']?.split(' ')[0] || '+91',
+            phone: item['Contact']?.split(' ')[1] || '',
+            orderNo: item['Order No'] || `ORDER-${Math.random().toString(36).substr(2, 8)}`,
+            orderDate: item['Order Date'],
+            clientType: item['Client Type'],
+            rows: [{
+              description: item['Description'],
+              requirement: item['Requirement'],
+              customRequirement: item['Custom Requirement'],
+              quantity: item['Qty'],
+              rate: item['Rate'],
+              total: item['Total'] || (item['Qty'] * item['Rate']).toFixed(2),
+              deliveryDate: item['Delivery Date'],
+              assignedExecutive: item['Service Assigned'],
+              status: item['Status'],
+              remark: item['Remark'],
+              isCompleted: item['Is Completed'] === 'Yes'
+            }],
+            discount: item['Discount'] || 0,
+            discountedTotal: item['Final Amount'] || 0,
+            advance: item['Advance'] || 0,
+            balance: item['Balance'] || 0,
+            advanceDate: item['Advance Date'],
+            paymentDate: item['Payment Date'],
+            paymentMethod: item['Payment Method'] || 'Cash',
+            chequeNumber: item['Cheque Number'] || '',
+            createdBy: item['Created By'] || item['Executive']
+          };
+
+          // For executives, override the executive field with their name
+          if (shouldSeeOnlyOwnOrders()) {
+            return {
+              ...baseOrder,
+              executive: executiveName, // Force executive name
+              createdBy: executiveName  // Also set created by
+            };
+          }
+
+          // For admins/service executives, use the executive from Excel or fallback
+          return {
+            ...baseOrder,
+            executive: item['Executive'] || baseOrder.createdBy,
+            createdBy: item['Created By'] || item['Executive'] || 'Admin'
+          };
+        });
 
         await axios.post(API_ENDPOINTS.IMPORT_ORDERS, ordersToImport);
         
         const { role, name } = getUserInfo();
         fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
         
-        toast.success('Orders imported successfully!');
+        toast.success(`Successfully imported ${ordersToImport.length} orders!`);
+        
+        // Reset the file input
+        document.getElementById('importExcelInput').value = '';
       } catch (err) {
         console.error('Error importing orders:', err);
         toast.error('Failed to import orders. Please check the file format.');
+        
+        // Reset the file input on error too
+        document.getElementById('importExcelInput').value = '';
       }
     };
     reader.readAsArrayBuffer(file);
@@ -1310,7 +1362,7 @@ function ViewOrders() {
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '10px' }}>
-          {/* Export to Excel Button - Only show for Admin, Account, and Service Executive */}
+          {/* Export to Excel Button - Show for Admin, Account, Service Executive AND regular Executives */}
           {canExportToExcel() && (
             <button
               onClick={handleExportToExcel}
@@ -1329,8 +1381,8 @@ function ViewOrders() {
             </button>
           )}
 
-          {/* Import from Excel Button - Only show for Admin, Account, and Service Executive */}
-          {!shouldSeeOnlyOwnOrders() && (
+          {/* Import from Excel Button - Show for Admin, Account, Service Executive AND regular Executives */}
+          {canImportFromExcel() && (
             <button
               onClick={() => document.getElementById('importExcelInput').click()}
               style={{

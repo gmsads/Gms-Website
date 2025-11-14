@@ -214,6 +214,8 @@ const ExecutiveDashboard = () => {
     count: 0,
     byStatus: []
   });
+  const [isFieldExec, setIsFieldExec] = useState(false);
+  const [buttonsLoaded, setButtonsLoaded] = useState(false); // NEW: Track when all buttons should be visible
 
   const navigate = useNavigate();
 
@@ -223,14 +225,24 @@ const ExecutiveDashboard = () => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
-  // Check if user is a field executive
-  const isFieldExecutive = useCallback(() => {
-    const role = userProfile.role?.toLowerCase();
-    return role === 'fieldexecutive' || 
-           role === 'field executive' ||
-           role === 'fieldexec' ||
-           role === 'field';
-  }, [userProfile.role]);
+  // Check if user is a field executive - SIMPLIFIED VERSION
+  const checkFieldExecutiveRole = useCallback((role) => {
+    if (!role) return false;
+    
+    const normalizedRole = role.toString().toLowerCase().trim();
+    console.log('Checking role for field executive:', normalizedRole);
+    
+    const fieldExecutiveRoles = [
+      'fieldexecutive',
+      'field executive', 
+      'fieldexec',
+      'field',
+      'field_executive',
+      'field-executive'
+    ];
+    
+    return fieldExecutiveRoles.includes(normalizedRole);
+  }, []);
 
   // Event handlers
   const handleSaveProfile = async (updatedProfile) => {
@@ -239,11 +251,19 @@ const ExecutiveDashboard = () => {
         name: userProfile.name.trim(),
         updates: updatedProfile
       });
-      setUserProfile(prev => ({
-        ...prev,
+      
+      const updatedUserProfile = {
+        ...userProfile,
         ...updatedProfile,
         active: updatedProfile.active
-      }));
+      };
+      
+      setUserProfile(updatedUserProfile);
+      
+      // Update field executive status when profile is saved
+      const fieldExecStatus = checkFieldExecutiveRole(updatedProfile.role);
+      setIsFieldExec(fieldExecStatus);
+      
       return true;
     } catch (error) {
       console.error("Update failed:", error);
@@ -382,23 +402,43 @@ const ExecutiveDashboard = () => {
     }
   }, [selectedExecutive, selectedDate]);
 
-  const fetchUserProfile = useCallback(async () => {
+  // SIMPLIFIED: Fetch user profile with immediate role detection
+  const fetchUserProfile = useCallback(async (executiveName) => {
     try {
+      console.log('Fetching profile for:', executiveName);
       const response = await axios.get('/api/user-profile', {
-        params: { name: selectedExecutive }
+        params: { name: executiveName }
       });
 
       if (response.data) {
-        setUserProfile({
-          name: response.data.name,
-          phone: response.data.phone,
-          role: response.data.role.toLowerCase()
-        });
+        const userData = {
+          name: response.data.name || executiveName,
+          phone: response.data.phone || '',
+          role: response.data.role || ''
+        };
+        
+        setUserProfile(userData);
+        
+        // Update field executive status immediately
+        const fieldExecStatus = checkFieldExecutiveRole(userData.role);
+        console.log('Field executive status determined:', fieldExecStatus);
+        setIsFieldExec(fieldExecStatus);
+        
+        return userData;
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
+      // Set default values if API fails
+      const defaultUserData = {
+        name: executiveName,
+        phone: '',
+        role: ''
+      };
+      setUserProfile(defaultUserData);
+      setIsFieldExec(false);
+      return defaultUserData;
     }
-  }, [selectedExecutive]);
+  }, [checkFieldExecutiveRole]);
 
   const fetchProspects = useCallback(async () => {
     try {
@@ -463,21 +503,31 @@ const ExecutiveDashboard = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // IMPROVED: Initialize user and show all buttons immediately
   useEffect(() => {
     const loggedInUser = localStorage.getItem('userName');
+    console.log('Initializing user:', loggedInUser);
+    
     if (loggedInUser) {
       setUserName(loggedInUser);
       setSelectedExecutive(loggedInUser);
+      
+      // Show buttons immediately while fetching profile in background
+      setButtonsLoaded(true);
+      
+      // Fetch profile in background
+      fetchUserProfile(loggedInUser);
     }
-  }, []);
+  }, [fetchUserProfile]);
 
+  // Fetch data when selectedExecutive changes
   useEffect(() => {
     if (selectedExecutive) {
+      console.log('Fetching data for:', selectedExecutive);
       fetchExecutiveData(selectedExecutive);
       fetchPendingPayments();
       fetchAppointmentCount();
       fetchFollowUpCount();
-      fetchUserProfile();
       fetchProspects();
     }
   }, [
@@ -487,7 +537,6 @@ const ExecutiveDashboard = () => {
     fetchPendingPayments,
     fetchAppointmentCount, 
     fetchFollowUpCount, 
-    fetchUserProfile, 
     fetchProspects
   ]);
 
@@ -507,32 +556,6 @@ const ExecutiveDashboard = () => {
     fetchFollowUpCount, 
     fetchProspects
   ]);
-
-  // Add this useEffect to fetch initial user profile immediately
-  useEffect(() => {
-    const fetchInitialUserProfile = async () => {
-      const loggedInUser = localStorage.getItem('userName');
-      if (loggedInUser) {
-        try {
-          const response = await axios.get('/api/user-profile', {
-            params: { name: loggedInUser }
-          });
-
-          if (response.data) {
-            setUserProfile({
-              name: response.data.name,
-              phone: response.data.phone,
-              role: response.data.role.toLowerCase()
-            });
-          }
-        } catch (error) {
-          console.error('Error fetching initial user profile:', error);
-        }
-      }
-    };
-
-    fetchInitialUserProfile();
-  }, []);
 
   // Data for charts
   const pieData = [
@@ -574,90 +597,92 @@ const ExecutiveDashboard = () => {
           </div>
         </div>
 
-        {/* Mobile Menu Button Container - Positioned lower */}
-     {/* Mobile Menu Button Container - Positioned much lower */}
-<div 
-  className="mobile-menu-wrapper" 
-  style={{
-    display: 'flex',
-    alignItems: 'center',
-    height: '50%',
-    paddingTop: '0.5rem'  // Increased from 2rem to 3.5rem
-  }}
->
-  <button
-    className="mobile-menu-btn"
-    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-    aria-expanded={mobileMenuOpen}
-    style={{
-      display: 'none',
-      background: 'linear-gradient(135deg, #1976d2, #125ea3)',
-      border: 'none',
-      borderRadius: '5px',
-      fontSize: '1.5rem',
-      cursor: 'pointer',
-      padding: '0.75rem',
-      zIndex: 1001,
-      color: 'white',
-      width: '50px',
-      height: '50px',
-      alignItems: 'center',
-      justifyContent: 'center',
-      boxShadow: '0 4px 12px rgba(25, 118, 210, 0.3)',
-      transition: 'all 0.3s ease'
-    }}
-  >
-    {mobileMenuOpen ? '✕' : '☰'}
-  </button>
-</div>
-
-        <div className={`header-right ${mobileMenuOpen ? 'mobile-open' : ''}`}>
-          <div className="action-buttons">
-            <button
-              onClick={handleNewAppointmentsClick}
-              className="appointments-btn"
-            >
-              New Appointments
-              {appointmentCount > 0 && (
-                <span className={`appointment-count ${hasNewAppointments ? 'new' : ''}`}>
-                  {appointmentCount}
-                </span>
-              )}
-            </button>
-
-            {/* Field Executive Button - Only visible to field executives */}
-            {isFieldExecutive() && (
-              <button
-                onClick={handleFieldExecutivePage}
-                className="field-executive-btn"
-              >
-                Daily Report
-              </button>
-            )}
-
-            <button
-              onClick={handleFollowUpsClick}
-              className="follow-ups-btn"
-            >
-              Follow Ups
-              {followUpCount > 0 && (
-                <span className="follow-up-count">
-                  {followUpCount}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* User Avatar positioned slightly lower */}
-          <div className="user-avatar-container">
-            <button
-              className="user-avatar"
-              onClick={() => setShowProfileModal(true)}
-            >
-              {getInitials(userName)}
-            </button>
-          </div>
+        {/* Mobile Menu Button Container */}
+        <div 
+          className="mobile-menu-wrapper" 
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            height: '50%',
+            paddingTop: '0.5rem'
+          }}
+        >
+          <button
+            className="mobile-menu-btn"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-expanded={mobileMenuOpen}
+            style={{
+              display: 'none',
+              background: 'linear-gradient(135deg, #1976d2, #125ea3)',
+              border: 'none',
+              borderRadius: '5px',
+              fontSize: '1.5rem',
+              cursor: 'pointer',
+              padding: '0.75rem',
+              zIndex: 1001,
+              color: 'white',
+              width: '50px',
+              height: '50px',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(25, 118, 210, 0.3)',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            {mobileMenuOpen ? '✕' : '☰'}
+          </button>
         </div>
+
+        {/* BUTTONS CONTAINER - Show all buttons immediately */}
+        {buttonsLoaded && (
+          <div className={`header-right ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+            <div className="action-buttons">
+              <button
+                onClick={handleNewAppointmentsClick}
+                className="appointments-btn"
+              >
+                New Appointments
+                {appointmentCount > 0 && (
+                  <span className={`appointment-count ${hasNewAppointments ? 'new' : ''}`}>
+                    {appointmentCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Field Executive Button - Show immediately based on current state */}
+              {isFieldExec && (
+                <button
+                  onClick={handleFieldExecutivePage}
+                  className="field-executive-btn"
+                >
+                 Daily Report
+                </button>
+              )}
+
+              <button
+                onClick={handleFollowUpsClick}
+                className="follow-ups-btn"
+              >
+                Follow Ups
+                {followUpCount > 0 && (
+                  <span className="follow-up-count">
+                    {followUpCount}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* User Avatar positioned slightly lower */}
+            <div className="user-avatar-container">
+              <button
+                className="user-avatar"
+                onClick={() => setShowProfileModal(true)}
+              >
+                {getInitials(userName)}
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Month/Year Picker */}
@@ -963,7 +988,7 @@ const ExecutiveDashboard = () => {
           margin-top: 0.5rem;
         }
 
-        /* New Appointments Button - BLUE COLOR */
+        /* New Appointments Button - DEEP BLUE COLOR */
         .appointments-btn {
           position: relative;
           padding: 0.75rem 1.5rem;
@@ -976,20 +1001,20 @@ const ExecutiveDashboard = () => {
           display: flex;
           align-items: center;
           white-space: nowrap;
-          background: linear-gradient(135deg, #1976d2, #125ea3);
+          background: linear-gradient(135deg, #1565C0, #0D47A1);
           color: white;
-          box-shadow: 0 4px 15px rgba(25, 118, 210, 0.3);
+          box-shadow: 0 4px 15px rgba(21, 101, 192, 0.4);
           min-width: 160px;
           justify-content: center;
         }
 
         .appointments-btn:hover {
-          background: linear-gradient(135deg, #1565c0, #0d47a1);
+          background: linear-gradient(135deg, #0D47A1, #082E63);
           transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(25, 118, 210, 0.4);
+          box-shadow: 0 6px 20px rgba(21, 101, 192, 0.5);
         }
 
-        /* Follow Ups Button - BLUE COLOR */
+        /* Follow Ups Button - PURPLE COLOR */
         .follow-ups-btn {
           position: relative;
           padding: 0.75rem 1.5rem;
@@ -1002,20 +1027,20 @@ const ExecutiveDashboard = () => {
           display: flex;
           align-items: center;
           white-space: nowrap;
-          background: linear-gradient(135deg, #2196F3, #1976D2);
+          background: linear-gradient(135deg, #7B1FA2, #4A148C);
           color: white;
-          box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+          box-shadow: 0 4px 15px rgba(123, 31, 162, 0.4);
           min-width: 140px;
           justify-content: center;
         }
 
         .follow-ups-btn:hover {
-          background: linear-gradient(135deg, #1e88e5, #1565c0);
+          background: linear-gradient(135deg, #6A1B9A, #38006B);
           transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+          box-shadow: 0 6px 20px rgba(123, 31, 162, 0.5);
         }
 
-        /* Field Executive Button - BLUE COLOR */
+        /* Field Executive Button - TEAL COLOR */
         .field-executive-btn {
           position: relative;
           padding: 0.75rem 1.5rem;
@@ -1028,17 +1053,17 @@ const ExecutiveDashboard = () => {
           display: flex;
           align-items: center;
           white-space: nowrap;
-          background: linear-gradient(135deg, #42a5f5, #1e88e5);
+          background: linear-gradient(135deg, #00796B, #004D40);
           color: white;
-          box-shadow: 0 4px 15px rgba(66, 165, 245, 0.3);
+          box-shadow: 0 4px 15px rgba(0, 121, 107, 0.4);
           min-width: 150px;
           justify-content: center;
         }
 
         .field-executive-btn:hover {
-          background: linear-gradient(135deg, #1e88e5, #1565c0);
+          background: linear-gradient(135deg, #00695C, #00332D);
           transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(66, 165, 245, 0.4);
+          box-shadow: 0 6px 20px rgba(0, 121, 107, 0.5);
         }
 
         .appointment-count, .follow-up-count {

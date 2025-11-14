@@ -8,7 +8,7 @@ const dayjs = require("dayjs");
 const ServiceExecutive = require("../models/ServiceExecutive");
 const Account = require("../models/Account");
 const ItTeam = require("../models/ITTeam");
-
+const AdvanceApprovalRequest = require("../models/AdvanceApprovalRequest")
 // ============================
 // GET all executives
 // ============================
@@ -1406,5 +1406,125 @@ router.post("/migrate-trash-fields", async (req, res) => {
     res.status(500).json({ error: "Migration failed" });
   }
 });
+// ============================
+// POST: Request advance approval
+// ============================
+router.post("/advance-approval-requests", async (req, res) => {
+  try {
+    const {
+      executive,
+      business,
+      contactPerson,
+      contactNumber,
+      totalAmount,
+      advanceAmount,
+      advancePercentage,
+      reason,
+      orderData
+    } = req.body;
 
+    const newRequest = new AdvanceApprovalRequest({
+      executive,
+      business,
+      contactPerson,
+      contactNumber,
+      totalAmount,
+      advanceAmount,
+      advancePercentage,
+      reason,
+      orderData,
+      status: 'pending',
+      requestedAt: new Date()
+    });
+
+    await newRequest.save();
+    
+    res.json({ 
+      success: true, 
+      message: "Advance approval request submitted successfully",
+      requestId: newRequest._id 
+    });
+  } catch (err) {
+    console.error("Error creating advance approval request:", err);
+    res.status(500).json({ error: "Failed to submit approval request" });
+  }
+});
+
+// ============================
+// GET: All advance approval requests
+// ============================
+router.get("/advance-approval-requests", async (req, res) => {
+  try {
+    const { status } = req.query;
+    let query = {};
+    
+    if (status) {
+      query.status = status;
+    }
+
+    const requests = await AdvanceApprovalRequest.find(query)
+      .sort({ requestedAt: -1 });
+    
+    res.json(requests);
+  } catch (err) {
+    console.error("Error fetching advance approval requests:", err);
+    res.status(500).json({ error: "Failed to fetch approval requests" });
+  }
+});
+
+// ============================
+// PUT: Update advance approval request status
+// ============================
+router.put("/advance-approval-requests/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, adminNotes, approvedBy } = req.body;
+
+    const updatedRequest = await AdvanceApprovalRequest.findByIdAndUpdate(
+      id,
+      {
+        status,
+        adminNotes,
+        approvedBy,
+        reviewedAt: new Date()
+      },
+      { new: true }
+    );
+
+    if (!updatedRequest) {
+      return res.status(404).json({ error: "Approval request not found" });
+    }
+
+    res.json({ 
+      success: true, 
+      message: `Request ${status} successfully`,
+      request: updatedRequest 
+    });
+  } catch (err) {
+    console.error("Error updating advance approval request:", err);
+    res.status(500).json({ error: "Failed to update approval request" });
+  }
+});
+
+// ============================
+// GET: Check if executive has approved request for order
+// ============================
+router.get("/advance-approval-requests/check/:executive", async (req, res) => {
+  try {
+    const { executive } = req.params;
+    const { business, contactPerson } = req.query;
+
+    const approvedRequest = await AdvanceApprovalRequest.findOne({
+      executive,
+      business,
+      contactPerson,
+      status: 'approved'
+    });
+
+    res.json({ hasApproval: !!approvedRequest });
+  } catch (err) {
+    console.error("Error checking advance approval:", err);
+    res.status(500).json({ error: "Failed to check approval status" });
+  }
+});
 module.exports = router;

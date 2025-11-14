@@ -42,71 +42,71 @@ const FieldVisitsAdmin = () => {
   useEffect(() => {
     applyFilters();
   }, [filters, visits]);
-const formatImageUrl = (photoUrl) => {
-  if (!photoUrl) return null;
-  
-  console.log('Original photo URL:', photoUrl);
-  
-  // If it's already a full URL, return as is
-  if (photoUrl.startsWith('http')) {
-    return photoUrl;
-  }
-  
-  // For production domain
-  if (window.location.hostname === 'gms.globalmarketingsolutions.in') {
-    if (photoUrl.startsWith('/uploads')) {
-      return `https://gms.globalmarketingsolutions.in${photoUrl}`;
+  const formatImageUrl = (photoUrl) => {
+    if (!photoUrl) return null;
+
+    console.log('Original photo URL:', photoUrl);
+
+    // If it's already a full URL, return as is
+    if (photoUrl.startsWith('http')) {
+      return photoUrl;
     }
-    return `https://gms.globalmarketingsolutions.in/uploads/visits/${photoUrl}`;
-  }
-  
-  // For local development
-  if (photoUrl.startsWith('/uploads')) {
-    return `http://localhost:5000${photoUrl}`;
-  }
-  return `http://localhost:5000/uploads/visits/${photoUrl}`;
-};
+
+    // For production domain
+    if (window.location.hostname === 'gms.globalmarketingsolutions.in') {
+      if (photoUrl.startsWith('/uploads')) {
+        return `https://gms.globalmarketingsolutions.in${photoUrl}`;
+      }
+      return `https://gms.globalmarketingsolutions.in/uploads/visits/${photoUrl}`;
+    }
+
+    // For local development
+    if (photoUrl.startsWith('/uploads')) {
+      return `http://localhost:5000${photoUrl}`;
+    }
+    return `http://localhost:5000/uploads/visits/${photoUrl}`;
+  };
   const fetchVisits = async () => {
     try {
       setLoading(true);
       setError('');
       setServerError(null);
-      
+
       const response = await axios.get('/api/field-executive/admin/visits');
-      
+
       const processedVisits = response.data.map(visit => ({
         ...visit,
         photo: visit.photo ? formatImageUrl(visit.photo) : null
       }));
-      
+
       setVisits(processedVisits);
       setFilteredVisits(processedVisits);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching visits:', error);
-      
+
       try {
         const simpleResponse = await axios.get('/api/field-executive/admin/simple-visits');
-        
+
         const processedVisits = simpleResponse.data.map(visit => ({
           ...visit,
           photo: visit.photo ? formatImageUrl(visit.photo) : null
         }));
-        
+
         setVisits(processedVisits);
         setFilteredVisits(processedVisits);
         setLoading(false);
         return;
       } catch (simpleError) {
         console.error('Simple endpoint also failed:', simpleError);
-        
+
         if (error.response && error.response.data) {
           setServerError(error.response.data);
           setError(`Server Error: ${error.response.data.error || error.response.data.message || 'Unknown error'}`);
         } else {
           setError('Failed to fetch visits. Please check if the server is running and try again.');
         }
-        
+
         setLoading(false);
       }
     }
@@ -127,7 +127,7 @@ const formatImageUrl = (photoUrl) => {
     let filtered = [...visits];
 
     if (filters.executive && filters.executive !== 'all') {
-      filtered = filtered.filter(visit => 
+      filtered = filtered.filter(visit =>
         visit.executive && visit.executive.toLowerCase().includes(filters.executive.toLowerCase())
       );
     }
@@ -226,16 +226,16 @@ const formatImageUrl = (photoUrl) => {
 
     try {
       const response = await axios.put(`/api/field-executive/admin/visits/${editingVisit._id}`, editForm);
-      
+
       // Update the visits state with the updated visit
-      setVisits(prev => prev.map(visit => 
+      setVisits(prev => prev.map(visit =>
         visit._id === editingVisit._id ? response.data.visit : visit
       ));
-      
-      setFilteredVisits(prev => prev.map(visit => 
+
+      setFilteredVisits(prev => prev.map(visit =>
         visit._id === editingVisit._id ? response.data.visit : visit
       ));
-      
+
       cancelEdit();
     } catch (error) {
       console.error('Error updating visit:', error);
@@ -269,11 +269,11 @@ const formatImageUrl = (photoUrl) => {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-    
+
     link.setAttribute('href', url);
     link.setAttribute('download', `field-visits-${format(new Date(), 'yyyy-MM-dd')}.csv`);
     link.style.visibility = 'hidden';
-    
+
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -521,7 +521,7 @@ const formatImageUrl = (photoUrl) => {
                       </td>
                       <td>
                         {visit.photo ? (
-                          <button 
+                          <button
                             className="view-photo-btn"
                             onClick={() => openImageModal(visit.photo)}
                             title="View Photo"
@@ -537,14 +537,14 @@ const formatImageUrl = (photoUrl) => {
                       <td>{report.leads || '-'}</td>
                       <td>
                         <div className="action-buttons">
-                          <button 
+                          <button
                             className="edit-btn"
                             onClick={() => startEdit(visit)}
                             title="Edit Visit"
                           >
                             ✏️
                           </button>
-                          <button 
+                          <button
                             className="delete-btn"
                             onClick={() => deleteVisit(visit._id)}
                             title="Delete Visit"
@@ -559,8 +559,8 @@ const formatImageUrl = (photoUrl) => {
               ) : (
                 <tr>
                   <td colSpan="11" className="no-data">
-                    {filters.date || filters.executive !== 'all' || filters.status !== 'all' 
-                      ? 'No field visits found matching your filters' 
+                    {filters.date || filters.executive !== 'all' || filters.status !== 'all'
+                      ? 'No field visits found matching your filters'
                       : 'No field visits found'
                     }
                   </td>
@@ -582,9 +582,9 @@ const formatImageUrl = (photoUrl) => {
               </button>
             </div>
             <div className="image-container">
-              <img 
-                src={selectedImage} 
-                alt="Visit" 
+              <img
+                src={selectedImage}
+                alt="Visit"
                 onError={(e) => {
                   e.target.onerror = null;
                   e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjEwMCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5Y2E0YWYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIwLjM1ZW0iPkltYWdlIG5vdCBmb3VuZDwvdGV4dD48L3N2Zz4=';
@@ -607,18 +607,18 @@ const formatImageUrl = (photoUrl) => {
           min-height: 100vh;
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        
         .page-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
           margin-bottom: 2rem;
           padding: 1.5rem;
-          background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
           color: white;
           border-radius: 12px;
           box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
+       
         
         .page-header h1 {
           margin: 0;

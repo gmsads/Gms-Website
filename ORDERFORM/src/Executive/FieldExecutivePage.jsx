@@ -1049,7 +1049,7 @@ const FieldExecutivePage = () => {
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Purpose:</label>
+                                    <label>Description:</label>
                                     <input
                                         type="text"
                                         value={newVisit.purpose}

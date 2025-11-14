@@ -40,6 +40,9 @@ function PendingPayment({ executiveFilter = null }) {
   const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'today', 'other'
   const [exportLoading, setExportLoading] = useState(false);
   
+  // NEW STATE: Reminder notification
+  const [showReminder, setShowReminder] = useState(false);
+  
   const monthLabels = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
@@ -68,6 +71,14 @@ function PendingPayment({ executiveFilter = null }) {
     applyFilters();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders, year, selectedMonth, searchTerm, activeFilter]);
+
+  // NEW EFFECT: Show reminder when component mounts and when filtered orders change
+  useEffect(() => {
+    if (filteredOrders.length > 0 && totalPendingAmount > 0) {
+      showReminderNotification();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredOrders]);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -166,6 +177,16 @@ function PendingPayment({ executiveFilter = null }) {
     setFilteredOrders(result);
   };
 
+  // NEW FUNCTION: Show reminder notification
+  const showReminderNotification = () => {
+    setShowReminder(true);
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+      setShowReminder(false);
+    }, 5000);
+  };
+
   // Function to check if order has delivery date today
   const hasTodayDelivery = (order) => {
     if (!order.rows || !order.rows.length) return false;
@@ -195,6 +216,23 @@ function PendingPayment({ executiveFilter = null }) {
     if (deliveryDates.length === 0) return 'Not Set';
     
     return deliveryDates[0].toLocaleDateString();
+  };
+
+  // UPDATED FUNCTION: Handle business name click - only for admin, not for executives
+  const handleBusinessClick = (businessName) => {
+    if (!businessName) return;
+    
+    // If executiveFilter exists (meaning we're in executive view), don't navigate
+    if (executiveFilter) {
+      return; // Disable for executives
+    }
+    
+    // Navigate to ViewOrders with business filter (admin only)
+    navigate('/admin-dashboard/view-orders', {
+      state: {
+        businessFilter: businessName
+      }
+    });
   };
 
   const handleRecordPayment = (order) => {
@@ -552,6 +590,69 @@ function PendingPayment({ executiveFilter = null }) {
   // Calculate total pending amount with null checks
   const totalPendingAmount = filteredOrders.reduce((sum, order) => sum + (order?.balance || 0), 0);
 
+  // NEW STYLES: Reminder notification styles
+  const reminderStyles = {
+    modal: {
+      position: 'fixed',
+      top: '20px',
+      right: '20px',
+      backgroundColor: '#e74c3c',
+      color: 'white',
+      padding: '20px',
+      borderRadius: '8px',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+      zIndex: 3000,
+      maxWidth: '350px',
+      animation: 'slideInRight 0.3s ease-out',
+    },
+    title: {
+      fontSize: '18px',
+      fontWeight: 'bold',
+      marginBottom: '10px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+    },
+    amount: {
+      fontSize: '24px',
+      fontWeight: 'bold',
+      marginBottom: '8px',
+    },
+    details: {
+      fontSize: '14px',
+      opacity: 0.9,
+      marginBottom: '5px',
+    },
+    closeButton: {
+      position: 'absolute',
+      top: '10px',
+      right: '10px',
+      background: 'none',
+      border: 'none',
+      color: 'white',
+      fontSize: '18px',
+      cursor: 'pointer',
+      fontWeight: 'bold',
+    },
+    icon: {
+      fontSize: '20px',
+    }
+  };
+
+  // Add CSS animation
+  const animationStyle = `
+    @keyframes slideInRight {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+  `;
+
   // Filter button styles
   const filterButtonStyle = (filterType) => ({
     padding: '8px 16px',
@@ -564,6 +665,18 @@ function PendingPayment({ executiveFilter = null }) {
     backgroundColor: activeFilter === filterType ? '#3498db' : '#ecf0f1',
     color: activeFilter === filterType ? 'white' : '#2c3e50',
   });
+
+  // UPDATED STYLE: Business name clickable style - different for admin vs executives
+  const businessNameStyle = {
+    color: executiveFilter ? '#666666' : '#003366', // Gray for executives, blue for admin
+    cursor: executiveFilter ? 'default' : 'pointer', // Default cursor for executives
+    fontWeight: '500',
+    textDecoration: executiveFilter ? 'none' : 'underline', // No underline for executives
+    transition: executiveFilter ? 'none' : 'all 0.2s ease', // No transition for executives
+    padding: '4px 8px',
+    borderRadius: '4px',
+    display: 'inline-block',
+  };
 
   // Updated styles with export buttons
   const styles = {
@@ -939,9 +1052,38 @@ function PendingPayment({ executiveFilter = null }) {
 
   return (
     <div style={styles.container}>
+      {/* Add CSS animation */}
+      <style>{animationStyle}</style>
+      
       <h2 style={styles.title}>
         {executiveFilter ? `${executiveFilter}'s Pending Payments` : 'Pending Payments'}
       </h2>
+
+      {/* NEW: Reminder Notification */}
+      {showReminder && filteredOrders.length > 0 && (
+        <div style={reminderStyles.modal}>
+          <button 
+            style={reminderStyles.closeButton}
+            onClick={() => setShowReminder(false)}
+          >
+            ×
+          </button>
+          <div style={reminderStyles.title}>
+            <span style={reminderStyles.icon}>💰</span>
+            Pending Payments Reminder
+          </div>
+          <div style={reminderStyles.amount}>
+            ₹{totalPendingAmount.toLocaleString()}
+          </div>
+          <div style={reminderStyles.details}>
+            Total Orders: {filteredOrders.length}
+          </div>
+          <div style={reminderStyles.details}>
+            Filter: {activeFilter === 'today' ? "Today's Delivery" : 
+                    activeFilter === 'other' ? "Other Pending" : "All Pending"}
+          </div>
+        </div>
+      )}
 
       {/* Filter Buttons */}
       <div style={styles.filterButtonsContainer}>
@@ -1068,7 +1210,27 @@ function PendingPayment({ executiveFilter = null }) {
                   <tr key={order?._id || index} style={index % 2 === 0 ? styles.evenRow : styles.oddRow}>
                     <td style={styles.td}>{index + 1}</td>
                     <td style={styles.td}>{order?.executive || ''}</td>
-                    <td style={styles.td}>{order?.business || ''}</td>
+                    {/* UPDATED: Make business name clickable only for admin */}
+                    <td style={styles.td}>
+                      <span
+                        style={businessNameStyle}
+                        onClick={() => handleBusinessClick(order?.business)}
+                        onMouseEnter={(e) => {
+                          if (!executiveFilter) { // Only for admin
+                            e.target.style.color = '#0056b3';
+                            e.target.style.backgroundColor = '#e3f2fd';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!executiveFilter) { // Only for admin
+                            e.target.style.color = '#003366';
+                            e.target.style.backgroundColor = 'transparent';
+                          }
+                        }}
+                      >
+                        {order?.business || ''}
+                      </span>
+                    </td>
                     <td style={styles.td}>{order?.contactPerson || ''}</td>
                     <td style={styles.td}>{order?.contactCode || ''} {order?.phone || ''}</td>
                     <td style={styles.td}>₹{(order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0)?.toLocaleString() || '0')}</td>

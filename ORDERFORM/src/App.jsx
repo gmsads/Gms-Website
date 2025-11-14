@@ -65,6 +65,7 @@ import Parties from './Admin/Parties';
 import Quotation from './Admin/Quotation';
 import InstallPWAButton from './components/InstallPWAButton';
 import FieldVisitsAdmin from './Admin/FieldVisitsAdmin';
+import AdvanceApprovalPage  from './Admin/AdvanceApprovalPage';
 function App() {
   return (
     <BrowserRouter>
@@ -164,6 +165,7 @@ function App() {
           <Route path="design-report" element={<DesignReport />} />
           <Route path="parties" element={<Parties />} />
           <Route path="quotation" element={<Quotation/>}/>
+          <Route path="advance-approvals" element={<AdvanceApprovalPage/>}/>
           <Route path="fieldvisitsadmin" element={<FieldVisitsAdmin/>} />
         </Route>
        // Add these imports at the top with other imports

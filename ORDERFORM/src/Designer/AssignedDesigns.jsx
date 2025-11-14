@@ -44,7 +44,7 @@ const AssignedDesigns = () => {
   useEffect(() => {
     const fetchServiceDesignUpdates = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/design-requests`, {
+        const res = await axios.get(`/api/design-requests`, {
           params: {
             assignedDesigner: loggedInUserId,
             status: ['in-progress', 'completed', 'assigned-to-service']
@@ -115,7 +115,7 @@ const AssignedDesigns = () => {
       console.log("Updating status:", newStatus, "with payload:", payload);
 
       const response = await axios.patch(
-        `http://localhost:5000/api/design-requests/${id}`,
+        `/api/design-requests/${id}`,
         payload,
         {
           timeout: 10000,
@@ -159,7 +159,7 @@ const AssignedDesigns = () => {
       if (!orderId) {
         throw new Error("No valid order ID found in design request");
       }
-      const response = await axios.get(`http://localhost:5000/api/orders/${orderId}`);
+      const response = await axios.get(`/api/orders/${orderId}`);
       setSelectedOrder(response.data);
       setIsModalOpen(true);
     } catch (error) {
