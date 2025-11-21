@@ -1,50 +1,67 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
-import {
-  Chart as ChartJS,
-  Title,
-  Tooltip,
-  LineElement,
-  PointElement,
-  Legend,
-  ArcElement,
-  BarElement,
-  CategoryScale,
-  LinearScale,
-} from 'chart.js';
-import { Bar, Doughnut } from 'react-chartjs-2';
 import AutoLogout from "../mainpage/AutoLogout";
-// Register ChartJS components
-ChartJS.register(
-  LineElement,
-  PointElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement,
-  BarElement,
-  CategoryScale,
-  LinearScale
-);
+import axios from 'axios';
 
 function VendorDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [hoveredItem, setHoveredItem] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
-  const [year, setYear] = useState(new Date().getFullYear());
+  const [vendorData, setVendorData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Mock data for charts
-  const chartData = {
-    monthlyOrders: [12, 19, 8, 15, 12, 18, 10, 14, 16, 12, 20, 15],
-    paidOrders: 120,
-    pendingPayments: 35
-  };
+  // Vendor categories mapping
+  const vendorCategories = [
+    { id: 'mobile-vans', name: 'Mobile Vans' },
+    { id: 'try-cycles', name: 'Try Cycles' },
+    { id: 'digital-wall', name: 'Digital Wall Pasting' },
+    { id: 'pole-boards', name: 'Pole Boards Installation' },
+    { id: 'rounds', name: 'Rounds' },
+  ];
 
-  // Only show dashboard cards when on the exact vendor-dashboard path
-  const showDashboardCards = location.pathname === '/vendor-dashboard' && 
-                           !location.pathname.endsWith('/vendor-dashboard/');
+  // Fetch vendor data for logged-in vendor
+  useEffect(() => {
+    const fetchVendorData = async () => {
+      try {
+        setIsLoading(true);
+        const vendorPhone = localStorage.getItem('vendorPhone') || localStorage.getItem('userPhone') || localStorage.getItem('userName');
+        
+        if (!vendorPhone) {
+          setError('No vendor identification found. Please login again.');
+          setIsLoading(false);
+          return;
+        }
+
+        // Search vendors by phone number
+        const response = await axios.get('http://localhost:5000/api/vendors');
+        const vendor = response.data.find(v => 
+          v.contact === vendorPhone || 
+          v.name === vendorPhone ||
+          v.contact.includes(vendorPhone)
+        );
+
+        if (vendor) {
+          setVendorData(vendor);
+          // Store vendor ID for future use
+          localStorage.setItem('vendorId', vendor._id);
+          setError('');
+        } else {
+          setError('Vendor profile not found. Please contact administrator.');
+        }
+
+      } catch (err) {
+        setError('Failed to fetch vendor data. Please try again later.');
+        console.error('Error fetching vendor data:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchVendorData();
+  }, []);
 
   const styles = {
     container: {
@@ -125,65 +142,95 @@ function VendorDashboard() {
       textOverflow: 'ellipsis',
       maxWidth: '60%',
     },
-    dashboardCards: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-      gap: '25px',
-      margin: '25px auto',
-      maxWidth: '900px',
-    },
-    card: {
+    vendorDetailsCard: {
       backgroundColor: 'white',
       borderRadius: '12px',
       boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '25px',
-      minHeight: '380px',
-      width: '100%',
-      boxSizing: 'border-box',
-      textAlign: 'center',
+      padding: '30px',
+      margin: '20px auto',
+      maxWidth: '800px',
     },
-    cardTitle: {
-      fontSize: '18px',
+    vendorHeader: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '30px',
+      borderBottom: '2px solid #003366',
+      paddingBottom: '15px',
+    },
+    vendorTitle: {
+      fontSize: '28px',
+      fontWeight: 'bold',
+      color: '#003366',
+      margin: 0,
+    },
+    vendorCategory: {
+      fontSize: '16px',
+      color: '#666',
+      backgroundColor: '#e6f3ff',
+      padding: '8px 15px',
+      borderRadius: '20px',
+      fontWeight: '500',
+    },
+    detailSection: {
+      marginBottom: '25px',
+    },
+    sectionTitle: {
+      fontSize: '20px',
       fontWeight: '600',
       color: '#003366',
       marginBottom: '15px',
+      borderLeft: '4px solid #003366',
+      paddingLeft: '10px',
     },
-    yearSelectorWrapper: {
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      margin: '20px 0',
+    detailGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
       gap: '15px',
     },
-    yearSelectorLabel: {
-      fontWeight: '600',
-      color: '#003366',
-      fontSize: '16px',
-    },
-    yearSelector: {
-      padding: '8px 12px',
-      fontSize: '14px',
-      borderRadius: '6px',
-      border: '1px solid #ddd',
-      backgroundColor: 'white',
-    },
-    chartContainer: {
-      width: '100%',
-      height: '220px',
+    detailItem: {
       display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      margin: '15px 0',
+      flexDirection: 'column',
+      marginBottom: '12px',
     },
-    totalCount: {
-      fontSize: '24px',
+    detailLabel: {
+      fontSize: '14px',
+      fontWeight: '600',
+      color: '#666',
+      marginBottom: '5px',
+    },
+    detailValue: {
+      fontSize: '16px',
+      color: '#333',
+      padding: '8px 12px',
+      backgroundColor: '#f8f9fa',
+      borderRadius: '6px',
+      border: '1px solid #e9ecef',
+    },
+    amountDisplay: {
+      fontSize: '18px',
       fontWeight: 'bold',
-      color: '#003366',
-      marginTop: '15px',
+      color: '#2E8B57',
+    },
+    ratingDisplay: {
+      fontSize: '16px',
+      fontWeight: 'bold',
+      color: '#FFA500',
+    },
+    loadingText: {
+      textAlign: 'center',
+      padding: '40px',
+      fontSize: '18px',
+      color: '#666',
+    },
+    errorText: {
+      textAlign: 'center',
+      padding: '40px',
+      fontSize: '18px',
+      color: '#dc3545',
+      backgroundColor: '#f8d7da',
+      borderRadius: '8px',
+      margin: '20px',
     },
   };
 
@@ -192,6 +239,10 @@ function VendorDashboard() {
     ...(isActive ? styles.activeSidebarItem : {}),
     ...(hoveredItem === name ? styles.hoverEffect : {}),
   });
+
+  // Only show dashboard cards when on the exact vendor-dashboard path
+  const showDashboardCards = location.pathname === '/vendor-dashboard' && 
+                           !location.pathname.endsWith('/vendor-dashboard/');
 
   // Responsive sidebar effect
   useEffect(() => {
@@ -203,10 +254,90 @@ function VendorDashboard() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Render vendor details similar to admin view
+  const renderVendorDetails = () => {
+    if (!vendorData) return null;
+
+    return (
+      <div style={styles.vendorDetailsCard}>
+        <div style={styles.vendorHeader}>
+          <h1 style={styles.vendorTitle}>{vendorData.name}</h1>
+          <div style={styles.vendorCategory}>
+            {vendorCategories.find(c => c.id === vendorData.category)?.name || vendorData.category}
+          </div>
+        </div>
+
+        {/* Basic Information Section */}
+        <div style={styles.detailSection}>
+          <h3 style={styles.sectionTitle}>Basic Information</h3>
+          <div style={styles.detailGrid}>
+            <div style={styles.detailItem}>
+              <span style={styles.detailLabel}>Contact Number</span>
+              <span style={styles.detailValue}>{vendorData.contact}</span>
+            </div>
+            <div style={styles.detailItem}>
+              <span style={styles.detailLabel}>Location</span>
+              <span style={styles.detailValue}>{vendorData.location}</span>
+            </div>
+            <div style={styles.detailItem}>
+              <span style={styles.detailLabel}>Service Amount</span>
+              <span style={{...styles.detailValue, ...styles.amountDisplay}}>
+                ₹{vendorData.amount}
+              </span>
+            </div>
+            <div style={styles.detailItem}>
+              <span style={styles.detailLabel}>Available From</span>
+              <span style={styles.detailValue}>
+                {new Date(vendorData.availability).toLocaleDateString()}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Service Details Section */}
+        <div style={styles.detailSection}>
+          <h3 style={styles.sectionTitle}>Service Details</h3>
+          <div style={styles.detailGrid}>
+            <div style={styles.detailItem}>
+              <span style={styles.detailLabel}>Address</span>
+              <span style={styles.detailValue}>
+                {vendorData.details?.address || 'Not provided'}
+              </span>
+            </div>
+            <div style={styles.detailItem}>
+              <span style={styles.detailLabel}>Services Offered</span>
+              <span style={styles.detailValue}>
+                {vendorData.details?.services || 'Not provided'}
+              </span>
+            </div>
+            <div style={styles.detailItem}>
+              <span style={styles.detailLabel}>Rating</span>
+              <span style={{...styles.detailValue, ...styles.ratingDisplay}}>
+                {vendorData.details?.rating || '0'}/5
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Additional Notes Section */}
+        {vendorData.details?.notes && (
+          <div style={styles.detailSection}>
+            <h3 style={styles.sectionTitle}>Additional Notes</h3>
+            <div style={styles.detailItem}>
+              <span style={styles.detailValue}>
+                {vendorData.details.notes}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div>
       {/* Navbar */}
-       <AutoLogout />
+      <AutoLogout />
       <div style={styles.navbar}>
         <span style={styles.burger} onClick={() => setSidebarOpen(!sidebarOpen)}>
           &#9776;
@@ -235,7 +366,7 @@ function VendorDashboard() {
               userSelect: 'none',
             }}
           >
-            {(localStorage.getItem('userName') || 'V').charAt(0).toUpperCase()}
+            {(vendorData?.name?.charAt(0) || localStorage.getItem('userName') || 'V').toUpperCase()}
           </div>
           <button
             onClick={() => {
@@ -262,7 +393,7 @@ function VendorDashboard() {
         <div style={styles.sidebar}>
           <NavLink
             to="/vendor-dashboard"
-            end  // This ensures exact matching for the dashboard route
+            end
             style={linkStyle('dashboard')}
             onMouseEnter={() => setHoveredItem('dashboard')}
             onMouseLeave={() => setHoveredItem('')}
@@ -289,95 +420,14 @@ function VendorDashboard() {
 
         {/* Main Content Area */}
         <div style={styles.content}>
-          {/* Only show either the dashboard cards or the outlet content */}
-          {showDashboardCards ? (
+          {isLoading ? (
+            <div style={styles.loadingText}>Loading your vendor profile...</div>
+          ) : error ? (
+            <div style={styles.errorText}>{error}</div>
+          ) : showDashboardCards ? (
             <>
-              {/* Year Selector */}
-              <div style={styles.yearSelectorWrapper}>
-                <label htmlFor="year-select" style={styles.yearSelectorLabel}>
-                  Select Year:
-                </label>
-                <select
-                  id="year-select"
-                  value={year}
-                  onChange={(e) => setYear(parseInt(e.target.value))}
-                  style={styles.yearSelector}
-                >
-                  {Array.from({ length: 5 }, (_, i) => year - 2 + i).map((y) => (
-                    <option key={y} value={y}>
-                      {y}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={styles.dashboardCards}>
-                {/* Total Orders Card */}
-                <div style={styles.card}>
-                  <div style={styles.cardTitle}>Total Orders ({year})</div>
-                  <div style={styles.chartContainer}>
-                    <Bar
-                      data={{
-                        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-                        datasets: [{
-                          label: 'Orders',
-                          data: chartData.monthlyOrders,
-                          backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                          borderColor: 'rgba(54, 162, 235, 1)',
-                          borderWidth: 1,
-                        }],
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: { display: false },
-                        },
-                        scales: {
-                          y: {
-                            beginAtZero: true,
-                            ticks: {
-                              precision: 0
-                            }
-                          }
-                        }
-                      }}
-                    />
-                  </div>
-                  <div style={styles.totalCount}>
-                    {chartData.monthlyOrders.reduce((a, b) => a + b, 0)} Total
-                  </div>
-                </div>
-
-                {/* Payment Status Card */}
-                <div style={styles.card}>
-                  <div style={styles.cardTitle}>Payment Status</div>
-                  <div style={styles.chartContainer}>
-                    <Doughnut
-                      data={{
-                        labels: ['Paid', 'Pending'],
-                        datasets: [{
-                          data: [chartData.paidOrders, chartData.pendingPayments],
-                          backgroundColor: ['#4CAF50', '#F44336'],
-                          borderWidth: 1,
-                        }],
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: {
-                            position: 'bottom'
-                          }
-                        }
-                      }}
-                    />
-                  </div>
-                  <div style={styles.totalCount}>
-                    {chartData.pendingPayments} Pending
-                  </div>
-                </div>
-              </div>
+              {/* Vendor Details Card - Only shows vendor profile */}
+              {renderVendorDetails()}
             </>
           ) : (
             <Outlet />

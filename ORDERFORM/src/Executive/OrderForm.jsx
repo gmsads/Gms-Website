@@ -107,6 +107,16 @@ function OrderForm({
         throw new Error('Invalid phone number');
       }
 
+      // Format payment methods for display
+      let paymentMethodDisplay = "Not specified";
+      if (orderData.paymentMethods && orderData.paymentMethods.length > 0) {
+        if (typeof orderData.paymentMethods === 'string') {
+          paymentMethodDisplay = orderData.paymentMethods;
+        } else if (Array.isArray(orderData.paymentMethods)) {
+          paymentMethodDisplay = orderData.paymentMethods.join(', ');
+        }
+      }
+
       const message = `🎉 *Order Confirmation* 🎉
 
 Dear ${orderData.contactPerson},
@@ -118,6 +128,7 @@ Your order has been successfully placed with *Global Marketing Solutions*!
 📋 *Order Number:* ${orderData.orderNumber}
 👤 *Contact Person:* ${orderData.contactPerson}
 📅 *Order Date:* ${new Date(orderData.orderDate).toLocaleDateString()}
+📍 *Location:* ${orderData.location || 'Not specified'}
 
 *Requirements:*
 ${orderData.requirements}
@@ -126,6 +137,16 @@ ${orderData.requirements}
 💰 *Total Amount:* ₹${orderData.total}
 💳 *Advance Paid:* ₹${orderData.advance}
 ⚖️ *Balance:* ₹${orderData.balance}
+💳 *Payment Method:* ${paymentMethodDisplay}
+${orderData.advanceDate ? `📅 *Advance Date:* ${new Date(orderData.advanceDate).toLocaleDateString()}` : ''}
+${orderData.paymentDate ? `📅 *Payment Date:* ${new Date(orderData.paymentDate).toLocaleDateString()}` : ''}
+
+*Additional Details:*
+${orderData.chequeNumber ? `🏦 *Cheque Number:* ${orderData.chequeNumber}` : ''}
+${orderData.upiId ? `📱 *UPI ID:* ${orderData.upiId}` : ''}
+${orderData.bankName ? `🏛️ *Bank Name:* ${orderData.bankName}` : ''}
+${orderData.transactionRef ? `🔗 *Transaction Ref:* ${orderData.transactionRef}` : ''}
+${orderData.poNumber ? `📄 *PO Number:* ${orderData.poNumber}` : ''}
 
 Thank you for your business! We'll keep you updated on your order status.
 
@@ -430,35 +451,75 @@ Global Marketing Solutions Team`;
     }
   };
 
+  // Updated useEffect to fetch regular executives, field executives, and service executives
   useEffect(() => {
-    const fetchInitialData = async () => {
+    const fetchAllExecutives = async () => {
       try {
         setLoadingExecutives(true);
-        const requirementsRes = await axios.get("/api/requirements");
-        setRequirements([...requirementsRes.data].sort((a, b) => a.name.localeCompare(b.name)));
+        
+        // Fetch regular executives
         const execsRes = await axios.get("/api/executives");
-        const sortedExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
-        setSaleClosedByExecutives(sortedExecs);
+        const regularExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
+        
+        // Fetch field executives
+        const fieldExecsRes = await axios.get("/api/field-executive/admin/executives");
+        const fieldExecutives = fieldExecsRes.data.map(name => ({ name, _id: name, type: 'field' }));
+        
+        // Fetch service executives
+        const serviceExecsRes = await axios.get("/api/service-executives");
+        const serviceExecutives = serviceExecsRes.data.map(exec => ({ 
+          name: exec.name, 
+          _id: exec._id, 
+          type: 'service' 
+        }));
+        
+        // Combine all lists and remove duplicates
+        const allExecutives = [
+          ...regularExecs,
+          ...fieldExecutives,
+          ...serviceExecutives
+        ].filter((exec, index, self) => 
+          index === self.findIndex(e => e.name === exec.name)
+        ).sort((a, b) => a.name.localeCompare(b.name));
+        
+        setSortedExecutives(allExecutives);
+        setSaleClosedByExecutives(allExecutives);
 
         if (isAdmin) {
-          setSortedExecutives(sortedExecs);
+          setSortedExecutives(allExecutives);
         }
-
-        await fetchTargetForDate(orderDate);
 
         if (existingData?.executive && !isCreatingNew) {
           setSelectedExecutive(existingData.executive);
         }
+
+      } catch (error) {
+        console.error("Error fetching executives:", error);
+      } finally {
+        setLoadingExecutives(false);
+      }
+    };
+
+    fetchAllExecutives();
+  }, [existingData, isAdmin, isCreatingNew]);
+
+  // Keep the existing useEffect for other initial data
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const requirementsRes = await axios.get("/api/requirements");
+        setRequirements([...requirementsRes.data].sort((a, b) => a.name.localeCompare(b.name)));
+
+        await fetchTargetForDate(orderDate);
 
         if (routerLocation.state?.phoneNumber) {
           checkIfExistingClient(routerLocation.state.phoneNumber);
         }
       } catch (error) {
         console.error("Initialization error:", error);
-      } finally {
-        setLoadingExecutives(false);
       }
     };
+
     if (existingData && !isCreatingNew) {
       setSelectedExecutive(existingData.executive || (isAdmin ? "" : localStorage.getItem("userName") || ""));
       setBusiness(existingData.business || "");
@@ -678,7 +739,16 @@ Global Marketing Solutions Team`;
         total: discountedTotal,
         advance: advance,
         balance: balance,
-        orderDate: orderDate
+        orderDate: orderDate,
+        location: clientLocation,
+        paymentMethods: paymentMethodStr, // This now includes the formatted payment methods
+        advanceDate: advanceDate,
+        paymentDate: paymentDate,
+        chequeNumber: chequeNumber,
+        upiId: selectedUpi,
+        bankName: bankName,
+        transactionRef: transactionRef,
+        poNumber: poNumber
       };
 
       // Send WhatsApp message automatically

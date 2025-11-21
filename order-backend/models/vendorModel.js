@@ -18,10 +18,25 @@ const vendorModalSchema = new mongoose.Schema({
     required: true,
     enum: ['mobile-vans', 'try-cycles', 'digital-wall', 'pole-boards', 'rounds'] 
   },
+  amount: { 
+    type: Number, 
+    required: true,
+    min: [0, 'Amount cannot be negative']
+  },
+  availability: { 
+    type: Date, 
+    required: true,
+    default: Date.now
+  },
   details: {
     address: String,
     services: String,
-    availability: String,
+    rating: {
+      type: Number,
+      min: 0,
+      max: 5,
+      default: 0
+    },
     notes: String
   },
   createdAt: { type: Date, default: Date.now }

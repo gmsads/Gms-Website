@@ -385,6 +385,7 @@ import ViewOrders from './Admin/ViewOrders';
           }
         >
           <Route path="pending-payment" element={<PendingPayment />} />
+           <Route path="vendors" element={<Vendors />} />
           <Route path="pending-service" element={<PendingService />} />
           <Route path="create-order" element={<CreateOrder />} />
           <Route path="view-orders" element={<ViewOrders />} />

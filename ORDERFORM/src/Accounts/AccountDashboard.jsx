@@ -919,7 +919,15 @@ function AccountDashboard({ loggedInUser }) {
           >
             Create Expense
           </NavLink>
-          
+             <NavLink
+            to="vendors"
+            style={linkStyle('vendors')}
+            onMouseEnter={() => setHoveredItem('vendors')}
+            onMouseLeave={() => setHoveredItem('')}
+            onClick={handleSidebarClick}
+          >
+           Vendors
+          </NavLink>
           {/* View Expenses link */}
           <NavLink
             to="view-expenses"

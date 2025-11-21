@@ -252,7 +252,53 @@ router.post("/add-executive", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+// ✅ Route to add Vendor (with username) - ADD THIS TO YOUR BACKEND
+router.post("/add-vendor", async (req, res) => {
+  const {
+    username,
+    name,
+    phone,
+    password,
+    email,
+    guardianName,
+    aadhar,
+    joiningDate,
+    experience,
+    active
+  } = req.body;
 
+  try {
+    const existing = await Vendor.findOne({
+      $or: [{ username }, { name }],
+    });
+    if (existing) {
+      return res.status(400).json({
+        error:
+          existing.username === username
+            ? "Username already exists"
+            : "Name already exists",
+      });
+    }
+
+    const newVendor = new Vendor({
+      username,
+      name,
+      password,
+      phone,
+      email,
+      guardianName,
+      aadhar,
+      joiningDate,
+      experience,
+      active: active !== false
+    });
+    await newVendor.save();
+    res.status(201).json({ message: "Vendor added successfully" });
+  } catch (err) {
+    console.error("Error saving Vendor:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 // ✅ Route to add an Admin (with username)
 router.post("/add-admin", async (req, res) => {
   const { username, name, password, phone, email,
