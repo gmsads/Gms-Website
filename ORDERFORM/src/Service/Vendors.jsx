@@ -15,17 +15,24 @@ const VendorsPage = () => {
     const [showAddCategory, setShowAddCategory] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
 
+    // Get today's date in YYYY-MM-DD format
+    const getTodayDate = () => {
+        const today = new Date();
+        return today.toISOString().split('T')[0];
+    };
+
     // New vendor form state
     const [newVendor, setNewVendor] = useState({
         name: '',
         contact: '',
         location: '',
         category: 'mobile-vans',
+        amount: '',
+        availability: getTodayDate(),
         details: {
             address: '',
             services: '',
             rating: '',
-            availability: 'Mon-Fri, 9AM-6PM',
             notes: ''
         }
     });
@@ -39,12 +46,49 @@ const VendorsPage = () => {
         { id: 'rounds', name: 'Rounds' },
     ]);
 
+    // Function to send vendor details to WhatsApp to specific phone number
+    const sendToWhatsApp = (vendorData) => {
+        // Get the phone number from vendor data
+        const phoneNumber = vendorData.contact;
+        
+        // Remove any spaces, dashes, or special characters from phone number
+        const cleanPhoneNumber = phoneNumber.replace(/\D/g, '');
+        
+        // Format the message
+        const message = `
+🏢 *Vendor Registration Confirmation*
+
+📛 *Name:* ${vendorData.name}
+📞 *Contact:* ${vendorData.contact}
+📍 *Location:* ${vendorData.location}
+💰 *Amount:* ₹${vendorData.amount}
+📅 *Available From:* ${vendorData.availability}
+🗂️ *Category:* ${vendorCategories.find(c => c.id === vendorData.category)?.name}
+
+📋 *Details:*
+🏠 *Address:* ${vendorData.details.address || 'Not provided'}
+🛠️ *Services:* ${vendorData.details.services || 'Not provided'}
+⭐ *Rating:* ${vendorData.details.rating || 'Not rated'}
+📝 *Notes:* ${vendorData.details.notes || 'No notes'}
+
+_Registered on: ${new Date().toLocaleDateString()}_
+        `.trim();
+
+        // Encode the message for URL
+        const encodedMessage = encodeURIComponent(message);
+        
+        // Create WhatsApp URL with specific phone number
+        const whatsappUrl = `https://wa.me/${cleanPhoneNumber}?text=${encodedMessage}`;
+        
+        // Open WhatsApp in new tab
+        window.open(whatsappUrl, '_blank');
+    };
+
     // Fetch vendors from backend
     useEffect(() => {
         const fetchVendors = async () => {
             try {
                 setIsLoading(true);
-                // Replace with your actual API endpoint
                 const response = await axios.get('/api/vendors');
                 setVendorsData(response.data);
                 setError('');
@@ -59,70 +103,81 @@ const VendorsPage = () => {
         fetchVendors();
     }, []);
 
-     // Filter vendors based on search and category
-     const filteredVendors = vendorsData.filter(vendor => {
+    // Filter vendors based on search and category
+    const filteredVendors = vendorsData.filter(vendor => {
         const matchesSearch = vendor.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
             vendor.name.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesCategory = selectedCategory === 'all' || vendor.category === selectedCategory;
         return matchesSearch && matchesCategory;
     });
 
-  // Handle form input changes
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    // Handle form input changes
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
 
-    if (name.includes('details.')) {
-        const detailField = name.split('.')[1];
-        setNewVendor({
-            ...newVendor,
-            details: {
-                ...newVendor.details,
-                [detailField]: name === 'details.rating' ? parseFloat(value) : value
-            }
-        });
-    } else {
-        setNewVendor({
-            ...newVendor,
-            [name]: value
-        });
-    }
-};
+        if (name.includes('details.')) {
+            const detailField = name.split('.')[1];
+            setNewVendor({
+                ...newVendor,
+                details: {
+                    ...newVendor.details,
+                    [detailField]: name === 'details.rating' ? parseFloat(value) : value
+                }
+            });
+        } else {
+            setNewVendor({
+                ...newVendor,
+                [name]: value
+            });
+        }
+    };
 
-    // Submit new vendor to backend
-    
     // Submit new vendor to backend
     const handleAddVendor = async (e) => {
         e.preventDefault();
 
         // Basic validation
-        if (!newVendor.name || !newVendor.contact || !newVendor.location) {
+        if (!newVendor.name || !newVendor.contact || !newVendor.location || !newVendor.amount) {
             setError('Please fill in all required fields');
             return;
         }
 
         try {
             setIsLoading(true);
-            const response = await axios.post('/api/vendors', {
+            const response = await axios.post('http://localhost:5000/api/vendors', {
                 ...newVendor,
-                contact: String(newVendor.contact) // Ensure contact is string
+                contact: String(newVendor.contact),
+                amount: parseFloat(newVendor.amount)
             });
 
-            setVendorsData([...vendorsData, response.data]);
+            const savedVendor = response.data;
+            
+            // Update local state
+            setVendorsData([...vendorsData, savedVendor]);
             setShowAddForm(false);
+            
+            // Reset form
             setNewVendor({
                 name: '',
                 contact: '',
                 location: '',
                 category: 'mobile-vans',
+                amount: '',
+                availability: getTodayDate(),
                 details: {
                     address: '',
                     services: '',
                     rating: 0,
-                    availability: 'Mon-Fri, 9AM-6PM',
                     notes: ''
                 }
             });
             setError('');
+
+            // Send to WhatsApp after successful save - to the vendor's phone number
+            setTimeout(() => {
+                sendToWhatsApp(savedVendor);
+            }, 500);
+
         } catch (err) {
             setError(`Failed to add vendor: ${err.response?.data?.message || err.message}`);
             console.error('Error adding vendor:', err);
@@ -131,6 +186,10 @@ const VendorsPage = () => {
         }
     };
 
+    // Function to send existing vendor to WhatsApp
+    const sendVendorToWhatsApp = (vendor) => {
+        sendToWhatsApp(vendor);
+    };
 
     const handleAddCategory = () => {
         if (!newCategoryName.trim()) {
@@ -143,7 +202,6 @@ const VendorsPage = () => {
             name: newCategoryName.trim()
         };
         
-        // Check if category already exists
         if (vendorCategories.some(cat => cat.id === newCategory.id)) {
             setError('This category already exists');
             return;
@@ -156,7 +214,6 @@ const VendorsPage = () => {
         setNewVendor(prev => ({ ...prev, category: newCategory.id }));
         setError('');
     };
-
 
     // Styles
     const styles = {
@@ -210,10 +267,7 @@ const VendorsPage = () => {
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
             padding: '15px',
             cursor: 'pointer',
-            transition: 'transform 0.2s',
-            ':hover': {
-                transform: 'translateY(-5px)'
-            }
+            transition: 'transform 0.2s'
         },
         vendorName: {
             fontSize: '18px',
@@ -322,6 +376,28 @@ const VendorsPage = () => {
             borderRadius: '4px',
             border: '1px solid #ddd',
             margin: '0'
+        },
+        amountDisplay: {
+            fontSize: '16px',
+            fontWeight: 'bold',
+            color: '#2E8B57'
+        },
+        whatsappButton: {
+            padding: '8px 15px',
+            backgroundColor: '#25D366',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            marginLeft: '10px'
+        },
+        vendorActions: {
+            display: 'flex',
+            gap: '10px',
+            marginTop: '10px'
         }
     };
 
@@ -479,6 +555,34 @@ const VendorsPage = () => {
                                 </div>
 
                                 <div style={styles.formGroup}>
+                                    <label style={styles.formLabel}>Amount (₹)*:</label>
+                                    <input
+                                        type="number"
+                                        name="amount"
+                                        value={newVendor.amount}
+                                        onChange={handleInputChange}
+                                        style={styles.formInput}
+                                        required
+                                        min="0"
+                                        step="0.01"
+                                        placeholder="0.00"
+                                    />
+                                </div>
+
+                                <div style={styles.formGroup}>
+                                    <label style={styles.formLabel}>Availability Date*:</label>
+                                    <input
+                                        type="date"
+                                        name="availability"
+                                        value={newVendor.availability}
+                                        onChange={handleInputChange}
+                                        style={styles.formInput}
+                                        required
+                                        min={getTodayDate()}
+                                    />
+                                </div>
+
+                                <div style={styles.formGroup}>
                                     <label style={styles.formLabel}>Category*:</label>
                                     <select
                                         name="category"
@@ -516,13 +620,17 @@ const VendorsPage = () => {
                                 </div>
 
                                 <div style={styles.formGroup}>
-                                    <label style={styles.formLabel}>Availability:</label>
+                                    <label style={styles.formLabel}>Rating:</label>
                                     <input
-                                        type="text"
-                                        name="details.availability"
-                                        value={newVendor.details.availability}
+                                        type="number"
+                                        name="details.rating"
+                                        value={newVendor.details.rating}
                                         onChange={handleInputChange}
                                         style={styles.formInput}
+                                        min="0"
+                                        max="5"
+                                        step="0.1"
+                                        placeholder="0-5"
                                     />
                                 </div>
 
@@ -560,15 +668,43 @@ const VendorsPage = () => {
                         <div style={styles.vendorGrid}>
                             {filteredVendors.map(vendor => (
                                 <div
-                                    key={vendor.id}
+                                    key={vendor._id || vendor.id}
                                     style={styles.vendorCard}
-                                    onClick={() => setSelectedVendor(vendor)}
                                 >
                                     <div style={styles.vendorName}>{vendor.name}</div>
                                     <div style={styles.vendorInfo}><strong>Contact:</strong> {vendor.contact}</div>
                                     <div style={styles.vendorInfo}><strong>Location:</strong> {vendor.location}</div>
                                     <div style={styles.vendorInfo}>
                                         <strong>Type:</strong> {vendorCategories.find(c => c.id === vendor.category)?.name}
+                                    </div>
+                                    <div style={styles.vendorInfo}>
+                                        <strong>Amount:</strong> <span style={styles.amountDisplay}>₹{vendor.amount}</span>
+                                    </div>
+                                    <div style={styles.vendorInfo}>
+                                        <strong>Available From:</strong> {new Date(vendor.availability).toLocaleDateString()}
+                                    </div>
+                                    
+                                    <div style={styles.vendorActions}>
+                                        <button
+                                            onClick={() => setSelectedVendor(vendor)}
+                                            style={{
+                                                padding: '6px 12px',
+                                                backgroundColor: '#003366',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                                flex: 1
+                                            }}
+                                        >
+                                            View Details
+                                        </button>
+                                        <button
+                                            onClick={() => sendVendorToWhatsApp(vendor)}
+                                            style={styles.whatsappButton}
+                                        >
+                                            📱 WhatsApp
+                                        </button>
                                     </div>
                                 </div>
                             ))}
@@ -589,6 +725,12 @@ const VendorsPage = () => {
                             Back to Vendors
                         </button>
                         <div style={styles.detailTitle}>{selectedVendor.name}</div>
+                        <button
+                            onClick={() => sendVendorToWhatsApp(selectedVendor)}
+                            style={styles.whatsappButton}
+                        >
+                            📱 Share via WhatsApp
+                        </button>
                     </div>
 
                     <div style={styles.detailSection}>
@@ -607,6 +749,18 @@ const VendorsPage = () => {
                                 {vendorCategories.find(c => c.id === selectedVendor.category)?.name}
                             </div>
                         </div>
+                        <div style={styles.detailRow}>
+                            <div style={styles.detailLabel}>Amount:</div>
+                            <div style={{ ...styles.detailValue, ...styles.amountDisplay }}>
+                                ₹{selectedVendor.amount}
+                            </div>
+                        </div>
+                        <div style={styles.detailRow}>
+                            <div style={styles.detailLabel}>Available From:</div>
+                            <div style={styles.detailValue}>
+                                {new Date(selectedVendor.availability).toLocaleDateString()}
+                            </div>
+                        </div>
                     </div>
 
                     <div style={styles.detailSection}>
@@ -618,10 +772,6 @@ const VendorsPage = () => {
                         <div style={styles.detailRow}>
                             <div style={styles.detailLabel}>Services:</div>
                             <div style={styles.detailValue}>{selectedVendor.details.services}</div>
-                        </div>
-                        <div style={styles.detailRow}>
-                            <div style={styles.detailLabel}>Availability:</div>
-                            <div style={styles.detailValue}>{selectedVendor.details.availability}</div>
                         </div>
                         <div style={styles.detailRow}>
                             <div style={styles.detailLabel}>Rating:</div>

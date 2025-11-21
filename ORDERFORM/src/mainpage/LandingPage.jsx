@@ -36,6 +36,7 @@ function LandingPage() {
       localStorage.setItem('isLoggedIn', 'true');
       localStorage.setItem('role', role);
       localStorage.setItem('userName', name);
+      
 
       // 3. Track executive login if role is Executive
       if (role === 'Executive') {
@@ -73,10 +74,12 @@ const roleRoutes = {
   'Sales Manager': '/sales-manager-dashboard',
   'Digital Marketing': '/digital-dashboard',
   'Vendor': '/vendor-dashboard',
+  'Agent': '/agent-dashboard',   
   'IT': '/it-dashboard',
-  'Unit': '/order',                // Redirect to executive order page
+  'Unit': '/unit-dashboard',                // Redirect to executive order page
   'FieldExecutive': '/order',      // Redirect to executive order page
-  'fieldexecutive': '/order'       // Keep backward compatibility
+  'fieldexecutive': '/order'  ,
+     // Keep backward compatibility
 };
 
       const route = roleRoutes[role];
@@ -158,8 +161,8 @@ const roleRoutes = {
             </label>
 
             <div style={styles.buttons}>
-              <button style={styles.modalBtn} onClick={handleLogin}>Login</button>
               <button style={styles.modalBtn} onClick={() => setShowLogin(false)}>Cancel</button>
+              <button style={styles.modalBtn} onClick={handleLogin}>Login</button>
             </div>
           </div>
         </div>

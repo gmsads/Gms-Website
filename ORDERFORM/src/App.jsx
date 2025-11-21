@@ -42,7 +42,6 @@ import ViewPerformance from './Admin/ViewPerformance';
 import ServiceManagerDashboard from './ServiceManager/Servicemanagerdashbaord';
 import ITDashboard from './ITTeam/ITDashboard';
 import DesignUpdates from "./Service/DesignUpdates";
-import ServiceUpdate from './Admin/ServiceUpdate';
 import Vendors from './Service/Vendors';
 import Pricelist from './Service/Pricelist';
 import Inventory from './Admin/Inventory ';
@@ -56,11 +55,41 @@ import Record from './Executive/Record';
 import StartDesign from './Designer/StartDesign';
 import DesignReport from './Admin/DesignReports';
 import FieldExecutivePage from './Executive/FieldExecutivePage';
-
+import UnitDashboard from './unit/UnitDashboard.jsx';
+import EmployeeFaceEnroll from './unit/EmployeeFaceEnroll.jsx';
+import EmployeeLogin from './unit/EmployeeLogin.jsx';
+import UnitAttendance from './Admin/UnitAttendance.jsx';
+import TrashOrders from './Admin/TrashOrders';
+import AgentDashboard from './Agent/AgentDashboard.jsx'
+import Parties from './Admin/Parties';
+import Quotation from './Admin/Quotation';
+import InstallPWAButton from './components/InstallPWAButton';
+import FieldVisitsAdmin from './Admin/FieldVisitsAdmin';
+import AdvanceApprovalPage  from './Admin/AdvanceApprovalPage';
 function App() {
   return (
     <BrowserRouter>
+         {/* PWA Install Button visible on all pages */}
+      <InstallPWAButton />
       <Routes>
+
+        <Route
+          path="/unit-dashboard"
+          element={
+            <ProtectedRoute>
+              <UnitDashboard />
+            </ProtectedRoute>
+          }
+        >
+
+          <Route path="daily-report" element={<DailyReport />} />
+          <Route path="record" element={<Record />} />
+          <Route path="hour" element={<Hourrecord />} />
+          <Route path="hour-reeport" element={<HourReport />} />
+          <Route path="employee-face" element={<EmployeeFaceEnroll />} />
+          <Route path="employee-login" element={<EmployeeLogin />} />
+
+        </Route>
         <Route path="/" element={<LandingPage />} />
         <Route path="/order" element={<Order />} />
 
@@ -107,7 +136,10 @@ function App() {
 
           <Route path="appointments" element={<Appointment />} />
           <Route path="prospects" element={<Prospective />} />
+            <Route path="vendors" element={<Vendors />} />
           <Route path="daily-report" element={<DailyReport />} />
+          <Route path="trash-orders" element={<TrashOrders />} />
+          <Route path="unit-attendance" element={<UnitAttendance />} />
           <Route path="view-orders" element={<ViewOrders />} />
           <Route path="employees" element={<Employees />} />
           <Route path="add-executive" element={<AddExecutiveAdmin />} />
@@ -127,13 +159,54 @@ function App() {
           <Route path="create-anniversary" element={<CreateAnniversary />} />
           <Route path="anniversary-list" element={<AnniversaryList />} />
           <Route path="performance" element={<ViewPerformance />} />
-          <Route path="service-update" element={<ServiceUpdate />} />
           <Route path="price-list" element={<Pricelist />} />
           <Route path="inventory" element={<Inventory />} />
           <Route path="hour-reeport" element={<HourReport />} />
-           <Route path="design-report" element={<DesignReport/>} />
-          
+          <Route path="design-report" element={<DesignReport />} />
+          <Route path="parties" element={<Parties />} />
+          <Route path="quotation" element={<Quotation/>}/>
+          <Route path="advance-approvals" element={<AdvanceApprovalPage/>}/>
+          <Route path="fieldvisitsadmin" element={<FieldVisitsAdmin/>} />
         </Route>
+       // Add these imports at the top with other imports
+import AgentDashboard from './Agent/AgentDashboard';
+import FieldExecutivePage from './Executive/FieldExecutivePage';
+import Record from './Executive/Record';
+import DailyReport from './Admin/DailyRecord';
+import Pricelist from './Service/Pricelist';
+import Prospective from './Executive/Prospective';
+import Viewprospective from './Admin/Viewprospective';
+import CreateOrder from './Admin/CreatOrder';
+import ViewOrders from './Admin/ViewOrders';
+
+// Then in the Routes section:
+<Route
+  path="/agent-dashboard"
+  element={
+    <ProtectedRoute allowedRoles={['Agent']}>
+      <AgentDashboard />
+    </ProtectedRoute>
+  }
+>
+  <Route index element={<div>Agent Dashboard Home</div>} />
+  <Route path="create-order" element={<CreateOrder />} />
+  <Route path="view-orders" element={<ViewOrders />} />
+  <Route path="record" element={<Record />} />
+  <Route path="view-record" element={<DailyReport />} />
+  <Route path="price-list" element={<Pricelist />} />
+  <Route path="create-prospect" element={<Prospective />} />
+  <Route path="view-prospects" element={<Viewprospective />} />
+</Route>
+
+<Route
+  path="/field-executive"
+  element={
+    <ProtectedRoute allowedRoles={['Agent']}>
+      <FieldExecutivePage />
+    </ProtectedRoute>
+  }
+/>
+
         <Route
           path="/service-manager-dashboard"
           element={
@@ -154,9 +227,7 @@ function App() {
           <Route path="assign-service" element={<AssignService />} />
           <Route path="price-list" element={<Pricelist />} />
         </Route>
-        <Route
-          path="/vendor-dashboard"
-          element={
+        <Route path="/vendor-dashboard" element={
             <ProtectedRoute allowedRoles={['Vendor']}>
               <VendorDashboard />
             </ProtectedRoute>
@@ -198,7 +269,8 @@ function App() {
           <Route path="anniversary-list" element={<AnniversaryList />} />
           <Route path="price-list" element={<Pricelist />} />
         </Route>
-        
+
+        {/* Executive Dashboard Route */}
         {/* Executive Dashboard Route */}
         <Route
           path="/executive-dashboard"
@@ -208,7 +280,9 @@ function App() {
             </ProtectedRoute>
           }
         />
-        
+        <Route path="/performance" element={<ViewPerformance />} />
+
+
         {/* Field Executive Page Route - ADDED THIS SECTION */}
         <Route
           path="/field-executive"
@@ -218,7 +292,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        
+
         <Route
           path="/followup"
           element={
@@ -227,6 +301,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+
         <Route
           path="/pending-payment"
           element={
@@ -274,10 +350,12 @@ function App() {
           <Route path="price-list" element={<Pricelist />} />
           <Route path="expenses" element={<Expenses />} />
           <Route path="view-expenses" element={<ViewExpenses />} />
-            <Route path="hour" element={<Hourrecord />} />
+          <Route path="hour" element={<Hourrecord />} />
           <Route path="hour-reeport" element={<HourReport />} />
-           <Route path="daily-report" element={<DailyReport />} />
-            <Route path="daily-record" element={<Record />} />
+          <Route path="daily-report" element={<DailyReport />} />
+          <Route path="daily-record" element={<Record />} />
+          <Route path="inventory" element={<Inventory />} />
+
         </Route>
         <Route
           path="/designer-dashboard"
@@ -288,7 +366,7 @@ function App() {
           }
         >
           <Route path="assigned-designs" element={<AssignedDesigns />} />
-           <Route path="start-design" element={<StartDesign />} />
+          <Route path="start-design" element={<StartDesign />} />
         </Route>
         <Route
           path="/digital-dashboard"
@@ -307,6 +385,7 @@ function App() {
           }
         >
           <Route path="pending-payment" element={<PendingPayment />} />
+           <Route path="vendors" element={<Vendors />} />
           <Route path="pending-service" element={<PendingService />} />
           <Route path="create-order" element={<CreateOrder />} />
           <Route path="view-orders" element={<ViewOrders />} />
@@ -318,6 +397,8 @@ function App() {
           <Route path="hour-reeport" element={<HourReport />} />
           <Route path="daily-record" element={<Record />} />
           <Route path="daily-report" element={<DailyReport />} />
+          <Route path="inventory" element={<Inventory />} />
+
         </Route>
       </Routes>
 

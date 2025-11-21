@@ -34,16 +34,36 @@ const designRoutes = require("./routes/designRequests");
 const expensesRoute = require('./routes/expenses');
 const fieldExecutiveRoutes = require('./routes/fieldExecutive');
 const designersRoutes = require('./routes/designers');
+const uploadRoute = require('./routes/uploadRoute.js');
+const unitAttendanceRoutes = require('./routes/unitAttendance');
+const trashOrdersRoutes = require("./routes/trashOrders");
+const parties = require("./routes/parties");
+const attendanceRoutes = require('./routes/attendance');// Cron Jobs
+const quotationRoutes = require('./routes/quotations');
 // Initialize Express
+const leadsRoutes = require('./routes/Lead.js');
+const callLogsRoutes = require('./routes/Calllog.js'); 
+
+
+const salaryRoutes = require('./routes/salaryRoutes');
+
 const app = express();
 runReminderCron();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // SERVING UPLOADS
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use('/api/salaries', salaryRoutes);
 
+// Upload endpoint
+app.use("/api/upload", uploadRoute);
+app.use("/api/trash-orders",trashOrdersRoutes);
+app.use('/api/leads',leadsRoutes);
+app.use('/api/call-logs', callLogsRoutes);
 // Routes - SPECIFIC ROUTES FIRST
+app.use('/api/quotations', quotationRoutes);
+app.use('/api/attendance', attendanceRoutes);
 app.use('/api/anniversaries', anniversaryRoutes);
 app.use('/api/expenses', expensesRoute);
 app.use('/api/price-items', priceItemsRouter);
@@ -65,15 +85,18 @@ app.use("/api/logout-history", logoutHistoryRoutes);
 app.use("/api/design-requests", designRoutes);
 app.use('/api/field-executive', fieldExecutiveRoutes);
 app.use('/api/designers', designersRoutes);
+
 // AUTH ROUTES (contains add-field-executive)
 app.use("/api", authRoutes);
 
 // GENERIC ROUTES LAST
+app.use("/api/parties",parties);
 app.use("/api", orderRoutes);
 app.use("/api", checkClientRoutes);
 app.use("/api", serviceExecutiveRoutes);
 app.use("/api", employeeRoutes);
-
+app.use('/api/employees', require('./routes/employees'));
+app.use('/api/attendance', unitAttendanceRoutes);
 // Be careful with this catch-all route - it might conflict
 // app.use("/api", router);
 

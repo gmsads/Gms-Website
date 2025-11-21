@@ -12,74 +12,48 @@ import DigitalMarketingOrderForm from "../Executive/Digitalform";
 import Record from "./Record";
 import ViewRecord from "./ViewRecord";
 import AutoLogout from "../mainpage/AutoLogout";
+import PendingPayment from "../Admin/PendingPayment";
 import "../Executive/order.css";
 
 function Admin() {
-  // State for sidebar toggle
+ 
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
-  
-  // State for active tab
   const [activeTab, setActiveTab] = useState("executive-dashboard");
-  
-  // State for selected executive
   const [selectedExecutive] = useState(
     localStorage.getItem("userName") || "Executive"
   );
-  
-  // State for target data
+
   const [targetData, setTargetData] = useState({
     target: 0,
     achieved: 0,
     formattedTarget: "₹0",
     formattedAchieved: "₹0",
   });
-  
-  // State for loading status
-  const [loading, setLoading] = useState(true);
-  
-  // State for order number
-  const [orderNumber, setOrderNumber] = useState("");
-  
-  // State for showing order form
-  const [showOrderForm, setShowOrderForm] = useState(false);
-  
-  // State for existing order data
-  const [existingOrderData, setExistingOrderData] = useState(null);
-  
-  // State for loading during search
-  const [isLoading, setIsLoading] = useState(false);
-  
-  // State for search errors
-  const [searchError, setSearchError] = useState("");
-  
-  // State for selected form type
-  const [selectedFormType, setSelectedFormType] = useState("order");
-  
-  // State for showing logout options
-  const [showLogoutOptions, setShowLogoutOptions] = useState(false);
 
-  // State for session timer and AutoLogout control
+  const [loading, setLoading] = useState(true);
+  const [orderNumber, setOrderNumber] = useState("");
+  const [showOrderForm, setShowOrderForm] = useState(false);
+  const [existingOrderData, setExistingOrderData] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [selectedFormType, setSelectedFormType] = useState("order");
+  const [showLogoutOptions, setShowLogoutOptions] = useState(false);
   const [activeDuration, setActiveDuration] = useState("00:00:00");
   const [isSessionActive, setIsSessionActive] = useState(true);
   const timerRef = useRef(null);
+  const [pendingPaymentData, setPendingPaymentData] = useState({
+    count: 0,
+    amount: 0,
+    loading: true
+  });
 
-  // Get user role from localStorage
   const userRole = localStorage.getItem("userRole") || "executive";
-  
-  // Ref for logout dropdown
   const logoutRef = useRef(null);
-
-  // Initialize timer on component mount
   useEffect(() => {
-    // Set initial login time if not set
     if (!localStorage.getItem('loginTime')) {
       localStorage.setItem('loginTime', new Date().toISOString());
     }
-
-    // Calculate initial duration immediately
     updateDuration();
-
-    // Start the interval timer
     timerRef.current = setInterval(updateDuration, 1000);
 
     return () => {
@@ -88,43 +62,78 @@ function Admin() {
       }
     };
   }, []);
-// In the Admin component, add this useEffect to handle the navigation state
-useEffect(() => {
-  // Check if there's appointment data from a sale closed redirect
-  const saleClosedData = localStorage.getItem('saleClosedAppointmentData');
-  if (saleClosedData) {
+
+  const fetchPendingPayments = async () => {
     try {
-      const appointmentData = JSON.parse(saleClosedData);
-      setExistingOrderData(appointmentData);
-      setShowOrderForm(true);
-      setActiveTab('order');
+      setPendingPaymentData(prev => ({ ...prev, loading: true }));
+      const res = await axios.get('/api/orders', {
+        params: {
+          _: new Date().getTime()
+        }
+      });
       
-      // Pre-fill the phone number if available
-      if (appointmentData.phoneNumber) {
-        setOrderNumber(appointmentData.phoneNumber);
-      }
+      const executivePendingOrders = res.data.filter(order => 
+        order?.executive?.toLowerCase() === selectedExecutive.toLowerCase() && 
+        order?.balance > 0
+      );
       
-      // Clear the stored data
-      localStorage.removeItem('saleClosedAppointmentData');
+      const totalPendingAmount = executivePendingOrders.reduce((sum, order) => sum + (order?.balance || 0), 0);
+      
+      setPendingPaymentData({
+        count: executivePendingOrders.length,
+        amount: totalPendingAmount,
+        loading: false
+      });
     } catch (error) {
-      console.error('Error parsing appointment data:', error);
+      console.error('Error fetching pending payments:', error);
+      setPendingPaymentData(prev => ({ ...prev, loading: false }));
     }
-  }
-  
-  // Also check for navigation state
-  if (location.state?.activeTab) {
-    setActiveTab(location.state.activeTab);
-    if (location.state.activeTab === 'order' && location.state.appointmentData) {
-      setExistingOrderData(location.state.appointmentData);
-      setShowOrderForm(true);
-      if (location.state.appointmentData.phoneNumber) {
-        setOrderNumber(location.state.appointmentData.phoneNumber);
+  };
+
+  useEffect(() => {
+    if (selectedExecutive) {
+      fetchPendingPayments();
+      const interval = setInterval(fetchPendingPayments, 30000);
+      return () => clearInterval(interval);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedExecutive]);
+
+  useEffect(() => {
+   
+    const saleClosedData = localStorage.getItem('saleClosedAppointmentData');
+    if (saleClosedData) {
+      try {
+        const appointmentData = JSON.parse(saleClosedData);
+        setExistingOrderData(appointmentData);
+        setShowOrderForm(true);
+        setActiveTab('order');
+        
+        
+        if (appointmentData.phoneNumber) {
+          setOrderNumber(appointmentData.phoneNumber);
+        }
+
+        localStorage.removeItem('saleClosedAppointmentData');
+      } catch (error) {
+        console.error('Error parsing appointment data:', error);
       }
     }
-  }
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [location]);
-  // Function to calculate and update duration
+   
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+      if (location.state.activeTab === 'order' && location.state.appointmentData) {
+        setExistingOrderData(location.state.appointmentData);
+        setShowOrderForm(true);
+        if (location.state.appointmentData.phoneNumber) {
+          setOrderNumber(location.state.appointmentData.phoneNumber);
+        }
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location]);
+
+
   const updateDuration = () => {
     const storedTime = localStorage.getItem('loginTime');
     if (!storedTime) return;
@@ -140,7 +149,7 @@ useEffect(() => {
     setActiveDuration(`${hours}:${minutes}:${seconds}`);
   };
 
-  // Reset timer function
+
   const resetTimer = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -343,6 +352,11 @@ useEffect(() => {
     return percentage < 100 ? "blink-progress" : "";
   };
 
+  // Handle pending payment click
+  const handlePendingPaymentClick = () => {
+    setActiveTab("pending-payments");
+  };
+
   return (
     <div className="app-container">
       {isSessionActive && <AutoLogout />}
@@ -381,6 +395,44 @@ useEffect(() => {
               <div className="timer-value">{activeDuration}</div>
             </div>
           </div>
+
+          {/* Pending Payment Notification */}
+          {pendingPaymentData.count > 0 && (
+            <div 
+              className="pending-payment-notification"
+              onClick={handlePendingPaymentClick}
+              style={{
+                backgroundColor: '#e74c3c',
+                color: 'white',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginRight: '15px',
+                boxShadow: '0 2px 4px rgba(231, 76, 60, 0.3)',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#c0392b';
+                e.target.style.transform = 'scale(1.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = '#e74c3c';
+                e.target.style.transform = 'scale(1)';
+              }}
+            >
+              <span>⚠️</span>
+              <span>
+                {selectedExecutive}, you have {pendingPaymentData.count} pending payments
+                <br />
+                <small>Total: ₹{pendingPaymentData.amount.toLocaleString()}</small>
+              </span>
+            </div>
+          )}
 
           <div
             className="target-display blink"
@@ -462,6 +514,8 @@ useEffect(() => {
               { key: "prospective", icon: "🔍", text: "Create Prospects ➕" },
               { key: "viewProspects", icon: "👁️", text: "View Prospects" },
               { key: "price-list", icon: "💰", text: "Price List" },
+              { key: "pending-payments", icon: "💰", text: "Pending Payments" },
+               { key: "tele", icon: "📞", text: "Tele-CRM" },
             ].map(({ key, icon, text }) => (
               <div
                 key={key}
@@ -492,6 +546,7 @@ useEffect(() => {
           )}
 
           {activeTab === "record" && <Record />}
+          {activeTab === "tele" && <TeleCRM />}
           {activeTab === "appointment" && <Appointment />}
           {activeTab === "viewOrders" && <ViewOrders userRole={userRole} />}
           {activeTab === "price-list" && <Pricelist />}
@@ -499,6 +554,9 @@ useEffect(() => {
           {activeTab === "prospective" && <Prospective />}
           {activeTab === "viewProspects" && <ViewProspective />}
           {activeTab === "viewRecord" && <ViewRecord />}
+          {activeTab === "pending-payments" && (
+            <PendingPayment executiveFilter={selectedExecutive} />
+          )}
 
           {activeTab === "order" && !showOrderForm && (
             <div className="phone-search-container">

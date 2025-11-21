@@ -2,8 +2,11 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { saveAs } from 'file-saver';
+import { Document, Packer, Paragraph, Table, TableCell, TableRow, WidthType, AlignmentType, TextRun } from 'docx';
+import jsPDF from 'jspdf';
 
-function PendingPayment() {
+function PendingPayment({ executiveFilter = null }) {
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -22,11 +25,23 @@ function PendingPayment() {
   });
   const [paymentLoading, setPaymentLoading] = useState(false);
 
+  // Success popup state
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [paymentResult, setPaymentResult] = useState({
+    submittedAmount: 0,
+    remainingBalance: 0,
+    orderNo: ''
+  });
+
   // Filter states
   const [year, setYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'today', 'other'
+  const [exportLoading, setExportLoading] = useState(false);
+  
+  // NEW STATE: Reminder notification
+  const [showReminder, setShowReminder] = useState(false);
   
   const monthLabels = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -50,12 +65,20 @@ function PendingPayment() {
       }
     }
     fetchOrders();
-  }, [location]);
+  }, [location, executiveFilter]);
 
   useEffect(() => {
     applyFilters();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders, year, selectedMonth, searchTerm, activeFilter]);
+
+  // NEW EFFECT: Show reminder when component mounts and when filtered orders change
+  useEffect(() => {
+    if (filteredOrders.length > 0 && totalPendingAmount > 0) {
+      showReminderNotification();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredOrders]);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -65,8 +88,17 @@ function PendingPayment() {
           _: new Date().getTime() // Cache buster
         }
       });
+      
+      // Filter orders by executive if executiveFilter is provided
+      let filteredData = res.data;
+      if (executiveFilter) {
+        filteredData = filteredData.filter(order => 
+          order?.executive?.toLowerCase() === executiveFilter.toLowerCase()
+        );
+      }
+      
       // Sort orders by orderDate descending (newest first) and then by createdAt descending
-      const sortedOrders = res.data
+      const sortedOrders = filteredData
         .filter(order => order && order.balance > 0)
         .sort((a, b) => {
           // First sort by orderDate (newest first)
@@ -145,6 +177,16 @@ function PendingPayment() {
     setFilteredOrders(result);
   };
 
+  // NEW FUNCTION: Show reminder notification
+  const showReminderNotification = () => {
+    setShowReminder(true);
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+      setShowReminder(false);
+    }, 5000);
+  };
+
   // Function to check if order has delivery date today
   const hasTodayDelivery = (order) => {
     if (!order.rows || !order.rows.length) return false;
@@ -174,6 +216,23 @@ function PendingPayment() {
     if (deliveryDates.length === 0) return 'Not Set';
     
     return deliveryDates[0].toLocaleDateString();
+  };
+
+  // UPDATED FUNCTION: Handle business name click - only for admin, not for executives
+  const handleBusinessClick = (businessName) => {
+    if (!businessName) return;
+    
+    // If executiveFilter exists (meaning we're in executive view), don't navigate
+    if (executiveFilter) {
+      return; // Disable for executives
+    }
+    
+    // Navigate to ViewOrders with business filter (admin only)
+    navigate('/admin-dashboard/view-orders', {
+      state: {
+        businessFilter: businessName
+      }
+    });
   };
 
   const handleRecordPayment = (order) => {
@@ -224,18 +283,69 @@ function PendingPayment() {
         note: paymentData.note
       };
 
-      await axios.post(`/api/orders/${currentOrder._id}/record-payment`, paymentPayload);
+      const response = await axios.post(`/api/orders/${currentOrder._id}/record-payment`, paymentPayload);
       
-      // Refresh the orders list to get updated data with proper sorting
+      // Calculate remaining balance
+      const remainingBalance = parseFloat((currentOrder.balance - paymentAmount).toFixed(2));
+      
+      // Show success popup with payment details
+      setPaymentResult({
+        submittedAmount: paymentAmount,
+        remainingBalance: remainingBalance,
+        orderNo: currentOrder.orderNo
+      });
+      setShowSuccessPopup(true);
+      
+      // Close payment modal
+      setShowPaymentModal(false);
+      
+      // Refresh the orders list
       await fetchOrders();
       
-      setShowPaymentModal(false);
     } catch (err) {
       console.error('Error recording payment:', err);
       alert('Failed to record payment. Please try again.');
     } finally {
       setPaymentLoading(false);
     }
+  };
+
+  const closeSuccessPopup = () => {
+    setShowSuccessPopup(false);
+    setPaymentResult({
+      submittedAmount: 0,
+      remainingBalance: 0,
+      orderNo: ''
+    });
+  };
+
+  // Get current filter description for export files
+  const getFilterDescription = () => {
+    let description = '';
+    
+    if (executiveFilter) {
+      description += `${executiveFilter}'s `;
+    }
+    
+    if (activeFilter === 'today') {
+      description += "Today's Delivery Orders";
+    } else if (activeFilter === 'other') {
+      description += "Other Pending Orders";
+    } else {
+      description += "All Pending Orders";
+    }
+    
+    if (selectedMonth !== null) {
+      description += ` - ${monthLabels[selectedMonth]} ${year}`;
+    } else if (year !== new Date().getFullYear()) {
+      description += ` - Year ${year}`;
+    }
+    
+    if (searchTerm) {
+      description += ` - Search: "${searchTerm}"`;
+    }
+    
+    return description;
   };
 
   const handleExportToExcel = () => {
@@ -256,11 +366,292 @@ function PendingPayment() {
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'PendingPayments');
-    XLSX.writeFile(workbook, 'pending_payments.xlsx');
+    
+    const fileName = `pending_payments_${getFilterDescription().replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
+
+  const handleExportToWord = async () => {
+    setExportLoading(true);
+    try {
+      // Table headers
+      const tableHeaders = [
+        'S.No',
+        'Executive',
+        'Business',
+        'Customer',
+        'Contact',
+        'Total',
+        'Advance',
+        'Balance',
+        'Delivery Date',
+        'Order Date'
+      ];
+
+      // Table rows
+      const tableRows = filteredOrders.map((order, index) => [
+        (index + 1).toString(),
+        order?.executive || '',
+        order?.business || '',
+        order?.contactPerson || '',
+        `${order?.contactCode || ''} ${order?.phone || ''}`.trim(),
+        `₹${(order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0) || 0).toLocaleString()}`,
+        `₹${(order?.advance || 0).toLocaleString()}`,
+        `₹${(order?.balance || 0).toLocaleString()}`,
+        getDeliveryDate(order),
+        order?.orderDate ? new Date(order.orderDate).toLocaleDateString() : ''
+      ]);
+
+      // Create table
+      const table = new Table({
+        width: {
+          size: 100,
+          type: WidthType.PERCENTAGE,
+        },
+        rows: [
+          // Header row
+          new TableRow({
+            children: tableHeaders.map(header => 
+              new TableCell({
+                children: [new Paragraph({
+                  children: [new TextRun({ text: header, bold: true })],
+                  alignment: AlignmentType.CENTER,
+                })],
+                shading: {
+                  fill: "4472C4",
+                },
+              })
+            ),
+          }),
+          // Data rows
+          ...tableRows.map(row => 
+            new TableRow({
+              children: row.map(cell => 
+                new TableCell({
+                  children: [new Paragraph({ text: cell })],
+                })
+              ),
+            })
+          ),
+        ],
+      });
+
+      // Create document
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({
+              children: [new TextRun({ text: "Pending Payments Report", bold: true, size: 32 })],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 400 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: `Filter: ${getFilterDescription()}`, bold: true, size: 24 })],
+              spacing: { after: 200 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: `Generated on: ${new Date().toLocaleDateString()}`, size: 20 })],
+              spacing: { after: 400 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: `Total Orders: ${filteredOrders.length} | Total Pending Amount: ₹${totalPendingAmount.toLocaleString()}`, bold: true, size: 22 })],
+              spacing: { after: 400 },
+            }),
+            table,
+          ],
+        }],
+      });
+
+      // Generate and download
+      const blob = await Packer.toBlob(doc);
+      const fileName = `pending_payments_${getFilterDescription().replace(/[^a-zA-Z0-9]/g, '_')}.docx`;
+      saveAs(blob, fileName);
+    } catch (error) {
+      console.error('Error generating Word document:', error);
+      alert('Error generating Word document. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleExportToPDF = () => {
+    setExportLoading(true);
+    try {
+      const doc = new jsPDF();
+      
+      // Title
+      doc.setFontSize(16);
+      doc.setTextColor(40);
+      doc.text('Pending Payments Report', 105, 15, { align: 'center' });
+      
+      // Filter info
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      
+      const filterDesc = `Filter: ${getFilterDescription()}`;
+      const generatedOn = `Generated on: ${new Date().toLocaleDateString()}`;
+      const summary = `Total Orders: ${filteredOrders.length} | Total Pending Amount: ₹${totalPendingAmount.toLocaleString()}`;
+      
+      doc.text(filterDesc, 14, 25);
+      doc.text(generatedOn, 14, 32);
+      doc.text(summary, 14, 39);
+      
+      // Create table manually
+      const headers = ['S.No', 'Executive', 'Business', 'Customer', 'Contact', 'Total', 'Advance', 'Balance', 'Delivery Date'];
+      const columnWidths = [15, 25, 30, 25, 30, 25, 25, 25, 25];
+      const startX = 10;
+      let startY = 50;
+      
+      // Table header
+      doc.setFillColor(68, 114, 196);
+      doc.setTextColor(255);
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'bold');
+      
+      let currentX = startX;
+      headers.forEach((header, index) => {
+        doc.rect(currentX, startY, columnWidths[index], 6, 'F');
+        doc.text(header, currentX + 2, startY + 4);
+        currentX += columnWidths[index];
+      });
+      
+      // Table rows
+      doc.setTextColor(0);
+      doc.setFont(undefined, 'normal');
+      startY += 6;
+      
+      filteredOrders.forEach((order, index) => {
+        if (startY > 270) { // Add new page if running out of space
+          doc.addPage();
+          startY = 20;
+        }
+        
+        const rowData = [
+          (index + 1).toString(),
+          order?.executive?.substring(0, 12) || '',
+          order?.business?.substring(0, 15) || '',
+          order?.contactPerson?.substring(0, 12) || '',
+          `${order?.contactCode || ''} ${order?.phone || ''}`.trim().substring(0, 15),
+          `₹${(order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0) || 0).toLocaleString()}`,
+          `₹${(order?.advance || 0).toLocaleString()}`,
+          `₹${(order?.balance || 0).toLocaleString()}`,
+          getDeliveryDate(order).substring(0, 10)
+        ];
+        
+        currentX = startX;
+        rowData.forEach((cell, cellIndex) => {
+          doc.text(cell, currentX + 2, startY + 4);
+          currentX += columnWidths[cellIndex];
+        });
+        
+        // Add horizontal line
+        doc.setDrawColor(200, 200, 200);
+        doc.line(startX, startY + 6, startX + columnWidths.reduce((a, b) => a + b, 0), startY + 6);
+        
+        startY += 6;
+      });
+      
+      const fileName = `pending_payments_${getFilterDescription().replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      doc.save(fileName);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      
+      // Ultra simple fallback
+      try {
+        const doc = new jsPDF();
+        doc.text('Pending Payments Report', 20, 20);
+        doc.text(`Filter: ${getFilterDescription()}`, 20, 30);
+        doc.text(`Total Orders: ${filteredOrders.length}`, 20, 40);
+        doc.text(`Total Pending Amount: ₹${totalPendingAmount.toLocaleString()}`, 20, 50);
+        doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 60);
+        
+        let yPos = 80;
+        filteredOrders.forEach((order, index) => {
+          if (yPos > 270) {
+            doc.addPage();
+            yPos = 20;
+          }
+          doc.text(`${index + 1}. ${order?.business || 'N/A'} - ₹${order?.balance || 0}`, 20, yPos);
+          yPos += 10;
+        });
+        
+        const fileName = `pending_payments_${getFilterDescription().replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+        doc.save(fileName);
+      } catch (fallbackError) {
+        console.error('Fallback PDF generation failed:', fallbackError);
+        alert('Error generating PDF. Please try exporting to Excel or Word instead.');
+      }
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   // Calculate total pending amount with null checks
   const totalPendingAmount = filteredOrders.reduce((sum, order) => sum + (order?.balance || 0), 0);
+
+  // NEW STYLES: Reminder notification styles
+  const reminderStyles = {
+    modal: {
+      position: 'fixed',
+      top: '20px',
+      right: '20px',
+      backgroundColor: '#e74c3c',
+      color: 'white',
+      padding: '20px',
+      borderRadius: '8px',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+      zIndex: 3000,
+      maxWidth: '350px',
+      animation: 'slideInRight 0.3s ease-out',
+    },
+    title: {
+      fontSize: '18px',
+      fontWeight: 'bold',
+      marginBottom: '10px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+    },
+    amount: {
+      fontSize: '24px',
+      fontWeight: 'bold',
+      marginBottom: '8px',
+    },
+    details: {
+      fontSize: '14px',
+      opacity: 0.9,
+      marginBottom: '5px',
+    },
+    closeButton: {
+      position: 'absolute',
+      top: '10px',
+      right: '10px',
+      background: 'none',
+      border: 'none',
+      color: 'white',
+      fontSize: '18px',
+      cursor: 'pointer',
+      fontWeight: 'bold',
+    },
+    icon: {
+      fontSize: '20px',
+    }
+  };
+
+  // Add CSS animation
+  const animationStyle = `
+    @keyframes slideInRight {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+  `;
 
   // Filter button styles
   const filterButtonStyle = (filterType) => ({
@@ -275,7 +666,19 @@ function PendingPayment() {
     color: activeFilter === filterType ? 'white' : '#2c3e50',
   });
 
-  // Updated styles with delivery date column
+  // UPDATED STYLE: Business name clickable style - different for admin vs executives
+  const businessNameStyle = {
+    color: executiveFilter ? '#666666' : '#003366', // Gray for executives, blue for admin
+    cursor: executiveFilter ? 'default' : 'pointer', // Default cursor for executives
+    fontWeight: '500',
+    textDecoration: executiveFilter ? 'none' : 'underline', // No underline for executives
+    transition: executiveFilter ? 'none' : 'all 0.2s ease', // No transition for executives
+    padding: '4px 8px',
+    borderRadius: '4px',
+    display: 'inline-block',
+  };
+
+  // Updated styles with export buttons
   const styles = {
     container: {
       padding: '20px',
@@ -457,9 +860,32 @@ function PendingPayment() {
       justifyContent: 'center',
       gap: '15px',
       marginTop: '20px',
+      flexWrap: 'wrap',
     },
     excelButton: {
       backgroundColor: '#16a085',
+      color: 'white',
+      border: 'none',
+      padding: '10px 20px',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: '14px',
+      fontWeight: '600',
+      transition: 'all 0.2s',
+    },
+    wordButton: {
+      backgroundColor: '#2c5fa3',
+      color: 'white',
+      border: 'none',
+      padding: '10px 20px',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: '14px',
+      fontWeight: '600',
+      transition: 'all 0.2s',
+    },
+    pdfButton: {
+      backgroundColor: '#e74c3c',
       color: 'white',
       border: 'none',
       padding: '10px 20px',
@@ -553,9 +979,111 @@ function PendingPayment() {
     },
   };
 
+  // Success popup styles
+  const successPopupStyles = {
+    modal: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 2000,
+    },
+    content: {
+      backgroundColor: 'white',
+      padding: '30px',
+      borderRadius: '12px',
+      width: '400px',
+      maxWidth: '90%',
+      textAlign: 'center',
+      boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+    },
+    icon: {
+      fontSize: '60px',
+      color: '#27ae60',
+      marginBottom: '15px',
+    },
+    title: {
+      fontSize: '24px',
+      fontWeight: 'bold',
+      color: '#27ae60',
+      marginBottom: '20px',
+    },
+    message: {
+      fontSize: '16px',
+      color: '#2c3e50',
+      marginBottom: '10px',
+    },
+    amount: {
+      fontSize: '20px',
+      fontWeight: 'bold',
+      color: '#e74c3c',
+      margin: '10px 0',
+    },
+    balance: {
+      fontSize: '18px',
+      fontWeight: 'bold',
+      color: '#3498db',
+      margin: '10px 0',
+    },
+    orderNo: {
+      fontSize: '14px',
+      color: '#7f8c8d',
+      marginBottom: '20px',
+      fontStyle: 'italic',
+    },
+    button: {
+      backgroundColor: '#27ae60',
+      color: 'white',
+      border: 'none',
+      padding: '12px 30px',
+      borderRadius: '6px',
+      fontSize: '16px',
+      fontWeight: 'bold',
+      cursor: 'pointer',
+      marginTop: '10px',
+      transition: 'all 0.3s',
+    },
+  };
+
   return (
     <div style={styles.container}>
-      <h2 style={styles.title}>Pending Payments</h2>
+      {/* Add CSS animation */}
+      <style>{animationStyle}</style>
+      
+      <h2 style={styles.title}>
+        {executiveFilter ? `${executiveFilter}'s Pending Payments` : 'Pending Payments'}
+      </h2>
+
+      {/* NEW: Reminder Notification */}
+      {showReminder && filteredOrders.length > 0 && (
+        <div style={reminderStyles.modal}>
+          <button 
+            style={reminderStyles.closeButton}
+            onClick={() => setShowReminder(false)}
+          >
+            ×
+          </button>
+          <div style={reminderStyles.title}>
+            <span style={reminderStyles.icon}>💰</span>
+            Pending Payments Reminder
+          </div>
+          <div style={reminderStyles.amount}>
+            ₹{totalPendingAmount.toLocaleString()}
+          </div>
+          <div style={reminderStyles.details}>
+            Total Orders: {filteredOrders.length}
+          </div>
+          <div style={reminderStyles.details}>
+            Filter: {activeFilter === 'today' ? "Today's Delivery" : 
+                    activeFilter === 'other' ? "Other Pending" : "All Pending"}
+          </div>
+        </div>
+      )}
 
       {/* Filter Buttons */}
       <div style={styles.filterButtonsContainer}>
@@ -682,7 +1210,27 @@ function PendingPayment() {
                   <tr key={order?._id || index} style={index % 2 === 0 ? styles.evenRow : styles.oddRow}>
                     <td style={styles.td}>{index + 1}</td>
                     <td style={styles.td}>{order?.executive || ''}</td>
-                    <td style={styles.td}>{order?.business || ''}</td>
+                    {/* UPDATED: Make business name clickable only for admin */}
+                    <td style={styles.td}>
+                      <span
+                        style={businessNameStyle}
+                        onClick={() => handleBusinessClick(order?.business)}
+                        onMouseEnter={(e) => {
+                          if (!executiveFilter) { // Only for admin
+                            e.target.style.color = '#0056b3';
+                            e.target.style.backgroundColor = '#e3f2fd';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!executiveFilter) { // Only for admin
+                            e.target.style.color = '#003366';
+                            e.target.style.backgroundColor = 'transparent';
+                          }
+                        }}
+                      >
+                        {order?.business || ''}
+                      </span>
+                    </td>
                     <td style={styles.td}>{order?.contactPerson || ''}</td>
                     <td style={styles.td}>{order?.contactCode || ''} {order?.phone || ''}</td>
                     <td style={styles.td}>₹{(order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0)?.toLocaleString() || '0')}</td>
@@ -709,8 +1257,26 @@ function PendingPayment() {
       )}
 
       <div style={styles.footerButtons}>
-        <button onClick={handleExportToExcel} style={styles.excelButton}>
-          Export to Excel
+        <button 
+          onClick={handleExportToExcel} 
+          style={styles.excelButton}
+          disabled={exportLoading || filteredOrders.length === 0}
+        >
+          {exportLoading ? 'Exporting...' : 'Export to Excel'}
+        </button>
+        <button 
+          onClick={handleExportToWord} 
+          style={styles.wordButton}
+          disabled={exportLoading || filteredOrders.length === 0}
+        >
+          {exportLoading ? 'Exporting...' : 'Export to Word'}
+        </button>
+        <button 
+          onClick={handleExportToPDF} 
+          style={styles.pdfButton}
+          disabled={exportLoading || filteredOrders.length === 0}
+        >
+          {exportLoading ? 'Exporting...' : 'Export to PDF'}
         </button>
         <button onClick={() => navigate(-1)} style={styles.backButton}>
           Back
@@ -832,6 +1398,43 @@ function PendingPayment() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Success Popup */}
+      {showSuccessPopup && (
+        <div style={successPopupStyles.modal}>
+          <div style={successPopupStyles.content}>
+            <div style={successPopupStyles.icon}>✓</div>
+            <h2 style={successPopupStyles.title}>Payment Successful!</h2>
+            
+            <p style={successPopupStyles.message}>
+              Payment has been recorded successfully
+            </p>
+            
+            <div style={successPopupStyles.amount}>
+              Amount Paid: ₹{paymentResult.submittedAmount.toLocaleString()}
+            </div>
+            
+            <div style={successPopupStyles.balance}>
+              Remaining Balance: ₹{paymentResult.remainingBalance.toLocaleString()}
+            </div>
+            
+            {paymentResult.orderNo && (
+              <div style={successPopupStyles.orderNo}>
+                Order: {paymentResult.orderNo}
+              </div>
+            )}
+            
+            <button 
+              onClick={closeSuccessPopup}
+              style={successPopupStyles.button}
+              onMouseOver={(e) => e.target.style.backgroundColor = '#219a52'}
+              onMouseOut={(e) => e.target.style.backgroundColor = '#27ae60'}
+            >
+              OK
+            </button>
           </div>
         </div>
       )}

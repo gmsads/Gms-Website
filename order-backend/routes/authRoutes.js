@@ -36,6 +36,7 @@ const Vendor = require("../models/Vendor");
 const Order = require("../models/Order");
 const FieldExecutive = require("../models/FieldExecutive");
 const Unit = require("../models/Unit");
+const Agent = require("../models/Agent");
 
 // ✅ Login route for Executive, Admin, Designer, Account,Service
 router.post("/login", async (req, res) => {
@@ -105,6 +106,18 @@ router.post("/login", async (req, res) => {
         name: digitalMarketing.name,
       });
     }
+// Check Agent
+const agent = await Agent.findOne({
+  name: new RegExp(`^${name.trim()}$`, "i"),
+  password: password.trim(),
+});
+if (agent) {
+  return res.json({
+    success: true,
+    role: "Agent",
+    name: agent.name,
+  });
+}
 
     // Client service
     const clientService = await ClientService.findOne({
@@ -239,7 +252,53 @@ router.post("/add-executive", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+// ✅ Route to add Vendor (with username) - ADD THIS TO YOUR BACKEND
+router.post("/add-vendor", async (req, res) => {
+  const {
+    username,
+    name,
+    phone,
+    password,
+    email,
+    guardianName,
+    aadhar,
+    joiningDate,
+    experience,
+    active
+  } = req.body;
 
+  try {
+    const existing = await Vendor.findOne({
+      $or: [{ username }, { name }],
+    });
+    if (existing) {
+      return res.status(400).json({
+        error:
+          existing.username === username
+            ? "Username already exists"
+            : "Name already exists",
+      });
+    }
+
+    const newVendor = new Vendor({
+      username,
+      name,
+      password,
+      phone,
+      email,
+      guardianName,
+      aadhar,
+      joiningDate,
+      experience,
+      active: active !== false
+    });
+    await newVendor.save();
+    res.status(201).json({ message: "Vendor added successfully" });
+  } catch (err) {
+    console.error("Error saving Vendor:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 // ✅ Route to add an Admin (with username)
 router.post("/add-admin", async (req, res) => {
   const { username, name, password, phone, email,
@@ -647,7 +706,8 @@ router.get("/employees", async (req, res) => {
       digitalMarketings,
       clientServices,
       units,
-      fieldExecutives
+      fieldExecutives,
+      agents
     ] = await Promise.all([
       Executive.find({}).lean(),
       Admin.find({}).lean(),
@@ -660,7 +720,8 @@ router.get("/employees", async (req, res) => {
       DigitalMarketing.find({}).lean(),
       ClientService.find({}).lean(),
       Unit.find({}).lean(),
-      FieldExecutive.find({}).lean() // Ensure this is included
+      FieldExecutive.find({}).lean(),
+       Agent.find({}).lean()// Ensure this is included
     ]);
 
     const employeeCategories = {
@@ -675,7 +736,9 @@ router.get("/employees", async (req, res) => {
       DigitalMarketing: digitalMarketings,
       ClientService: clientServices,
       Unit: units,
-      FieldExecutive: fieldExecutives // Ensure consistent naming
+      FieldExecutive: fieldExecutives,
+      Agent: agents,
+
     };
 
     res.json(employeeCategories);
@@ -703,6 +766,8 @@ router.get("/user-profile", async (req, res) => {
       { model: ClientService, name: "ClientService" },
       { model: Unit, name: "Unit" },
       { model: FieldExecutive, name: "FieldExecutive" },
+      { model: Agent, name: "Agent" },
+
     ];
 
     let user = null;
@@ -756,7 +821,8 @@ router.put("/update-profile", async (req, res) => {
       DigitalMarketing,
       ClientService,
       Unit,
-      FieldExecutive
+      FieldExecutive,
+      Agent
     };
 
     // Find current user
@@ -899,6 +965,53 @@ router.post("/add-unit", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+// ✅ Route to add Agent (with username)
+router.post("/add-agent", async (req, res) => {
+  const {
+    username,
+    name,
+    phone,
+    password,
+    email,
+    guardianName,
+    aadhar,
+    joiningDate,
+    experience,
+    active
+  } = req.body;
+
+  try {
+    const existing = await Agent.findOne({
+      $or: [{ username }, { name }],
+    });
+    if (existing) {
+      return res.status(400).json({
+        error:
+          existing.username === username
+            ? "Username already exists"
+            : "Name already exists",
+      });
+    }
+
+    const newAgent = new Agent({
+      username,
+      name,
+      password,
+      phone,
+      email,
+      guardianName,
+      aadhar,
+      joiningDate,
+      experience,
+      active: active !== false
+    });
+    await newAgent.save();
+    res.status(201).json({ message: "Agent added successfully" });
+  } catch (err) {
+    console.error("Error saving Agent:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 // Update the route to use multer middleware
 router.post("/add-field-executive", upload.single('image'), async (req, res) => {
@@ -948,6 +1061,26 @@ router.post("/add-field-executive", upload.single('image'), async (req, res) => 
   } catch (err) {
     console.error("Error saving Field Executive:", err);
     res.status(500).json({ error: "Server error: " + err.message });
+  }
+});
+// Get all Unit employees
+router.get("/units", async (req, res) => {
+  try {
+    const units = await Unit.find({})
+      .select('-password') // Exclude password from the response
+      .sort({ createdAt: -1 }); // Sort by newest first
+
+    res.status(200).json({
+      success: true,
+      data: units,
+      count: units.length
+    });
+  } catch (err) {
+    console.error("Error fetching Unit employees:", err);
+    res.status(500).json({ 
+      success: false,
+      error: "Server error while fetching units" 
+    });
   }
 });
 module.exports = router;

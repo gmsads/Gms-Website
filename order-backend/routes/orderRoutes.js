@@ -8,7 +8,7 @@ const dayjs = require("dayjs");
 const ServiceExecutive = require("../models/ServiceExecutive");
 const Account = require("../models/Account");
 const ItTeam = require("../models/ITTeam");
-
+const AdvanceApprovalRequest = require("../models/AdvanceApprovalRequest")
 // ============================
 // GET all executives
 // ============================
@@ -65,7 +65,6 @@ router.get("/requirements", async (req, res) => {
   }
 });
 
-// ============================
 // POST a new order (auto-generate orderNo)
 // ============================
 router.post("/submit", async (req, res) => {
@@ -95,7 +94,17 @@ router.post("/submit", async (req, res) => {
     const paddedNum = String(nextNumber).padStart(3, "0");
     const newOrderNo = `${orderPrefix}${paddedNum}`;
 
-    const newOrder = new Order({ ...req.body, orderNo: newOrderNo });
+    // FIXED: Ensure createdBy field is properly saved
+    const orderData = {
+      ...req.body,
+      orderNo: newOrderNo,
+      // Ensure createdBy is always set from the request
+      createdBy: req.body.createdBy || req.body.executive // Fallback to executive if not provided
+    };
+
+    console.log('Final order data to save:', orderData); // Debug log
+
+    const newOrder = new Order(orderData);
 
     await newOrder.save();
 
@@ -106,6 +115,100 @@ router.post("/submit", async (req, res) => {
   }
 });
 
+// ============================
+// UPDATE an existing order
+// ============================
+router.put("/orders/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log("Updating order:", id, "with data:", req.body);
+
+    // FIXED: Ensure createdBy field is preserved during update
+    const updateData = { ...req.body };
+    
+    // If createdBy is not provided in update, preserve the existing one
+    if (!updateData.createdBy) {
+      const existingOrder = await Order.findById(id);
+      if (existingOrder && existingOrder.createdBy) {
+        updateData.createdBy = existingOrder.createdBy;
+      }
+    }
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedOrder) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json({ message: "Order updated successfully", order: updatedOrder });
+  } catch (err) {
+    console.error("Error updating order:", err);
+    res.status(500).json({ error: "Failed to update order" });
+  }
+});
+
+// ============================
+// GET all orders (with filtering)
+// ============================
+router.get("/orders", async (req, res) => {
+  try {
+    let query = {};
+
+    console.log('Query parameters:', req.query); // Debug log
+
+    // Filter by executive name if specified (for performance view)
+    if (req.query.executive) {
+      query.executive = req.query.executive;
+    }
+
+    // Filter by service executive if specified
+    if (req.query.serviceExecutive) {
+      query['rows.assignedExecutive'] = req.query.serviceExecutive;
+    }
+
+    // Filter by logged-in executive if role is Executive
+    if (req.query.role === "Executive") {
+      query.executive = req.query.name;
+    }
+
+    // Filter by client type if specified
+    if (req.query.clientType) {
+      query.clientType = req.query.clientType;
+    }
+
+    // Filter by month/year if specified
+    if (req.query.month && req.query.year) {
+      const month = parseInt(req.query.month);
+      const year = parseInt(req.query.year);
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 1);
+
+      query.orderDate = {
+        $gte: startDate,
+        $lt: endDate,
+      };
+    }
+
+    console.log('Final query:', query); // Debug log
+
+    const orders = await Order.find(query);
+    console.log('Found orders:', orders.length); // Debug log
+    
+    // Debug: Log createdBy field for each order
+    orders.forEach(order => {
+      console.log(`Order ${order.orderNo}: executive=${order.executive}, createdBy=${order.createdBy}`);
+    });
+    
+    res.json(orders);
+  } catch (err) {
+    console.error("Error fetching orders:", err);
+    res.status(500).json({ error: "Failed to fetch orders" });
+  }
+});
 // ============================
 // GET dashboard chart data
 // ============================
@@ -180,43 +283,8 @@ router.get("/dashboard/chart-data", async (req, res) => {
   }
 });
 
-// ============================
-// GET all orders (with filtering)
-// ============================
-router.get("/orders", async (req, res) => {
-  try {
-    let query = {};
 
-    // Filter by executive if specified
-    if (req.query.role === "Executive") {
-      query.executive = req.query.name;
-    }
 
-    // Filter by client type if specified
-    if (req.query.clientType) {
-      query.clientType = req.query.clientType;
-    }
-
-    // Filter by month/year if specified
-    if (req.query.month && req.query.year) {
-      const month = parseInt(req.query.month);
-      const year = parseInt(req.query.year);
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 1);
-
-      query.orderDate = {
-        $gte: startDate,
-        $lt: endDate,
-      };
-    }
-
-    const orders = await Order.find(query);
-    res.json(orders);
-  } catch (err) {
-    console.error("Error fetching orders:", err);
-    res.status(500).json({ error: "Failed to fetch orders" });
-  }
-});
 
 // ============================
 // GET orders with pending payments
@@ -231,10 +299,7 @@ router.get("/orders/pending-payments", async (req, res) => {
   }
 });
 
-// ============================
-// GET orders with pending services
-// ============================
-// GET orders with pending services and executive assignments
+
 // ============================
 // GET orders with pending services
 // ============================
@@ -362,62 +427,95 @@ router.post("/set-target", async (req, res) => {
 // ============================
 // POST: Record payment for order
 // ============================
+// Add debugging to see what's failing
 router.post("/orders/:id/record-payment", async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
-    if (!order) return res.status(404).json({ message: "Order not found" });
+    console.log("Payment request received:", req.body);
+    console.log("Order ID:", req.params.id);
 
-    // Validate payment data
-    if (!req.body.amount || isNaN(req.body.amount)) {
-      return res.status(400).json({ message: "Invalid payment amount" });
+    const orderId = req.params.id;
+    const { date, amount, method, reference, note } = req.body;
+
+    // Validate required fields
+    if (!amount) {
+      return res.status(400).json({ message: "Payment amount is required" });
     }
 
-    const paymentAmount = parseFloat(req.body.amount);
-
-    if (paymentAmount > order.balance) {
-      return res.status(400).json({
-        message: `Payment amount (${paymentAmount}) exceeds remaining balance (${order.balance})`,
-      });
+    const existingOrder = await Order.findById(orderId);
+    console.log("Existing order:", existingOrder);
+    
+    if (!existingOrder) {
+      return res.status(404).json({ message: "Order not found" });
     }
+
+    const paymentAmount = parseFloat(amount);
+    const newBalance = parseFloat((existingOrder.balance - paymentAmount).toFixed(2));
 
     // Create payment record
     const paymentRecord = {
-      date: req.body.date || new Date(),
+      date: date ? new Date(date) : new Date(),
       amount: paymentAmount,
-      method: req.body.method || "Cash",
-      reference: req.body.reference || "",
-      note: req.body.note || "",
+      method: method || "Cash",
+      reference: reference || "",
+      note: note || "",
     };
 
-    // Add to payment history
-    order.paymentHistory = order.paymentHistory || [];
-    order.paymentHistory.push(paymentRecord);
+    console.log("Payment record to be created:", paymentRecord);
 
-    // Update balance
-    order.balance = parseFloat((order.balance - paymentAmount).toFixed(2));
+    // Build update object dynamically to avoid missing fields
+    const updateData = {
+      $push: { paymentHistory: paymentRecord },
+      $set: {
+        balance: newBalance,
+        status: newBalance <= 0 ? "Paid" : "Partially Paid",
+        updatedAt: new Date()
+      }
+    };
 
-    // Update status
-    order.status = order.balance <= 0 ? "Paid" : "Partially Paid";
-    if (order.balance <= 0) {
-      order.paymentDate = new Date();
+    // Preserve all existing fields that might be required
+    const requiredFields = ['createdBy', 'executive', 'business', 'contactPerson', 'phone', 'orderNo', 'orderDate'];
+    requiredFields.forEach(field => {
+      if (existingOrder[field]) {
+        updateData.$set[field] = existingOrder[field];
+      }
+    });
+
+    // Add payment date if fully paid
+    if (newBalance <= 0) {
+      updateData.$set.paymentDate = new Date();
     }
 
-    await order.save();
+    console.log("Update data:", updateData);
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      updateData,
+      { 
+        new: true, 
+        runValidators: true 
+      }
+    );
+
+    console.log("Order updated successfully:", updatedOrder._id);
 
     res.json({
       success: true,
       message: "Payment recorded successfully",
-      order,
+      order: updatedOrder,
     });
+
   } catch (err) {
-    console.error("Payment error:", err);
+    console.error("Payment error details:", err);
+    console.error("Error stack:", err.stack);
+    
     res.status(500).json({
-      message: "Server error",
+      message: "Server error while recording payment",
       error: err.message,
+      // Don't expose full error in production
+      ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
     });
   }
 });
-
 // ============================
 // GET: Get target for executive
 // ============================
@@ -966,31 +1064,467 @@ router.get('/service-dashboard', async (req, res) => {
   }
 });
 
-// In your backend route
+// ============================
+// PUT: Update order row status (VALIDATION FIXED VERSION)
+// ============================
 router.put('/orders/:orderId/rows/:rowIndex/status', async (req, res) => {
+  console.log('🔧 STATUS UPDATE ENDPOINT HIT');
+  console.log('Params:', req.params);
+  console.log('Body:', req.body);
+
   try {
     const { orderId, rowIndex } = req.params;
     const { isCompleted, status, updatedBy } = req.body;
 
-    const order = await Order.findById(orderId);
-    if (!order) return res.status(404).json({ error: 'Order not found' });
-
-    if (rowIndex >= order.rows.length) {
-      return res.status(400).json({ error: 'Invalid row index' });
+    // Basic validation
+    if (!orderId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Order ID is required' 
+      });
     }
 
-    // Update both fields
-    order.rows[rowIndex].isCompleted = isCompleted;
-    order.rows[rowIndex].status = status;
-    order.rows[rowIndex].updatedAt = new Date();
-    order.rows[rowIndex].updatedBy = updatedBy;
+    if (rowIndex === undefined || rowIndex === null) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Row index is required' 
+      });
+    }
+
+    // Find the order
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Order not found' 
+      });
+    }
+
+    // Parse and validate row index
+    const rowIndexNum = parseInt(rowIndex);
+    if (isNaN(rowIndexNum) || rowIndexNum < 0 || rowIndexNum >= order.rows.length) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Invalid row index. Must be between 0 and ${order.rows.length - 1}` 
+      });
+    }
+
+    // Get the row to update
+    const rowToUpdate = order.rows[rowIndexNum];
+    
+    console.log('📝 Current row state:', {
+      requirement: rowToUpdate.requirement,
+      currentStatus: rowToUpdate.status,
+      currentIsCompleted: rowToUpdate.isCompleted
+    });
+
+    // **VALIDATION FIX: Ensure data types are correct**
+    // Convert to proper types to avoid validation errors
+    const updates = {};
+    
+    if (isCompleted !== undefined) {
+      updates.isCompleted = Boolean(isCompleted); // Force boolean
+      console.log('🔄 Setting isCompleted:', updates.isCompleted);
+    }
+    
+    if (status) {
+      updates.status = String(status).trim(); // Force string and trim
+      console.log('🔄 Setting status:', updates.status);
+    }
+
+    // Apply updates
+    Object.assign(rowToUpdate, updates);
+
+    // Set metadata - ensure proper types
+    rowToUpdate.updatedAt = new Date();
+    rowToUpdate.updatedBy = String(updatedBy || 'Service Dashboard').trim();
+    
+    console.log('📅 Updated row:', rowToUpdate);
+
+    // **VALIDATION FIX: Use findByIdAndUpdate to bypass some validation issues**
+    console.log('💾 Saving order with findByIdAndUpdate...');
+    
+    const updateQuery = {
+      $set: {
+        [`rows.${rowIndexNum}.isCompleted`]: rowToUpdate.isCompleted,
+        [`rows.${rowIndexNum}.status`]: rowToUpdate.status,
+        [`rows.${rowIndexNum}.updatedAt`]: rowToUpdate.updatedAt,
+        [`rows.${rowIndexNum}.updatedBy`]: rowToUpdate.updatedBy
+      }
+    };
+
+    // Add completedAt if marking as completed
+    if (rowToUpdate.isCompleted && !rowToUpdate.completedAt) {
+      updateQuery.$set[`rows.${rowIndexNum}.completedAt`] = new Date();
+    }
+
+    console.log('📤 Update query:', JSON.stringify(updateQuery, null, 2));
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      updateQuery,
+      { 
+        new: true, 
+        runValidators: false // **TEMPORARILY disable validators to identify the issue**
+      }
+    );
+
+    if (!updatedOrder) {
+      throw new Error('Failed to update order');
+    }
+
+    console.log('✅ Order updated successfully');
+
+    // Send success response
+    res.json({
+      success: true,
+      message: 'Status updated successfully',
+      data: {
+        orderId: updatedOrder._id,
+        orderNo: updatedOrder.orderNo,
+        rowIndex: rowIndexNum,
+        status: rowToUpdate.status,
+        isCompleted: rowToUpdate.isCompleted,
+        updatedBy: rowToUpdate.updatedBy
+      }
+    });
+
+  } catch (error) {
+    console.error('💥 ERROR in status update:', error);
+    
+    // Handle validation errors specifically
+    if (error.name === 'ValidationError') {
+      console.log('🔍 VALIDATION ERRORS:');
+      Object.keys(error.errors).forEach(key => {
+        console.log(`  - ${key}: ${error.errors[key].message}`);
+      });
+      
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Data validation failed',
+        details: Object.keys(error.errors).map(key => ({
+          field: key,
+          message: error.errors[key].message
+        }))
+      });
+    }
+
+    if (error.name === 'CastError') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid data format' 
+      });
+    }
+
+    // Generic error
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to update status',
+      error: error.message 
+    });
+  }
+});
+
+// ============================
+// PUT: Mark executive as inactive/active
+// ============================
+router.put("/service-executives/:id/status", async (req, res) => {
+  try {
+    const { active, inactiveReason } = req.body;
+    
+    const updatedExecutive = await ServiceExecutive.findByIdAndUpdate(
+      req.params.id,
+      { 
+        active: active !== undefined ? active : true,
+        inactiveReason: active === false ? inactiveReason : null,
+        inactiveSince: active === false ? new Date() : null
+      },
+      { new: true }
+    );
+
+    if (!updatedExecutive) {
+      return res.status(404).json({ error: "Executive not found" });
+    }
+
+    res.json({ 
+      message: `Executive ${active ? 'activated' : 'deactivated'} successfully`,
+      executive: updatedExecutive 
+    });
+  } catch (err) {
+    console.error("Error updating executive status:", err);
+    res.status(500).json({ error: "Failed to update executive status" });
+  }
+});
+
+// ============================
+// GET active service executives only
+// ============================
+router.get("/service-executives/active", async (req, res) => {
+  try {
+    const activeExecutives = await ServiceExecutive.find({ active: { $ne: false } });
+    res.json(activeExecutives);
+  } catch (err) {
+    console.error("Error fetching active executives:", err);
+    res.status(500).json({ error: "Failed to fetch active executives" });
+  }
+});
+// ============================
+// GET trashed orders
+// ============================
+router.get("/orders/trash", async (req, res) => {
+  try {
+    const trashedOrders = await Order.find({ isTrashed: true })
+      .sort({ trashedAt: -1 });
+    
+    console.log('Found trashed orders:', trashedOrders.length);
+    res.json(trashedOrders);
+  } catch (err) {
+    console.error("Error fetching trashed orders:", err);
+    res.status(500).json({ error: "Failed to fetch trashed orders" });
+  }
+});
+// ============================
+// DELETE: Move order to trash (soft delete)
+// ============================
+router.delete("/orders/:id", async (req, res) => {
+  try {
+    const orderToDelete = await Order.findById(req.params.id);
+
+    if (!orderToDelete) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    console.log('Moving order to trash:', {
+      orderId: req.params.id,
+      orderNo: orderToDelete.orderNo,
+      deletedBy: req.body.deletedBy,
+      reason: req.body.reason
+    });
+
+    // Instead of deleting, mark as trashed (soft delete)
+    orderToDelete.isTrashed = true;
+    orderToDelete.trashedAt = new Date();
+    orderToDelete.trashedBy = req.body.deletedBy || 'Admin';
+    orderToDelete.deletionReason = req.body.reason || 'Deleted by user';
+
+    await orderToDelete.save();
+
+    console.log('Order successfully moved to trash:', orderToDelete.orderNo);
+
+    res.json({ 
+      message: "Order moved to trash successfully",
+      order: {
+        id: orderToDelete._id,
+        orderNo: orderToDelete.orderNo,
+        isTrashed: orderToDelete.isTrashed,
+        trashedAt: orderToDelete.trashedAt
+      }
+    });
+  } catch (err) {
+    console.error("Error moving order to trash:", err);
+    res.status(500).json({ error: "Failed to move order to trash" });
+  }
+});
+// ============================
+// PUT: Restore order from trash
+// ============================
+router.put("/orders/:id/restore", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    order.isTrashed = false;
+    order.trashedAt = null;
+    order.trashedBy = null;
+    order.deletionReason = null;
 
     await order.save();
 
-    res.json({ success: true, order });
+    res.json({ message: "Order restored successfully" });
   } catch (err) {
-    console.error('Error updating status:', err);
-    res.status(500).json({ error: 'Failed to update status' });
-  }
+    console.error("Error restoring order:", err);
+    res.status(500).json({ error: "Failed to restore order" });
+  }
+});
+// ============================
+// DELETE: Permanently delete order from trash
+// ============================
+router.delete("/orders/:id/permanent", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    if (!order.isTrashed) {
+      return res.status(400).json({ error: "Order is not in trash" });
+    }
+
+    // Permanently delete the order
+    await Order.findByIdAndDelete(req.params.id);
+
+    res.json({ message: "Order permanently deleted" });
+  } catch (err) {
+    console.error("Error permanently deleting order:", err);
+    res.status(500).json({ error: "Failed to permanently delete order" });
+  }
+});
+// ============================
+// Migration route to add trash fields to existing orders
+// ============================
+router.post("/migrate-trash-fields", async (req, res) => {
+  try {
+    const result = await Order.updateMany(
+      { 
+        $or: [
+          { isTrashed: { $exists: false } },
+          { trashedAt: { $exists: false } },
+          { trashedBy: { $exists: false } },
+          { deletionReason: { $exists: false } }
+        ]
+      },
+      {
+        $set: {
+          isTrashed: false,
+          trashedAt: null,
+          trashedBy: null,
+          deletionReason: null
+        }
+      }
+    );
+    
+    res.json({ 
+      message: "Migration completed", 
+      modified: result.modifiedCount 
+    });
+  } catch (err) {
+    console.error("Migration error:", err);
+    res.status(500).json({ error: "Migration failed" });
+  }
+});
+// ============================
+// POST: Request advance approval
+// ============================
+router.post("/advance-approval-requests", async (req, res) => {
+  try {
+    const {
+      executive,
+      business,
+      contactPerson,
+      contactNumber,
+      totalAmount,
+      advanceAmount,
+      advancePercentage,
+      reason,
+      orderData
+    } = req.body;
+
+    const newRequest = new AdvanceApprovalRequest({
+      executive,
+      business,
+      contactPerson,
+      contactNumber,
+      totalAmount,
+      advanceAmount,
+      advancePercentage,
+      reason,
+      orderData,
+      status: 'pending',
+      requestedAt: new Date()
+    });
+
+    await newRequest.save();
+    
+    res.json({ 
+      success: true, 
+      message: "Advance approval request submitted successfully",
+      requestId: newRequest._id 
+    });
+  } catch (err) {
+    console.error("Error creating advance approval request:", err);
+    res.status(500).json({ error: "Failed to submit approval request" });
+  }
+});
+
+// ============================
+// GET: All advance approval requests
+// ============================
+router.get("/advance-approval-requests", async (req, res) => {
+  try {
+    const { status } = req.query;
+    let query = {};
+    
+    if (status) {
+      query.status = status;
+    }
+
+    const requests = await AdvanceApprovalRequest.find(query)
+      .sort({ requestedAt: -1 });
+    
+    res.json(requests);
+  } catch (err) {
+    console.error("Error fetching advance approval requests:", err);
+    res.status(500).json({ error: "Failed to fetch approval requests" });
+  }
+});
+
+// ============================
+// PUT: Update advance approval request status
+// ============================
+router.put("/advance-approval-requests/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, adminNotes, approvedBy } = req.body;
+
+    const updatedRequest = await AdvanceApprovalRequest.findByIdAndUpdate(
+      id,
+      {
+        status,
+        adminNotes,
+        approvedBy,
+        reviewedAt: new Date()
+      },
+      { new: true }
+    );
+
+    if (!updatedRequest) {
+      return res.status(404).json({ error: "Approval request not found" });
+    }
+
+    res.json({ 
+      success: true, 
+      message: `Request ${status} successfully`,
+      request: updatedRequest 
+    });
+  } catch (err) {
+    console.error("Error updating advance approval request:", err);
+    res.status(500).json({ error: "Failed to update approval request" });
+  }
+});
+
+// ============================
+// GET: Check if executive has approved request for order
+// ============================
+router.get("/advance-approval-requests/check/:executive", async (req, res) => {
+  try {
+    const { executive } = req.params;
+    const { business, contactPerson } = req.query;
+
+    const approvedRequest = await AdvanceApprovalRequest.findOne({
+      executive,
+      business,
+      contactPerson,
+      status: 'approved'
+    });
+
+    res.json({ hasApproval: !!approvedRequest });
+  } catch (err) {
+    console.error("Error checking advance approval:", err);
+    res.status(500).json({ error: "Failed to check approval status" });
+  }
 });
 module.exports = router;

@@ -1,7 +1,7 @@
-import  { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useLocation } from "react-router-dom";
-import { useReactToPrint } from "react-to-print";
+
 import Invoice from "./Invoice";
 import Select from 'react-select';
 
@@ -16,8 +16,7 @@ function OrderForm({
 }) {
   const routerLocation = useLocation();
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  // eslint-disable-next-line no-unused-vars
-  const [showAdvanceWarning, setShowAdvanceWarning] = useState(false);
+  const [showAdvanceApprovalModal, setShowAdvanceApprovalModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingTarget, setLoadingTarget] = useState(true);
   const [targetChanged, setTargetChanged] = useState(false);
@@ -65,9 +64,20 @@ function OrderForm({
   const [splitCommission, setSplitCommission] = useState(false);
   const [commissionSplitInfo, setCommissionSplitInfo] = useState(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
-  const [advanceError, setAdvanceError] = useState(""); // NEW: For advance validation
+  const [advanceError, setAdvanceError] = useState("");
+  const [createdBy, setCreatedBy] = useState("");
+  // Add WhatsApp state variable
+  const [whatsappSent, setWhatsappSent] = useState(false);
+  // Add advance approval states
+  const [approvalReason, setApprovalReason] = useState("");
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const [hasAdvanceApproval, setHasAdvanceApproval] = useState(false);
+  const [approvalRequested, setApprovalRequested] = useState(false);
+
   const printRef = useRef();
   const invoiceRef = useRef();
+  // Add polling interval reference for automatic approval checking
+  const approvalPollingRef = useRef(null);
 
   function getEmptyRow() {
     const delivery = new Date(orderDate);
@@ -86,6 +96,141 @@ function OrderForm({
       gstIncluded: false,
     };
   }
+
+  // Add WhatsApp message function
+  const sendWhatsAppMessage = (phoneNumber, orderData) => {
+    try {
+      const cleanNumber = phoneNumber.replace(/\D/g, '');
+      const finalNumber = cleanNumber.slice(-10);
+      
+      if (finalNumber.length !== 10) {
+        throw new Error('Invalid phone number');
+      }
+
+      // Format payment methods for display
+      let paymentMethodDisplay = "Not specified";
+      if (orderData.paymentMethods && orderData.paymentMethods.length > 0) {
+        if (typeof orderData.paymentMethods === 'string') {
+          paymentMethodDisplay = orderData.paymentMethods;
+        } else if (Array.isArray(orderData.paymentMethods)) {
+          paymentMethodDisplay = orderData.paymentMethods.join(', ');
+        }
+      }
+
+      const message = `🎉 *Order Confirmation* 🎉
+
+Dear ${orderData.contactPerson},
+
+Your order has been successfully placed with *Global Marketing Solutions*!
+
+*Order Details:*
+🏢 *Business:* ${orderData.business}
+📋 *Order Number:* ${orderData.orderNumber}
+👤 *Contact Person:* ${orderData.contactPerson}
+📅 *Order Date:* ${new Date(orderData.orderDate).toLocaleDateString()}
+📍 *Location:* ${orderData.location || 'Not specified'}
+
+*Requirements:*
+${orderData.requirements}
+
+*Payment Summary:*
+💰 *Total Amount:* ₹${orderData.total}
+💳 *Advance Paid:* ₹${orderData.advance}
+⚖️ *Balance:* ₹${orderData.balance}
+💳 *Payment Method:* ${paymentMethodDisplay}
+${orderData.advanceDate ? `📅 *Advance Date:* ${new Date(orderData.advanceDate).toLocaleDateString()}` : ''}
+${orderData.paymentDate ? `📅 *Payment Date:* ${new Date(orderData.paymentDate).toLocaleDateString()}` : ''}
+
+*Additional Details:*
+${orderData.chequeNumber ? `🏦 *Cheque Number:* ${orderData.chequeNumber}` : ''}
+${orderData.upiId ? `📱 *UPI ID:* ${orderData.upiId}` : ''}
+${orderData.bankName ? `🏛️ *Bank Name:* ${orderData.bankName}` : ''}
+${orderData.transactionRef ? `🔗 *Transaction Ref:* ${orderData.transactionRef}` : ''}
+${orderData.poNumber ? `📄 *PO Number:* ${orderData.poNumber}` : ''}
+
+Thank you for your business! We'll keep you updated on your order status.
+
+For any queries, please contact us.
+
+Best regards,
+Global Marketing Solutions Team`;
+
+      const encodedMessage = encodeURIComponent(message);
+      const whatsappUrl = `https://wa.me/91${finalNumber}?text=${encodedMessage}`;
+      
+      window.open(whatsappUrl, '_blank');
+      
+      setWhatsappSent(true);
+      return { success: true, message: 'WhatsApp opened successfully' };
+    } catch (error) {
+      console.error('WhatsApp error:', error);
+      return { success: false, message: error.message };
+    }
+  };
+
+  useEffect(() => {
+    const currentUser = localStorage.getItem("userName") || "Admin";
+    setCreatedBy(currentUser);
+  }, []);
+
+  // Enhanced checkAdvanceApproval function with automatic detection
+  const checkAdvanceApproval = async () => {
+    try {
+      const response = await axios.get(
+        `/api/advance-approval-requests/check/${selectedExecutive}`,
+        { params: { business, contactPerson } }
+      );
+      
+      const previousApprovalStatus = hasAdvanceApproval;
+      const newApprovalStatus = response.data.hasApproval;
+      
+      setHasAdvanceApproval(newApprovalStatus);
+      
+      // Show success message if approval was just granted
+      if (!previousApprovalStatus && newApprovalStatus && approvalRequested) {
+        alert("🎉 Your advance approval request has been approved! You can now submit the order.");
+        
+        // Stop polling since we got approval
+        if (approvalPollingRef.current) {
+          clearInterval(approvalPollingRef.current);
+          approvalPollingRef.current = null;
+        }
+      }
+    } catch (error) {
+      console.error("Error checking advance approval:", error);
+    }
+  };
+
+  // Check for existing approval when form loads
+  useEffect(() => {
+    if (!isAdmin && business && contactPerson) {
+      checkAdvanceApproval();
+    }
+  }, [business, contactPerson, isAdmin]);
+
+  // Poll for approval status when waiting for approval - AUTOMATIC DETECTION
+  useEffect(() => {
+    if (approvalRequested && !hasAdvanceApproval && !isAdmin && business && contactPerson) {
+      // Start polling every 5 seconds
+      approvalPollingRef.current = setInterval(async () => {
+        await checkAdvanceApproval();
+      }, 5000); // Check every 5 seconds
+
+      // Cleanup on unmount or when approval is granted
+      return () => {
+        if (approvalPollingRef.current) {
+          clearInterval(approvalPollingRef.current);
+          approvalPollingRef.current = null;
+        }
+      };
+    } else {
+      // Stop polling if we have approval or user is admin
+      if (approvalPollingRef.current) {
+        clearInterval(approvalPollingRef.current);
+        approvalPollingRef.current = null;
+      }
+    }
+  }, [approvalRequested, hasAdvanceApproval, isAdmin, business, contactPerson]);
 
   const isTimeBasedRequirement = (requirementName) => {
     return requirementName === "Mobile Vans" || requirementName === "Try Cycles";
@@ -106,36 +251,107 @@ function OrderForm({
     return row.gstIncluded ? (baseAmount * 1.18).toFixed(2) : baseAmount.toFixed(2);
   };
 
-  const handlePrint = useReactToPrint({
-    content: () => printRef.current,
-    pageStyle: `
-      @page { size: auto; margin: 10mm; }
-      @media print {
-        body { -webkit-print-color-adjust: exact; }
-        .no-print { display: none !important; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
-      }
-    `,
-  });
+  const handlePrint = () => {
+    const printContent = printRef.current;
+    if (!printContent) {
+      alert("No content available for printing");
+      return;
+    }
 
-  const handleInvoicePrint = useReactToPrint({
-    content: () => invoiceRef.current,
-    pageStyle: `
-      @page { size: A4; margin: 10mm; }
-      @media print {
-        body { -webkit-print-color-adjust: exact; }
+    const printWindow = window.open('', '_blank');
+    const printStyles = `
+      <style>
+        body { 
+          font-family: Arial, sans-serif;
+          margin: 0;
+          padding: 20px;
+          color: #333;
+          background: white;
+        }
         .no-print { display: none !important; }
-      }
-    `,
-  });
+        .print-actions { display: none !important; }
+        .form-actions { display: none !important; }
+        .existing-order-notice { display: none !important; }
+        .success-modal-overlay { display: none !important; }
+        .created-by-info { 
+          background-color: #f0f8ff; 
+          padding: 8px; 
+          border-radius: 4px; 
+          margin-bottom: 10px;
+          border-left: 4px solid #2196F3;
+        }
+        @media print {
+          body { margin: 0; padding: 10mm; }
+        }
+      </style>
+    `;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Order Form - ${business || "New Order"}</title>
+          ${printStyles}
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+      setTimeout(() => printWindow.close(), 500);
+    }, 500);
+  };
+
+  const handleInvoicePrint = () => {
+    const invoiceContent = invoiceRef.current;
+    if (!invoiceContent) {
+      alert("No invoice content available for printing");
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    const printStyles = `
+      <style>
+        body { 
+          font-family: Arial, sans-serif;
+          margin: 0;
+          padding: 20mm;
+          color: #333;
+          background: white;
+        }
+        .no-print { display: none !important; }
+        @media print {
+          body { margin: 0; padding: 0; }
+        }
+      </style>
+    `;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Invoice</title>
+          ${printStyles}
+        </head>
+        <body>
+          ${invoiceContent.innerHTML}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+      setTimeout(() => printWindow.close(), 500);
+    }, 500);
+  };
 
   const generateInvoice = () => {
     setShowInvoice(true);
   };
 
-  // Function to reset form for new order
   const resetFormForNewOrder = () => {
     setSelectedExecutive(isAdmin ? "" : localStorage.getItem("userName") || "");
     setBusiness(routerLocation.state?.businessName || "");
@@ -165,50 +381,145 @@ function OrderForm({
     setPoDocument(null);
     setSplitCommission(false);
     setCommissionSplitInfo(null);
-    setAdvanceError(""); // NEW: Reset advance error
+    setAdvanceError("");
+    // Reset WhatsApp state
+    setWhatsappSent(false);
+    // Reset approval states
+    setHasAdvanceApproval(false);
+    setApprovalRequested(false);
+    setApprovalReason("");
+    // Stop polling when form is reset
+    if (approvalPollingRef.current) {
+      clearInterval(approvalPollingRef.current);
+      approvalPollingRef.current = null;
+    }
     setIsCreatingNew(true);
     if (onNewOrder) onNewOrder();
   };
-  // eslint-disable-next-line no-unused-vars
-  const validateAdvance = (advanceAmount, totalAmount) => {
-    const advanceNum = parseFloat(advanceAmount) || 0;
-    const totalNum = parseFloat(totalAmount) || 0;
 
-    if (totalNum === 0) return true; 
+  const submitAdvanceApprovalRequest = async () => {
+    if (!approvalReason.trim()) {
+      alert("Please provide a reason for low advance payment");
+      return;
+    }
 
-    const percentage = (advanceNum / totalNum) * 100;
-    return percentage >= 50;
+    setIsSubmittingApproval(true);
+    try {
+      const advanceNum = parseFloat(advance) || 0;
+      const totalNum = parseFloat(total) || 0;
+      const advancePercentage = (advanceNum / totalNum) * 100;
+
+      const requestData = {
+        executive: selectedExecutive,
+        business,
+        contactPerson,
+        contactNumber,
+        totalAmount: totalNum,
+        advanceAmount: advanceNum,
+        advancePercentage: advancePercentage.toFixed(1),
+        reason: approvalReason,
+        orderData: {
+          clientLocation,
+          saleClosedBy,
+          orderDate,
+          clientType,
+          target,
+          rows: rows.map(row => ({
+            requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
+            description: row.description,
+            quantity: row.quantity,
+            rate: row.rate,
+            total: row.total
+          })),
+          discount,
+          paymentMethods
+        }
+      };
+
+      await axios.post("/api/advance-approval-requests", requestData);
+      
+      setShowAdvanceApprovalModal(false);
+      setApprovalRequested(true);
+      setApprovalReason("");
+      
+      alert("Advance approval request submitted! The system will automatically check for approval every 5 seconds. You'll be notified when approved.");
+    } catch (error) {
+      console.error("Error submitting approval request:", error);
+      alert("Failed to submit approval request. Please try again.");
+    } finally {
+      setIsSubmittingApproval(false);
+    }
   };
 
+  // Updated useEffect to fetch regular executives, field executives, and service executives
   useEffect(() => {
-    const fetchInitialData = async () => {
+    const fetchAllExecutives = async () => {
       try {
         setLoadingExecutives(true);
-        const requirementsRes = await axios.get("/api/requirements");
-        setRequirements([...requirementsRes.data].sort((a, b) => a.name.localeCompare(b.name)));
+        
+        // Fetch regular executives
         const execsRes = await axios.get("/api/executives");
-        const sortedExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
-        setSaleClosedByExecutives(sortedExecs);
+        const regularExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
+        
+        // Fetch field executives
+        const fieldExecsRes = await axios.get("/api/field-executive/admin/executives");
+        const fieldExecutives = fieldExecsRes.data.map(name => ({ name, _id: name, type: 'field' }));
+        
+        // Fetch service executives
+        const serviceExecsRes = await axios.get("/api/service-executives");
+        const serviceExecutives = serviceExecsRes.data.map(exec => ({ 
+          name: exec.name, 
+          _id: exec._id, 
+          type: 'service' 
+        }));
+        
+        // Combine all lists and remove duplicates
+        const allExecutives = [
+          ...regularExecs,
+          ...fieldExecutives,
+          ...serviceExecutives
+        ].filter((exec, index, self) => 
+          index === self.findIndex(e => e.name === exec.name)
+        ).sort((a, b) => a.name.localeCompare(b.name));
+        
+        setSortedExecutives(allExecutives);
+        setSaleClosedByExecutives(allExecutives);
 
         if (isAdmin) {
-          setSortedExecutives(sortedExecs);
+          setSortedExecutives(allExecutives);
         }
-
-        await fetchTargetForDate(orderDate);
 
         if (existingData?.executive && !isCreatingNew) {
           setSelectedExecutive(existingData.executive);
         }
+
+      } catch (error) {
+        console.error("Error fetching executives:", error);
+      } finally {
+        setLoadingExecutives(false);
+      }
+    };
+
+    fetchAllExecutives();
+  }, [existingData, isAdmin, isCreatingNew]);
+
+  // Keep the existing useEffect for other initial data
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const requirementsRes = await axios.get("/api/requirements");
+        setRequirements([...requirementsRes.data].sort((a, b) => a.name.localeCompare(b.name)));
+
+        await fetchTargetForDate(orderDate);
 
         if (routerLocation.state?.phoneNumber) {
           checkIfExistingClient(routerLocation.state.phoneNumber);
         }
       } catch (error) {
         console.error("Initialization error:", error);
-      } finally {
-        setLoadingExecutives(false);
       }
     };
+
     if (existingData && !isCreatingNew) {
       setSelectedExecutive(existingData.executive || (isAdmin ? "" : localStorage.getItem("userName") || ""));
       setBusiness(existingData.business || "");
@@ -220,6 +531,7 @@ function OrderForm({
       setClientType(existingData.clientType || "");
       setTarget(existingData.target || "");
       setDiscount(existingData.discount || 0);
+      setCreatedBy(existingData.createdBy || "Admin");
 
       if (existingData.rows && existingData.rows.length > 0) {
         setRows(existingData.rows.map((row) => ({
@@ -249,7 +561,6 @@ function OrderForm({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingData, orderNumber, isAdmin, executives, routerLocation.state, isCreatingNew]);
 
-  // Check if commission should be split
   useEffect(() => {
     if (selectedExecutive && saleClosedBy) {
       const shouldSplit = selectedExecutive !== saleClosedBy;
@@ -280,22 +591,21 @@ function OrderForm({
       return;
     }
 
-    // MODIFIED: Validate advance payment is at least 50% ONLY for non-admin users
     const advanceNum = parseFloat(advance) || 0;
     const totalNum = parseFloat(total) || 0;
+    const advancePercentage = (advanceNum / totalNum) * 100;
 
-    if (totalNum > 0 && !isAdmin) { // Only validate for non-admin users
-      const advancePercentage = (advanceNum / totalNum) * 100;
-
-      if (advancePercentage < 50) {
-        setAdvanceError("Advance payment must be at least 50% of the total amount");
-        return;
-      } else {
-        setAdvanceError("");
-      }
+    // Check if advance is less than 50% for non-admin users
+    if (totalNum > 0 && !isAdmin && advancePercentage < 50 && !hasAdvanceApproval) {
+      setShowAdvanceApprovalModal(true);
+      return;
     }
 
+    // Continue with normal submission...
+    await submitOrder();
+  };
 
+  const submitOrder = async () => {
     setIsSubmitting(true);
     try {
       const phone = contactNumber.replace(/\D/g, "").slice(-10);
@@ -318,23 +628,23 @@ function OrderForm({
         ? paymentMethods.map((m) => m === "UPI" ? `UPI - ${selectedUpi}` : m).join(" + ")
         : paymentMethods.join(" + ");
 
-      // Check if commission should be split (only if saleClosedBy is selected AND different from executive)
       const shouldSplitCommission = saleClosedBy && selectedExecutive !== saleClosedBy;
 
-      // Use full amounts if no split, half amounts if split
       const finalTotal = shouldSplitCommission ? (parseFloat(total) / 2).toFixed(2) : parseFloat(total).toFixed(2);
       const finalDiscountedTotal = shouldSplitCommission ? (parseFloat(discountedTotal) / 2).toFixed(2) : parseFloat(discountedTotal).toFixed(2);
       const finalAdvance = shouldSplitCommission ? (parseFloat(advance) / 2).toFixed(2) : parseFloat(advance).toFixed(2);
       const finalBalance = shouldSplitCommission ? (parseFloat(balance) / 2).toFixed(2) : parseFloat(balance).toFixed(2);
       const finalDiscount = shouldSplitCommission ? (parseFloat(discount) / 2).toFixed(2) : parseFloat(discount).toFixed(2);
 
-      // Base order data
+      // FIXED: Always set createdBy for admin users, preserve existing for updates
+      const finalCreatedBy = isAdmin ? createdBy : (existingData?.createdBy || selectedExecutive);
+
       const mainOrderData = {
         executive: selectedExecutive,
         business,
         contactPerson,
         location: clientLocation,
-        saleClosedBy: saleClosedBy || selectedExecutive, // Use executive name if saleClosedBy is empty
+        saleClosedBy: saleClosedBy || selectedExecutive,
         contactCode: "+91",
         phone,
         orderDate,
@@ -360,7 +670,7 @@ function OrderForm({
         }),
         advanceDate,
         paymentDate,
-        paymentMethod: paymentMethodStr,
+        paymentMethods: paymentMethodStr,
         advance: finalAdvance,
         balance: finalBalance,
         total: finalTotal,
@@ -369,6 +679,7 @@ function OrderForm({
         chequeNumber,
         chequeImage,
         designStatus: design === "no" ? "pending" : "provided",
+        createdBy: finalCreatedBy,
         commissionSplit: shouldSplitCommission ? {
           executive1: selectedExecutive,
           executive2: saleClosedBy,
@@ -382,7 +693,6 @@ function OrderForm({
         }
       };
 
-      // If commission is split, mark the main order
       if (shouldSplitCommission) {
         mainOrderData.isCommissionSplit = true;
         mainOrderData.splitDetails = {
@@ -391,11 +701,12 @@ function OrderForm({
         };
       }
 
+      console.log('Final order data being submitted:', mainOrderData);
+
       setIsSubmittingDesign(true);
       await axios.post("/api/design-requests", designRequestData);
       setIsSubmittingDesign(false);
 
-      // Submit the main order - check if we're updating existing or creating new
       const orderResponse = (existingData && !isCreatingNew)
         ? await axios.put(`/api/orders/${existingData._id}`, mainOrderData)
         : await axios.post("/api/submit", mainOrderData);
@@ -404,24 +715,50 @@ function OrderForm({
       if (shouldSplitCommission) {
         const duplicateOrderData = {
           ...mainOrderData,
-          executive: saleClosedBy, // Change executive to sale closed by
+          executive: saleClosedBy,
           isCommissionSplit: true,
-          originalOrderId: orderResponse.data._id, // Reference to original order
+          originalOrderId: orderResponse.data._id,
           splitDetails: {
             partnerExecutive: selectedExecutive,
             splitPercentage: 50
           }
         };
 
-        // Create duplicate order for the sale closed by executive
         await axios.post("/api/submit", duplicateOrderData);
       }
+
+      // ADD WHATSAPP MESSAGE AFTER SUCCESSFUL SUBMISSION
+      const orderDataForWhatsApp = {
+        business: business,
+        contactPerson: contactPerson,
+        orderNumber: orderResponse.data.orderNumber || `ORD-${Date.now()}`,
+        requirements: rows
+          .filter((row) => row.requirement)
+          .map((row) => row.requirement === "other" ? row.customRequirement : row.requirement)
+          .join(", "),
+        total: discountedTotal,
+        advance: advance,
+        balance: balance,
+        orderDate: orderDate,
+        location: clientLocation,
+        paymentMethods: paymentMethodStr, // This now includes the formatted payment methods
+        advanceDate: advanceDate,
+        paymentDate: paymentDate,
+        chequeNumber: chequeNumber,
+        upiId: selectedUpi,
+        bankName: bankName,
+        transactionRef: transactionRef,
+        poNumber: poNumber
+      };
+
+      // Send WhatsApp message automatically
+      sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
 
       setShowSuccessModal(true);
       setTimeout(() => {
         setShowSuccessModal(false);
         setIsSubmitting(false);
-        setIsCreatingNew(false); // Reset the flag after successful submission
+        setIsCreatingNew(false);
         if (onSuccess) onSuccess(orderResponse.data);
       }, 2000);
     } catch (err) {
@@ -508,7 +845,6 @@ function OrderForm({
     setAdvance(cleanedValue);
     updateBalance(total, cleanedValue);
 
-    // MODIFIED: Only validate advance payment for non-admin users
     const advanceNum = parseFloat(cleanedValue) || 0;
     const totalNum = parseFloat(total) || 0;
 
@@ -521,7 +857,7 @@ function OrderForm({
         setAdvanceError("");
       }
     } else {
-      setAdvanceError(""); // Clear any existing errors for admin
+      setAdvanceError("");
     }
   };
 
@@ -561,6 +897,104 @@ function OrderForm({
 
   const capitalizeFirst = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
+  // Validation functions
+  const validateLocation = (value) => {
+    // Only allow letters, spaces, and common location characters
+    return /^[a-zA-Z\s\-.,()]*$/.test(value);
+  };
+
+  const validateContactPerson = (value) => {
+    // Only allow letters and spaces
+    return /^[a-zA-Z\s]*$/.test(value);
+  };
+
+  const validateBusinessName = (value) => {
+    // Allow both letters and numbers for business name
+    return /^[a-zA-Z0-9\s\-.,&()]*$/.test(value);
+  };
+
+  const validateContactNumber = (value) => {
+    // Allow only digits and ensure exactly 10 digits
+    const digits = value.replace(/\D/g, "");
+    return digits.length <= 10;
+  };
+
+  // Render advance validation section - UPDATED for automatic approval
+  const renderAdvanceValidation = () => {
+    const advanceNum = parseFloat(advance) || 0;
+    const totalNum = parseFloat(total) || 0;
+    const advancePercentage = totalNum > 0 ? (advanceNum / totalNum) * 100 : 0;
+
+    if (totalNum > 0 && !isAdmin) {
+      return (
+        <div style={{ 
+          marginTop: "10px", 
+          padding: "10px", 
+          backgroundColor: advancePercentage < 50 ? "#fff3cd" : "#d4edda", 
+          borderRadius: "4px",
+          border: `1px solid ${advancePercentage < 50 ? "#ffeaa7" : "#c3e6cb"}`
+        }}>
+          <strong>Advance Payment:</strong> {advancePercentage.toFixed(1)}% of total
+          
+          {advancePercentage < 50 ? (
+            <div>
+              <span style={{ color: "#856404", marginLeft: "10px" }}>
+                ❌ Minimum 50% required
+              </span>
+              {!hasAdvanceApproval && !approvalRequested && (
+                <div style={{ marginTop: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanceApprovalModal(true)}
+                    style={{
+                      padding: "6px 12px",
+                      backgroundColor: "#007bff",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontSize: "12px"
+                    }}
+                  >
+                    📨 Request Approval for Low Advance
+                  </button>
+                </div>
+              )}
+              {approvalRequested && !hasAdvanceApproval && (
+                <div style={{ marginTop: "8px", color: "#856404" }}>
+                  <div>⏳ Approval request submitted - Waiting for admin approval</div>
+                  <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+                    🔄 Auto-checking every 5 seconds...
+                  </div>
+                </div>
+              )}
+              {hasAdvanceApproval && (
+                <div style={{ marginTop: "8px", color: "#155724" }}>
+                  ✅ Approved by admin - You can now submit this order
+                </div>
+              )}
+            </div>
+          ) : (
+            <span style={{ color: "#155724", marginLeft: "10px" }}>
+              ✅ Minimum requirement met
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    if (totalNum > 0 && isAdmin) {
+      return (
+        <div style={{ marginTop: "10px", padding: "10px", backgroundColor: "#d1ecf1", borderRadius: "4px" }}>
+          <strong>Advance Payment:</strong> {advancePercentage.toFixed(1)}% of total
+          <span style={{ color: "#0c5460", marginLeft: "10px" }}>ℹ️ Admin override enabled</span>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   if (showInvoice) {
     return (
       <div ref={invoiceRef}>
@@ -592,6 +1026,106 @@ function OrderForm({
           <div className="success-modal">
             <div className="success-checkmark">✓</div>
             <h2>Order {existingData && !isCreatingNew ? "Updated" : "Submitted"} Successfully!</h2>
+            {/* Add WhatsApp success message */}
+            {whatsappSent && (
+              <div style={{ 
+                marginTop: '15px', 
+                padding: '10px', 
+                backgroundColor: '#e8f5e8', 
+                borderRadius: '4px',
+                border: '1px solid #4caf50'
+              }}>
+                <p style={{ margin: 0, color: '#2e7d32' }}>
+                  ✅ WhatsApp message has been sent to the customer!
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Advance Approval Modal */}
+      {showAdvanceApprovalModal && (
+        <div className="modal-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div className="modal-content" style={{
+            background: 'white',
+            padding: '30px',
+            borderRadius: '8px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
+          }}>
+            <h3>Request Advance Payment Approval</h3>
+            <p>
+              Your advance payment is less than 50% of the total amount. 
+              Please provide a reason for the low advance payment to request admin approval.
+            </p>
+            
+            <div style={{ margin: "15px 0", padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+              <strong>Order Details:</strong>
+              <div>Business: {business}</div>
+              <div>Contact: {contactPerson}</div>
+              <div>Total Amount: ₹{total}</div>
+              <div>Advance Paid: ₹{advance} ({((parseFloat(advance) || 0) / parseFloat(total) * 100).toFixed(1)}%)</div>
+            </div>
+
+            <label style={{ display: 'block', marginBottom: '15px' }}>
+              Reason for Low Advance:
+              <textarea
+                value={approvalReason}
+                onChange={(e) => setApprovalReason(e.target.value)}
+                placeholder="Please explain why the advance payment is less than 50%..."
+                rows="4"
+                style={{ width: "100%", marginTop: "8px", padding: "8px", border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+            </label>
+
+            <div className="modal-actions" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowAdvanceApprovalModal(false);
+                  setApprovalReason("");
+                }}
+                className="btn btn-secondary"
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitAdvanceApprovalRequest}
+                disabled={isSubmittingApproval || !approvalReason.trim()}
+                className="btn btn-primary"
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: isSubmittingApproval ? 'not-allowed' : 'pointer',
+                  opacity: isSubmittingApproval || !approvalReason.trim() ? 0.6 : 1
+                }}
+              >
+                {isSubmittingApproval ? "Submitting..." : "Submit Request"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -605,9 +1139,20 @@ function OrderForm({
         </div>
       )}
 
+      {isAdmin && (
+        <div className="created-by-info">
+          <strong>Order Created By: {createdBy}</strong>
+          {createdBy !== selectedExecutive && (
+            <span style={{ marginLeft: '10px', color: '#666' }}>
+              (on behalf of {selectedExecutive})
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="form-header">
         <h2 className="subtitle">ORDER FORM</h2>
-        <div className="print-actions">
+        <div className="print-actions no-print">
           <button onClick={handlePrint} className="btn btn-print">
             Print Order
           </button>
@@ -645,13 +1190,13 @@ function OrderForm({
           </label>
 
           <label>
-            Client Type:
+            Order Type:
             <select value={clientType} onChange={(e) => setClientType(e.target.value)}>
               <option value="">Select</option>
               <option value="Retail">Retail</option>
               <option value="Renewal">Renewal</option>
               <option value="Agent">Agent</option>
-              <option value="Renwal-Agent">Renewal-Agent</option>
+              <option value="Renewal-Agent">Renewal-Agent</option>
               <option value="Corporate">Corporate</option>
               <option value="Walk-In">Walk-In</option>
             </select>
@@ -662,7 +1207,11 @@ function OrderForm({
             <input
               type="text"
               value={business}
-              onChange={(e) => setBusiness(capitalizeFirst(e.target.value))}
+              onChange={(e) => {
+                if (validateBusinessName(e.target.value) || e.target.value === "") {
+                  setBusiness(capitalizeFirst(e.target.value));
+                }
+              }}
               placeholder="Enter business name"
             />
           </label>
@@ -674,7 +1223,11 @@ function OrderForm({
                 <input
                   type="text"
                   value={contactPerson}
-                  onChange={(e) => setContactPerson(capitalizeFirst(e.target.value))}
+                  onChange={(e) => {
+                    if (validateContactPerson(e.target.value) || e.target.value === "") {
+                      setContactPerson(capitalizeFirst(e.target.value));
+                    }
+                  }}
                   placeholder="Contact person name"
                 />
               </label>
@@ -685,7 +1238,11 @@ function OrderForm({
                 <input
                   type="text"
                   value={clientLocation}
-                  onChange={(e) => setClientLocation(e.target.value)}
+                  onChange={(e) => {
+                    if (validateLocation(e.target.value) || e.target.value === "") {
+                      setClientLocation(e.target.value);
+                    }
+                  }}
                   placeholder="Enter location"
                 />
               </label>
@@ -706,7 +1263,6 @@ function OrderForm({
             </div>
           </div>
 
-          {/* Commission Split Information */}
           {splitCommission && commissionSplitInfo && (
             <div style={{
               backgroundColor: '#e8f5e8',
@@ -792,8 +1348,13 @@ function OrderForm({
             <input
               type="text"
               value={contactNumber}
-              onChange={handleContactNumberChange}
+              onChange={(e) => {
+                if (validateContactNumber(e.target.value) || e.target.value === "") {
+                  handleContactNumberChange(e);
+                }
+              }}
               placeholder="+91 9876543210"
+              maxLength="14"
             />
           </label>
         </div>
@@ -831,7 +1392,7 @@ function OrderForm({
                         handleRowChange(index, "requirement", value);
                         if (value !== "other") handleRowChange(index, "customRequirement", "");
                       }}
-                      isSearchable={true} // Enable search functionality
+                      isSearchable={true}
                       placeholder="Search requirement..."
                       styles={{
                         control: (base) => ({
@@ -999,23 +1560,8 @@ function OrderForm({
           </div>
         </div>
 
-        {total > 0 && !isAdmin && (
-          <div style={{ marginTop: "10px", padding: "10px", backgroundColor: "#f5f5f5", borderRadius: "4px" }}>
-            <strong>Advance Payment:</strong> {((parseFloat(advance) || 0) / parseFloat(total) * 100).toFixed(1)}% of total
-            {((parseFloat(advance) || 0) / parseFloat(total) * 100) < 50 ? (
-              <span style={{ color: "red", marginLeft: "10px" }}>❌ Minimum 50% required</span>
-            ) : (
-              <span style={{ color: "green", marginLeft: "10px" }}>✅ Minimum requirement met</span>
-            )}
-          </div>
-        )}
-
-        {total > 0 && isAdmin && (
-          <div style={{ marginTop: "10px", padding: "10px", backgroundColor: "#f0f8ff", borderRadius: "4px" }}>
-            <strong>Advance Payment:</strong> {((parseFloat(advance) || 0) / parseFloat(total) * 100).toFixed(1)}% of total
-            <span style={{ color: "blue", marginLeft: "10px" }}>ℹ️ Admin override enabled</span>
-          </div>
-        )}
+        {/* Replace the existing advance validation with the new one */}
+        {renderAdvanceValidation()}
       </div>
 
       <div className="payment-method-section">
@@ -1152,13 +1698,13 @@ function OrderForm({
         )}
       </div>
 
-      <div className="form-actions">
+      <div className="form-actions no-print">
         <button type="button" onClick={onBack} className="btn btn-secondary">
           Back to Search
         </button>
         <button
           onClick={handleSubmit}
-          disabled={isSubmitting || (!isAdmin && advanceError)} // Only disable for non-admin with advance error
+          disabled={isSubmitting || (!isAdmin && advanceError && !hasAdvanceApproval)}
           className="btn btn-primary"
         >
           {isSubmitting ? "Submitting..." : (existingData && !isCreatingNew) ? "Update Order" : "Submit Order"}
@@ -1215,30 +1761,6 @@ function OrderForm({
           color: #4CAF50;
           margin-bottom: 15px;
         }
-        .warning-modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background-color: rgba(0, 0, 0, 0.5);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          z-index: 1000;
-        }
-        .warning-modal {
-          background: white;
-          padding: 30px;
-          border-radius: 8px;
-          text-align: center;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-          max-width: 400px;
-        }
-        .warning-icon {
-          font-size: 48px;
-          margin-bottom: 15px;
-        }
         .existing-order-notice {
           background-color: #e3f2fd;
           padding: 15px;
@@ -1255,6 +1777,14 @@ function OrderForm({
           border-radius: 4px;
           cursor: pointer;
         }
+        .created-by-info {
+          background-color: #e8f5e8;
+          border: 1px solid #4caf50;
+          border-radius: 6px;
+          padding: 10px 15px;
+          margin-bottom: 15px;
+          font-size: 14px;
+        }
         .form-top {
           display: flex;
           gap: 20px;
@@ -1269,7 +1799,7 @@ function OrderForm({
           margin-bottom: 15px;
         }
         input, select {
-          width: 100%;
+          width: '100%';
           padding: 8px;
           border: 1px solid #ddd;
           border-radius: 4px;
@@ -1331,6 +1861,9 @@ function OrderForm({
         .target-change-animation {
           animation: targetChange 1.5s ease;
         }
+        .no-print {
+          /* This class hides elements during printing */
+        }
         @keyframes targetChange {
           0% { background-color: #ffffcc; }
           100% { background-color: transparent; }
@@ -1341,6 +1874,20 @@ function OrderForm({
           }
           .payment-section > div {
             flex-direction: column;
+          }
+        }
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          .form-actions {
+            display: none !important;
+          }
+          .print-actions {
+            display: none !important;
+          }
+          .existing-order-notice {
+            display: none !important;
           }
         }
       `}</style>

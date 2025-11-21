@@ -216,22 +216,30 @@ const AppointmentStatus = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchAppointments = async () => {
-      try {
-        setIsLoading(true);
-        const response = await axios.get('/api/appointments');
-        setAppointments(response.data);
-        setFilteredAppointments(response.data);
-      } catch (error) {
-        console.error('Error fetching appointments:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+ useEffect(() => {
+  const fetchAppointments = async () => {
+    try {
+      setIsLoading(true);
+      const response = await axios.get('/api/appointments');
 
-    fetchAppointments();
-  }, []);
+      // 🚀 Filter out already completed or sale closed appointments
+      const activeAppointments = response.data.filter(
+        (appt) => appt.status !== 'completed' && appt.status !== 'sale closed'
+      );
+
+      setAppointments(activeAppointments);
+      setFilteredAppointments(activeAppointments);
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  fetchAppointments();
+}, []);
+
+  
 
   useEffect(() => {
     if (activeFilter === 'all') {
@@ -243,12 +251,54 @@ const AppointmentStatus = () => {
     }
   }, [activeFilter, appointments]);
 
-  const handleStatusChange = (id, newStatus) => {
+const handleStatusChange = async (id, newStatus) => {
+  try {
+    // Update the selected status in state
     setUpdatedStatus((prev) => ({
       ...prev,
       [id]: newStatus,
     }));
-  };
+
+    // Prepare request data
+    // eslint-disable-next-line no-unused-vars
+    const currentAppointment = appointments.find((a) => a._id === id);
+    const requestData = { status: newStatus };
+
+    if (newStatus === 'sale closed') {
+      requestData.closedBy = saleClosedByName[id] || '';
+    }
+
+    // Call backend to update status
+    const response = await axios.put(`/api/appointments/appointments/${id}/status`, requestData);
+
+    if (response.status === 200) {
+      // Remove from UI if sale closed or completed
+      if (newStatus === 'sale closed' || newStatus === 'completed') {
+        setAppointments((prev) => prev.filter((appt) => appt._id !== id));
+        setFilteredAppointments((prev) => prev.filter((appt) => appt._id !== id));
+      } else {
+        // Otherwise just update in state
+        const updatedList = appointments.map((appt) =>
+          appt._id === id
+            ? { ...appt, status: newStatus, closedBy: requestData.closedBy || appt.closedBy }
+            : appt
+        );
+        setAppointments(updatedList);
+        setFilteredAppointments(updatedList);
+      }
+
+      // Success message
+      setSuccessMap((prev) => ({ ...prev, [id]: true }));
+      setTimeout(() => {
+        setSuccessMap((prev) => ({ ...prev, [id]: false }));
+      }, 2500);
+    }
+  } catch (error) {
+    console.error('Error updating status:', error);
+    alert(`Failed to update status: ${error.response?.data?.message || error.message}`);
+  }
+};
+
 
   const handleNameChange = (id, name) => {
     setSaleClosedByName((prev) => ({
@@ -257,45 +307,48 @@ const AppointmentStatus = () => {
     }));
   };
 
-  const updateStatus = async (id) => {
-    try {
-      const requestData = {
-        status: updatedStatus[id] || appointments.find(a => a._id === id).status,
-      };
+ const updateStatus = async (id) => {
+  try {
+    const currentAppointment = appointments.find(a => a._id === id);
+    const newStatus = updatedStatus[id] || currentAppointment.status;
 
-      if ((updatedStatus[id] === 'sale closed' || appointments.find(a => a._id === id).status === 'sale closed')) {
-        requestData.closedBy = saleClosedByName[id] || '';
-      }
+    const requestData = { status: newStatus };
 
-      const response = await axios.put(`/api/appointments/appointments/${id}/status`, requestData);
-      
-      if (response.status === 200) {
-        setAppointments(prev =>
-          prev.map(appt =>
-            appt._id === id ? { 
-              ...appt, 
-              status: updatedStatus[id] || appt.status,
-              ...((updatedStatus[id] === 'sale closed' || appt.status === 'sale closed') && { 
-                closedBy: saleClosedByName[id] || appt.closedBy 
-              })
-            } : appt
-          )
-        );
-        setSuccessMap((prev) => ({ ...prev, [id]: true }));
-        setTimeout(() => {
-          setSuccessMap((prev) => ({ ...prev, [id]: false }));
-        }, 2500);
-      }
-    } catch (error) {
-      console.error('Error updating status:', error);
-      console.log('Error details:', {
-        url: error.config.url,
-        data: error.config.data,
-        response: error.response?.data
-      });
-      alert(`Failed to update status: ${error.response?.data?.message || error.message}`);
+    if (newStatus === 'sale closed') {
+      requestData.closedBy = saleClosedByName[id] || '';
     }
-  };
+
+    const response = await axios.put(`/api/appointments/appointments/${id}/status`, requestData);
+
+    if (response.status === 200) {
+      // Update the main list
+      const updatedList = appointments.map(appt =>
+        appt._id === id
+          ? { ...appt, status: newStatus, closedBy: requestData.closedBy || appt.closedBy }
+          : appt
+      );
+
+      setAppointments(updatedList);
+
+      // Remove if sale closed or completed
+      if (newStatus === 'sale closed' || newStatus === 'completed') {
+        setFilteredAppointments(prev => prev.filter(appt => appt._id !== id));
+      } else {
+        setFilteredAppointments(updatedList);
+      }
+
+      // Success feedback
+      setSuccessMap((prev) => ({ ...prev, [id]: true }));
+      setTimeout(() => {
+        setSuccessMap((prev) => ({ ...prev, [id]: false }));
+      }, 2500);
+    }
+  } catch (error) {
+    console.error('Error updating status:', error);
+    alert(`Failed to update status: ${error.response?.data?.message || error.message}`);
+  }
+};
+
 
   const statusFilters = [
     { value: 'all', label: 'All Appointments' },
@@ -305,8 +358,20 @@ const AppointmentStatus = () => {
     { value: 'in progress', label: 'In Progress' },
     { value: 'completed', label: 'Completed' },
     { value: 'cancelled', label: 'Cancelled' },
-    { value: 'postponded', label: 'Postponed' },
     { value: 'sale closed', label: 'Sale Closed' },
+    { value: 'postponded', label: 'Postponed' },
+  ];
+
+  // Status options for dropdown (all statuses including completed and sale closed)
+  const statusOptions = [
+    { value: 'pending', label: 'Pending' },
+    { value: 'assigned', label: 'Assigned' },
+    { value: 'contacted', label: 'Contacted' },
+    { value: 'in progress', label: 'In Progress' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'cancelled', label: 'Cancelled' },
+    { value: 'sale closed', label: 'Sale Closed' },
+    { value: 'postponded', label: 'Postponed' },
   ];
 
   return (
@@ -388,7 +453,7 @@ const AppointmentStatus = () => {
                   value={updatedStatus[appt._id] || appt.status}
                   onChange={(e) => handleStatusChange(appt._id, e.target.value)}
                 >
-                  {statusFilters.slice(1).map((status) => (
+                  {statusOptions.map((status) => (
                     <option key={status.value} value={status.value}>
                       {status.label}
                     </option>

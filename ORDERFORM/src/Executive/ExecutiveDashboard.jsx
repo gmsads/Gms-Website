@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { parseISO, isBefore } from 'date-fns';
@@ -192,7 +191,7 @@ const ExecutiveDashboard = () => {
   const [achieved, setAchieved] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showCongrats, setShowCongrats] = useState(false);
-  const [, setIsMobile] = useState(window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [paymentData, setPaymentData] = useState([
     { name: 'Paid', value: 0, fill: '#4CAF50' },
     { name: 'Unpaid', value: 0, fill: '#F44336' },
@@ -215,37 +214,56 @@ const ExecutiveDashboard = () => {
     count: 0,
     byStatus: []
   });
+  const [isFieldExec, setIsFieldExec] = useState(false);
+  const [buttonsLoaded, setButtonsLoaded] = useState(false); // NEW: Track when all buttons should be visible
 
   const navigate = useNavigate();
 
   // Helper functions
   const getInitials = (name) => {
-    return name ? name.split(' ').map(n => n[0]).join('').toUpperCase() : '';
+    if (!name) return '';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
-  // Check if user is a field executive
-  const isFieldExecutive = useCallback(() => {
-    console.log('Current user role:', userProfile.role);
-    // Check for all possible formats
-    const role = userProfile.role?.toLowerCase();
-    return role === 'fieldexecutive' || 
-           role === 'field executive' ||
-           role === 'fieldexec' ||
-           role === 'field';
-  }, [userProfile.role]);
+  // Check if user is a field executive - SIMPLIFIED VERSION
+  const checkFieldExecutiveRole = useCallback((role) => {
+    if (!role) return false;
+    
+    const normalizedRole = role.toString().toLowerCase().trim();
+    console.log('Checking role for field executive:', normalizedRole);
+    
+    const fieldExecutiveRoles = [
+      'fieldexecutive',
+      'field executive', 
+      'fieldexec',
+      'field',
+      'field_executive',
+      'field-executive'
+    ];
+    
+    return fieldExecutiveRoles.includes(normalizedRole);
+  }, []);
 
-  // Event handlers - MOVE THESE BEFORE ANY JSX USAGE
+  // Event handlers
   const handleSaveProfile = async (updatedProfile) => {
     try {
       await axios.put('/api/update-profile', {
         name: userProfile.name.trim(),
         updates: updatedProfile
       });
-      setUserProfile(prev => ({
-        ...prev,
+      
+      const updatedUserProfile = {
+        ...userProfile,
         ...updatedProfile,
         active: updatedProfile.active
-      }));
+      };
+      
+      setUserProfile(updatedUserProfile);
+      
+      // Update field executive status when profile is saved
+      const fieldExecStatus = checkFieldExecutiveRole(updatedProfile.role);
+      setIsFieldExec(fieldExecStatus);
+      
       return true;
     } catch (error) {
       console.error("Update failed:", error);
@@ -253,15 +271,8 @@ const ExecutiveDashboard = () => {
     }
   };
 
-  // eslint-disable-next-line no-unused-vars
-  const handleNotificationClick = () => {
-    localStorage.setItem('lastSeenAppointmentCount', appointmentCount);
-    setHasNewAppointments(false);
-    navigate('/pending-service');
-  };
-
   const handleNewAppointmentsClick = () => {
-    localStorage.setItem('lastSeenAppointmentCount', appointmentCount);
+    localStorage.setItem('lastSeenAppointmentCount', appointmentCount.toString());
     setHasNewAppointments(false);
     navigate('/new-appointment');
   };
@@ -271,7 +282,6 @@ const ExecutiveDashboard = () => {
   };
 
   const handleFieldExecutivePage = () => {
-    console.log('Navigating to field executive page');
     navigate('/field-executive');
   };
 
@@ -392,23 +402,43 @@ const ExecutiveDashboard = () => {
     }
   }, [selectedExecutive, selectedDate]);
 
-  const fetchUserProfile = useCallback(async () => {
+  // SIMPLIFIED: Fetch user profile with immediate role detection
+  const fetchUserProfile = useCallback(async (executiveName) => {
     try {
+      console.log('Fetching profile for:', executiveName);
       const response = await axios.get('/api/user-profile', {
-        params: { name: selectedExecutive }
+        params: { name: executiveName }
       });
 
       if (response.data) {
-        setUserProfile({
-          name: response.data.name,
-          phone: response.data.phone,
-          role: response.data.role.toLowerCase()
-        });
+        const userData = {
+          name: response.data.name || executiveName,
+          phone: response.data.phone || '',
+          role: response.data.role || ''
+        };
+        
+        setUserProfile(userData);
+        
+        // Update field executive status immediately
+        const fieldExecStatus = checkFieldExecutiveRole(userData.role);
+        console.log('Field executive status determined:', fieldExecStatus);
+        setIsFieldExec(fieldExecStatus);
+        
+        return userData;
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
+      // Set default values if API fails
+      const defaultUserData = {
+        name: executiveName,
+        phone: '',
+        role: ''
+      };
+      setUserProfile(defaultUserData);
+      setIsFieldExec(false);
+      return defaultUserData;
     }
-  }, [selectedExecutive]);
+  }, [checkFieldExecutiveRole]);
 
   const fetchProspects = useCallback(async () => {
     try {
@@ -463,31 +493,52 @@ const ExecutiveDashboard = () => {
 
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) {
+        setMobileMenuOpen(false);
+      }
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // IMPROVED: Initialize user and show all buttons immediately
   useEffect(() => {
     const loggedInUser = localStorage.getItem('userName');
+    console.log('Initializing user:', loggedInUser);
+    
     if (loggedInUser) {
       setUserName(loggedInUser);
       setSelectedExecutive(loggedInUser);
+      
+      // Show buttons immediately while fetching profile in background
+      setButtonsLoaded(true);
+      
+      // Fetch profile in background
+      fetchUserProfile(loggedInUser);
     }
-  }, []);
+  }, [fetchUserProfile]);
 
+  // Fetch data when selectedExecutive changes
   useEffect(() => {
     if (selectedExecutive) {
+      console.log('Fetching data for:', selectedExecutive);
       fetchExecutiveData(selectedExecutive);
       fetchPendingPayments();
       fetchAppointmentCount();
       fetchFollowUpCount();
-      fetchUserProfile();
       fetchProspects();
     }
-  }, [selectedExecutive, selectedDate, fetchExecutiveData, fetchPendingPayments,
-    fetchAppointmentCount, fetchFollowUpCount, fetchUserProfile, fetchProspects]);
+  }, [
+    selectedExecutive, 
+    selectedDate, 
+    fetchExecutiveData, 
+    fetchPendingPayments,
+    fetchAppointmentCount, 
+    fetchFollowUpCount, 
+    fetchProspects
+  ]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -499,39 +550,12 @@ const ExecutiveDashboard = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [selectedExecutive, fetchAppointmentCount, fetchFollowUpCount, fetchProspects]);
-
-  // Add this useEffect to fetch initial user profile immediately
-  useEffect(() => {
-    const fetchInitialUserProfile = async () => {
-      const loggedInUser = localStorage.getItem('userName');
-      if (loggedInUser) {
-        try {
-          const response = await axios.get('/api/user-profile', {
-            params: { name: loggedInUser }
-          });
-
-          if (response.data) {
-            setUserProfile({
-              name: response.data.name,
-              phone: response.data.phone,
-              role: response.data.role.toLowerCase()
-            });
-            console.log('Initial user profile fetched:', response.data);
-          }
-        } catch (error) {
-          console.error('Error fetching initial user profile:', error);
-        }
-      }
-    };
-
-    fetchInitialUserProfile();
-  }, []);
-
-  useEffect(() => {
-    console.log('User profile updated:', userProfile);
-    console.log('Is field executive:', isFieldExecutive());
-  }, [userProfile, isFieldExecutive]);
+  }, [
+    selectedExecutive, 
+    fetchAppointmentCount, 
+    fetchFollowUpCount, 
+    fetchProspects
+  ]);
 
   // Data for charts
   const pieData = [
@@ -561,67 +585,104 @@ const ExecutiveDashboard = () => {
       {/* Header */}
       <header className="dashboard-header">
         <div className="header-left">
-          <h2>{selectedExecutive}</h2>
-          <button onClick={handleCalendarClick} className="calendar-btn">
-            <span className="calendar-icon">📅</span>
-            <span className="date-display">
-              {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </span>
-          </button>
-        </div>
-
-        <button
-          className="mobile-menu-btn"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-expanded={mobileMenuOpen}
-        >
-          {mobileMenuOpen ? '✕' : '☰'}
-        </button>
-
-        <div className={`header-right ${mobileMenuOpen ? 'mobile-open' : ''}`}>
-          <div className="action-buttons">
-            <button
-              onClick={handleNewAppointmentsClick}
-              className="appointments-btn"
-            >
-              New Appointments
-              {appointmentCount > 0 && (
-                <span className={`appointment-count ${hasNewAppointments ? 'new' : ''}`}>
-                  {appointmentCount}
-                </span>
-              )}
-            </button>
-
-            {/* Field Executive Button - Only visible to field executives */}
-            {isFieldExecutive() && (
-              <button
-                onClick={handleFieldExecutivePage}
-                className="field-executive-btn"
-              >
-                Field Executive
-              </button>
-            )}
-
-            <button
-              onClick={handleFollowUpsClick}
-              className="follow-ups-btn"
-            >
-              Follow Ups
-              {followUpCount > 0 && (
-                <span className="follow-up-count">
-                  {followUpCount}
-                </span>
-              )}
+          {/* Name positioned above calendar */}
+          <div className="name-calendar-container">
+            <h2 className="executive-name">{selectedExecutive}</h2>
+            <button onClick={handleCalendarClick} className="calendar-btn">
+              <span className="calendar-icon">📅</span>
+              <span className="date-display">
+                {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </span>
             </button>
           </div>
+        </div>
 
+        {/* Mobile Menu Button Container */}
+        <div 
+          className="mobile-menu-wrapper" 
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            height: '50%',
+            paddingTop: '0.5rem'
+          }}
+        >
           <button
-            className="user-avatar"
-            onClick={() => setShowProfileModal(true)}
+            className="mobile-menu-btn"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-expanded={mobileMenuOpen}
+            style={{
+              display: 'none',
+              background: 'linear-gradient(135deg, #1976d2, #125ea3)',
+              border: 'none',
+              borderRadius: '5px',
+              fontSize: '1.5rem',
+              cursor: 'pointer',
+              padding: '0.75rem',
+              zIndex: 1001,
+              color: 'white',
+              width: '50px',
+              height: '50px',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(25, 118, 210, 0.3)',
+              transition: 'all 0.3s ease'
+            }}
           >
-            {getInitials(userName)}
+            {mobileMenuOpen ? '✕' : '☰'}
           </button>
         </div>
+
+        {/* BUTTONS CONTAINER - Show all buttons immediately */}
+        {buttonsLoaded && (
+          <div className={`header-right ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+            <div className="action-buttons">
+              <button
+                onClick={handleNewAppointmentsClick}
+                className="appointments-btn"
+              >
+                New Appointments
+                {appointmentCount > 0 && (
+                  <span className={`appointment-count ${hasNewAppointments ? 'new' : ''}`}>
+                    {appointmentCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Field Executive Button - Show immediately based on current state */}
+              {isFieldExec && (
+                <button
+                  onClick={handleFieldExecutivePage}
+                  className="field-executive-btn"
+                >
+                 Daily Report
+                </button>
+              )}
+
+              <button
+                onClick={handleFollowUpsClick}
+                className="follow-ups-btn"
+              >
+                Follow Ups
+                {followUpCount > 0 && (
+                  <span className="follow-up-count">
+                    {followUpCount}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* User Avatar positioned slightly lower */}
+            <div className="user-avatar-container">
+              <button
+                className="user-avatar"
+                onClick={() => setShowProfileModal(true)}
+              >
+                {getInitials(userName)}
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Month/Year Picker */}
@@ -655,14 +716,14 @@ const ExecutiveDashboard = () => {
             </div>
           </div>
           <div className="chart-container">
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={isMobile ? 250 : 300}>
               <PieChart>
                 <Pie
                   data={pieData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
+                  innerRadius={isMobile ? 40 : 60}
+                  outerRadius={isMobile ? 80 : 100}
                   label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                   dataKey="value"
                 >
@@ -675,8 +736,8 @@ const ExecutiveDashboard = () => {
                     data={[{ name: 'Extra', value: achieved - target }, { name: 'Remainder', value: achieved }]}
                     cx="50%"
                     cy="50%"
-                    innerRadius={110}
-                    outerRadius={120}
+                    innerRadius={isMobile ? 90 : 110}
+                    outerRadius={isMobile ? 100 : 120}
                     dataKey="value"
                   >
                     <Cell fill="#2196F3" />
@@ -696,7 +757,7 @@ const ExecutiveDashboard = () => {
             <h3>🛠 Services Status</h3>
           </div>
           <div className="chart-container">
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={isMobile ? 200 : 250}>
               <PieChart>
                 <Pie
                   data={[
@@ -706,7 +767,7 @@ const ExecutiveDashboard = () => {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  outerRadius={70}
+                  outerRadius={isMobile ? 60 : 70}
                   dataKey="value"
                   onClick={handleServiceSliceClick}
                 >
@@ -730,14 +791,14 @@ const ExecutiveDashboard = () => {
             <h3>💳 Payment Status</h3>
           </div>
           <div className="chart-container">
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
               <PieChart>
                 <Pie
                   data={paymentData}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  outerRadius={70}
+                  outerRadius={isMobile ? 60 : 70}
                   dataKey="value"
                   onClick={handlePaymentSliceClick}
                 >
@@ -764,13 +825,13 @@ const ExecutiveDashboard = () => {
           <div className="prospect-chart">
             <h3>Total Prospects: {prospectData.count}</h3>
             {hasProspectData ? (
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
                 <PieChart>
                   <Pie
                     data={prospectData.byStatus}
                     cx="50%"
                     cy="50%"
-                    outerRadius={70}
+                    outerRadius={isMobile ? 60 : 70}
                     fill="#8884d8"
                     dataKey="value"
                     label
@@ -803,7 +864,7 @@ const ExecutiveDashboard = () => {
       )}
 
       {/* CSS Styles */}
-      <style>{`
+      <style jsx>{`
         :root {
           --primary: #1976d2;
           --primary-dark: #125ea3;
@@ -821,8 +882,6 @@ const ExecutiveDashboard = () => {
           --shadow: 0 4px 12px rgba(0,0,0,0.08);
           --radius: 12px;
           --transition: all 0.3s ease;
-          --text-color: #333333;
-          --accent-color: #007bff;
         }
 
         * {
@@ -838,13 +897,14 @@ const ExecutiveDashboard = () => {
           display: flex;
           flex-direction: column;
           gap: 1.5rem;
+          overflow-x: hidden;
         }
 
         /* Header Styles */
         .dashboard-header {
           display: flex;
           justify-content: space-between;
-          align-items: center;
+          align-items: flex-start;
           flex-wrap: wrap;
           gap: 1rem;
           padding: 0.5rem 0;
@@ -853,64 +913,85 @@ const ExecutiveDashboard = () => {
 
         .header-left {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           gap: 1rem;
+          flex: 1;
         }
 
-        .header-left h2 {
+        /* Name and Calendar Container */
+        .name-calendar-container {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          align-items: flex-start;
+        }
+
+        .executive-name {
           font-size: 1.5rem;
           font-weight: 600;
           color: var(--text);
+          word-break: break-word;
+          margin: 0;
+          line-height: 1.2;
         }
 
+        /* Calendar Button */
         .calendar-btn {
           display: flex;
           align-items: center;
           gap: 0.5rem;
-          background: none;
-          border: 1px solid var(--border);
+          background: linear-gradient(135deg, #ff6b6b, #ffa726);
+          border: none;
           border-radius: var(--radius);
           padding: 0.5rem 1rem;
           cursor: pointer;
           transition: var(--transition);
-          color:red;
+          white-space: nowrap;
+          color: white;
+          font-weight: 500;
+          box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
         }
 
         .calendar-btn:hover {
-          background-color: rgba(0, 0, 0, 0.05);
+          background: linear-gradient(135deg, #ff5252, #ff9800);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+        }
+
+        .calendar-icon {
+          font-size: 1.1rem;
         }
 
         .date-display {
           font-size: 0.9rem;
-        }
-
-        .mobile-menu-btn {
-          display: none;
-          background: none;
-          border: none;
-          font-size: 1.5rem;
-          cursor: pointer;
-          padding: 0.5rem;
+          font-weight: 500;
         }
 
         .header-right {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           gap: 1rem;
-        }
-
-        .header-right.mobile-open {
-          display: flex;
+          justify-content: flex-end;
+          flex: 1;
         }
 
         .action-buttons {
           display: flex;
           gap: 0.75rem;
+          align-items: center;
         }
 
-        .appointments-btn, .follow-ups-btn, .field-executive-btn {
+        /* User Avatar Container - Positioned slightly lower */
+        .user-avatar-container {
+          display: flex;
+          align-items: center;
+          margin-top: 0.5rem;
+        }
+
+        /* New Appointments Button - DEEP BLUE COLOR */
+        .appointments-btn {
           position: relative;
-          padding: 0.75rem 1.25rem;
+          padding: 0.75rem 1.5rem;
           border-radius: var(--radius);
           border: none;
           font-size: 0.9rem;
@@ -919,29 +1000,74 @@ const ExecutiveDashboard = () => {
           transition: var(--transition);
           display: flex;
           align-items: center;
+          white-space: nowrap;
+          background: linear-gradient(135deg, #1565C0, #0D47A1);
+          color: white;
+          box-shadow: 0 4px 15px rgba(21, 101, 192, 0.4);
+          min-width: 160px;
+          justify-content: center;
         }
 
-        .appointments-btn {
-          background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-          color: #fff;
+        .appointments-btn:hover {
+          background: linear-gradient(135deg, #0D47A1, #082E63);
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(21, 101, 192, 0.5);
         }
 
+        /* Follow Ups Button - PURPLE COLOR */
         .follow-ups-btn {
-          background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
-          color: #fff;
+          position: relative;
+          padding: 0.75rem 1.5rem;
+          border-radius: var(--radius);
+          border: none;
+          font-size: 0.9rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: var(--transition);
+          display: flex;
+          align-items: center;
+          white-space: nowrap;
+          background: linear-gradient(135deg, #7B1FA2, #4A148C);
+          color: white;
+          box-shadow: 0 4px 15px rgba(123, 31, 162, 0.4);
+          min-width: 140px;
+          justify-content: center;
         }
 
+        .follow-ups-btn:hover {
+          background: linear-gradient(135deg, #6A1B9A, #38006B);
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(123, 31, 162, 0.5);
+        }
+
+        /* Field Executive Button - TEAL COLOR */
         .field-executive-btn {
-          background: linear-gradient(135deg, #9C27B0, #7B1FA2);
-          color: #fff;
+          position: relative;
+          padding: 0.75rem 1.5rem;
+          border-radius: var(--radius);
+          border: none;
+          font-size: 0.9rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: var(--transition);
+          display: flex;
+          align-items: center;
+          white-space: nowrap;
+          background: linear-gradient(135deg, #00796B, #004D40);
+          color: white;
+          box-shadow: 0 4px 15px rgba(0, 121, 107, 0.4);
+          min-width: 150px;
+          justify-content: center;
         }
 
         .field-executive-btn:hover {
-          background: linear-gradient(135deg, #7B1FA2, #6A1B9A);
+          background: linear-gradient(135deg, #00695C, #00332D);
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(0, 121, 107, 0.5);
         }
 
         .appointment-count, .follow-up-count {
-          background-color: rgba(255, 255, 255, 0.2);
+          background-color: rgba(255, 255, 255, 0.3);
           color: #fff;
           border-radius: 50%;
           width: 1.5rem;
@@ -952,14 +1078,17 @@ const ExecutiveDashboard = () => {
           font-size: 0.75rem;
           font-weight: bold;
           margin-left: 0.5rem;
+          border: 2px solid rgba(255, 255, 255, 0.5);
         }
 
         .appointment-count.new {
           animation: blink 1s infinite;
+          background-color: #ffeb3b;
+          color: #333;
         }
 
         .user-avatar {
-          background-color: var(--primary);
+          background: linear-gradient(135deg, #1976d2, #125ea3);
           width: 3rem;
           height: 3rem;
           border-radius: 50%;
@@ -971,10 +1100,13 @@ const ExecutiveDashboard = () => {
           cursor: pointer;
           border: none;
           transition: var(--transition);
+          flex-shrink: 0;
+          box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
         }
 
         .user-avatar:hover {
           transform: scale(1.05);
+          box-shadow: 0 6px 16px rgba(25, 118, 210, 0.4);
         }
 
         /* Main Content Styles */
@@ -993,6 +1125,7 @@ const ExecutiveDashboard = () => {
           display: flex;
           flex-direction: column;
           gap: 1rem;
+          overflow: hidden;
         }
 
         .target-card {
@@ -1015,11 +1148,14 @@ const ExecutiveDashboard = () => {
           display: flex;
           justify-content: space-between;
           align-items: center;
+          flex-wrap: wrap;
+          gap: 0.5rem;
         }
 
         .card-header h3 {
           font-size: 1.25rem;
           font-weight: 600;
+          color: var(--text);
         }
 
         .target-achieved {
@@ -1030,7 +1166,7 @@ const ExecutiveDashboard = () => {
 
         .target-summary {
           display: flex;
-          flex-direction: column;
+          flexDirection: column;
           gap: 0.5rem;
           background: rgba(0, 0, 0, 0.02);
           border-radius: var(--radius);
@@ -1049,7 +1185,7 @@ const ExecutiveDashboard = () => {
 
         .chart-container {
           width: 100%;
-          height: 300px;
+          min-height: 200px;
         }
 
         .card-footer {
@@ -1059,18 +1195,21 @@ const ExecutiveDashboard = () => {
           border-top: 1px solid var(--border);
           font-weight: 600;
           font-size: 0.9rem;
+          flex-wrap: wrap;
+          gap: 0.5rem;
         }
 
         /* Prospects Chart Styles */
         .prospect-chart {
           flex: 1;
-          width: 100%;
+          width: '100%';
         }
 
         .prospect-chart h3 {
           margin-bottom: 1rem;
           font-size: 1.1rem;
           color: var(--text);
+          text-align: center;
         }
 
         /* Congratulations Popup */
@@ -1089,6 +1228,7 @@ const ExecutiveDashboard = () => {
           align-items: center;
           gap: 0.75rem;
           max-width: 90%;
+          width: auto;
         }
 
         .congrats-icon {
@@ -1119,7 +1259,7 @@ const ExecutiveDashboard = () => {
           font-size: 1rem;
         }
 
-        /* Month Picker Overlay */
+        /* Month Picker Overlay - Colorful */
         .month-picker-overlay {
           position: fixed;
           top: 0;
@@ -1134,34 +1274,39 @@ const ExecutiveDashboard = () => {
         }
 
         .month-picker {
-          background-color: var(--card-bg);
-          color: var(--text-color);
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           border-radius: var(--radius);
           padding: 1.5rem;
           box-shadow: var(--shadow);
           width: 300px;
           max-width: 90%;
+          color: white;
         }
 
         .month-picker-header {
           display: flex;
           justify-content: space-between;
           margin-bottom: 1rem;
+          gap: 0.5rem;
         }
 
         .month-select,
         .year-select {
           padding: 0.5rem;
-          border-radius: 4px;
-          border: 1px solid var(--border);
-          background-color: #fff;
-          color: #000;
+          border-radius: 8px;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          background-color: rgba(255, 255, 255, 0.9);
+          color: #333;
           flex: 1;
           font-size: 0.9rem;
+          font-weight: 500;
         }
 
-        .month-select {
-          margin-right: 0.5rem;
+        .month-select:focus,
+        .year-select:focus {
+          outline: none;
+          border-color: #ffa726;
+          background-color: white;
         }
 
         .month-picker-footer {
@@ -1171,45 +1316,36 @@ const ExecutiveDashboard = () => {
           margin-top: 1rem;
         }
 
-        .month-picker-footer button {
-          padding: 0.4rem 0.8rem;
-          background-color: var(--button-bg);
-          color: var(--button-text);
-          border: 1px solid var(--border);
-          border-radius: 4px;
-          cursor: pointer;
-        }
-
-        .month-picker-footer button:hover {
-          background-color: var(--accent-color);
-          color: #fff;
-        }
-
         .cancel-btn {
           padding: 0.5rem 1rem;
-          border-radius: 4px;
-          border: 1px solid var(--border);
-          background: var(--card-bg);
+          border-radius: 8px;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          background: transparent;
+          color: white;
           cursor: pointer;
           transition: var(--transition);
+          font-weight: 500;
         }
 
         .cancel-btn:hover {
-          background-color: rgba(0, 0, 0, 0.05);
+          background: rgba(255, 255, 255, 0.1);
+          border-color: rgba(255, 255, 255, 0.5);
         }
 
         .apply-btn, .save-btn {
           padding: 0.5rem 1rem;
-          border-radius: 4px;
+          border-radius: 8px;
           border: none;
-          background: var(--primary);
+          background: #ffa726;
           color: white;
           cursor: pointer;
           transition: var(--transition);
+          font-weight: 500;
         }
 
         .apply-btn:hover, .save-btn:hover {
-          background: var(--primary-dark);
+          background: #ff9800;
+          transform: translateY(-1px);
         }
 
         /* Modal Styles */
@@ -1232,59 +1368,8 @@ const ExecutiveDashboard = () => {
           border-radius: var(--radius);
           width: 90%;
           max-width: 400px;
-        }
-
-        .modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1rem;
-        }
-
-        .close-btn {
-          background: none;
-          border: none;
-          font-size: 1.5rem;
-          cursor: pointer;
-        }
-
-        .form-group {
-          margin-bottom: 1rem;
-        }
-
-        .form-group label {
-          display: block;
-          margin-bottom: 0.5rem;
-          font-weight: 500;
-        }
-
-        .form-group input, 
-        .form-group select {
-          width: 100%;
-          padding: 0.75rem;
-          border-radius: 4px;
-          border: 1px solid var(--border);
-          font-size: 1rem;
-        }
-
-        .checkbox-group {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .form-actions {
-          display: flex;
-          gap: 0.5rem;
-          margin-top: 1.5rem;
-        }
-
-        .form-actions button {
-          flex: 1;
-          padding: 0.75rem;
-          border-radius: 4px;
-          cursor: pointer;
-          font-weight: 600;
+          max-height: 90vh;
+          overflow-y: auto;
         }
 
         /* Animations */
@@ -1294,7 +1379,7 @@ const ExecutiveDashboard = () => {
           100% { opacity: 1; }
         }
 
-        /* Responsive adjustments */
+        /* Mobile Responsive Styles */
         @media (max-width: 1024px) {
           .services-card {
             grid-column: span 6;
@@ -1307,26 +1392,63 @@ const ExecutiveDashboard = () => {
         }
 
         @media (max-width: 768px) {
-          .dashboard-header {
-            flex-direction: column;
-            align-items: flex-start;
+          .dashboard-container {
+            padding: 0.5rem;
             gap: 1rem;
           }
 
+          .dashboard-header {
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 0.5rem;
+            padding: 0.5rem 0;
+          }
+
+          .header-left {
+            flex: 1;
+            justify-content: flex-start;
+          }
+
+          .name-calendar-container {
+            gap: 0.25rem;
+          }
+
+          .executive-name {
+            font-size: 1.2rem;
+            text-align: left;
+          }
+
+          .calendar-btn {
+            padding: 0.5rem 0.8rem;
+            font-size: 0.8rem;
+          }
+
+          .date-display {
+            font-size: 0.8rem;
+          }
+
+          /* Mobile Menu Button display for mobile */
           .mobile-menu-btn {
-            display: block;
-            position: absolute;
-            top: 0.5rem;
-            right: 0.5rem;
+            display: flex !important;
+          }
+
+          .mobile-menu-wrapper {
+            padding-top: 3.5rem !important;
           }
 
           .header-right {
             display: none;
-            width: 100%;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
             flex-direction: column;
             gap: 1rem;
-            padding-top: 1rem;
+            padding: 1rem;
             border-top: 1px solid var(--border);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 1000;
           }
 
           .header-right.mobile-open {
@@ -1336,30 +1458,155 @@ const ExecutiveDashboard = () => {
           .action-buttons {
             flex-direction: column;
             width: 100%;
+            gap: 0.5rem;
+          }
+
+          .appointments-btn, 
+          .follow-ups-btn, 
+          .field-executive-btn {
+            width: 100%;
+            justify-content: center;
+            font-size: 14px;
+            padding: 1rem;
+          }
+
+          .user-avatar-container {
+            align-self: center;
+            margin-top: 0;
+          }
+
+          .user-avatar {
+            width: 2.5rem;
+            height: 2.5rem;
+            font-size: 1rem;
           }
 
           .dashboard-content {
             grid-template-columns: 1fr;
+            gap: 1rem;
           }
 
-          .services-card,
-          .payments-card,
-          .prospects-card {
-            grid-column: 1 / -1;
+          .dashboard-card {
+            grid-column: 1 / -1 !important;
+            padding: 1rem;
+          }
+
+          .card-header h3 {
+            font-size: 1.1rem;
+          }
+
+          .card-footer {
+            font-size: 0.8rem;
+            flex-direction: column;
+            text-align: center;
+          }
+
+          .target-summary {
+            padding: 0.75rem;
+          }
+
+          .summary-item {
+            font-size: 0.9rem;
+          }
+
+          .chart-container {
+            height: 250px !important;
           }
         }
 
         @media (max-width: 480px) {
-          .prospects-table {
-            display: block;
-            overflow-x: auto;
-            white-space: nowrap;
+          .dashboard-container {
+            padding: 0.25rem;
           }
 
-          .prospects-table th,
-          .prospects-table td {
+          .header-left {
+            gap: 0.5rem;
+          }
+
+          .executive-name {
+            font-size: 1.1rem;
+          }
+
+          .calendar-btn {
+            padding: 0.4rem 0.7rem;
+            font-size: 0.75rem;
+          }
+
+          .date-display {
+            font-size: 0.75rem;
+          }
+
+          .dashboard-card {
+            padding: 0.75rem;
+          }
+
+          .card-header h3 {
+            font-size: 1rem;
+          }
+
+          .chart-container {
+            height: 220px !important;
+          }
+
+          .appointments-btn, 
+          .follow-ups-btn, 
+          .field-executive-btn {
+            font-size: 12px;
+            padding: 0.8rem;
+          }
+
+          .appointment-count, 
+          .follow-up-count {
+            width: 1.25rem;
+            height: 1.25rem;
+            font-size: 0.7rem;
+          }
+        }
+
+        @media (max-width: 360px) {
+          .executive-name {
+            font-size: 1rem;
+          }
+
+          .calendar-btn {
+            padding: 0.35rem 0.6rem;
+            font-size: 0.7rem;
+          }
+
+          .dashboard-card {
             padding: 0.5rem;
-            font-size: 0.85rem;
+          }
+
+          .chart-container {
+            height: 200px !important;
+          }
+        }
+
+        /* Chart text visibility fixes */
+        .recharts-legend-wrapper {
+          font-size: 12px;
+        }
+
+        .recharts-pie-label-text {
+          font-size: 10px;
+          font-weight: 600;
+        }
+
+        .recharts-tooltip-wrapper {
+          font-size: 12px;
+        }
+
+        @media (max-width: 768px) {
+          .recharts-legend-wrapper {
+            font-size: 10px;
+          }
+
+          .recharts-pie-label-text {
+            font-size: 8px;
+          }
+
+          .recharts-tooltip-wrapper {
+            font-size: 10px;
           }
         }
       `}</style>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { format } from "date-fns";
-import { useNavigate } from "react-router-dom";
+
 import { DESIGN_REQUESTS, DESIGNER_NAMES } from "../utils/endpoints";
 
 const ViewDesignRequests = () => {
@@ -15,9 +15,42 @@ const ViewDesignRequests = () => {
   const [designers, setDesigners] = useState([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [currentDesignId, setCurrentDesignId] = useState(null);
-  const navigate = useNavigate();
+  const [toast, setToast] = useState({ show: false, message: '', type: '' });
+  // New state for month and year filters
+  const [selectedMonth, setSelectedMonth] = useState("");
+  const [selectedYear, setSelectedYear] = useState("");
+  
+  // Toast function
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: '' }), 3000);
+  };
 
-  // In your useEffect where you fetch data:
+  // Get all 12 months
+  const getAllMonths = () => {
+    return Array.from({ length: 12 }, (_, i) => i + 1); // [1, 2, 3, ..., 12]
+  };
+
+  // Get years from 2024 to 2030
+  const getAllYears = () => {
+    return Array.from({ length: 7 }, (_, i) => 2024 + i); // [2024, 2025, 2026, 2027, 2028, 2029, 2030]
+  };
+
+  // Get available years from data for reference
+  const getAvailableYearsFromData = (designs) => {
+    const yearsSet = new Set();
+    
+    designs.forEach(design => {
+      if (design.requestDate) {
+        const date = new Date(design.requestDate);
+        const year = date.getFullYear();
+        yearsSet.add(year);
+      }
+    });
+    
+    return Array.from(yearsSet).sort((a, b) => b - a);
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -25,25 +58,65 @@ const ViewDesignRequests = () => {
         const [requestsRes, designersRes] = await Promise.all([
           axios.get(DESIGN_REQUESTS),
           axios.get(DESIGNER_NAMES),
-
-          // axios.get('/api/designers?active=true') // Only fetch active designers
         ]);
 
-        // Process designers data according to your API response
-        const designersData = Array.isArray(designersRes.data.data)
-          ? designersRes.data.data.map((designer) => ({
+        console.log("=== DEBUG: FETCHING LATEST DATA ===");
+        console.log("Designs count:", requestsRes.data.length);
+
+        // Check specific design that was just assigned
+        const recentlyAssigned = requestsRes.data.find(d =>
+          d._id === '68e78ee3e25a17136c84ed73' // Use the ID from your logs
+        );
+        if (recentlyAssigned) {
+          console.log("Recently assigned design:", {
+            id: recentlyAssigned._id,
+            assignedDesigner: recentlyAssigned.assignedDesigner,
+            assignedDesignerName: recentlyAssigned.assignedDesignerName,
+            status: recentlyAssigned.status
+          });
+        }
+
+        // Process designers data - FIXED VERSION
+        let designersData = [];
+
+        // Your backend returns { success: true, data: [...] }
+        if (designersRes.data && designersRes.data.success && Array.isArray(designersRes.data.data)) {
+          designersData = designersRes.data.data.map((designer) => ({
             _id: designer._id,
             name: designer.name,
-            username: designer.username || "", // Handle optional username
-          }))
-          : [];
+            username: designer.username || "",
+          }));
+        } else if (Array.isArray(designersRes.data)) {
+          // Fallback if it's directly an array
+          designersData = designersRes.data.map((designer) => ({
+            _id: designer._id,
+            name: designer.name,
+            username: designer.username || "",
+          }));
+        }
+
+        console.log("Designers available:", designersData.length);
+        console.log("Designers list:", designersData);
+
+        // Check if assigned designers exist in our list
+        const assignedDesigns = requestsRes.data.filter(d => d.assignedDesigner);
+        assignedDesigns.forEach(design => {
+          const designer = designersData.find(d => d._id === design.assignedDesigner);
+          console.log(`Design ${design._id}:`, {
+            assignedDesigner: design.assignedDesigner,
+            assignedDesignerName: design.assignedDesignerName,
+            designerFound: !!designer,
+            designerName: designer?.name
+          });
+        });
 
         setDesigns(requestsRes.data);
         setDesigners(designersData);
+
       } catch (err) {
         console.error("Fetch error:", err);
         setError(err.message);
-        setDesigners([]); // Set empty array on error
+        setDesigners([]);
       } finally {
         setLoading(false);
       }
@@ -56,37 +129,48 @@ const ViewDesignRequests = () => {
       await axios.patch(`${DESIGN_REQUESTS}/${id}`, {
         status: newStatus,
       });
-      setRefresh(!refresh); // Refresh data after update
+      setRefresh(!refresh);
+      showToast("Status updated successfully!", "success");
     } catch (err) {
       console.error("Error updating status:", err);
-      alert("Failed to update status. Please try again.");
+      showToast("Failed to update status. Please try again.", "error");
     }
   };
+
   const handleAssignDesigner = async () => {
     if (!selectedDesigner || !currentDesignId) {
-      alert("Please select a designer");
+      showToast("Please select a designer", "error");
       return;
     }
-  
+
     try {
-      // eslint-disable-next-line no-unused-vars
+      const selectedDesignerObj = designers.find(d => d._id === selectedDesigner);
+
+      console.log("=== DEBUG: ASSIGNING DESIGNER ===");
+      console.log("Design ID:", currentDesignId);
+      console.log("Selected Designer:", selectedDesignerObj);
+
       const response = await axios.patch(
         `${DESIGN_REQUESTS}/${currentDesignId}`,
         {
           assignedDesigner: selectedDesigner,
-          assignedDesignerName: designers.find(d => d._id === selectedDesigner)?.name,
+          assignedDesignerName: selectedDesignerObj?.name,
           status: "in-progress",
         }
       );
-  
-      setRefresh(!refresh);
+
+      console.log("Assignment response:", response.data);
+
+      // Force immediate refresh
+      setRefresh(prev => !prev);
       setShowAssignModal(false);
-      alert("Designer assigned successfully!");
-      
+      setSelectedDesigner("");
+      showToast("Designer assigned successfully!", "success");
+
     } catch (err) {
       console.error("Full error:", err);
       console.error("Response data:", err.response?.data);
-      alert(`Assignment failed: ${err.response?.data?.message || err.message}`);
+      showToast(`Assignment failed: ${err.response?.data?.message || err.message}`, "error");
     }
   };
 
@@ -97,17 +181,79 @@ const ViewDesignRequests = () => {
       design.contactPerson?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       design.phoneNumber?.includes(searchTerm) ||
       design.requirements?.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesFilter && matchesSearch;
+    
+    // Month and year filtering
+    let matchesDate = true;
+    if (design.requestDate) {
+      const designDate = new Date(design.requestDate);
+      const designMonth = designDate.getMonth() + 1;
+      const designYear = designDate.getFullYear();
+      
+      if (selectedMonth && selectedMonth !== "") {
+        matchesDate = matchesDate && designMonth === parseInt(selectedMonth);
+      }
+      if (selectedYear && selectedYear !== "") {
+        matchesDate = matchesDate && designYear === parseInt(selectedYear);
+      }
+    } else {
+      // If no request date and filters are applied, exclude it
+      matchesDate = !selectedMonth && !selectedYear;
+    }
+    
+    return matchesFilter && matchesSearch && matchesDate;
   });
-
-  const handleViewDetails = (designId) => {
-    navigate(`/admin-dashboard/design-details/${designId}`);
-  };
 
   const openAssignModal = (designId) => {
     setCurrentDesignId(designId);
     setShowAssignModal(true);
   };
+
+  // Function to get assigned designer name
+  const getAssignedDesignerName = (design) => {
+    // Priority 1: Use the stored designer name (this should be set when assigning)
+    if (design.assignedDesignerName) {
+      return design.assignedDesignerName;
+    }
+
+    // Priority 2: Look up designer by ID from our designers list
+    if (design.assignedDesigner && designers.length > 0) {
+      const designer = designers.find(d => {
+        // Handle both string and ObjectId comparisons
+        return d._id === design.assignedDesigner ||
+          d._id?.toString() === design.assignedDesigner?.toString() ||
+          d._id === design.assignedDesigner?._id;
+      });
+
+      if (designer) {
+        return designer.name;
+      }
+
+      // Designer ID exists but not found in our list
+      console.warn(`Designer with ID ${design.assignedDesigner} not found in designers list`);
+      return `ID: ${design.assignedDesigner}`;
+    }
+
+    // No designer assigned
+    return "Unassigned";
+  };
+
+  // Reset date filters
+  const resetDateFilters = () => {
+    setSelectedMonth("");
+    setSelectedYear("");
+  };
+
+  // Get all months and years
+  const months = getAllMonths();
+  const years = getAllYears();
+  // eslint-disable-next-line no-unused-vars
+  const availableYearsFromData = getAvailableYearsFromData(designs);
+
+  // Calculate stats for filtered data
+  const totalRequests = filteredDesigns.length;
+  const pendingRequests = filteredDesigns.filter((d) => d.status === "pending").length;
+  const inProgressRequests = filteredDesigns.filter((d) => d.status === "in-progress").length;
+  const completedRequests = filteredDesigns.filter((d) => d.status === "completed").length;
 
   if (loading)
     return (
@@ -129,6 +275,16 @@ const ViewDesignRequests = () => {
 
   return (
     <div style={styles.container}>
+      {/* Toast Component */}
+      {toast.show && (
+        <div style={{
+          ...styles.toast,
+          backgroundColor: toast.type === 'success' ? '#4CAF50' : '#f44336'
+        }}>
+          {toast.message}
+        </div>
+      )}
+
       {/* Assign Designer Modal */}
       {showAssignModal && (
         <div style={styles.modalOverlay}>
@@ -145,7 +301,7 @@ const ViewDesignRequests = () => {
               ) : (
                 designers.map((designer) => (
                   <option key={designer._id} value={designer._id}>
-                    {designer.name} ({designer.username})
+                    {designer.name} {designer.username ? `(${designer.username})` : ''}
                   </option>
                 ))
               )}
@@ -200,103 +356,148 @@ const ViewDesignRequests = () => {
         </div>
       </div>
 
-      <div style={styles.tableWrapper}>
-      <table style={styles.table}>
-  <thead>
-    <tr style={styles.tableHeadRow}>
-      <th style={{ ...styles.th, width: "12%" }}>Executive</th>
-      <th style={{ ...styles.th, width: "12%" }}>Business</th>
-      <th style={{ ...styles.th, width: "10%" }}>Contact</th>
-      <th style={{ ...styles.th, width: "10%" }}>Phone</th>
-      <th style={{ ...styles.th, width: "15%" }}>Requirements</th>
-      <th style={{ ...styles.th, width: "10%" }}>Request Date</th>
-      <th style={{ ...styles.th, width: "10%" }}>Status</th>
-      <th style={{ ...styles.th, width: "10%" }}>Assigned To</th>
-      <th style={{ ...styles.th, width: "11%" }}>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {filteredDesigns.length > 0 ? (
-      filteredDesigns.map((design) => (
-        <tr key={design._id} style={styles.tableRow}>
-          <td style={styles.td}>{design.executive || "N/A"}</td>
-          <td style={styles.td}>{design.businessName || "N/A"}</td>
-          <td style={styles.td}>{design.contactPerson || "N/A"}</td>
-          <td style={styles.td}>{design.phoneNumber || "N/A"}</td>
-          <td style={styles.td}>
-            <div style={styles.requirementsCell}>
-              {design.requirements || "N/A"}
-            </div>
-          </td>
-          <td style={styles.td}>
-            {design.requestDate
-              ? format(new Date(design.requestDate), "PP")
-              : "N/A"}
-          </td>
-          <td style={styles.td}>
+      {/* Date Filters Section */}
+      <div style={styles.dateFilters}>
+        <h3 style={styles.dateFiltersTitle}>Filter by Date</h3>
+        <div style={styles.dateFilterControls}>
+          <div style={styles.dateFilterGroup}>
+            <label style={styles.dateFilterLabel}>Month:</label>
             <select
-              value={design.status || "pending"}
-              onChange={(e) => updateStatus(design._id, e.target.value)}
-              style={getStatusStyle(design.status)}
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              style={styles.dateFilterSelect}
             >
-              <option value="pending">Pending</option>
-              <option value="in-progress">In Progress</option>
-              <option value="completed">Completed</option>
+              <option value="">All Months</option>
+              {months.map(month => (
+                <option key={month} value={month}>
+                  {new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}
+                </option>
+              ))}
             </select>
-          </td>
-          <td style={styles.td}>
-            {design.assignedDesigner
-              ? designers.find((d) => d._id === design.assignedDesigner)
-                  ?.name || "Unknown"
-              : "Unassigned"}
-          </td>
-          <td style={styles.td}>
-            <div style={styles.actionButtons}>
-              <button
-                style={styles.viewButton}
-                onClick={() => handleViewDetails(design._id)}
-              >
-                View
-              </button>
-              <button
-                style={styles.assignButton}
-                onClick={() => openAssignModal(design._id)}
-                disabled={design.status === "completed"}
-              >
-                Assign
-              </button>
-            </div>
-          </td>
-        </tr>
-      ))
-    ) : (
-      <tr>
-        <td colSpan="10" style={styles.noResults}>
-          No design requests found matching your criteria
-        </td>
-      </tr>
-    )}
-  </tbody>
-</table>
-      </div>
+          </div>
 
+          <div style={styles.dateFilterGroup}>
+            <label style={styles.dateFilterLabel}>Year:</label>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              style={styles.dateFilterSelect}
+            >
+              <option value="">All Years</option>
+              {years.map(year => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {(selectedMonth || selectedYear) && (
+            <button
+              style={styles.resetDateButton}
+              onClick={resetDateFilters}
+            >
+              Clear Date Filters
+            </button>
+          )}
+        </div>
+      </div>
+      
+      {/* Stats Section */}
       <div style={styles.stats}>
         <div style={styles.statCard}>
           <h3>Total Requests</h3>
-          <p>{designs.length}</p>
+          <p>{totalRequests}</p>
         </div>
         <div style={styles.statCard}>
           <h3>Pending</h3>
-          <p>{designs.filter((d) => d.status === "pending").length}</p>
+          <p>{pendingRequests}</p>
         </div>
         <div style={styles.statCard}>
           <h3>In Progress</h3>
-          <p>{designs.filter((d) => d.status === "in-progress").length}</p>
+          <p>{inProgressRequests}</p>
         </div>
         <div style={styles.statCard}>
           <h3>Completed</h3>
-          <p>{designs.filter((d) => d.status === "completed").length}</p>
+          <p>{completedRequests}</p>
         </div>
+      </div>
+
+      <div style={styles.tableWrapper}>
+        <table style={styles.table}>
+          <thead>
+            <tr style={styles.tableHeadRow}>
+              <th style={{ ...styles.th, width: "12%" }}>Executive</th>
+              <th style={{ ...styles.th, width: "12%" }}>Business</th>
+              <th style={{ ...styles.th, width: "10%" }}>Contact</th>
+              <th style={{ ...styles.th, width: "10%" }}>Phone</th>
+              <th style={{ ...styles.th, width: "15%" }}>Requirements</th>
+              <th style={{ ...styles.th, width: "10%" }}>Request Date</th>
+              <th style={{ ...styles.th, width: "10%" }}>Status</th>
+              <th style={{ ...styles.th, width: "10%" }}>Assigned To</th>
+              <th style={{ ...styles.th, width: "11%" }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredDesigns.length > 0 ? (
+              filteredDesigns.map((design) => (
+                <tr key={design._id} style={styles.tableRow}>
+                  <td style={styles.td}>{design.executive || "N/A"}</td>
+                  <td style={styles.td}>{design.businessName || "N/A"}</td>
+                  <td style={styles.td}>{design.contactPerson || "N/A"}</td>
+                  <td style={styles.td}>{design.phoneNumber || "N/A"}</td>
+                  <td style={styles.td}>
+                    <div style={styles.requirementsCell}>
+                      {design.requirements || "N/A"}
+                    </div>
+                  </td>
+                  <td style={styles.td}>
+                    {design.requestDate
+                      ? format(new Date(design.requestDate), "PP")
+                      : "N/A"}
+                  </td>
+                  <td style={styles.td}>
+                    {design.status === "completed" ? (
+                      <div style={getStatusStyle(design.status)}>
+                        Completed
+                      </div>
+                    ) : (
+                      <select
+                        value={design.status || "pending"}
+                        onChange={(e) => updateStatus(design._id, e.target.value)}
+                        style={getStatusStyle(design.status)}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="in-progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                    )}
+                  </td>
+                  <td style={styles.td}>
+                    {getAssignedDesignerName(design)}
+                  </td>
+                  <td style={styles.td}>
+                    <div style={styles.actionButtons}>
+                      <button
+                        style={styles.assignButton}
+                        onClick={() => openAssignModal(design._id)}
+                        disabled={design.status === "completed"}
+                      >
+                        Assign
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="9" style={styles.noResults}>
+                  No design requests found matching your criteria
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -308,7 +509,7 @@ const getStatusStyle = (status) => ({
   borderRadius: "20px",
   border: "none",
   fontWeight: "500",
-  cursor: "pointer",
+  cursor: status === "completed" ? "default" : "pointer",
   backgroundColor:
     status === "completed"
       ? "#d4edda"
@@ -321,6 +522,9 @@ const getStatusStyle = (status) => ({
       : status === "in-progress"
         ? "#856404"
         : "#721c24",
+  width: "100%",
+  textAlign: "center",
+  display: "inline-block",
 });
 
 const styles = {
@@ -429,70 +633,46 @@ const styles = {
     fontSize: "14px",
     minWidth: "150px",
   },
-  tableWrapper: {
-    overflowX: "auto",
-    borderRadius: "6px",
-    border: "1px solid #eee",
+  // New styles for date filters
+  dateFilters: {
     marginBottom: "24px",
-    width: "100%",
+    padding: "16px",
+    backgroundColor: "#f8f9fa",
+    borderRadius: "6px",
+    border: "1px solid #e9ecef",
   },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    fontSize: "14px",
-    tableLayout: "fixed", // Ensures consistent column widths
+  dateFiltersTitle: {
+    margin: "0 0 12px 0",
+    fontSize: "16px",
+    color: "#495057",
+    fontWeight: "600",
   },
-  th: {
-    padding: "12px 16px",
-    textAlign: "left",
-    fontWeight: "500",
-    position: "sticky",
-    top: 0,
-    backgroundColor: "#003366",
-    color: "white",
-    whiteSpace: "nowrap",
-  },
-  td: {
-    padding: "12px 16px",
-    borderBottom: "1px solid #eee",
-    verticalAlign: "middle",
-    wordWrap: "break-word", // Allows text to wrap within cells
-  },
-  requirementsCell: {
-    maxWidth: "200px",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    display: "block", // Helps with text overflow
-  },
-
-  noResults: {
-    padding: "20px",
-    textAlign: "center",
-    color: "#777",
-    fontStyle: "italic",
-  },
-  actionButtons: {
+  dateFilterControls: {
     display: "flex",
-    gap: "8px",
+    gap: "16px",
+    alignItems: "center",
     flexWrap: "wrap",
   },
-  viewButton: {
-    padding: "6px 12px",
-    backgroundColor: "#3498db",
-    color: "white",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-    fontSize: "13px",
-    transition: "background-color 0.2s",
-    "&:hover": {
-      backgroundColor: "#2980b9",
-    },
+  dateFilterGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
   },
-  assignButton: {
+  dateFilterLabel: {
+    fontSize: "14px",
+    color: "#495057",
+    fontWeight: "500",
+  },
+  dateFilterSelect: {
+    padding: "6px 10px",
+    borderRadius: "4px",
+    border: "1px solid #ced4da",
+    fontSize: "14px",
+    minWidth: "120px",
+  },
+  resetDateButton: {
     padding: "6px 12px",
-    backgroundColor: "#2ecc71",
+    backgroundColor: "#6c757d",
     color: "white",
     border: "none",
     borderRadius: "4px",
@@ -500,17 +680,14 @@ const styles = {
     fontSize: "13px",
     transition: "background-color 0.2s",
     "&:hover": {
-      backgroundColor: "#27ae60",
-    },
-    "&:disabled": {
-      backgroundColor: "#cccccc",
-      cursor: "not-allowed",
+      backgroundColor: "#5a6268",
     },
   },
   stats: {
     display: "flex",
     gap: "16px",
     flexWrap: "wrap",
+    marginBottom: "24px",
   },
   statCard: {
     flex: "1",
@@ -529,6 +706,69 @@ const styles = {
       fontSize: "24px",
       fontWeight: "600",
       color: "#2c3e50",
+    },
+  },
+  tableWrapper: {
+    overflowX: "auto",
+    borderRadius: "6px",
+    border: "1px solid #eee",
+    width: "100%",
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+    fontSize: "14px",
+    tableLayout: "fixed",
+  },
+  th: {
+    padding: "12px 16px",
+    textAlign: "left",
+    fontWeight: "500",
+    position: "sticky",
+    top: 0,
+    backgroundColor: "#003366",
+    color: "white",
+    whiteSpace: "nowrap",
+  },
+  td: {
+    padding: "12px 16px",
+    borderBottom: "1px solid #eee",
+    verticalAlign: "middle",
+    wordWrap: "break-word",
+  },
+  requirementsCell: {
+    maxWidth: "200px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    display: "block",
+  },
+  noResults: {
+    padding: "20px",
+    textAlign: "center",
+    color: "#777",
+    fontStyle: "italic",
+  },
+  actionButtons: {
+    display: "flex",
+    gap: "8px",
+    flexWrap: "wrap",
+  },
+  assignButton: {
+    padding: "6px 12px",
+    backgroundColor: "#2ecc71",
+    color: "white",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer",
+    fontSize: "13px",
+    transition: "background-color 0.2s",
+    "&:hover": {
+      backgroundColor: "#27ae60",
+    },
+    "&:disabled": {
+      backgroundColor: "#cccccc",
+      cursor: "not-allowed",
     },
   },
   modalOverlay: {
@@ -595,6 +835,32 @@ const styles = {
       cursor: "not-allowed",
     },
   },
+  toast: {
+    position: "fixed",
+    top: "20px",
+    right: "20px",
+    padding: "12px 20px",
+    borderRadius: "4px",
+    color: "white",
+    zIndex: 1001,
+    animation: "slideIn 0.3s ease-out",
+  },
 };
+
+// Add CSS animation for toast
+const styleSheet = document.styleSheets[0];
+const slideInAnimation = `
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+`;
+styleSheet.insertRule(slideInAnimation, styleSheet.cssRules.length);
 
 export default ViewDesignRequests;

@@ -4,15 +4,16 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 60px;
+  height: 70px;
   background-color: #2c3e50;
   color: white;
   display: flex;
-  align-items: center;
-  padding: 0 20px;
+  align-items: flex-start;
+  padding: 5px 20px;
   z-index: 1000;
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
+
 /* order.css */
 .read-only-input {
   background-color: #f5f5f5;
@@ -27,12 +28,14 @@
   font-size: 1.5rem;
   cursor: pointer;
   margin-right: 20px;
+  margin-top: 8px;
 }
 
 .navbar-title {
   margin: 0;
   font-size: 1.6rem;
   flex-grow: 1;
+  margin-top: 8px;
 }
 
 .navbar-title {
@@ -46,6 +49,7 @@
   .navbar-title {
     font-size: 1.2rem;
     margin-left: 10px;
+    margin-top: 5px;
   }
 }
 
@@ -56,7 +60,7 @@
   background-color: #2c3e50;
   color: white;
   position: fixed;
-  top: 60px;
+  top: 70px;
   left: 0;
   transition: all 0.3s ease-in-out;
   overflow: hidden;
@@ -95,12 +99,15 @@
   width: 0;
 }
 
-/* Main Content Styles */
+/* Main Content Styles - UPDATED FOR SCROLLING */
 .main-content {
-  margin-top: 60px;
+  margin-top: 70px;
   margin-left: 250px;
   padding: 20px;
   transition: all 0.3s ease-in-out;
+  min-height: calc(100vh - 70px);
+  overflow-y: auto;
+  height: calc(100vh - 70px);
 }
 
 .main-content.expanded {
@@ -223,6 +230,7 @@ tr:nth-child(even) {
 .view-order-button:hover {
   background-color: #27ae60;
 }
+
 /* Target button styling */
 .set-target-btn {
   padding: 5px 10px;
@@ -233,7 +241,7 @@ tr:nth-child(even) {
 /* Form action buttons */
 .form-actions {
   display: flex;
-  gap: 15px; /* Added gap between buttons */
+  gap: 15px;
   margin-top: 20px;
 }
 
@@ -261,6 +269,7 @@ tr:nth-child(even) {
   gap: 20px;
   margin-top: 20px;
 }
+
 .payment, .amount {
   flex: 1 1 30%;
   min-width: 200px;
@@ -374,11 +383,13 @@ tr:nth-child(even) {
     justify-content: space-between;
     font-size: 14px;
     padding: 0 10px;
+    height: 80px;
   }
 
   .toggle-btn {
     font-size: 1.2rem;
     margin-right: 10px;
+    margin-top: 5px;
   }
 
   .nav-item {
@@ -394,6 +405,7 @@ tr:nth-child(even) {
 @media (max-width: 480px) {
   .navbar-title {
     font-size: 1rem;
+    margin-top: 3px;
   }
 
   .form-container {
@@ -425,7 +437,7 @@ tr:nth-child(even) {
 
 .profile-section {
   position: absolute;
-  top: 10px;
+  top: 15px;
   right: 20px;
   display: flex;
   align-items: center;
@@ -467,12 +479,13 @@ tr:nth-child(even) {
   background-color: #0056b3;
 }
 
-/* Navbar right section */
+/* Navbar right section - UPDATED */
 .navbar-right {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px; /* controls the space between profile and logout */
+  gap: 8px;
+  margin-top: 0;
 }
 
 .profile-icon {
@@ -486,61 +499,64 @@ tr:nth-child(even) {
   color: white;
   font-weight: bold;
   font-size: 18px;
+  margin-top: 0;
 }
 
-/* updates */
-/* Target Display Styles */
-.target-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 1.4rem;
-  font-weight: 800;
-  color: #00e1ff;
-}
-
+/* TARGET DISPLAY STYLES - MOVED UPWARD */
 .target-display {
   z-index: 1000;
   display: flex;
-  align-items: center; /* Align icon and text vertically */
-  flex-direction: row; /* Icon and text side-by-side */
-  padding: 10px 20px;
+  align-items: center;
+  flex-direction: row;
+  padding: 8px 12px;
   background: linear-gradient(135deg, #e75517, #e7c114);
-  border-radius: 16px;
-  font-weight: 800;
-  font-size: 1.4rem;
+  border-radius: 12px;
+  font-weight: 700;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  margin: 1.5rem 20px 0 0;
-  margin-top: 0.5rem;
-  max-width: 500px;
-  gap: 10px; /* Space between icon and text */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  margin: 8px 10px 0 0;
+  max-width: 450px;
+  gap: 8px;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
   overflow: visible;
-}
-/* Hover */
-.target-display:hover {
-  transform: scale(1.03);
-  box-shadow: 0 0 16px rgba(0, 255, 255, 0.4);
+  position: relative;
+  top: 0;
 }
 
-/* Icon Style */
-.target-icon {
-  font-size: 1.1rem;
+/* Target Header */
+.target-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1rem;
+  font-weight: 700;
   color: #00e1ff;
 }
 
-/* Progress Container */
+/* Target Progress Container */
 .target-progress-container {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Target Text */
+.target-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Progress Bar Background */
 .progress-bar {
   width: 100%;
-  height: 16px;
+  height: 14px;
   background-color: #3b3b52;
-  border-radius: 8px;
+  border-radius: 7px;
   overflow: hidden;
   position: relative;
 }
@@ -548,8 +564,20 @@ tr:nth-child(even) {
 /* Progress Fill */
 .progress-fill {
   height: 100%;
-  border-radius: 8px;
+  border-radius: 7px;
   transition: width 0.5s ease-in-out, background-image 0.5s ease-in-out;
+}
+
+/* Icon Style */
+.target-icon {
+  font-size: 1rem;
+  color: #00e1ff;
+}
+
+/* Hover Effect */
+.target-display:hover {
+  transform: scale(1.03);
+  box-shadow: 0 0 16px rgba(0, 255, 255, 0.4);
 }
 
 /* Blinking Progress Animation */
@@ -574,25 +602,151 @@ tr:nth-child(even) {
   border: 2px solid rgba(255, 255, 255, 0.5);
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
+/* MOBILE RESPONSIVE STYLES FOR TARGET DISPLAY - UPDATED */
+@media (max-width: 1200px) {
   .target-display {
-    padding: 12px 16px;
-    font-size: 1rem;
-    max-width: 100%;
-    width: 100%;
-    margin: 1rem auto 0 auto;
+    max-width: 380px;
+    padding: 7px 10px;
+    margin: 6px 8px 0 0;
   }
-
-  .target-icon {
-    font-size: 1rem;
+  
+  .target-header {
+    font-size: 0.95rem;
   }
-
-  .progress-bar {
-    height: 12px;
+  
+  .target-text {
+    font-size: 0.85rem;
   }
 }
 
+@media (max-width: 992px) {
+  .target-display {
+    max-width: 320px;
+    margin: 5px 5px 0 0;
+  }
+  
+  .navbar-right {
+    gap: 6px;
+  }
+}
+
+@media (max-width: 768px) {
+  .target-display {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 10px 8px;
+    margin: 2px auto 0 auto;
+    max-width: 260px;
+    width: 90%;
+    gap: 6px;
+    position: relative;
+    top: 0;
+  }
+  
+  .target-header {
+    font-size: 0.85rem;
+    justify-content: center;
+  }
+  
+  .target-progress-container {
+    width: 100%;
+    gap: 4px;
+  }
+  
+  .target-text {
+    font-size: 0.8rem;
+    white-space: normal;
+    line-height: 1.1;
+  }
+  
+  .progress-bar {
+    height: 12px;
+  }
+  
+  .target-icon {
+    font-size: 0.9rem;
+  }
+  
+  .navbar-right {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 5px;
+  }
+}
+
+@media (max-width: 576px) {
+  .target-display {
+    max-width: 240px;
+    padding: 8px 6px;
+    margin: 1px auto 0 auto;
+  }
+  
+  .target-header {
+    font-size: 0.8rem;
+  }
+  
+  .target-text {
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  
+  .progress-bar {
+    height: 10px;
+  }
+  
+  .target-icon {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .target-display {
+    max-width: 200px;
+    padding: 6px 5px;
+    margin: 0 auto;
+  }
+  
+  .target-header {
+    font-size: 0.75rem;
+  }
+  
+  .target-text {
+    font-size: 0.7rem;
+  }
+  
+  .progress-bar {
+    height: 8px;
+  }
+  
+  .navbar-right {
+    gap: 3px;
+    margin-top: 3px;
+  }
+}
+
+@media (max-width: 360px) {
+  .target-display {
+    max-width: 180px;
+    padding: 5px 4px;
+    margin: 0 auto;
+  }
+  
+  .target-header {
+    font-size: 0.7rem;
+  }
+  
+  .target-text {
+    font-size: 0.65rem;
+  }
+  
+  .target-icon {
+    font-size: 0.75rem;
+  }
+}
+
+/* Logout Button - UPDATED POSITION */
 .logout-btn {
   padding: 8px 14px;
   background-color: #ff4d4d;
@@ -601,11 +755,11 @@ tr:nth-child(even) {
   border-radius: 20px;
   font-weight: bold;
   cursor: pointer;
-  height: 30px; /* same height as profile icon */
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 100px;
+  margin-top: 0;
 }
 
 .logout-btn:hover {
@@ -620,6 +774,7 @@ tr:nth-child(even) {
   background-color: #f5f5f5;
   cursor: not-allowed;
 }
+
 .summary-section {
   display: flex;
   justify-content: space-between;
@@ -652,9 +807,11 @@ button {
 .nav-item:hover {
   background: skyblue;
 }
+
 .nav-icon {
   margin-right: 10px;
 }
+
 .calendar-icon-wrapper {
   position: relative;
   margin: 0 1rem;
@@ -675,6 +832,7 @@ button {
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
+
 /* Add to your CSS file */
 .monthly-targets-grid {
   display: grid;
@@ -712,10 +870,11 @@ button {
   border-radius: 4px;
   border: 1px solid #ddd;
 }
+
 /* Updated Logout Dropdown Styles */
 .logout-btn {
   position: relative;
-  background-color: #1e88e5; /* Blue background */
+  background-color: #1e88e5;
   color: white;
   border: none;
   padding: 8px 16px;
@@ -725,7 +884,7 @@ button {
 }
 
 .logout-btn:hover {
-  background-color: #1565c0; /* Darker blue on hover */
+  background-color: #1565c0;
 }
 
 .logout-options-dropdown {
@@ -733,9 +892,9 @@ button {
   right: 0;
   top: 100%;
   background: white;
-  border: 1px solid #e3f2fd; /* Light blue border */
+  border: 1px solid #e3f2fd;
   border-radius: 4px;
-  box-shadow: 0 2px 15px rgba(30, 136, 229, 0.2); /* Blue-tinted shadow */
+  box-shadow: 0 2px 15px rgba(30, 136, 229, 0.2);
   z-index: 1000;
   min-width: 200px;
   overflow: hidden;
@@ -749,10 +908,10 @@ button {
   background: white;
   border: none;
   cursor: pointer;
-  color: #0d47a1; /* Dark blue text */
+  color: #0d47a1;
   font-size: 14px;
   transition: all 0.2s;
-  border-bottom: 1px solid #e3f2fd; /* Light blue separator */
+  border-bottom: 1px solid #e3f2fd;
 }
 
 .logout-options-dropdown button:last-child {
@@ -760,13 +919,13 @@ button {
 }
 
 .logout-options-dropdown button:hover {
-  background-color: #bbdefb; /* Light blue hover */
+  background-color: #bbdefb;
   color: #0d47a1;
 }
 
 /* For the logout option specifically */
 .logout-options-dropdown button:last-child:hover {
-  background-color: #ffebee; /* Light red for logout */
+  background-color: #ffebee;
   color: #c62828;
 }
 
@@ -802,17 +961,19 @@ button {
 .logout-options-dropdown button:nth-child(5)::before {
   background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23c62828"><path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>');
 }
+
 /* Session Timer Card Styles */
 .session-timer-card {
   display: flex;
   align-items: center;
   background: #ffffff;
   border-radius: 10px;
-  padding: 10px 15px;
-  margin-right: 15px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 8px 12px;
+  margin-right: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   border: 1px solid #e0e0e0;
-  min-width: 180px;
+  min-width: 160px;
+  margin-top: 0;
 }
 
 .timer-icon-container {
@@ -847,7 +1008,7 @@ button {
   letter-spacing: 1px;
 }
 
-/* Responsive adjustments */
+/* Responsive adjustments for timer */
 @media (max-width: 1200px) {
   .session-timer-card {
     min-width: 160px;
