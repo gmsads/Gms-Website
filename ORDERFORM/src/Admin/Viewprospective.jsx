@@ -58,63 +58,92 @@ const ViewProspective = () => {
 
     const month = searchParams.get('month');
     const year = searchParams.get('year');
+    const executive = searchParams.get('executive');
+    const executiveName = searchParams.get('executiveName');
+
+    console.log('URL Parameters:', {
+      month, year, executive, executiveName
+    });
 
     setFilters({
       year: year || '',
       month: month || '',
-      leadSource: ''
+      leadSource: '',
+      executive: executive || '',
+      executiveName: executiveName || ''
     });
   }, [location]);
 
-  // Fetch prospective clients data - UPDATED VERSION with privileged route
-  const fetchProspectives = async () => {
-    try {
-      const userName = localStorage.getItem('userName');
-      const role = localStorage.getItem('role');
+// Fetch prospective clients data - UPDATED VERSION
+const fetchProspectives = async () => {
+  try {
+    const userName = localStorage.getItem('userName');
+    const role = localStorage.getItem('role');
+    
+    // Get URL parameters
+    const searchParams = new URLSearchParams(location.search);
+    const executiveNameFromUrl = searchParams.get('executiveName');
 
-      // Determine which API endpoint to use based on user privileges
-      let apiEndpoint;
-      let params = {};
+    console.log('🔍 Fetching prospectives with:', {
+      executiveNameFromUrl,
+      userName,
+      role
+    });
 
-      if (role === 'Admin' || privilegedExecutives.includes(userName)) {
-        // Use the privileged route for Admin and privileged executives
-        apiEndpoint = `${API_BASE_URL}/prospective-clients/privileged/all`;
-        params = { userName };
-      } else {
-        // Use the regular route for normal executives
-        apiEndpoint = API_ENDPOINTS.PROSPECTIVES;
-        params = { userName, role };
-      }
+    let params = {};
 
-      const response = await axios.get(apiEndpoint, { params });
-
-      // Sort by creation date (newest first)
-      const sortedData = response.data.sort((a, b) => {
-        const dateA = new Date(a.createdAt || a.dateCreated || a.followUpDate);
-        const dateB = new Date(b.createdAt || b.dateCreated || b.followUpDate);
-        return dateB - dateA;
-      });
-
-      setProspectives(sortedData);
-      setFilteredProspectives(sortedData);
-      setLoading(false);
-    } catch (err) {
-      console.error('Error fetching prospectives:', err);
-      
-      // Handle access denied errors gracefully
-      if (err.response?.status === 403) {
-        setError('Access denied. You do not have permission to view all prospects.');
-      } else {
-        setError('Failed to load prospective clients');
-      }
-      setLoading(false);
+    // CASE 1: If specific executive name is provided in URL (coming from performance view)
+    if (executiveNameFromUrl) {
+      console.log('🎯 Filtering by specific executive from performance view:', executiveNameFromUrl);
+      params = { 
+        executiveName: executiveNameFromUrl,
+        filterByExecutive: 'true'
+      };
+    } 
+    // CASE 2: Admin or privileged users - use regular endpoint
+    else if (canSeeAllProspects) {
+      console.log('👑 Privileged user - using regular endpoint');
+      params = { userName, role };
     }
-  };
+    // CASE 3: Regular executive - only their own prospects
+    else {
+      console.log('👤 Regular executive - showing own prospects only');
+      params = { userName, role };
+    }
 
-  // Fetch data on component mount
+    console.log('📤 Making API request with params:', params);
+
+    const response = await axios.get('/api/prospective-clients', { params });
+    console.log('✅ API Response count:', response.data.length);
+    console.log('📋 API Response data:', response.data);
+
+    if (response.data.length === 0) {
+      console.log('⚠️ No prospects found with current filters');
+    }
+
+    // Sort by creation date (newest first)
+    const sortedData = response.data.sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.dateCreated || a.followUpDate);
+      const dateB = new Date(b.createdAt || b.dateCreated || b.followUpDate);
+      return dateB - dateA;
+    });
+
+    console.log('📊 Setting state with:', sortedData.length, 'prospects');
+    setProspectives(sortedData);
+    setFilteredProspectives(sortedData);
+    setLoading(false);
+    
+  } catch (err) {
+    console.error('❌ Error fetching prospectives:', err);
+    setError('Failed to load prospective clients: ' + (err.response?.data?.message || err.message));
+    setLoading(false);
+  }
+};
+
+  // Fetch data on component mount and when location changes
   useEffect(() => {
     fetchProspectives();
-  }, []);
+  }, [location]);
 
   // Apply filters whenever filters or search term changes
   useEffect(() => {
@@ -375,6 +404,19 @@ const ViewProspective = () => {
     return [...new Set(prospectives.map(p => p.leadFrom).filter(Boolean))];
   };
 
+ // Get current viewing context
+const getViewingContext = () => {
+  const searchParams = new URLSearchParams(location.search);
+  const executiveNameFromUrl = searchParams.get('executiveName');
+  
+  if (executiveNameFromUrl) {
+    return `🔍 Viewing prospects for: ${executiveNameFromUrl}`;
+  } else if (canSeeAllProspects) {
+    return '👑 Viewing all prospects (Admin/Privileged Access)';
+  } else {
+    return `👤 Viewing prospects assigned to: ${userName}`;
+  }
+};
   // Style for different status badges
   const getStatusStyle = (status) => {
     const baseStyle = {
@@ -408,12 +450,15 @@ const ViewProspective = () => {
       <div style={styles.header}>
         <h2 style={styles.heading}>
           Prospective Clients 
-          {canSeeAllProspects && ` - All Prospects`}
-          {!canSeeAllProspects && ` - ${userName}'s Prospects`}
         </h2>
 
+        {/* Viewing context */}
+        <div style={styles.viewingContext}>
+          {getViewingContext()}
+        </div>
+
         {/* User privilege indicator */}
-        {isPrivilegedExecutive && (
+        {isPrivilegedExecutive && !filters.executiveName && (
           <div style={styles.privilegeBanner}>
             <strong>Privileged Access:</strong> Viewing all prospects
           </div>
@@ -545,7 +590,6 @@ const ViewProspective = () => {
       {/* Results count */}
       <div style={styles.resultsCount}>
         Showing {filteredProspectives.length} of {prospectives.length} prospects
-        {canSeeAllProspects ? ' (All Prospects)' : ` (Assigned to ${userName})`}
       </div>
 
       {/* Main table */}
@@ -567,90 +611,88 @@ const ViewProspective = () => {
               {canSeeAllProspects && <th style={styles.th}>Delete</th>}
             </tr>
           </thead>
-         <tbody>
-  {filteredProspectives.length > 0 ? (
-    filteredProspectives.map((p) => (
-      <tr key={p._id} style={styles.tableRow}>
-        <td style={styles.td}>
-          {p.createdAt ? format(new Date(p.createdAt), 'MMM dd, yyyy') : 'N/A'}
-        </td>
-        <td style={styles.td}>{p.ExcutiveName || p.executiveName}</td>
-        <td style={styles.td}>{p.businessName}</td>
-        <td style={styles.td}>{p.contactPerson}</td>
-        <td style={styles.td}>{p.phoneNumber}</td>
-        <td style={styles.td}>{p.location}</td>
-        <td style={styles.td}>{p.leadFrom || 'N/A'}</td>
-        <td style={styles.td}>{p.requirementDescription || 'N/A'}</td>
-        <td style={styles.td}>
-          {p.followUpDate ? format(new Date(p.followUpDate), 'MMM dd, yyyy') : 'N/A'}
-        </td>
-        <td style={styles.td}>
-          <span style={getStatusStyle(p.status)}>
-            {p.status || 'New'}
-          </span>
-        </td>
-        <td style={styles.td}>
-          <select
-            value=""
-            onChange={(e) => handleStatusChange(p._id, e.target.value)}
-            style={styles.select}
-            disabled={sending[p._id]}
-          >
-            <option value="">Update Status</option>
-            <option value="sale closed">Sale Closed</option>
-            <option value="not interested">Not Interested</option>
-            <option value="next month">Next Month</option>
-            <option value="followup">Follow Up</option>
-          </select>
-          {sending[p._id] && (
-            <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
-              Updating...
-            </div>
-          )}
-          {success[p._id] && p.status === 'sale closed' && (
-            <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
-              ✓ Sale closed! Redirecting to order form...
-            </div>
-          )}
-          {success[p._id] && p.status !== 'sale closed' && success[p._id] !== 'moved_to_trash' && (
-            <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
-              ✓ Status updated successfully!
-            </div>
-          )}
-        </td>
-        {canSeeAllProspects && (
-          <td style={styles.td}>
-            <button
-              onClick={() => handleDelete(p._id)}
-              style={styles.deleteButton}
-              disabled={sending[p._id]}
-            >
-              {sending[p._id] ? 'Deleting...' : 'Delete'}
-            </button>
-          </td>
-        )}
-      </tr>
-    ))
-  ) : (
-    <tr>
-      <td colSpan={canSeeAllProspects ? 12 : 11} style={{ padding: '20px', textAlign: 'center' }}>
-        {searchTerm || filters.year || filters.month || filters.leadSource 
-          ? 'No matching results found with current filters' 
-          : !canSeeAllProspects 
-            ? `No prospective clients assigned to ${userName}`
-            : 'No prospective clients available'
-        }
-      </td>
-    </tr>
-  )}
-</tbody>
+          <tbody>
+            {filteredProspectives.length > 0 ? (
+              filteredProspectives.map((p) => (
+                <tr key={p._id} style={styles.tableRow}>
+                  <td style={styles.td}>
+                    {p.createdAt ? format(new Date(p.createdAt), 'MMM dd, yyyy') : 'N/A'}
+                  </td>
+                  <td style={styles.td}>{p.ExcutiveName || p.executiveName}</td>
+                  <td style={styles.td}>{p.businessName}</td>
+                  <td style={styles.td}>{p.contactPerson}</td>
+                  <td style={styles.td}>{p.phoneNumber}</td>
+                  <td style={styles.td}>{p.location}</td>
+                  <td style={styles.td}>{p.leadFrom || 'N/A'}</td>
+                  <td style={styles.td}>{p.requirementDescription || 'N/A'}</td>
+                  <td style={styles.td}>
+                    {p.followUpDate ? format(new Date(p.followUpDate), 'MMM dd, yyyy') : 'N/A'}
+                  </td>
+                  <td style={styles.td}>
+                    <span style={getStatusStyle(p.status)}>
+                      {p.status || 'New'}
+                    </span>
+                  </td>
+                  <td style={styles.td}>
+                    <select
+                      value=""
+                      onChange={(e) => handleStatusChange(p._id, e.target.value)}
+                      style={styles.select}
+                      disabled={sending[p._id]}
+                    >
+                      <option value="">Update Status</option>
+                      <option value="sale closed">Sale Closed</option>
+                      <option value="not interested">Not Interested</option>
+                      <option value="next month">Next Month</option>
+                      <option value="followup">Follow Up</option>
+                    </select>
+                    {sending[p._id] && (
+                      <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
+                        Updating...
+                      </div>
+                    )}
+                    {success[p._id] && p.status === 'sale closed' && (
+                      <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
+                        ✓ Sale closed! Redirecting to order form...
+                      </div>
+                    )}
+                    {success[p._id] && p.status !== 'sale closed' && success[p._id] !== 'moved_to_trash' && (
+                      <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '5px' }}>
+                        ✓ Status updated successfully!
+                      </div>
+                    )}
+                  </td>
+                  {canSeeAllProspects && (
+                    <td style={styles.td}>
+                      <button
+                        onClick={() => handleDelete(p._id)}
+                        style={styles.deleteButton}
+                        disabled={sending[p._id]}
+                      >
+                        {sending[p._id] ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={canSeeAllProspects ? 12 : 11} style={{ padding: '20px', textAlign: 'center' }}>
+                  {searchTerm || filters.year || filters.month || filters.leadSource 
+                    ? 'No matching results found with current filters' 
+                    : 'No prospective clients available'
+                  }
+                </td>
+              </tr>
+            )}
+          </tbody>
         </table>
       </div>
     </div>
   );
 };
 
-// Styles object (keep the same as before)
+// Updated Styles with new viewing context style
 const styles = {
   container: {
     padding: '20px',
@@ -664,10 +706,21 @@ const styles = {
   },
   heading: {
     color: '#2c3e50',
-    marginBottom: '15px',
+    marginBottom: '10px',
     borderBottom: '2px solid #3498db',
     paddingBottom: '10px',
     fontSize: '24px'
+  },
+  viewingContext: {
+    backgroundColor: '#e8f4fd',
+    padding: '10px 15px',
+    borderRadius: '6px',
+    marginBottom: '15px',
+    border: '1px solid #b3d9ff',
+    color: '#004085',
+    fontSize: '16px',
+    fontWeight: '600',
+    textAlign: 'center'
   },
   privilegeBanner: {
     backgroundColor: '#d4edda',

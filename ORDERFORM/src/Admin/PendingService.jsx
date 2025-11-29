@@ -15,19 +15,12 @@ function PendingService() {
   // State to store orders after applying filters
   const [filteredOrders, setFilteredOrders] = useState([]);
   
-  // State for search functionality
+  
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // State to track which remark is being edited (contains orderId and rowIndex)
   const [editingRemark, setEditingRemark] = useState(null);
-  
-  // State to store temporary remark value during editing
   const [tempRemark, setTempRemark] = useState('');
-  
-  // State to store the name when assigning service to someone
   const [assignedToText, setAssignedToText] = useState('');
-  
-  // React Router navigation hook
+  const [updateDescription, setUpdateDescription] = useState('');
   const navigate = useNavigate();
   
   // Get current date for default filter values
@@ -60,6 +53,7 @@ function PendingService() {
     { value: 'printing', label: 'Printing' },
     { value: 'installation pending', label: 'Installation Pending' },
     { value: 'onboarding', label: 'Onboarding' },
+    { value: 'updated', label: 'Updated' },
     { value: 'completed', label: 'Completed' }
   ];
 
@@ -175,9 +169,14 @@ function PendingService() {
             return currentRemark.toLowerCase().includes('assigned to');
           }
           
-          // Handle 'completed' status filter
+          // Handle 'updated' status filter
+          if (statusFilter === 'updated') {
+            return currentRemark.toLowerCase().includes('updated:');
+          }
+          
+          // Handle 'completed' status filter - FIXED: Check both remark and isCompleted flag
           if (statusFilter === 'completed') {
-            return currentRemark.toLowerCase() === 'completed';
+            return row.isCompleted === true || currentRemark.toLowerCase() === 'completed';
           }
           
           // Handle other status filters with exact match
@@ -224,110 +223,117 @@ function PendingService() {
     setFilteredOrders(result);
   };
 
-  // Function to handle remark changes (status updates)
+  // Function to handle remark changes
   const handleRemarkChange = async (orderId, rowIndex, newRemark) => {
     try {
       // Initialize variables for the update
       let remarkValue = newRemark;
       let isCompleted = false;
-      let completedDate = null;
-      let assignedExecutive = ''; // NEW: Store assigned executive name
+      let assignedExecutive = '';
+      let updateTimestamp = null;
 
       // Handle 'assigned to' remark type
       if (newRemark === 'assigned to') {
-        // Validate that a name was entered
         if (!assignedToText.trim()) {
           alert('Please enter a name for "Assigned to"');
           return;
         }
-        // Format the remark and store the executive name
         remarkValue = `assigned to ${assignedToText.trim()}`;
-        assignedExecutive = assignedToText.trim(); // NEW: Store the name separately
+        assignedExecutive = assignedToText.trim();
       } 
+      // Handle 'updated' remark type
+      else if (newRemark === 'updated') {
+        if (!updateDescription.trim()) {
+          alert('Please enter an update description');
+          return;
+        }
+        updateTimestamp = new Date().toISOString();
+        const formattedTime = formatDateTime(updateTimestamp);
+        remarkValue = `updated: ${updateDescription.trim()} (${formattedTime})`;
+      }
       // Handle 'completed' remark type
       else if (newRemark === 'completed') {
         isCompleted = true;
         remarkValue = 'completed';
-        completedDate = new Date().toISOString(); // Set completion timestamp
       }
 
-      // Validate that a remark was selected (except for completed)
-      if (!remarkValue && newRemark !== 'completed') {
+      // Validate that a remark was selected
+      if (!remarkValue && newRemark !== 'completed' && newRemark !== 'updated') {
         alert('Please select a remark');
         return;
       }
 
-      // OPTIMISTIC UI UPDATE: Update the UI immediately without waiting for API
+      // OPTIMISTIC UI UPDATE
       setOrders(prevOrders => 
         prevOrders.map(order => {
           if (order._id === orderId) {
-            // Update the specific row that was modified
             const updatedRows = order.rows.map((row, index) => 
               index === rowIndex 
                 ? { 
                     ...row, 
                     remark: remarkValue,
-                    assignedExecutive: assignedExecutive, // NEW: Update assigned executive
+                    assignedExecutive: assignedExecutive,
                     isCompleted: isCompleted,
-                    completedDate: completedDate,
-                    updatedAt: new Date().toISOString() // Update timestamp for sorting
+                    updatedAt: new Date().toISOString(),
+                    lastUpdateTime: updateTimestamp || row.lastUpdateTime
                   } 
                 : row
             );
 
-            // Create updated order with new rows
             const updatedOrder = {
               ...order,
               rows: updatedRows,
-              updatedAt: new Date().toISOString() // Update order timestamp
+              updatedAt: new Date().toISOString()
             };
 
             return updatedOrder;
           }
           return order;
         }).sort((a, b) => {
-          // Re-sort orders to keep newest updates on top
           const dateA = new Date(a.updatedAt || a.createdAt || a.date || new Date());
           const dateB = new Date(b.updatedAt || b.createdAt || b.date || new Date());
-          return dateB - dateA; // Newest first
+          return dateB - dateA;
         })
       );
 
-      // API CALL: Send update to server
+      // API CALL with required fields
       const response = await axios.put(
         `/api/pending-services/${orderId}/row/${rowIndex}/remark`, 
         { 
           remark: remarkValue,
-          assignedExecutive: assignedExecutive, // NEW: Send assigned executive to API
+          assignedExecutive: assignedExecutive,
           isCompleted: isCompleted,
-          completedDate: completedDate
+          lastUpdateTime: updateTimestamp
         }
       );
 
       // Check if API call was successful
       if (!response.data.success) {
-        // If API failed, refresh data from server
-        fetchOrders();
+        fetchOrders(); // Refresh data if API failed
         throw new Error(response.data.error || 'Update failed');
       }
 
       // Reset editing state on success
       setEditingRemark(null);
       setAssignedToText('');
+      setUpdateDescription('');
       
     } catch (err) {
-      // Handle errors from API call
       console.error('Update failed:', err);
       alert(`Failed to update: ${err.response?.data?.error || err.message}`);
-      // Refresh data to ensure UI matches server state
-      fetchOrders();
+      fetchOrders(); // Refresh data to ensure UI matches server state
     }
   };
 
   // Function to start editing a remark
   const startEditingRemark = (orderId, rowIndex, currentRemark) => {
+    // FIXED: Check both remark and isCompleted flag
+    const isRowCompleted = currentRemark === 'completed' || 
+                          (orders.find(order => order._id === orderId)?.rows[rowIndex]?.isCompleted === true);
+    
     // Prevent editing if status is already completed
-    if (currentRemark === 'completed') {
+    if (isRowCompleted) {
+      alert('This service is already completed and cannot be edited.');
       return;
     }
     
@@ -339,6 +345,13 @@ function PendingService() {
       setTempRemark('assigned to');
       // Extract the name from "assigned to [name]" format
       setAssignedToText(currentRemark.replace('assigned to', '').trim());
+    } else if (currentRemark && currentRemark.includes('updated:')) {
+      // Extract description from "updated: description (timestamp)" format
+      setTempRemark('updated');
+      const descriptionMatch = currentRemark.match(/updated:\s*(.*?)\s*\(\d{2}-\d{2}-\d{4} \d{2}:\d{2}\)/);
+      if (descriptionMatch && descriptionMatch[1]) {
+        setUpdateDescription(descriptionMatch[1].trim());
+      }
     } else {
       // For other remarks, use the current value (or empty if 'Pending')
       setTempRemark(currentRemark === 'Pending' ? '' : currentRemark || '');
@@ -365,10 +378,11 @@ function PendingService() {
           'Rate': row.rate,
           'Total': row.total,
           'Delivery Date': formatDate(row.deliveryDate),
-          'Service Assigned To': row.assignedExecutive || 'Not Assigned', // NEW: Include assigned executive in export
+          'Service Assigned To': row.assignedExecutive || 'Not Assigned',
           'Remarks': row.remark || 'Pending',
           'Status': row.remark || 'Pending',
-          'Completed Date': row.completedDate ? formatDateTime(row.completedDate) : 'Not Completed',
+          'Is Completed': row.isCompleted ? 'Yes' : 'No',
+          'Last Update Time': row.lastUpdateTime ? formatDateTime(row.lastUpdateTime) : 'Never Updated',
           'Balance': order.balance
         });
       });
@@ -430,7 +444,7 @@ function PendingService() {
   };
 
   // Function to get CSS styles for different remark types
-  const getRemarkStyle = (remark) => {
+  const getRemarkStyle = (remark, isCompletedFlag = false) => {
     // Base style for all remarks
     const baseStyle = {
       padding: '4px 8px',
@@ -441,6 +455,15 @@ function PendingService() {
       color: 'white',
       fontWeight: 'bold'
     };
+
+    // FIXED: Check both remark and isCompleted flag for completed status
+    if (isCompletedFlag || remark === 'completed') {
+      return {
+        ...baseStyle,
+        backgroundColor: '#2ecc71', // Green
+        cursor: 'default', // No pointer since completed can't be edited
+      };
+    }
 
     // Style for pending status
     if (!remark || remark === 'Pending' || remark === 'pending') {
@@ -460,12 +483,12 @@ function PendingService() {
       };
     }
 
-    // Style for completed status
-    if (remark === 'completed') {
+    // Style for updated status
+    if (remark.includes('updated:')) {
       return {
         ...baseStyle,
-        backgroundColor: '#2ecc71', // Green
-        cursor: 'default', // No pointer since completed can't be edited
+        backgroundColor: '#9b59b6', // Purple
+        cursor: 'pointer',
       };
     }
 
@@ -473,7 +496,7 @@ function PendingService() {
     if (remark === 'design pending') {
       return {
         ...baseStyle,
-        backgroundColor: '#9b59b6', // Purple
+        backgroundColor: '#e67e22', // Dark orange
         cursor: 'pointer',
       };
     }
@@ -482,7 +505,7 @@ function PendingService() {
     if (remark === 'printing') {
       return {
         ...baseStyle,
-        backgroundColor: '#e67e22', // Dark orange
+        backgroundColor: '#e74c3c', // Red
         cursor: 'pointer',
       };
     }
@@ -491,7 +514,7 @@ function PendingService() {
     if (remark === 'installation pending') {
       return {
         ...baseStyle,
-        backgroundColor: '#e74c3c', // Red
+        backgroundColor: '#34495e', // Dark blue
         cursor: 'pointer',
       };
     }
@@ -513,9 +536,9 @@ function PendingService() {
     };
   };
 
-  // Function to check if a remark indicates completed status
-  const isCompleted = (remark) => {
-    return remark === 'completed';
+  // FIXED: Improved function to check if a row is completed
+  const isRowCompleted = (row) => {
+    return row.isCompleted === true || row.remark === 'completed';
   };
 
   // Function to reset filters to current month
@@ -572,7 +595,7 @@ function PendingService() {
               </label>
               <select
                 id="month-select"
-                value={selectedMonth + 1} // Convert from 0-11 to 1-12 for display
+                value={selectedMonth + 1}
                 onChange={(e) => setSelectedMonth(parseInt(e.target.value) - 1)}
                 style={styles.filterSelect}
               >
@@ -647,7 +670,7 @@ function PendingService() {
                 {[
                   'S.No', 'Executive', 'Business', 'Customer', 'Contact',
                   'Requirement', 'Qty', 'Rate', 'Total', 
-                  'Delivery Date', 'Service Assigned To', 'Remarks', 'Completed Date' // UPDATED: Added 'Service Assigned To' column
+                  'Delivery Date', 'Service Assigned To', 'Remarks', 'Last Update Time'
                 ].map((header) => (
                   <th key={header} style={styles.th}>{header}</th>
                 ))}
@@ -657,7 +680,7 @@ function PendingService() {
               {/* No data message */}
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan="13" style={styles.noData}> {/* UPDATED: colSpan from 12 to 13 */}
+                  <td colSpan="13" style={styles.noData}>
                     No services found for {monthLabels[selectedMonth]} {year}
                     {statusFilter !== 'all' ? ` with status "${statusOptions.find(opt => opt.value === statusFilter)?.label}"` : ''}
                   </td>
@@ -665,114 +688,139 @@ function PendingService() {
               ) : (
                 /* Data rows */
                 filteredOrders.map((order, orderIndex) =>
-                  order.rows.map((row, rowIndex) => (
-                    <tr
-                      key={`${order._id}-${rowIndex}`}
-                      style={styles.tableRow(orderIndex + rowIndex)}
-                    >
-                      {/* Row data cells */}
-                      <td style={styles.td}>{orderIndex + 1}</td>
-                      <td style={styles.td}>{order.executive}</td>
-                      <td style={styles.td}>{order.business}</td>
-                      <td style={styles.td}>{order.contactPerson}</td>
-                      <td style={styles.td}>{order.contactCode} {order.phone}</td>
-                      <td style={styles.td}>{row.requirement}</td>
-                      <td style={styles.td}>{row.quantity}</td>
-                      <td style={styles.td}>{row.rate}</td>
-                      <td style={styles.td}>{row.total}</td>
-                      <td style={styles.td}>{formatDate(row.deliveryDate)}</td>
-                      
-                      {/* NEW: Service Assigned To column */}
-                      <td style={styles.td}>
-                        {row.assignedExecutive ? (
-                          <span style={{
-                            backgroundColor: '#e3f2fd',
-                            color: '#1565c0',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            fontWeight: 'bold',
-                            display: 'inline-block'
-                          }}>
-                            {row.assignedExecutive}
-                          </span>
-                        ) : (
-                          <span style={{
-                            color: '#666',
-                            fontStyle: 'italic'
-                          }}>
-                            Not Assigned
-                          </span>
-                        )}
-                      </td>
-                      
-                      {/* Remarks column with edit functionality */}
-                      <td style={styles.td}>
-                        {editingRemark?.orderId === order._id && editingRemark?.rowIndex === rowIndex ? (
-                          /* Remark editor when editing */
-                          <div style={styles.remarkEditor}>
-                            <select
-                              value={tempRemark}
-                              onChange={(e) => setTempRemark(e.target.value)}
-                              style={styles.remarkSelect}
-                            >
-                              <option value="">Select Remark</option>
-                              <option value="completed">Completed</option>
-                              <option value="assigned to">Assigned to</option>
-                              <option value="design pending">Design pending</option>
-                              <option value="printing">Printing</option>
-                              <option value="installation pending">Installation pending</option>
-                              <option value="onboarding">Onboarding</option>
-                            </select>
-                            
-                            {/* Show name input when 'assigned to' is selected */}
-                            {tempRemark === 'assigned to' && (
-                              <input
-                                type="text"
-                                value={assignedToText}
-                                onChange={(e) => setAssignedToText(e.target.value)}
-                                placeholder="Enter name"
-                                style={styles.assignedInput}
-                              />
-                            )}
+                  order.rows.map((row, rowIndex) => {
+                    const isCompleted = isRowCompleted(row);
+                    return (
+                      <tr
+                        key={`${order._id}-${rowIndex}`}
+                        style={{
+                          ...styles.tableRow(orderIndex + rowIndex),
+                          ...(isCompleted && styles.completedRow)
+                        }}
+                      >
+                        {/* Row data cells */}
+                        <td style={styles.td}>{orderIndex + 1}</td>
+                        <td style={styles.td}>{order.executive}</td>
+                        <td style={styles.td}>{order.business}</td>
+                        <td style={styles.td}>{order.contactPerson}</td>
+                        <td style={styles.td}>{order.contactCode} {order.phone}</td>
+                        <td style={styles.td}>{row.requirement}</td>
+                        <td style={styles.td}>{row.quantity}</td>
+                        <td style={styles.td}>{row.rate}</td>
+                        <td style={styles.td}>{row.total}</td>
+                        <td style={styles.td}>{formatDate(row.deliveryDate)}</td>
+                        
+                        {/* Service Assigned To column */}
+                        <td style={styles.td}>
+                          {row.assignedExecutive ? (
+                            <span style={{
+                              backgroundColor: '#e3f2fd',
+                              color: '#1565c0',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              fontWeight: 'bold',
+                              display: 'inline-block'
+                            }}>
+                              {row.assignedExecutive}
+                            </span>
+                          ) : (
+                            <span style={{
+                              color: '#666',
+                              fontStyle: 'italic'
+                            }}>
+                              Not Assigned
+                            </span>
+                          )}
+                        </td>
+                        
+                        {/* Remarks column with edit functionality */}
+                        <td style={styles.td}>
+                          {editingRemark?.orderId === order._id && editingRemark?.rowIndex === rowIndex ? (
+                            /* Remark editor when editing */
+                            <div style={styles.remarkEditor}>
+                              <select
+                                value={tempRemark}
+                                onChange={(e) => setTempRemark(e.target.value)}
+                                style={styles.remarkSelect}
+                              >
+                                <option value="">Select Remark</option>
+                                <option value="completed">Completed</option>
+                                <option value="assigned to">Assigned to</option>
+                                <option value="updated">Updated</option>
+                                <option value="design pending">Design pending</option>
+                                <option value="printing">Printing</option>
+                                <option value="installation pending">Installation pending</option>
+                                <option value="onboarding">Onboarding</option>
+                              </select>
+                              
+                              {/* Show name input when 'assigned to' is selected */}
+                              {tempRemark === 'assigned to' && (
+                                <input
+                                  type="text"
+                                  value={assignedToText}
+                                  onChange={(e) => setAssignedToText(e.target.value)}
+                                  placeholder="Enter name"
+                                  style={styles.assignedInput}
+                                />
+                              )}
 
-                            {/* Save and cancel buttons */}
-                            <div style={styles.remarkButtons}>
-                              <button
-                                onClick={() => handleRemarkChange(order._id, rowIndex, tempRemark)}
-                                style={styles.saveButton}
-                                disabled={!tempRemark}
-                              >
-                                Save
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingRemark(null);
-                                  setAssignedToText('');
-                                }}
-                                style={styles.cancelButton}
-                              >
-                                Cancel
-                              </button>
+                              {/* Show description input when 'updated' is selected */}
+                              {tempRemark === 'updated' && (
+                                <div style={styles.updateContainer}>
+                                  <textarea
+                                    value={updateDescription}
+                                    onChange={(e) => setUpdateDescription(e.target.value)}
+                                    placeholder="Enter update description (what was done, progress, etc.)"
+                                    style={styles.updateTextarea}
+                                    rows="3"
+                                  />
+                                  <div style={styles.updateHint}>
+                                    This update will be timestamped automatically
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Save and cancel buttons */}
+                              <div style={styles.remarkButtons}>
+                                <button
+                                  onClick={() => handleRemarkChange(order._id, rowIndex, tempRemark)}
+                                  style={styles.saveButton}
+                                  disabled={!tempRemark || (tempRemark === 'updated' && !updateDescription.trim())}
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingRemark(null);
+                                    setAssignedToText('');
+                                    setUpdateDescription('');
+                                  }}
+                                  style={styles.cancelButton}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          /* Display remark when not editing */
-                          <div 
-                            onClick={() => startEditingRemark(order._id, rowIndex, row.remark || 'Pending')}
-                            style={getRemarkStyle(row.remark || 'Pending')}
-                            title={isCompleted(row.remark) ? "Completed - Cannot edit" : "Click to edit remark"}
-                          >
-                            {row.remark || 'Pending'}
-                          </div>
-                        )}
-                      </td>
-                      
-                      {/* Completed date column */}
-                      <td style={styles.td}>
-                        {row.completedDate ? formatDateTime(row.completedDate) : '-'}
-                      </td>
-                    </tr>
-                  ))
+                          ) : (
+                            /* Display remark when not editing */
+                            <div 
+                              onClick={() => !isCompleted && startEditingRemark(order._id, rowIndex, row.remark || 'Pending')}
+                              style={getRemarkStyle(row.remark || 'Pending', isCompleted)}
+                              title={isCompleted ? "Completed - Cannot edit" : "Click to edit remark"}
+                            >
+                              {row.remark || 'Pending'}
+                              {isCompleted && ' ✓'}
+                            </div>
+                          )}
+                        </td>
+                        
+                        {/* Last Update Time column */}
+                        <td style={styles.td}>
+                          {row.lastUpdateTime ? formatDateTime(row.lastUpdateTime) : '-'}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )
               )}
             </tbody>
@@ -952,6 +1000,10 @@ const styles = {
       backgroundColor: '#f1f5f9',
     },
   }),
+  completedRow: {
+    backgroundColor: '#d4edda !important',
+    borderLeft: '4px solid #28a745',
+  },
   footerButtons: {
     display: 'flex',
     justifyContent: 'center',
@@ -996,7 +1048,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '8px',
-    minWidth: '200px',
+    minWidth: '250px',
   },
   remarkSelect: {
     padding: '8px',
@@ -1009,6 +1061,25 @@ const styles = {
     borderRadius: '4px',
     border: '1px solid #ddd',
     fontSize: '13px',
+  },
+  updateContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+  },
+  updateTextarea: {
+    padding: '8px',
+    borderRadius: '4px',
+    border: '1px solid #ddd',
+    fontSize: '13px',
+    resize: 'vertical',
+    minHeight: '60px',
+    fontFamily: 'Arial, sans-serif',
+  },
+  updateHint: {
+    fontSize: '11px',
+    color: '#666',
+    fontStyle: 'italic',
   },
   remarkButtons: {
     display: 'flex',

@@ -66,6 +66,8 @@ import Quotation from './Admin/Quotation';
 import InstallPWAButton from './components/InstallPWAButton';
 import FieldVisitsAdmin from './Admin/FieldVisitsAdmin';
 import AdvanceApprovalPage  from './Admin/AdvanceApprovalPage';
+import ServiceForm from './Service/ServiceForm.jsx';
+
 function App() {
   return (
     <BrowserRouter>
@@ -355,6 +357,7 @@ import ViewOrders from './Admin/ViewOrders';
           <Route path="daily-report" element={<DailyReport />} />
           <Route path="daily-record" element={<Record />} />
           <Route path="inventory" element={<Inventory />} />
+          <Route path="serviceform" element={<ServiceForm/>} />
 
         </Route>
         <Route

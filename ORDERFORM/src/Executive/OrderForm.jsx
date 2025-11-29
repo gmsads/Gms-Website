@@ -605,168 +605,165 @@ Global Marketing Solutions Team`;
     await submitOrder();
   };
 
-  const submitOrder = async () => {
-    setIsSubmitting(true);
-    try {
-      const phone = contactNumber.replace(/\D/g, "").slice(-10);
-      if (phone.length !== 10) throw new Error("Please enter a valid 10-digit phone number");
+ const submitOrder = async () => {
+  setIsSubmitting(true);
+  try {
+    const phone = contactNumber.replace(/\D/g, "").slice(-10);
+    if (phone.length !== 10) throw new Error("Please enter a valid 10-digit phone number");
 
-      const designRequestData = {
-        executive: selectedExecutive,
-        businessName: business,
-        contactPerson: contactPerson,
-        phoneNumber: phone,
-        requirements: rows
-          .filter((row) => row.requirement)
-          .map((row) => row.requirement === "other" ? row.customRequirement : row.requirement)
-          .join(", "),
-        status: "pending",
-        requestDate: new Date().toISOString(),
-      };
+    const totalNum = parseFloat(total) || 0;
+    const advanceNum = parseFloat(advance) || 0;
 
-      let paymentMethodStr = paymentMethods.includes("UPI") && selectedUpi
-        ? paymentMethods.map((m) => m === "UPI" ? `UPI - ${selectedUpi}` : m).join(" + ")
-        : paymentMethods.join(" + ");
+    const designRequestData = {
+      executive: selectedExecutive,
+      businessName: business,
+      contactPerson: contactPerson,
+      phoneNumber: phone,
+      requirements: rows
+        .filter((row) => row.requirement)
+        .map((row) => row.requirement === "other" ? row.customRequirement : row.requirement)
+        .join(", "),
+      status: "pending",
+      requestDate: new Date().toISOString(),
+    };
 
-      const shouldSplitCommission = saleClosedBy && selectedExecutive !== saleClosedBy;
+    let paymentMethodStr = paymentMethods.includes("UPI") && selectedUpi
+      ? paymentMethods.map((m) => m === "UPI" ? `UPI - ${selectedUpi}` : m).join(" + ")
+      : paymentMethods.join(" + ");
 
-      const finalTotal = shouldSplitCommission ? (parseFloat(total) / 2).toFixed(2) : parseFloat(total).toFixed(2);
-      const finalDiscountedTotal = shouldSplitCommission ? (parseFloat(discountedTotal) / 2).toFixed(2) : parseFloat(discountedTotal).toFixed(2);
-      const finalAdvance = shouldSplitCommission ? (parseFloat(advance) / 2).toFixed(2) : parseFloat(advance).toFixed(2);
-      const finalBalance = shouldSplitCommission ? (parseFloat(balance) / 2).toFixed(2) : parseFloat(balance).toFixed(2);
-      const finalDiscount = shouldSplitCommission ? (parseFloat(discount) / 2).toFixed(2) : parseFloat(discount).toFixed(2);
+    const shouldSplitCommission = saleClosedBy && selectedExecutive !== saleClosedBy;
 
-      // FIXED: Always set createdBy for admin users, preserve existing for updates
-      const finalCreatedBy = isAdmin ? createdBy : (existingData?.createdBy || selectedExecutive);
+    const finalTotal = shouldSplitCommission ? (totalNum / 2).toFixed(2) : totalNum.toFixed(2);
+    const finalDiscountedTotal = shouldSplitCommission ? (parseFloat(discountedTotal) / 2).toFixed(2) : parseFloat(discountedTotal).toFixed(2);
+    const finalAdvance = shouldSplitCommission ? (advanceNum / 2).toFixed(2) : advanceNum.toFixed(2);
+    const finalBalance = shouldSplitCommission ? (parseFloat(balance) / 2).toFixed(2) : parseFloat(balance).toFixed(2);
+    const finalDiscount = shouldSplitCommission ? (parseFloat(discount) / 2).toFixed(2) : parseFloat(discount).toFixed(2);
 
-      const mainOrderData = {
-        executive: selectedExecutive,
-        business,
-        contactPerson,
-        location: clientLocation,
-        saleClosedBy: saleClosedBy || selectedExecutive,
-        contactCode: "+91",
-        phone,
-        orderDate,
-        target,
-        clientType: clientType || "New",
-        rows: rows.map((row) => {
-          const isTimeBased = isTimeBasedRequirement(row.requirement);
-          const rowTotal = shouldSplitCommission ? (parseFloat(row.total) / 2).toFixed(2) : parseFloat(row.total).toFixed(2);
+    const finalCreatedBy = isAdmin ? createdBy : (existingData?.createdBy || selectedExecutive);
 
-          return {
-            requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
-            description: row.description,
-            quantity: parseInt(row.quantity) || 0,
-            rate: parseFloat(row.rate) || 0,
-            days: isTimeBased ? parseInt(row.days) || 1 : undefined,
-            startDate: isTimeBased ? row.startDate : undefined,
-            endDate: isTimeBased ? row.endDate : undefined,
-            total: rowTotal,
-            deliveryDate: row.deliveryDate,
-            customRequirement: row.requirement === "other" ? row.customRequirement : undefined,
-            gstIncluded: row.gstIncluded || false,
-          };
-        }),
-        advanceDate,
-        paymentDate,
-        paymentMethods: paymentMethodStr,
-        advance: finalAdvance,
-        balance: finalBalance,
+    // 🆕 COMBINE ALL REQUIREMENTS INTO ONE STRING FOR REQUIREMENT FIELD
+    const allRequirements = rows
+      .filter((row) => row.requirement)
+      .map((row) => row.requirement === "other" ? row.customRequirement : row.requirement)
+      .join(", ");
+
+    const mainOrderData = {
+      executive: selectedExecutive,
+      business,
+      contactPerson,
+      location: clientLocation,
+      saleClosedBy: saleClosedBy || selectedExecutive,
+      contactCode: "+91",
+      phone,
+      orderDate,
+      target,
+      clientType: clientType || "New",
+      // 🆕 SINGLE CLEAN ROW - ALL REQUIREMENTS IN REQUIREMENT FIELD ONLY
+      rows: [{
+        requirement: allRequirements, // LINE CHANGED: All requirements combined here
+        description: "Order Requirements", // LINE CHANGED: Simple static description
+        quantity: 1, // Single line item
+        rate: parseFloat(totalNum.toFixed(2)),
         total: finalTotal,
-        discount: finalDiscount,
-        discountedTotal: finalDiscountedTotal,
-        chequeNumber,
-        chequeImage,
-        designStatus: design === "no" ? "pending" : "provided",
-        createdBy: finalCreatedBy,
-        commissionSplit: shouldSplitCommission ? {
-          executive1: selectedExecutive,
-          executive2: saleClosedBy,
-          amount1: finalDiscountedTotal,
-          amount2: finalDiscountedTotal,
-          split: true
-        } : {
-          executive: selectedExecutive,
-          amount: parseFloat(discountedTotal),
-          split: false
+        deliveryDate: rows[0]?.deliveryDate || new Date().toISOString().split("T")[0],
+        customRequirement: allRequirements,
+        gstIncluded: rows.some(row => row.gstIncluded)
+      }],
+      advanceDate,
+      paymentDate,
+      paymentMethods: paymentMethodStr,
+      advance: finalAdvance,
+      balance: finalBalance,
+      total: finalTotal,
+      discount: finalDiscount,
+      discountedTotal: finalDiscountedTotal,
+      chequeNumber,
+      chequeImage,
+      designStatus: design === "no" ? "pending" : "provided",
+      createdBy: finalCreatedBy,
+      commissionSplit: shouldSplitCommission ? {
+        executive1: selectedExecutive,
+        executive2: saleClosedBy,
+        amount1: finalDiscountedTotal,
+        amount2: finalDiscountedTotal,
+        split: true
+      } : {
+        executive: selectedExecutive,
+        amount: parseFloat(discountedTotal),
+        split: false
+      }
+    };
+
+    if (shouldSplitCommission) {
+      mainOrderData.isCommissionSplit = true;
+      mainOrderData.splitDetails = {
+        partnerExecutive: saleClosedBy,
+        splitPercentage: 50
+      };
+    }
+
+    console.log('Final order data being submitted:', mainOrderData);
+
+    setIsSubmittingDesign(true);
+    await axios.post("/api/design-requests", designRequestData);
+    setIsSubmittingDesign(false);
+
+    const orderResponse = (existingData && !isCreatingNew)
+      ? await axios.put(`/api/orders/${existingData._id}`, mainOrderData)
+      : await axios.post("/api/submit", mainOrderData);
+
+    // If commission is split, create a duplicate entry for the sale closed by executive
+    if (shouldSplitCommission) {
+      const duplicateOrderData = {
+        ...mainOrderData,
+        executive: saleClosedBy,
+        isCommissionSplit: true,
+        originalOrderId: orderResponse.data._id,
+        splitDetails: {
+          partnerExecutive: selectedExecutive,
+          splitPercentage: 50
         }
       };
 
-      if (shouldSplitCommission) {
-        mainOrderData.isCommissionSplit = true;
-        mainOrderData.splitDetails = {
-          partnerExecutive: saleClosedBy,
-          splitPercentage: 50
-        };
-      }
-
-      console.log('Final order data being submitted:', mainOrderData);
-
-      setIsSubmittingDesign(true);
-      await axios.post("/api/design-requests", designRequestData);
-      setIsSubmittingDesign(false);
-
-      const orderResponse = (existingData && !isCreatingNew)
-        ? await axios.put(`/api/orders/${existingData._id}`, mainOrderData)
-        : await axios.post("/api/submit", mainOrderData);
-
-      // If commission is split, create a duplicate entry for the sale closed by executive
-      if (shouldSplitCommission) {
-        const duplicateOrderData = {
-          ...mainOrderData,
-          executive: saleClosedBy,
-          isCommissionSplit: true,
-          originalOrderId: orderResponse.data._id,
-          splitDetails: {
-            partnerExecutive: selectedExecutive,
-            splitPercentage: 50
-          }
-        };
-
-        await axios.post("/api/submit", duplicateOrderData);
-      }
-
-      // ADD WHATSAPP MESSAGE AFTER SUCCESSFUL SUBMISSION
-      const orderDataForWhatsApp = {
-        business: business,
-        contactPerson: contactPerson,
-        orderNumber: orderResponse.data.orderNumber || `ORD-${Date.now()}`,
-        requirements: rows
-          .filter((row) => row.requirement)
-          .map((row) => row.requirement === "other" ? row.customRequirement : row.requirement)
-          .join(", "),
-        total: discountedTotal,
-        advance: advance,
-        balance: balance,
-        orderDate: orderDate,
-        location: clientLocation,
-        paymentMethods: paymentMethodStr, // This now includes the formatted payment methods
-        advanceDate: advanceDate,
-        paymentDate: paymentDate,
-        chequeNumber: chequeNumber,
-        upiId: selectedUpi,
-        bankName: bankName,
-        transactionRef: transactionRef,
-        poNumber: poNumber
-      };
-
-      // Send WhatsApp message automatically
-      sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
-
-      setShowSuccessModal(true);
-      setTimeout(() => {
-        setShowSuccessModal(false);
-        setIsSubmitting(false);
-        setIsCreatingNew(false);
-        if (onSuccess) onSuccess(orderResponse.data);
-      }, 2000);
-    } catch (err) {
-      console.error("Submission error:", err);
-      alert(`Submission failed: ${err.response?.data?.message || err.message}`);
-      setIsSubmitting(false);
+      await axios.post("/api/submit", duplicateOrderData);
     }
-  };
+
+    // WhatsApp message
+    const orderDataForWhatsApp = {
+      business: business,
+      contactPerson: contactPerson,
+      orderNumber: orderResponse.data.orderNumber || `ORD-${Date.now()}`,
+      requirements: allRequirements, // LINE CHANGED: Use the combined requirements
+      total: discountedTotal,
+      advance: advance,
+      balance: balance,
+      orderDate: orderDate,
+      location: clientLocation,
+      paymentMethods: paymentMethodStr,
+      advanceDate: advanceDate,
+      paymentDate: paymentDate,
+      chequeNumber: chequeNumber,
+      upiId: selectedUpi,
+      bankName: bankName,
+      transactionRef: transactionRef,
+      poNumber: poNumber
+    };
+
+    sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
+
+    setShowSuccessModal(true);
+    setTimeout(() => {
+      setShowSuccessModal(false);
+      setIsSubmitting(false);
+      setIsCreatingNew(false);
+      if (onSuccess) onSuccess(orderResponse.data);
+    }, 2000);
+  } catch (err) {
+    console.error("Submission error:", err);
+    alert(`Submission failed: ${err.response?.data?.message || err.message}`);
+    setIsSubmitting(false);
+  }
+};
 
   const fetchTargetForDate = async (dateString) => {
     if (!dateString || !selectedExecutive) return;

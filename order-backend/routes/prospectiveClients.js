@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ProspectiveClient = require('../models/ProspectiveClients');
 const PRIVILEGED_EXECUTIVES = ['admin1','Soujanya', 'Aleem', 'Sirisha', 'Sangeetha', 'Malleshwari', 'Malli'];
+
 // Create a new prospective client
 router.post('/', async (req, res) => {
     try {
@@ -74,15 +75,30 @@ router.post('/', async (req, res) => {
     }
 });
 
-// Get all prospective clients
+// SINGLE CORRECTED GET ALL PROSPECTIVE CLIENTS ROUTE
 router.get('/', async (req, res) => {
     try {
-        const { userName, role, search, status } = req.query;
+        const { userName, role, search, status, executiveName, filterByExecutive } = req.query;
+
+        console.log('📥 Backend received query:', {
+            userName, role, executiveName, filterByExecutive, search, status
+        });
 
         let query = {};
         
-        // Filter by executive if not admin
-        if (role !== 'Admin') {
+        // CASE 1: If specific executive filtering is requested (from performance view)
+        if (filterByExecutive === 'true' && executiveName) {
+            console.log('🎯 Filtering by executive from performance view:', executiveName);
+            query.ExcutiveName = executiveName;
+        }
+        // CASE 2: Admin or privileged users seeing all prospects
+        else if (role === 'Admin' || PRIVILEGED_EXECUTIVES.includes(userName)) {
+            console.log('👑 Admin/Privileged user - showing all prospects');
+            // No query filter = show all prospects
+        }
+        // CASE 3: Regular executive - only their own prospects
+        else {
+            console.log('👤 Regular executive - showing own prospects only:', userName);
             query.ExcutiveName = userName;
         }
 
@@ -96,9 +112,18 @@ router.get('/', async (req, res) => {
             query.$text = { $search: search };
         }
 
+        console.log('🔍 Final MongoDB query:', query);
+
         const clients = await ProspectiveClient.find(query)
             .sort({ followUpDate: 1, createdAt: -1 });
             
+        console.log('✅ Found clients:', clients.length);
+        console.log('📋 Sample clients:', clients.slice(0, 2).map(c => ({ 
+            id: c._id, 
+            executive: c.ExcutiveName, 
+            business: c.businessName 
+        })));
+        
         res.json(clients);
     } catch (error) {
         console.error('Error fetching prospective clients:', error);
@@ -134,7 +159,7 @@ router.get('/by-phone', async (req, res) => {
     }
 });
 
-// Add this to your prospective-clients routes
+// Get prospective stats
 router.get('/stats', async (req, res) => {
   try {
     const { year, month } = req.query;
@@ -303,6 +328,7 @@ router.delete('/:id', async (req, res) => {
         });
     }
 });
+
 // Get all prospective clients for privileged executives (separate route)
 router.get('/privileged/all', async (req, res) => {
     try {

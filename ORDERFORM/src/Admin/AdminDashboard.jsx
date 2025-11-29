@@ -1016,15 +1016,7 @@ function AdminDashboard() {
               >
                 Dashboard
               </NavLink>
-              <NavLink
-                to="advance-approvals"
-                style={linkStyle('advance-approvals')}
-                onMouseEnter={() => setHoveredItem('advance-approvals')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-              Advance-Approvals
-              </NavLink>
+              
             </>
           )}
         </div>
@@ -1056,7 +1048,15 @@ function AdminDashboard() {
               >
                 Create-Order ➕
               </NavLink>
-
+              <NavLink
+                to="advance-approvals"
+                style={linkStyle('advance-approvals')}
+                onMouseEnter={() => setHoveredItem('advance-approvals')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+              Advance-Approvals
+              </NavLink>
               <NavLink
                 to="view-orders"
                 style={linkStyle('view-orders')}
@@ -1113,11 +1113,20 @@ function AdminDashboard() {
               >
                 View Appointments
               </NavLink>
+              <NavLink
+                to="ledger"
+                style={linkStyle('ledger')}
+                onMouseEnter={() => setHoveredItem('ledger')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Ledger
+              </NavLink>
             </>
           )}
         </div>
 
-        {/* MANAGE USERS Section */}
+      
       {/* MANAGE USERS Section */}
         <div style={styles.sidebarSection}>
           <div
@@ -1297,15 +1306,7 @@ function AdminDashboard() {
                 View Design
               </NavLink>
 
-              <NavLink
-                to="ledger"
-                style={linkStyle('ledger')}
-                onMouseEnter={() => setHoveredItem('ledger')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Ledger
-              </NavLink>
+            
               <NavLink
                 to="design-report"
                 style={linkStyle('design-report')}
@@ -1664,53 +1665,132 @@ function AdminDashboard() {
                   <div>Error loading dashboard data.</div>
                 ) : (
                   <div style={styles.dashboardCards}>
-                    {/* REVENUE CARD - FIXED WITH PROPER TOOLTIP */}
-                    <div 
-                      style={styles.card}
-                      onClick={() => handleChartClick('revenue')}
-                    >
-                      <div>Total Revenue</div>
-                      <div style={styles.growthBadge}>
-                        ↑ {calculateRevenueGrowth()}%
-                      </div>
-                      <div style={styles.revenueAmount}>
-                        {formatAmount(calculateTotalRevenue())}
-                      </div>
-                      <div style={styles.revenueSubtext}>
-                        {formatAmountFull(calculateTotalRevenue())}
-                      </div>
-                      <div style={styles.revenueSubtext}>
-                        {getTimePeriodText()}
-                      </div>
-                      <div style={styles.revenueChart}>
-                        <Line
+                    {/* Total Revenue Bar Graph - NOW THE FIRST CARD */}
+                    <div style={styles.card}>
+                      <div>Total Revenue {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : '(Monthly)'}</div>
+                      <div style={styles.chartContainer}>
+                        <Bar
                           data={{
                             labels: selectedMonth !== null
                               ? chartData?.weeklyOrders?.map((_, i) => `Week ${i + 1}`) || ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
                               : monthLabels,
                             datasets: [
                               {
-                                label: 'Revenue',
+                                label: 'Total Revenue',
                                 data: selectedMonth !== null
                                   ? chartData?.weeklyOrders?.map(w => w.amount || 0) || []
                                   : safeArray(chartData?.amountByMonth),
-                                borderColor: 'rgba(54, 162, 235, 0.8)',
-                                backgroundColor: 'rgba(54, 162, 235, 0.1)',
-                                tension: 0.4,
-                                fill: {
-                                  target: 'origin',
-                                  above: 'rgba(54, 162, 235, 0.1)',
-                                },
-                                pointBackgroundColor: 'rgba(54, 162, 235, 1)',
-                                pointBorderColor: 'white',
-                                pointBorderWidth: 2,
+                                backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                                borderColor: 'rgba(75, 192, 192, 1)',
+                                borderWidth: 1,
+                                barPercentage: 0.8,
+                                categoryPercentage: 0.9
                               }
                             ]
                           }}
-                          options={revenueChartOptions}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                              legend: { display: false },
+                              tooltip: {
+                                callbacks: {
+                                  title: function(tooltipItems) {
+                                    // Show month/week name in title
+                                    const dataIndex = tooltipItems[0].dataIndex;
+                                    if (selectedMonth !== null) {
+                                      return `Week ${dataIndex + 1}`;
+                                    } else {
+                                      return monthLabels[dataIndex];
+                                    }
+                                  },
+                                  label: (context) => {
+                                    const amount = context.raw;
+                                    const formattedAmount = formatAmount(amount);
+                                    const fullAmount = formatAmountFull(amount);
+                                    return [
+                                      `Revenue: ₹${formattedAmount}`,
+                                      `Amount: ${fullAmount}`
+                                    ];
+                                  }
+                                }
+                              }
+                            },
+                            onClick: (_, elements) => {
+                              if (elements.length > 0) {
+                                const queryParams = new URLSearchParams();
+
+                                if (selectedMonth === null) {
+                                  // When viewing all months, click on a month bar
+                                  const clickedMonth = elements[0].index + 1;
+                                  queryParams.append('month', clickedMonth);
+                                  queryParams.append('year', year);
+
+                                  // Add the amount for display in view orders
+                                  const monthAmount = safeArray(chartData?.amountByMonth)[elements[0].index] || 0;
+                                  queryParams.append('monthAmount', monthAmount);
+                                  queryParams.append('monthName', monthLabels[elements[0].index]);
+                                } else {
+                                  // When viewing specific month, click on a week bar
+                                  const weekNumber = elements[0].index + 1;
+                                  queryParams.append('month', selectedMonth + 1);
+                                  queryParams.append('year', year);
+                                  queryParams.append('week', weekNumber);
+
+                                  // Add the amount for display in view orders
+                                  const weekAmount = chartData?.weeklyOrders?.[elements[0].index]?.amount || 0;
+                                  queryParams.append('weekAmount', weekAmount);
+                                  queryParams.append('monthName', monthLabels[selectedMonth]);
+                                }
+
+                                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                              }
+                            },
+                            scales: {
+                              x: {
+                                grid: { display: false },
+                                ticks: { autoSkip: false }
+                              },
+                              y: {
+                                beginAtZero: true,
+                                ticks: {
+                                  callback: function(value) {
+                                    if (value >= 100000) {
+                                      return (value / 100000) + 'L';
+                                    } else if (value >= 1000) {
+                                      return (value / 1000) + 'K';
+                                    }
+                                    return value;
+                                  }
+                                },
+                                grid: { color: 'rgba(0,0,0,0.05)' }
+                              }
+                            }
+                          }}
                         />
                       </div>
-                      <div style={styles.clickableSection} />
+                      <div style={styles.number}>
+                        {formatAmount(calculateTotalRevenue())}
+                      </div>
+                      <div style={styles.revenueSubtext}>
+                        {formatAmountFull(calculateTotalRevenue())}
+                      </div>
+                      {selectedMonth !== null && (
+                        <button
+                          onClick={() => setSelectedMonth(null)}
+                          style={{
+                            padding: '5px 10px',
+                            backgroundColor: '#003366',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            marginTop: '10px'
+                          }}
+                        >
+                          View All Months
+                        </button>
+                      )}
                     </div>
 
                     {/* Total Orders Bar Chart - WITH AMOUNT TOOLTIP */}

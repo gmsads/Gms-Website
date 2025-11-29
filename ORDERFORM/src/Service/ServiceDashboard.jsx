@@ -1468,7 +1468,51 @@ const showErrorMessage = (error, originalState) => {
           Prospects ➕
         </NavLink>
         <NavLink
+          to="/service-dashboard/serviceform"
+          style={({ isActive }) => ({
+            padding: '15px 25px',
+            cursor: 'pointer',
+            borderBottom: '1px solid rgba(255,255,255,0.2)',
+            color: 'white',
+            textDecoration: 'none',
+            display: 'block',
+            transition: 'background-color 0.3s',
+            fontSize: '16px',
+            fontWeight: '500',
+            ...(isActive ? {
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              fontWeight: 'bold',
+              fontSize: '16px',
+            } : {})
+          })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+        >
+          Mobilevan /TryCycle service
+        </NavLink>
+        <NavLink
           to="/service-dashboard/view-prospective"
+          style={({ isActive }) => ({
+            padding: '15px 25px',
+            cursor: 'pointer',
+            borderBottom: '1px solid rgba(255,255,255,0.2)',
+            color: 'white',
+            textDecoration: 'none',
+            display: 'block',
+            transition: 'background-color 0.3s',
+            fontSize: '16px',
+            fontWeight: '500',
+            ...(isActive ? {
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              fontWeight: 'bold',
+              fontSize: '16px',
+            } : {})
+          })}
+          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+        >
+          View Prospects
+        </NavLink>
+        <NavLink
+          to="/service-dashboard/"
           style={({ isActive }) => ({
             padding: '15px 25px',
             cursor: 'pointer',

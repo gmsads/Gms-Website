@@ -85,6 +85,22 @@ const apiService = {
     }
   },
 
+  async updateCallLog(callLogId, updates) {
+    try {
+      const response = await fetch(`/api/call-logs/${callLogId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating call log:', error);
+      return { error: error.message };
+    }
+  },
+
   async fetchCallLogs() {
     try {
       const response = await fetch('/api/call-logs');
@@ -111,6 +127,19 @@ function TeleCRM() {
   const [callDuration, setCallDuration] = useState('');
   const [importResults, setImportResults] = useState(null);
   const [showImportResults, setShowImportResults] = useState(false);
+  const [showAddLeadModal, setShowAddLeadModal] = useState(false);
+  const [newLead, setNewLead] = useState({
+    Date: '',
+    name: '',
+    phone: '',
+    email: '',
+    company: '',
+    source: 'Manual',
+    status: 'pending',
+    notes: ''
+  });
+  const [activeCallLog, setActiveCallLog] = useState(null);
+  const [callStartTime, setCallStartTime] = useState(null);
 
   // Generate months and years for filters
   const months = [
@@ -141,6 +170,13 @@ function TeleCRM() {
     fetchLeads();
     fetchCallLogs();
   }, [filterStatus, monthFilter, yearFilter]);
+
+  // Set default date for new lead
+  useEffect(() => {
+    const today = new Date();
+    const defaultDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+    setNewLead(prev => ({ ...prev, Date: defaultDate }));
+  }, []);
 
   const fetchLeads = async () => {
     setLoading(true);
@@ -176,172 +212,219 @@ function TeleCRM() {
   };
 
   // Format date for display
-const formatDate = (dateString) => {
-  if (!dateString) return '-';
-  try {
-    // Check if it's already in DD/MM/YYYY format
-    if (typeof dateString === 'string' && dateString.includes('/')) {
-      const parts = dateString.split('/');
-      if (parts.length === 3) {
-        const day = parts[0].padStart(2, '0');
-        const month = parts[1].padStart(2, '0');
-        const year = parts[2];
-        return `${day}/${month}/${year}`;
-      }
-    }
-    
-    // Handle ISO date strings
-    const date = new Date(dateString);
-    if (!isNaN(date.getTime())) {
-      return date.toLocaleDateString('en-GB'); // This gives DD/MM/YYYY format
-    }
-    
-    return dateString;
-  } catch (error) {
-    return dateString;
-  }
-};
-
-// Import leads from Excel
-const handleImportFromExcel = (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  if (!executiveName.trim()) {
-    alert('Please enter your name before importing leads');
-    e.target.value = '';
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = async (event) => {
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
     try {
-      const data = new Uint8Array(event.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-      if (jsonData.length === 0) {
-        alert('No data found in Excel file');
-        return;
-      }
-
-      setLoading(true);
-
-      // Process Excel data - flexible column names
-      const leadsToInsert = [];
-      const duplicateLeads = [];
-      const newLeads = [];
-
-      // Get today's date in DD/MM/YYYY format for default
-      const today = new Date();
-      const defaultDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
-
-      for (const row of jsonData) {
-        // Handle different column name variations
-        const name = row.Name || row.name || row.NAME || row['Customer Name'] || row['Client Name'] || 'Unknown';
-        const phone = String(row.Phone || row.phone || row.PHONE || row['Phone Number'] || row['Contact'] || row['Mobile'] || '');
-        const company = row.Company || row.company || row.COMPANY || row['Company Name'] || row['Business'] || '';
-        const email = row.Email || row.email || row.EMAIL || row['Email Address'] || '';
-        
-        // SIMPLE FIX: ALWAYS use today's date, ignore whatever is in Excel
-        let date = defaultDate;
-
-        // Validate required fields
-        if (!name || name === 'Unknown') {
-          throw new Error(`Row ${jsonData.indexOf(row) + 2}: Name is required`);
-        }
-        if (!phone) {
-          throw new Error(`Row ${jsonData.indexOf(row) + 2}: Phone number is required`);
-        }
-
-        const leadData = {
-          Date: date,
-          name: name,
-          phone: phone,
-          email: email,
-          company: company,
-          source: 'Excel Import',
-          employee_name: executiveName,
-          status: 'pending',
-          notes: '',
-        };
-
-        // Check if lead already exists
-        const existingLead = checkExistingLead(phone);
-        if (existingLead) {
-          duplicateLeads.push({
-            ...leadData,
-            existingData: existingLead
-          });
-        } else {
-          newLeads.push(leadData);
-          leadsToInsert.push(leadData);
-        }
-      }
-
-      console.log('New leads to insert:', newLeads.length);
-      console.log('Duplicate leads found:', duplicateLeads.length);
-
-      let result;
-      if (leadsToInsert.length > 0) {
-        // Send to backend for storage
-        result = await apiService.bulkInsertLeads(leadsToInsert);
-        console.log('Backend response:', result);
-      }
-
-      // Show import results
-      setImportResults({
-        total: jsonData.length,
-        inserted: leadsToInsert.length,
-        duplicates: duplicateLeads.length,
-        duplicateLeads: duplicateLeads,
-        newLeads: newLeads
-      });
-      setShowImportResults(true);
-
-      if (result && result.error) {
-        alert('Error importing leads: ' + result.error);
-      } else {
-        if (leadsToInsert.length > 0) {
-          fetchLeads(); // Refresh the leads list
+      // Check if it's already in DD/MM/YYYY format
+      if (typeof dateString === 'string' && dateString.includes('/')) {
+        const parts = dateString.split('/');
+        if (parts.length === 3) {
+          const day = parts[0].padStart(2, '0');
+          const month = parts[1].padStart(2, '0');
+          const year = parts[2];
+          return `${day}/${month}/${year}`;
         }
       }
       
+      // Handle ISO date strings
+      const date = new Date(dateString);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString('en-GB'); // This gives DD/MM/YYYY format
+      }
+      
+      return dateString;
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  // Import leads from Excel
+  const handleImportFromExcel = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!executiveName.trim()) {
+      alert('Please enter your name before importing leads');
       e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        if (jsonData.length === 0) {
+          alert('No data found in Excel file');
+          return;
+        }
+
+        setLoading(true);
+
+        // Process Excel data - flexible column names
+        const leadsToInsert = [];
+        const duplicateLeads = [];
+        const newLeads = [];
+
+        // Get today's date in DD/MM/YYYY format for default
+        const today = new Date();
+        const defaultDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+
+        for (const row of jsonData) {
+          // Handle different column name variations
+          const name = row.Name || row.name || row.NAME || row['Customer Name'] || row['Client Name'] || 'Unknown';
+          const phone = String(row.Phone || row.phone || row.PHONE || row['Phone Number'] || row['Contact'] || row['Mobile'] || '');
+          const company = row.Company || row.company || row.COMPANY || row['Company Name'] || row['Business'] || '';
+          const email = row.Email || row.email || row.EMAIL || row['Email Address'] || '';
+          
+          // Use date from Excel if available and valid, otherwise use today's date
+          let date = defaultDate;
+          if (row.Date && isValidDate(row.Date)) {
+            date = formatDate(row.Date);
+          }
+
+          // Validate required fields
+          if (!name || name === 'Unknown') {
+            throw new Error(`Row ${jsonData.indexOf(row) + 2}: Name is required`);
+          }
+          if (!phone) {
+            throw new Error(`Row ${jsonData.indexOf(row) + 2}: Phone number is required`);
+          }
+
+          const leadData = {
+            Date: date,
+            name: name,
+            phone: phone,
+            email: email,
+            company: company,
+            source: 'Excel Import',
+            employee_name: executiveName,
+            status: 'pending',
+            notes: '',
+          };
+
+          // Check if lead already exists
+          const existingLead = checkExistingLead(phone);
+          if (existingLead) {
+            duplicateLeads.push({
+              ...leadData,
+              existingData: existingLead
+            });
+          } else {
+            newLeads.push(leadData);
+            leadsToInsert.push(leadData);
+          }
+        }
+
+        console.log('New leads to insert:', newLeads.length);
+        console.log('Duplicate leads found:', duplicateLeads.length);
+
+        let result;
+        if (leadsToInsert.length > 0) {
+          // Send to backend for storage
+          result = await apiService.bulkInsertLeads(leadsToInsert);
+          console.log('Backend response:', result);
+        }
+
+        // Show import results
+        setImportResults({
+          total: jsonData.length,
+          inserted: leadsToInsert.length,
+          duplicates: duplicateLeads.length,
+          duplicateLeads: duplicateLeads,
+          newLeads: newLeads
+        });
+        setShowImportResults(true);
+
+        if (result && result.error) {
+          alert('Error importing leads: ' + result.error);
+        } else {
+          if (leadsToInsert.length > 0) {
+            fetchLeads(); // Refresh the leads list
+          }
+        }
+        
+        e.target.value = '';
+      } catch (err) {
+        alert('Error reading file: ' + err.message);
+      }
+      setLoading(false);
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  // Helper function to validate date format
+  const isValidDate = (dateString) => {
+    // Check if it's in DD/MM/YYYY format
+    const dateRegex = /^\d{1,2}\/\d{1,2}\/\d{4}$/;
+    if (!dateRegex.test(dateString)) return false;
+    
+    const parts = dateString.split('/');
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const year = parseInt(parts[2], 10);
+    
+    // Check the ranges
+    if (year < 1000 || year > 3000 || month === 0 || month > 12) return false;
+    
+    const monthLength = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    
+    // Adjust for leap years
+    if (year % 400 === 0 || (year % 100 !== 0 && year % 4 === 0)) {
+      monthLength[1] = 29;
+    }
+    
+    // Check the day range
+    return day > 0 && day <= monthLength[month - 1];
+  };
+
+  // Add manual lead
+  const handleAddLead = async () => {
+    if (!newLead.name || !newLead.phone) {
+      alert('Name and Phone are required fields');
+      return;
+    }
+
+    if (!isValidDate(newLead.Date)) {
+      alert('Please enter a valid date in DD/MM/YYYY format');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const leadData = {
+        ...newLead,
+        employee_name: executiveName
+      };
+
+      const result = await apiService.createLead(leadData);
+      
+      if (result.error) {
+        alert('Error creating lead: ' + result.error);
+      } else {
+        alert('Lead added successfully!');
+        setShowAddLeadModal(false);
+        setNewLead({
+          Date: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
+          name: '',
+          phone: '',
+          email: '',
+          company: '',
+          source: 'Manual',
+          status: 'pending',
+          notes: ''
+        });
+        fetchLeads();
+      }
     } catch (err) {
-      alert('Error reading file: ' + err.message);
+      alert('Error: ' + err.message);
     }
     setLoading(false);
   };
-  reader.readAsArrayBuffer(file);
-};
-
-// Helper function to validate date format
-const isValidDate = (dateString) => {
-  // Check if it's in DD/MM/YYYY format
-  const dateRegex = /^\d{1,2}\/\d{1,2}\/\d{4}$/;
-  if (!dateRegex.test(dateString)) return false;
-  
-  const parts = dateString.split('/');
-  const day = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10);
-  const year = parseInt(parts[2], 10);
-  
-  // Check the ranges
-  if (year < 1000 || year > 3000 || month === 0 || month > 12) return false;
-  
-  const monthLength = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  
-  // Adjust for leap years
-  if (year % 400 === 0 || (year % 100 !== 0 && year % 4 === 0)) {
-    monthLength[1] = 29;
-  }
-  
-  // Check the day range
-  return day > 0 && day <= monthLength[month - 1];
-};
 
   const handleCallClick = (lead) => {
     if (!executivePhone.trim()) {
@@ -368,6 +451,9 @@ const isValidDate = (dateString) => {
 
       if (callLogResult.error) {
         console.error('Error creating call log:', callLogResult.error);
+      } else {
+        setActiveCallLog(callLogResult.data);
+        setCallStartTime(new Date());
       }
 
       // Update lead with call timestamp
@@ -397,20 +483,32 @@ const isValidDate = (dateString) => {
 
     try {
       const duration = callDuration ? parseInt(callDuration) : 0;
+      
+      // Calculate actual call duration if call was started
+      let actualDuration = duration;
+      if (callStartTime && activeCallLog) {
+        const endTime = new Date();
+        actualDuration = Math.round((endTime - callStartTime) / 1000); // Convert to seconds
+      }
 
-      // Log the call completion
-      const callLogResult = await apiService.createCallLog({
-        lead_id: selectedLead._id,
-        executive_name: executiveName,
-        executive_phone: executivePhone,
-        client_phone: selectedLead.phone,
-        call_status: callResult,
-        call_duration: duration,
-        notes: `Call ${callResult}. Duration: ${duration} seconds`
-      });
-
-      if (callLogResult.error) {
-        console.error('Error creating call log:', callLogResult.error);
+      // Update the call log with end duration
+      if (activeCallLog) {
+        await apiService.updateCallLog(activeCallLog._id, {
+          call_status: callResult,
+          call_end_duration: actualDuration,
+          notes: `Call ${callResult}. Duration: ${actualDuration} seconds`
+        });
+      } else {
+        // Fallback: create new call log if active call log doesn't exist
+        await apiService.createCallLog({
+          lead_id: selectedLead._id,
+          executive_name: executiveName,
+          executive_phone: executivePhone,
+          client_phone: selectedLead.phone,
+          call_status: callResult,
+          call_end_duration: actualDuration,
+          notes: `Call ${callResult}. Duration: ${actualDuration} seconds`
+        });
       }
 
       const statusMap = {
@@ -421,9 +519,10 @@ const isValidDate = (dateString) => {
         'no_answer': 'no_answer'
       };
 
-      // Update lead status
+      // Update lead status and call end duration
       const updateResult = await apiService.updateLead(selectedLead._id, {
         status: statusMap[callResult] || 'pending',
+        call_end_duration: actualDuration
       });
 
       if (updateResult.error) {
@@ -434,11 +533,13 @@ const isValidDate = (dateString) => {
       setCallResult('completed');
       setCallDuration('');
       setSelectedLead(null);
+      setActiveCallLog(null);
+      setCallStartTime(null);
 
       fetchLeads();
       fetchCallLogs();
       
-      alert(`Call completed! Status updated to: ${callResult}`);
+      alert(`Call completed! Status updated to: ${callResult}. Duration: ${actualDuration} seconds`);
     } catch (err) {
       alert('Error: ' + err.message);
     }
@@ -500,6 +601,13 @@ const isValidDate = (dateString) => {
     }
 
     return baseStyle;
+  };
+
+  const formatDuration = (seconds) => {
+    if (!seconds) return '-';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
   };
 
   const styles = {
@@ -779,6 +887,15 @@ const isValidDate = (dateString) => {
     duplicateRow: {
       backgroundColor: '#fff3cd !important',
       borderLeft: '4px solid #ffc107'
+    },
+    formRow: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: '15px',
+      marginBottom: '15px'
+    },
+    fullWidth: {
+      gridColumn: '1 / -1'
     }
   };
 
@@ -822,6 +939,18 @@ const isValidDate = (dateString) => {
         </div>
 
         <div style={styles.inputGroup}>
+          <label style={styles.label}>Add Lead Manually</label>
+          <button
+            onClick={() => setShowAddLeadModal(true)}
+            style={styles.buttonGreen}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#218838'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#28a745'}
+          >
+            ➕ Add Lead
+          </button>
+        </div>
+
+        <div style={styles.inputGroup}>
           <label style={styles.label}>Import Excel Data</label>
           <button
             onClick={() => document.getElementById('importExcelInput').click()}
@@ -829,7 +958,7 @@ const isValidDate = (dateString) => {
             onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#2471a3'}
             onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2980b9'}
           >
-            Import from Excel
+            📊 Import from Excel
           </button>
           
           {/* Hidden file input */}
@@ -938,7 +1067,7 @@ const isValidDate = (dateString) => {
           <div style={styles.loading}>Loading...</div>
         ) : leads.length === 0 ? (
           <div style={styles.noData}>
-            No leads found. Import an Excel file to get started!
+            No leads found. Add a lead manually or import an Excel file to get started!
           </div>
         ) : (
           <table style={styles.table}>
@@ -950,6 +1079,7 @@ const isValidDate = (dateString) => {
                 <th style={styles.th}>Email</th>
                 <th style={styles.th}>Company</th>
                 <th style={styles.th}>Status</th>
+                <th style={styles.th}>Call Duration</th>
                 <th style={styles.th}>Notes</th>
                 <th style={styles.th}>Action</th>
                 <th style={styles.th}>Last Updated</th>
@@ -997,6 +1127,11 @@ const isValidDate = (dateString) => {
                     </select>
                   </td>
                   <td style={styles.td}>
+                    <span style={{fontSize: '12px', color: '#666'}}>
+                      {formatDuration(lead.call_end_duration)}
+                    </span>
+                  </td>
+                  <td style={styles.td}>
                     <textarea
                       defaultValue={lead.notes || ''}
                       onBlur={(e) => handleNotesChange(lead._id, e.target.value)}
@@ -1026,6 +1161,118 @@ const isValidDate = (dateString) => {
           </table>
         )}
       </div>
+
+      {/* Add Lead Modal */}
+      {showAddLeadModal && (
+        <div style={styles.modal} onClick={() => setShowAddLeadModal(false)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>➕ Add New Lead</h2>
+
+            <div style={styles.formRow}>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Date (DD/MM/YYYY)*</label>
+                <input
+                  type="text"
+                  value={newLead.Date}
+                  onChange={(e) => setNewLead({...newLead, Date: e.target.value})}
+                  placeholder="DD/MM/YYYY"
+                  style={styles.input}
+                />
+              </div>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Source</label>
+                <select
+                  value={newLead.source}
+                  onChange={(e) => setNewLead({...newLead, source: e.target.value})}
+                  style={styles.select}
+                >
+                  <option value="Manual">Manual</option>
+                  <option value="Google">Google</option>
+                  <option value="Referral">Referral</option>
+                  <option value="Website">Website</option>
+                  <option value="Social Media">Social Media</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={styles.formRow}>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Name*</label>
+                <input
+                  type="text"
+                  value={newLead.name}
+                  onChange={(e) => setNewLead({...newLead, name: e.target.value})}
+                  placeholder="Client name"
+                  style={styles.input}
+                />
+              </div>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Phone*</label>
+                <input
+                  type="tel"
+                  value={newLead.phone}
+                  onChange={(e) => setNewLead({...newLead, phone: e.target.value})}
+                  placeholder="Phone number"
+                  style={styles.input}
+                />
+              </div>
+            </div>
+
+            <div style={styles.formRow}>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Email</label>
+                <input
+                  type="email"
+                  value={newLead.email}
+                  onChange={(e) => setNewLead({...newLead, email: e.target.value})}
+                  placeholder="Email address"
+                  style={styles.input}
+                />
+              </div>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Company</label>
+                <input
+                  type="text"
+                  value={newLead.company}
+                  onChange={(e) => setNewLead({...newLead, company: e.target.value})}
+                  placeholder="Company name"
+                  style={styles.input}
+                />
+              </div>
+            </div>
+
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>Notes</label>
+              <textarea
+                value={newLead.notes}
+                onChange={(e) => setNewLead({...newLead, notes: e.target.value})}
+                placeholder="Additional notes..."
+                style={{...styles.notesInput, minHeight: '80px'}}
+              />
+            </div>
+
+            <div style={styles.modalButtonGroup}>
+              <button
+                onClick={handleAddLead}
+                style={{...styles.button, flex: 2, backgroundColor: '#28a745'}}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#218838'}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#28a745'}
+                disabled={loading}
+              >
+                {loading ? 'Adding...' : '✓ Add Lead'}
+              </button>
+              <button
+                onClick={() => setShowAddLeadModal(false)}
+                style={{...styles.button, flex: 1, backgroundColor: '#6c757d'}}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#5a6268'}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#6c757d'}
+              >
+                ✕ Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCallModal && selectedLead && (
         <div style={styles.modal} onClick={() => setShowCallModal(false)}>
@@ -1079,6 +1326,9 @@ const isValidDate = (dateString) => {
                 placeholder="e.g., 120"
                 style={styles.input}
               />
+              <small style={{color: '#666'}}>
+                Leave empty for automatic duration calculation when using Start Call
+              </small>
             </div>
 
             <div style={styles.modalButtonGroup}>

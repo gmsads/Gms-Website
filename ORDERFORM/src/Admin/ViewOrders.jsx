@@ -341,6 +341,113 @@ function ViewOrders() {
     }
   };
 
+  // Function to fetch orders from API with proper role-based filtering
+  const fetchOrders = async (role, name, month = null, year = null, clientType = null, executive = null, executiveName = null) => {
+    // Set loading state and clear errors
+    setLoading(true);
+    setError(null);
+    try {
+      let url = API_ENDPOINTS.ORDERS;
+
+      // Get URL parameters for executive filtering from performance view
+      const searchParams = new URLSearchParams(location.search);
+      const executiveFromUrl = searchParams.get('executive');
+      const executiveTypeFromUrl = searchParams.get('executiveType');
+      const executiveNameFromUrl = searchParams.get('executiveName');
+
+      console.log('🔍 Fetching orders with params:', {
+        role, 
+        name, 
+        month, 
+        year, 
+        clientType, 
+        executive, 
+        executiveName,
+        executiveFromUrl,
+        executiveTypeFromUrl,
+        executiveNameFromUrl
+      });
+
+      // Build query parameters
+      const queryParams = new URLSearchParams();
+      
+      // CASE 1: If specific executive filtering is requested from performance view
+      if (executiveNameFromUrl) {
+        console.log('🎯 Filtering by specific executive from performance view:', executiveNameFromUrl);
+        queryParams.append('executive', executiveNameFromUrl);
+        queryParams.append('filterByExecutive', 'true');
+      }
+      // CASE 2: Filter by current user if they're a regular executive
+      else {
+        const rolesThatCanSeeAll = ['Admin', 'Account', 'Service Executive'];
+        const shouldFilter = role && !rolesThatCanSeeAll.includes(role) && name;
+        
+        if (shouldFilter) {
+          queryParams.append('executive', name);
+          console.log('👤 FILTERING: Showing only orders for current executive:', name);
+        } else {
+          console.log('👑 NO FILTER: Showing all orders for role:', role);
+        }
+      }
+
+      // Add other filters to query parameters
+      if (month) queryParams.append('month', month);
+      if (year) queryParams.append('year', year);
+      if (clientType) queryParams.append('clientType', clientType);
+      if (executive) queryParams.append('executive', executive);
+      if (executiveName) queryParams.append('executiveName', executiveName);
+
+      // Log API call for debugging
+      console.log('📡 API Call:', `${url}?${queryParams.toString()}`);
+      
+      // Make API request
+      const res = await axios.get(`${url}?${queryParams.toString()}`);
+      console.log('📦 Total orders received from API:', res.data.length);
+
+      // Filter orders to only include 2025 orders
+      let filteredOrders = res.data.filter(order => {
+        if (!order.orderDate) return false;
+        const orderDate = new Date(order.orderDate);
+        if (isNaN(orderDate.getTime())) return false;
+        return orderDate.getFullYear() === 2025;
+      });
+
+      console.log('📊 Orders after 2025 filter:', filteredOrders.length);
+
+      // Verify filtering for debugging
+      if (executiveNameFromUrl) {
+        const executiveOrders = filteredOrders.filter(order => order.executive === executiveNameFromUrl);
+        console.log('🔍 VERIFICATION: Executive orders count:', executiveOrders.length);
+        console.log('🔍 VERIFICATION: Executive orders:', executiveOrders.map(o => ({ 
+          orderNo: o.orderNo, 
+          executive: o.executive,
+          match: o.executive === executiveNameFromUrl 
+        })));
+      }
+
+      // Sort orders by date (newest first)
+      const sortedOrders = filteredOrders.sort((a, b) => {
+        const dateA = new Date(a.orderDate || 0);
+        const dateB = new Date(b.orderDate || 0);
+        return dateB - dateA;
+      });
+
+      // Update state with fetched and processed orders
+      setOrders(sortedOrders);
+      setGroupedOrders(groupOrdersByMonth(sortedOrders));
+
+      console.log('✅ Final orders count:', sortedOrders.length);
+    } catch (err) {
+      // Handle fetch errors
+      console.error('❌ Error fetching orders:', err);
+      setError('Failed to fetch orders. Please try again.');
+      toast.error('Failed to fetch orders. Please try again.');
+    } finally {
+      // Reset loading state
+      setLoading(false);
+    }
+  };
+
   // useEffect hook to fetch orders on component mount or when filters change
   useEffect(() => {
     // Parse URL query parameters
@@ -377,8 +484,16 @@ function ViewOrders() {
       });
     }
 
-    // Update executive filters state
-    if (executive || executiveType || executiveName) {
+    // Update executive filters state - prioritize performance view filters
+    const executiveNameFromUrl = params.get('executiveName');
+    if (executiveNameFromUrl) {
+      console.log('🎯 Setting executive filter from performance view:', executiveNameFromUrl);
+      setAppliedExecutiveFilters({
+        executive: executive || '',
+        executiveType: executiveType || '',
+        executiveName: executiveNameFromUrl ? decodeURIComponent(executiveNameFromUrl) : ''
+      });
+    } else if (executive || executiveType || executiveName) {
       setAppliedExecutiveFilters({
         executive,
         executiveType,
@@ -396,91 +511,6 @@ function ViewOrders() {
     const { role, name } = getUserInfo();
     fetchOrders(role, name, month, year, clientType, executive, executiveName);
   }, [location.search, location.state]); // Re-run when search params or location state changes
-
-  // Function to fetch orders from API with proper role-based filtering
-  const fetchOrders = async (role, name, month = null, year = null, clientType = null, executive = null, executiveName = null) => {
-    // Set loading state and clear errors
-    setLoading(true);
-    setError(null);
-    try {
-      let url = API_ENDPOINTS.ORDERS;
-
-      // Log fetch parameters for debugging
-      console.log('Fetching orders with params:', {
-        role, name, month, year, clientType, executive, executiveName
-      });
-
-      // Build query parameters
-      const queryParams = new URLSearchParams();
-      
-      // Determine if orders should be filtered by executive
-      const rolesThatCanSeeAll = ['Admin', 'Account', 'Service Executive'];
-      const shouldFilter = role && !rolesThatCanSeeAll.includes(role) && name;
-      
-      // Add executive filter for non-privileged users
-      if (shouldFilter) {
-        queryParams.append('executive', name);
-        console.log('🔒 FILTERING: Showing only orders for executive:', name);
-      } else {
-        console.log('👑 NO FILTER: Showing all orders for role:', role);
-      }
-
-      // Add other filters to query parameters
-      if (month) queryParams.append('month', month);
-      if (year) queryParams.append('year', year);
-      if (clientType) queryParams.append('clientType', clientType);
-      if (executive) queryParams.append('executive', executive);
-      if (executiveName) queryParams.append('executiveName', executiveName);
-
-      // Log API call for debugging
-      console.log('📡 API Call:', `${url}?${queryParams.toString()}`);
-      // Make API request
-      const res = await axios.get(`${url}?${queryParams.toString()}`);
-      console.log('📦 Total orders received from API:', res.data.length);
-
-      // Filter orders to only include 2025 orders
-      let filteredOrders = res.data.filter(order => {
-        if (!order.orderDate) return false;
-        const orderDate = new Date(order.orderDate);
-        if (isNaN(orderDate.getTime())) return false;
-        return orderDate.getFullYear() === 2025;
-      });
-
-      console.log('📊 Orders after 2025 filter:', filteredOrders.length);
-
-      // Verify filtering for non-privileged users
-      if (shouldFilter) {
-        const userOrders = filteredOrders.filter(order => order.executive === name);
-        console.log('🔍 VERIFICATION: User orders count:', userOrders.length);
-        console.log('🔍 VERIFICATION: User orders:', userOrders.map(o => ({ 
-          orderNo: o.orderNo, 
-          executive: o.executive,
-          match: o.executive === name 
-        })));
-      }
-
-      // Sort orders by date (newest first)
-      const sortedOrders = filteredOrders.sort((a, b) => {
-        const dateA = new Date(a.orderDate || 0);
-        const dateB = new Date(b.orderDate || 0);
-        return dateB - dateA;
-      });
-
-      // Update state with fetched and processed orders
-      setOrders(sortedOrders);
-      setGroupedOrders(groupOrdersByMonth(sortedOrders));
-
-      console.log('✅ Final orders count:', sortedOrders.length);
-    } catch (err) {
-      // Handle fetch errors
-      console.error('❌ Error fetching orders:', err);
-      setError('Failed to fetch orders. Please try again.');
-      toast.error('Failed to fetch orders. Please try again.');
-    } finally {
-      // Reset loading state
-      setLoading(false);
-    }
-  };
 
   // Function to clear all filters
   const clearAllFilters = () => {
@@ -1252,17 +1282,23 @@ function ViewOrders() {
 
       {/* User Role Info Banner */}
       <div style={{
-        backgroundColor: shouldSeeOnlyOwnOrders() ? '#e3f2fd' : '#f3e5f5',
+        backgroundColor: appliedExecutiveFilters.executiveName ? '#fff3cd' : 
+                        shouldSeeOnlyOwnOrders() ? '#e3f2fd' : '#f3e5f5',
         padding: '10px 15px',
         borderRadius: '6px',
         marginBottom: '20px',
-        border: `2px solid ${shouldSeeOnlyOwnOrders() ? '#2196f3' : '#9c27b0'}`,
+        border: `2px solid ${
+          appliedExecutiveFilters.executiveName ? '#ffc107' : 
+          shouldSeeOnlyOwnOrders() ? '#2196f3' : '#9c27b0'
+        }`,
         textAlign: 'center',
         fontWeight: 'bold'
       }}>
-        {shouldSeeOnlyOwnOrders() 
-          ? `👤 Viewing Your Orders Only - ${executiveName || 'User'} (${userRole || 'User'})`
-          : `👑 Viewing All Orders - ${userRole || 'Admin'} Role`
+        {appliedExecutiveFilters.executiveName 
+          ? `🔍 Viewing Orders for: ${appliedExecutiveFilters.executiveName}`
+          : shouldSeeOnlyOwnOrders() 
+            ? `👤 Viewing Your Orders Only - ${executiveName || 'User'} (${userRole || 'User'})`
+            : `👑 Viewing All Orders - ${userRole || 'Admin'} Role`
         }
       </div>
 
@@ -1570,15 +1606,16 @@ function ViewOrders() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            backgroundColor: 'white',
+            backgroundColor: '#fff3cd',
             padding: '8px 12px',
-            borderRadius: '4px'
+            borderRadius: '4px',
+            border: '1px solid #ffc107'
           }}>
             <span>
               <strong>
-                {appliedExecutiveFilters.executiveType === 'executive' ? 'Sales Executive' :
-                  appliedExecutiveFilters.executiveType === 'service' ? 'Service Executive' :
-                    appliedExecutiveFilters.executiveType === 'account' ? 'Account Executive' : 'Executive'}:
+                {appliedExecutiveFilters.executiveType === 'executive' ? '🎯 Sales Executive' :
+                  appliedExecutiveFilters.executiveType === 'service' ? '🔧 Service Executive' :
+                    appliedExecutiveFilters.executiveType === 'account' ? '📊 Account Executive' : '👤 Executive'}:
               </strong> {appliedExecutiveFilters.executiveName}
             </span>
             <button
@@ -1589,10 +1626,11 @@ function ViewOrders() {
                 border: 'none',
                 padding: '4px 8px',
                 borderRadius: '3px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                fontSize: '12px'
               }}
             >
-              Clear
+              Clear Filter
             </button>
           </div>
         )}
@@ -2072,7 +2110,6 @@ function ViewOrders() {
         }}>
           <h3 style={{ color: '#666' }}>No orders found for 2025</h3>
           <p style={{ color: '#999' }}>
-            {shouldSeeOnlyOwnOrders() && `for executive: ${executiveName}`}
             {appliedExecutiveFilters.executiveName && `for executive: ${appliedExecutiveFilters.executiveName}`}
             {appliedExecutiveFilters.executiveName && (monthFilter || clientTypeFilter) && ' and '}
             {monthFilter && `in ${getMonthName(monthFilter)}`}

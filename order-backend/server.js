@@ -43,6 +43,7 @@ const quotationRoutes = require('./routes/quotations');
 // Initialize Express
 const leadsRoutes = require('./routes/Lead.js');
 const callLogsRoutes = require('./routes/Calllog.js'); 
+const serviceRequirementsRoutes = require('./routes/serviceRequirements');
 
 
 const salaryRoutes = require('./routes/salaryRoutes');
@@ -85,6 +86,7 @@ app.use("/api/logout-history", logoutHistoryRoutes);
 app.use("/api/design-requests", designRoutes);
 app.use('/api/field-executive', fieldExecutiveRoutes);
 app.use('/api/designers', designersRoutes);
+app.use('/api/service-requirements', serviceRequirementsRoutes);
 
 // AUTH ROUTES (contains add-field-executive)
 app.use("/api", authRoutes);
