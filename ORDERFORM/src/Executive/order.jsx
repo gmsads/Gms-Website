@@ -14,8 +14,7 @@ import ViewRecord from "./ViewRecord";
 import AutoLogout from "../mainpage/AutoLogout";
 import PendingPayment from "../Admin/PendingPayment";
 import "../Executive/order.css";
-import "../app.css";
-import TeleCRM from "./TeleCRM";
+
 function Admin() {
  
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
