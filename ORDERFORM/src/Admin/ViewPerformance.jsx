@@ -51,6 +51,7 @@ const PerformanceView = () => {
     }
   });
 
+
   // PERSISTENT: Save to localStorage whenever manuallyEligibleMonths changes
   useEffect(() => {
     try {
