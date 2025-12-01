@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const Lead = require('../models/Lead');
-const CallLog = require('../models/CallLog');
+const CallLog = require('../models/Calllog');
 
 // POST /api/leads - Get all leads with optional filtering
 router.post('/', async (req, res) => {

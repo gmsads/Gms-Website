@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const CallLog = require('../models/CallLog');
+const CallLog = require('../models/Calllog');
 
 // ===========================
 // GET ALL CALL LOGS
