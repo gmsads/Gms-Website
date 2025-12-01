@@ -1008,15 +1008,7 @@ function AdminDashboard() {
               >
                 Dashboard
               </NavLink>
-              <NavLink
-                to="advance-approvals"
-                style={linkStyle('advance-approvals')}
-                onMouseEnter={() => setHoveredItem('advance-approvals')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-              Advance-Approvals
-              </NavLink>
+              
             </>
           )}
         </div>
@@ -1048,7 +1040,15 @@ function AdminDashboard() {
               >
                 Create-Order ➕
               </NavLink>
-
+              <NavLink
+                to="advance-approvals"
+                style={linkStyle('advance-approvals')}
+                onMouseEnter={() => setHoveredItem('advance-approvals')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+              Advance-Approvals
+              </NavLink>
               <NavLink
                 to="view-orders"
                 style={linkStyle('view-orders')}
@@ -1105,11 +1105,20 @@ function AdminDashboard() {
               >
                 View Appointments
               </NavLink>
+              <NavLink
+                to="ledger"
+                style={linkStyle('ledger')}
+                onMouseEnter={() => setHoveredItem('ledger')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Ledger
+              </NavLink>
             </>
           )}
         </div>
 
-        {/* MANAGE USERS Section */}
+      
       {/* MANAGE USERS Section */}
         <div style={styles.sidebarSection}>
           <div
@@ -1289,15 +1298,7 @@ function AdminDashboard() {
                 View Design
               </NavLink>
 
-              <NavLink
-                to="ledger"
-                style={linkStyle('ledger')}
-                onMouseEnter={() => setHoveredItem('ledger')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Ledger
-              </NavLink>
+            
               <NavLink
                 to="design-report"
                 style={linkStyle('design-report')}
