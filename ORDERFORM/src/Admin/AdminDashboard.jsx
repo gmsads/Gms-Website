@@ -307,14 +307,6 @@ function AdminDashboard() {
       return safeArray(chartData.amountByMonth).reduce((sum, amount) => sum + amount, 0);
     }
   };
-
-  // Calculate revenue growth percentage (you might want to implement this with historical data)
-  const calculateRevenueGrowth = () => {
-    // This is a placeholder - you would need to compare with previous period
-    // For now, returning a static positive growth
-    return 12.5; // 12.5% growth
-  };
-
   // Generate year options
   const years = [];
   const currentYear = new Date().getFullYear();
