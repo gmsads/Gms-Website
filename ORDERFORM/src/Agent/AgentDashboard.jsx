@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import AutoLogout from "../mainpage/AutoLogout";
 import OrderForm from "../Executive/OrderForm";
@@ -269,15 +269,10 @@ function AgentDashboard() {
     </div>
   );
 
-  // Menu items configuration
+  // Menu items configuration - Only 3 items
   const menuItems = [
     { path: '/agent-dashboard', label: 'Dashboard', key: 'dashboard' },
     { path: '/agent-dashboard/create-order', label: 'Create Order', key: 'create-order' },
-    { path: '/agent-dashboard/view-orders', label: 'View Orders', key: 'view-orders' },
-    { path: '/agent-dashboard/record', label: 'Record', key: 'record' },
-    { path: '/agent-dashboard/price-list', label: 'Price List', key: 'price-list' },
-    { path: '/agent-dashboard/create-prospect', label: 'Create Prospect', key: 'create-prospect' },
-    { path: '/agent-dashboard/view-prospects', label: 'View Prospects', key: 'view-prospects' },
     { path: '/field-executive', label: 'Field Executive', key: 'field-executive' },
   ];
 
@@ -513,10 +508,12 @@ function AgentDashboard() {
             />
           )}
 
-          {/* Other tabs content */}
-          {location.pathname !== '/agent-dashboard' && 
-           location.pathname !== '/agent-dashboard/create-order' && (
-            <Outlet />
+          {/* Field Executive Tab Content */}
+          {location.pathname === '/field-executive' && (
+            <div className="field-executive-content">
+              <h2>Field Executive</h2>
+              <p>Field Executive content goes here...</p>
+            </div>
           )}
         </div>
       </div>
@@ -641,7 +638,7 @@ function AgentDashboard() {
         }
 
         .sidebar {
-          width: ${sidebarOpen ? '250px' : '0'};
+          width: ${sidebarOpen ? '200px' : '0'};
           background-color: #003366;
           color: #fff;
           overflow-x: hidden;
@@ -657,7 +654,7 @@ function AgentDashboard() {
         }
 
         .sidebar-user-info {
-          padding: 15px 25px;
+          padding: 15px 20px;
           border-bottom: 1px solid rgba(255,255,255,0.2);
           margin-bottom: 10px;
         }
@@ -678,7 +675,7 @@ function AgentDashboard() {
         }
 
         .nav-item {
-          padding: 15px 25px;
+          padding: 18px 20px;
           cursor: pointer;
           border-bottom: 1px solid rgba(255,255,255,0.2);
           color: white;
@@ -687,6 +684,7 @@ function AgentDashboard() {
           transition: background-color 0.3s;
           font-size: 16px;
           font-weight: 500;
+          text-align: left;
         }
 
         .nav-item:hover,
@@ -695,8 +693,12 @@ function AgentDashboard() {
           font-weight: bold;
         }
 
+        .nav-text {
+          display: block;
+        }
+
         .main-content {
-          margin-left: ${sidebarOpen && !isMobile ? '250px' : '0'};
+          margin-left: ${sidebarOpen && !isMobile ? '200px' : '0'};
           margin-top: 60px;
           padding: 20px;
           transition: margin-left 0.3s ease;
@@ -944,6 +946,26 @@ function AgentDashboard() {
           cursor: not-allowed;
         }
 
+        /* Field Executive Content */
+        .field-executive-content {
+          background: white;
+          padding: 30px;
+          border-radius: 10px;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          max-width: 800px;
+          margin: 0 auto;
+        }
+
+        .field-executive-content h2 {
+          color: #003366;
+          margin-bottom: 20px;
+        }
+
+        .field-executive-content p {
+          color: #666;
+          line-height: 1.6;
+        }
+
         /* Mobile Responsive */
         @media (max-width: 768px) {
           .navbar-title {
@@ -968,6 +990,10 @@ function AgentDashboard() {
 
           .recent-orders-section {
             padding: 20px;
+          }
+
+          .sidebar {
+            width: ${sidebarOpen ? '180px' : '0'};
           }
         }
 
@@ -996,6 +1022,11 @@ function AgentDashboard() {
 
           .label {
             font-size: 9px;
+          }
+
+          .nav-item {
+            padding: 16px 20px;
+            font-size: 15px;
           }
         }
       `}</style>

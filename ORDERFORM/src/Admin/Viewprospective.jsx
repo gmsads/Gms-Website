@@ -1,9 +1,10 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { format, addDays } from 'date-fns';
 import { confirmAlert } from 'react-confirm-alert';
 import { useNavigate, useLocation } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import 'react-confirm-alert/src/react-confirm-alert.css';
 
 const ViewProspective = () => {
@@ -19,6 +20,8 @@ const ViewProspective = () => {
   const [sending, setSending] = useState({});
   const [success, setSuccess] = useState({});
   const [redirectId, setRedirectId] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [printMode, setPrintMode] = useState(false);
   
   // Simple filter states
   const [filters, setFilters] = useState({
@@ -41,6 +44,7 @@ const ViewProspective = () => {
   
   const navigate = useNavigate();
   const location = useLocation();
+  const tableRef = useRef(null);
 
   // API configuration
   const API_BASE_URL = '/api';
@@ -74,71 +78,71 @@ const ViewProspective = () => {
     });
   }, [location]);
 
-// Fetch prospective clients data - UPDATED VERSION
-const fetchProspectives = async () => {
-  try {
-    const userName = localStorage.getItem('userName');
-    const role = localStorage.getItem('role');
-    
-    // Get URL parameters
-    const searchParams = new URLSearchParams(location.search);
-    const executiveNameFromUrl = searchParams.get('executiveName');
+  // Fetch prospective clients data
+  const fetchProspectives = async () => {
+    try {
+      const userName = localStorage.getItem('userName');
+      const role = localStorage.getItem('role');
+      
+      // Get URL parameters
+      const searchParams = new URLSearchParams(location.search);
+      const executiveNameFromUrl = searchParams.get('executiveName');
 
-    console.log('🔍 Fetching prospectives with:', {
-      executiveNameFromUrl,
-      userName,
-      role
-    });
+      console.log('🔍 Fetching prospectives with:', {
+        executiveNameFromUrl,
+        userName,
+        role
+      });
 
-    let params = {};
+      let params = {};
 
-    // CASE 1: If specific executive name is provided in URL (coming from performance view)
-    if (executiveNameFromUrl) {
-      console.log('🎯 Filtering by specific executive from performance view:', executiveNameFromUrl);
-      params = { 
-        executiveName: executiveNameFromUrl,
-        filterByExecutive: 'true'
-      };
-    } 
-    // CASE 2: Admin or privileged users - use regular endpoint
-    else if (canSeeAllProspects) {
-      console.log('👑 Privileged user - using regular endpoint');
-      params = { userName, role };
+      // CASE 1: If specific executive name is provided in URL (coming from performance view)
+      if (executiveNameFromUrl) {
+        console.log('🎯 Filtering by specific executive from performance view:', executiveNameFromUrl);
+        params = { 
+          executiveName: executiveNameFromUrl,
+          filterByExecutive: 'true'
+        };
+      } 
+      // CASE 2: Admin or privileged users - use regular endpoint
+      else if (canSeeAllProspects) {
+        console.log('👑 Privileged user - using regular endpoint');
+        params = { userName, role };
+      }
+      // CASE 3: Regular executive - only their own prospects
+      else {
+        console.log('👤 Regular executive - showing own prospects only');
+        params = { userName, role };
+      }
+
+      console.log('📤 Making API request with params:', params);
+
+      const response = await axios.get('/api/prospective-clients', { params });
+      console.log('✅ API Response count:', response.data.length);
+      console.log('📋 API Response data:', response.data);
+
+      if (response.data.length === 0) {
+        console.log('⚠️ No prospects found with current filters');
+      }
+
+      // Sort by creation date (newest first)
+      const sortedData = response.data.sort((a, b) => {
+        const dateA = new Date(a.createdAt || a.dateCreated || a.followUpDate);
+        const dateB = new Date(b.createdAt || b.dateCreated || b.followUpDate);
+        return dateB - dateA;
+      });
+
+      console.log('📊 Setting state with:', sortedData.length, 'prospects');
+      setProspectives(sortedData);
+      setFilteredProspectives(sortedData);
+      setLoading(false);
+      
+    } catch (err) {
+      console.error('❌ Error fetching prospectives:', err);
+      setError('Failed to load prospective clients: ' + (err.response?.data?.message || err.message));
+      setLoading(false);
     }
-    // CASE 3: Regular executive - only their own prospects
-    else {
-      console.log('👤 Regular executive - showing own prospects only');
-      params = { userName, role };
-    }
-
-    console.log('📤 Making API request with params:', params);
-
-    const response = await axios.get('/api/prospective-clients', { params });
-    console.log('✅ API Response count:', response.data.length);
-    console.log('📋 API Response data:', response.data);
-
-    if (response.data.length === 0) {
-      console.log('⚠️ No prospects found with current filters');
-    }
-
-    // Sort by creation date (newest first)
-    const sortedData = response.data.sort((a, b) => {
-      const dateA = new Date(a.createdAt || a.dateCreated || a.followUpDate);
-      const dateB = new Date(b.createdAt || b.dateCreated || b.followUpDate);
-      return dateB - dateA;
-    });
-
-    console.log('📊 Setting state with:', sortedData.length, 'prospects');
-    setProspectives(sortedData);
-    setFilteredProspectives(sortedData);
-    setLoading(false);
-    
-  } catch (err) {
-    console.error('❌ Error fetching prospectives:', err);
-    setError('Failed to load prospective clients: ' + (err.response?.data?.message || err.message));
-    setLoading(false);
-  }
-};
+  };
 
   // Fetch data on component mount and when location changes
   useEffect(() => {
@@ -300,6 +304,338 @@ const fetchProspectives = async () => {
     }
   };
 
+  // Export to Excel function
+  const exportToExcel = () => {
+    setExporting(true);
+    
+    try {
+      const dataToExport = filteredProspectives.map(prospect => ({
+        'Created Date': prospect.createdAt ? format(new Date(prospect.createdAt), 'MMM dd, yyyy') : 'N/A',
+        'Executive': prospect.ExcutiveName || prospect.executiveName,
+        'Business Name': prospect.businessName,
+        'Contact Person': prospect.contactPerson,
+        'Phone Number': prospect.phoneNumber,
+        'Location': prospect.location,
+        'Lead Source': prospect.leadFrom || 'N/A',
+        'Requirement': prospect.requirementDescription || 'N/A',
+        'Follow-up Date': prospect.followUpDate ? format(new Date(prospect.followUpDate), 'MMM dd, yyyy') : 'N/A',
+        'Status': prospect.status || 'New',
+        'Prospect Type': prospect.prospectType || 'N/A',
+        'WhatsApp Status': prospect.whatsappStatus || 'N/A'
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Prospective Clients');
+      
+      // Auto-size columns
+      const wscols = [
+        {wch: 12}, // Created Date
+        {wch: 15}, // Executive
+        {wch: 25}, // Business Name
+        {wch: 15}, // Contact Person
+        {wch: 15}, // Phone Number
+        {wch: 15}, // Location
+        {wch: 15}, // Lead Source
+        {wch: 30}, // Requirement
+        {wch: 12}, // Follow-up Date
+        {wch: 12}, // Status
+        {wch: 15}, // Prospect Type
+        {wch: 15}, // WhatsApp Status
+      ];
+      worksheet['!cols'] = wscols;
+      
+      // Generate filename with date
+      const dateStr = format(new Date(), 'yyyy-MM-dd_HH-mm');
+      const fileName = `Prospective_Clients_${dateStr}.xlsx`;
+      
+      XLSX.writeFile(workbook, fileName);
+      
+      // Show success message
+      setSuccess(prev => ({ ...prev, export: true }));
+      setTimeout(() => setSuccess(prev => ({ ...prev, export: false })), 3000);
+    } catch (error) {
+      console.error('Export error:', error);
+      setError('Failed to export data to Excel');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Export to CSV function
+  const exportToCSV = () => {
+    setExporting(true);
+    
+    try {
+      const headers = [
+        'Created Date',
+        'Executive',
+        'Business Name',
+        'Contact Person',
+        'Phone Number',
+        'Location',
+        'Lead Source',
+        'Requirement',
+        'Follow-up Date',
+        'Status',
+        'Prospect Type',
+        'WhatsApp Status'
+      ];
+      
+      const csvData = filteredProspectives.map(prospect => [
+        prospect.createdAt ? format(new Date(prospect.createdAt), 'MMM dd, yyyy') : 'N/A',
+        prospect.ExcutiveName || prospect.executiveName || '',
+        prospect.businessName || '',
+        prospect.contactPerson || '',
+        prospect.phoneNumber || '',
+        prospect.location || '',
+        prospect.leadFrom || 'N/A',
+        prospect.requirementDescription || 'N/A',
+        prospect.followUpDate ? format(new Date(p.followUpDate), 'MMM dd, yyyy') : 'N/A',
+        prospect.status || 'New',
+        prospect.prospectType || 'N/A',
+        prospect.whatsappStatus || 'N/A'
+      ]);
+      
+      const csvContent = [
+        headers.join(','),
+        ...csvData.map(row => 
+          row.map(cell => 
+            typeof cell === 'string' && cell.includes(',') 
+              ? `"${cell.replace(/"/g, '""')}"` 
+              : cell
+          ).join(',')
+        )
+      ].join('\n');
+      
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      const dateStr = format(new Date(), 'yyyy-MM-dd_HH-mm');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Prospective_Clients_${dateStr}.csv`);
+      link.style.visibility = 'hidden';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Show success message
+      setSuccess(prev => ({ ...prev, export: true }));
+      setTimeout(() => setSuccess(prev => ({ ...prev, export: false })), 3000);
+    } catch (error) {
+      console.error('CSV export error:', error);
+      setError('Failed to export data to CSV');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Print function
+  const handlePrint = () => {
+    setPrintMode(true);
+    
+    // Wait for state update and DOM render
+    setTimeout(() => {
+      const printWindow = window.open('', '_blank');
+      const printContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Prospective Clients Report</title>
+            <style>
+              @media print {
+                @page {
+                  margin: 0.5in;
+                  size: landscape;
+                }
+                body {
+                  font-family: Arial, sans-serif;
+                  font-size: 12px;
+                  line-height: 1.4;
+                }
+                h1 {
+                  color: #2c3e50;
+                  margin-bottom: 10px;
+                  font-size: 20px;
+                }
+                .report-info {
+                  margin-bottom: 20px;
+                  color: #666;
+                  font-size: 11px;
+                }
+                table {
+                  width: 100%;
+                  border-collapse: collapse;
+                  font-size: 10px;
+                }
+                th {
+                  background-color: #f0f0f0;
+                  color: #333;
+                  font-weight: bold;
+                  padding: 8px 5px;
+                  border: 1px solid #ddd;
+                  text-align: left;
+                }
+                td {
+                  padding: 6px 5px;
+                  border: 1px solid #ddd;
+                  vertical-align: top;
+                }
+                tr:nth-child(even) {
+                  background-color: #f9f9f9;
+                }
+                .status-badge {
+                  padding: 2px 6px;
+                  border-radius: 3px;
+                  font-size: 9px;
+                  display: inline-block;
+                }
+                .header-section {
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 20px;
+                  border-bottom: 1px solid #ddd;
+                  padding-bottom: 10px;
+                }
+              }
+              body {
+                font-family: Arial, sans-serif;
+                font-size: 12px;
+                line-height: 1.4;
+                margin: 20px;
+              }
+              h1 {
+                color: #2c3e50;
+                margin-bottom: 10px;
+                font-size: 20px;
+              }
+              .report-info {
+                margin-bottom: 20px;
+                color: #666;
+                font-size: 11px;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 10px;
+              }
+              th {
+                background-color: #f0f0f0;
+                color: #333;
+                font-weight: bold;
+                padding: 8px 5px;
+                border: 1px solid #ddd;
+                text-align: left;
+              }
+              td {
+                padding: 6px 5px;
+                border: 1px solid #ddd;
+                vertical-align: top;
+              }
+              tr:nth-child(even) {
+                background-color: #f9f9f9;
+              }
+              .status-badge {
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-size: 9px;
+                display: inline-block;
+              }
+              .header-section {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 20px;
+                border-bottom: 1px solid #ddd;
+                padding-bottom: 10px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header-section">
+              <div>
+                <h1>Prospective Clients Report</h1>
+                <div class="report-info">
+                  Generated on: ${format(new Date(), 'MMM dd, yyyy HH:mm')}<br>
+                  Total Records: ${filteredProspectives.length}<br>
+                  ${getViewingContext().replace(/[🔍👑👤]/g, '')}
+                </div>
+              </div>
+              <div style="text-align: right;">
+                <small>Page 1 of 1</small>
+              </div>
+            </div>
+            
+            <table>
+              <thead>
+                <tr>
+                  <th>Created Date</th>
+                  <th>Executive</th>
+                  <th>Business</th>
+                  <th>Contact</th>
+                  <th>Phone</th>
+                  <th>Location</th>
+                  <th>Lead Source</th>
+                  <th>Requirement</th>
+                  <th>Follow-up Date</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${filteredProspectives.map(p => `
+                  <tr>
+                    <td>${p.createdAt ? format(new Date(p.createdAt), 'MMM dd, yyyy') : 'N/A'}</td>
+                    <td>${p.ExcutiveName || p.executiveName || ''}</td>
+                    <td>${p.businessName || ''}</td>
+                    <td>${p.contactPerson || ''}</td>
+                    <td>${p.phoneNumber || ''}</td>
+                    <td>${p.location || ''}</td>
+                    <td>${p.leadFrom || 'N/A'}</td>
+                    <td>${p.requirementDescription || 'N/A'}</td>
+                    <td>${p.followUpDate ? format(new Date(p.followUpDate), 'MMM dd, yyyy') : 'N/A'}</td>
+                    <td>
+                      <span class="status-badge" style="
+                        ${p.status === 'sale closed' ? 'background-color: #d4edda; color: #155724;' : ''}
+                        ${p.status === 'not interested' ? 'background-color: #f8d7da; color: #721c24;' : ''}
+                        ${p.status === 'next month' ? 'background-color: #fff3cd; color: #856404;' : ''}
+                        ${p.status === 'followup' ? 'background-color: #cce5ff; color: #004085;' : ''}
+                        ${!p.status || p.status === 'New' ? 'background-color: #e2e3e5; color: #383d41;' : ''}
+                      ">
+                        ${p.status || 'New'}
+                      </span>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            
+            <div style="margin-top: 30px; font-size: 10px; color: #666; text-align: center;">
+              Confidential - For internal use only
+            </div>
+          </body>
+        </html>
+      `;
+      
+      printWindow.document.open();
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      
+      printWindow.onload = function() {
+        printWindow.focus();
+        printWindow.print();
+        printWindow.onafterprint = function() {
+          printWindow.close();
+        };
+      };
+      
+      setPrintMode(false);
+    }, 100);
+  };
+
   const handleDelete = async (id) => {
     confirmAlert({
       title: 'Confirm Delete',
@@ -404,19 +740,20 @@ const fetchProspectives = async () => {
     return [...new Set(prospectives.map(p => p.leadFrom).filter(Boolean))];
   };
 
- // Get current viewing context
-const getViewingContext = () => {
-  const searchParams = new URLSearchParams(location.search);
-  const executiveNameFromUrl = searchParams.get('executiveName');
-  
-  if (executiveNameFromUrl) {
-    return `🔍 Viewing prospects for: ${executiveNameFromUrl}`;
-  } else if (canSeeAllProspects) {
-    return '👑 Viewing all prospects (Admin/Privileged Access)';
-  } else {
-    return `👤 Viewing prospects assigned to: ${userName}`;
-  }
-};
+  // Get current viewing context
+  const getViewingContext = () => {
+    const searchParams = new URLSearchParams(location.search);
+    const executiveNameFromUrl = searchParams.get('executiveName');
+    
+    if (executiveNameFromUrl) {
+      return `🔍 Viewing prospects for: ${executiveNameFromUrl}`;
+    } else if (canSeeAllProspects) {
+      return '👑 Viewing all prospects (Admin/Privileged Access)';
+    } else {
+      return `👤 Viewing prospects assigned to: ${userName}`;
+    }
+  };
+
   // Style for different status badges
   const getStatusStyle = (status) => {
     const baseStyle = {
@@ -550,6 +887,39 @@ const getViewingContext = () => {
         />
       </div>
 
+      {/* Export and Print Controls */}
+      <div style={styles.exportControls}>
+        <button 
+          onClick={exportToExcel} 
+          style={styles.exportButton}
+          disabled={exporting || filteredProspectives.length === 0}
+        >
+          {exporting ? 'Exporting...' : '📊 Export to Excel'}
+        </button>
+        
+        <button 
+          onClick={exportToCSV} 
+          style={styles.exportButton}
+          disabled={exporting || filteredProspectives.length === 0}
+        >
+          {exporting ? 'Exporting...' : '📄 Export to CSV'}
+        </button>
+        
+        <button 
+          onClick={handlePrint} 
+          style={styles.printButton}
+          disabled={printMode || filteredProspectives.length === 0}
+        >
+          {printMode ? 'Preparing...' : '🖨️ Print Report'}
+        </button>
+        
+        {success.export && (
+          <span style={styles.exportSuccess}>
+            ✓ Export completed successfully!
+          </span>
+        )}
+      </div>
+
       {/* Follow-up date picker modal */}
       {showDatePicker && (
         <div style={styles.modalOverlay}>
@@ -593,7 +963,7 @@ const getViewingContext = () => {
       </div>
 
       {/* Main table */}
-      <div style={styles.tableWrapper}>
+      <div style={styles.tableWrapper} ref={tableRef}>
         <table style={styles.table}>
           <thead>
             <tr style={styles.tableHeadRow}>
@@ -797,6 +1167,45 @@ const styles = {
     fontSize: '16px',
     boxSizing: 'border-box',
     outline: 'none'
+  },
+  exportControls: {
+    display: 'flex',
+    gap: '10px',
+    marginBottom: '20px',
+    alignItems: 'center',
+    flexWrap: 'wrap'
+  },
+  exportButton: {
+    padding: '10px 15px',
+    backgroundColor: '#28a745',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontWeight: '500',
+    fontSize: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+  printButton: {
+    padding: '10px 15px',
+    backgroundColor: '#17a2b8',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontWeight: '500',
+    fontSize: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+  exportSuccess: {
+    marginLeft: '10px',
+    color: '#28a745',
+    fontWeight: '500',
+    fontSize: '14px'
   },
   resultsCount: {
     marginBottom: '15px',

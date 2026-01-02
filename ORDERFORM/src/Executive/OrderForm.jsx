@@ -605,7 +605,7 @@ Global Marketing Solutions Team`;
     await submitOrder();
   };
 
- const submitOrder = async () => {
+const submitOrder = async () => {
   setIsSubmitting(true);
   try {
     const phone = contactNumber.replace(/\D/g, "").slice(-10);
@@ -641,11 +641,36 @@ Global Marketing Solutions Team`;
 
     const finalCreatedBy = isAdmin ? createdBy : (existingData?.createdBy || selectedExecutive);
 
-    // 🆕 COMBINE ALL REQUIREMENTS INTO ONE STRING FOR REQUIREMENT FIELD
-    const allRequirements = rows
+    // 🆕 Combine requirements with their quantities in a structured way
+    const requirementDetails = rows
       .filter((row) => row.requirement)
-      .map((row) => row.requirement === "other" ? row.customRequirement : row.requirement)
+      .map((row) => {
+        const requirementName = row.requirement === "other" ? row.customRequirement : row.requirement;
+        const quantity = row.quantity ? parseFloat(row.quantity) : 0;
+        const rate = row.rate ? parseFloat(row.rate) : 0;
+        const rowTotal = row.total ? parseFloat(row.total) : 0;
+        
+        return {
+          name: requirementName,
+          quantity: quantity,
+          rate: rate,
+          total: rowTotal,
+          description: row.description || "",
+          days: row.days || "",
+          deliveryDate: row.deliveryDate || ""
+        };
+      });
+
+    // Create a single requirement string that includes quantities
+    const allRequirements = requirementDetails
+      .map(req => `${req.quantity} x ${req.name}`)
       .join(", ");
+
+    // Create a single description that includes details
+    const allDescriptions = requirementDetails
+      .map(req => `${req.description}${req.days ? ` (${req.days} days)` : ''}`)
+      .filter(desc => desc.trim())
+      .join(" | ");
 
     const mainOrderData = {
       executive: selectedExecutive,
@@ -658,16 +683,18 @@ Global Marketing Solutions Team`;
       orderDate,
       target,
       clientType: clientType || "New",
-      // 🆕 SINGLE CLEAN ROW - ALL REQUIREMENTS IN REQUIREMENT FIELD ONLY
+      // 🆕 SINGLE ROW WITH ALL REQUIREMENTS AND THEIR DETAILS
       rows: [{
-        requirement: allRequirements, // LINE CHANGED: All requirements combined here
-        description: "Order Requirements", // LINE CHANGED: Simple static description
-        quantity: 1, // Single line item
+        requirement: allRequirements, // Shows like "2 x Flyers, 1 x Banners, 3 x Business Cards"
+        description: allDescriptions || "Order Requirements", // Combined descriptions
+        quantity: 1, // Single line item for the whole order
         rate: parseFloat(totalNum.toFixed(2)),
         total: finalTotal,
         deliveryDate: rows[0]?.deliveryDate || new Date().toISOString().split("T")[0],
         customRequirement: allRequirements,
-        gstIncluded: rows.some(row => row.gstIncluded)
+        gstIncluded: rows.some(row => row.gstIncluded),
+        // 🆕 Store individual requirements as sub-items for reference
+        requirementDetails: requirementDetails
       }],
       advanceDate,
       paymentDate,
@@ -691,7 +718,18 @@ Global Marketing Solutions Team`;
         executive: selectedExecutive,
         amount: parseFloat(discountedTotal),
         split: false
-      }
+      },
+      // 🆕 Also store the individual rows for data integrity
+      originalRows: rows.map(row => ({
+        requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
+        description: row.description,
+        quantity: row.quantity,
+        rate: row.rate,
+        days: row.days,
+        total: row.total,
+        deliveryDate: row.deliveryDate,
+        gstIncluded: row.gstIncluded
+      }))
     };
 
     if (shouldSplitCommission) {
@@ -728,12 +766,13 @@ Global Marketing Solutions Team`;
       await axios.post("/api/submit", duplicateOrderData);
     }
 
-    // WhatsApp message
+    // WhatsApp message - Update to show quantities
     const orderDataForWhatsApp = {
       business: business,
       contactPerson: contactPerson,
       orderNumber: orderResponse.data.orderNumber || `ORD-${Date.now()}`,
-      requirements: allRequirements, // LINE CHANGED: Use the combined requirements
+      requirements: allRequirements, // This will show quantities
+      requirementDetails: requirementDetails, // Include detailed info
       total: discountedTotal,
       advance: advance,
       balance: balance,
@@ -764,7 +803,6 @@ Global Marketing Solutions Team`;
     setIsSubmitting(false);
   }
 };
-
   const fetchTargetForDate = async (dateString) => {
     if (!dateString || !selectedExecutive) return;
     setLoadingTarget(true);

@@ -44,7 +44,7 @@ const quotationRoutes = require('./routes/quotations');
 const leadsRoutes = require('./routes/Lead.js');
 const callLogsRoutes = require('./routes/Calllog.js'); 
 const serviceRequirementsRoutes = require('./routes/serviceRequirements');
-
+const purchase = require('./routes/purchase'); // ADD THIS LINE
 
 const salaryRoutes = require('./routes/salaryRoutes');
 
@@ -56,6 +56,7 @@ app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 app.use('/api/salaries', salaryRoutes);
+app.use('/api/purchases', purchase); // ADD THIS LINE
 
 // Upload endpoint
 app.use("/api/upload", uploadRoute);

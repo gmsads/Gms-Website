@@ -51,16 +51,6 @@ function AdminDashboard() {
   const [searchError, setSearchError] = useState('');
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [selectedFormType, setSelectedFormType] = useState('order');
-
-  // Daily report states - UPDATED STATE
-  const [dailyReportData, setDailyReportData] = useState({
-    totalCalls: 0,
-    totalWhatsapp: 0,
-    totalFollowUp: 0,
-    executiveReports: []
-  });
-  const [dailyReportLoading, setDailyReportLoading] = useState(true);
-
   // Month labels
   const monthLabels = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -175,82 +165,6 @@ function AdminDashboard() {
     fetchDashboardData();
   }, [year, selectedMonth]);
 
-  // Fetch daily report data - UPDATED FUNCTION
-  const fetchDailyReportData = async () => {
-    setDailyReportLoading(true);
-    try {
-      const response = await axios.get('/api/reports');
-      const reports = response.data;
-      
-      // Calculate totals from all reports
-      const totals = {
-        totalCalls: 0,
-        totalWhatsapp: 0,
-        totalFollowUp: 0,
-        executiveReports: []
-      };
-
-      if (Array.isArray(reports) && reports.length > 0) {
-        // Group data by executive
-        const executiveMap = new Map();
-        
-        reports.forEach(report => {
-          const executiveName = report.executiveName || 'Unknown';
-          if (!executiveMap.has(executiveName)) {
-            executiveMap.set(executiveName, {
-              executiveName: executiveName,
-              totalCalls: 0,
-              totalWhatsapp: 0,
-              totalFollowUp: 0
-            });
-          }
-          
-          const execData = executiveMap.get(executiveName);
-          execData.totalCalls += report.totalCalls || 0;
-          execData.totalWhatsapp += report.whatsapp || 0;
-          execData.totalFollowUp += report.followUps || 0;
-        });
-
-        // Calculate totals
-        executiveMap.forEach(execData => {
-          totals.totalCalls += execData.totalCalls;
-          totals.totalWhatsapp += execData.totalWhatsapp;
-          totals.totalFollowUp += execData.totalFollowUp;
-        });
-
-        totals.executiveReports = Array.from(executiveMap.values())
-          .sort((a, b) => b.totalCalls - a.totalCalls)
-          .slice(0, 8); // Top 8 executives by calls for better chart display
-      }
-
-      setDailyReportData(totals);
-    } catch (err) {
-      console.error('Daily Report API Error:', err.response?.data || err.message);
-      setDailyReportData({
-        totalCalls: 0,
-        totalWhatsapp: 0,
-        totalFollowUp: 0,
-        executiveReports: []
-      });
-    } finally {
-      setDailyReportLoading(false);
-    }
-  };
-
-  // Fetch daily reports when component mounts
-  useEffect(() => {
-    fetchDailyReportData();
-  }, []);
-
-  // Refresh daily reports data periodically (every 5 minutes)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchDailyReportData();
-    }, 300000); // 5 minutes
-
-    return () => clearInterval(interval);
-  }, []);
-
   // Handle order search
   const handleSearch = async () => {
     if (orderNumber.length !== 10) {
@@ -341,225 +255,6 @@ function AdminDashboard() {
       return `${monthLabels[selectedMonth]} ${year}`;
     }
     return `Year ${year}`;
-  };
-
-  // Get current date for display
-  const getCurrentDate = () => {
-    return new Date().toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
-  };
-
-  // Prepare chart data for daily activities - NEW FUNCTION
-  const prepareDailyActivitiesChartData = () => {
-    const executives = dailyReportData.executiveReports.map(exec => 
-      exec.executiveName.length > 8 ? exec.executiveName.substring(0, 8) + '...' : exec.executiveName
-    );
-    
-    const callsData = dailyReportData.executiveReports.map(exec => exec.totalCalls);
-    const whatsappData = dailyReportData.executiveReports.map(exec => exec.totalWhatsapp);
-    const followUpData = dailyReportData.executiveReports.map(exec => exec.totalFollowUp);
-
-    return {
-      labels: executives,
-      datasets: [
-        {
-          label: 'Calls',
-          data: callsData,
-          backgroundColor: 'rgba(54, 162, 235, 0.8)',
-          borderColor: 'rgba(54, 162, 235, 1)',
-          borderWidth: 1,
-          barPercentage: 0.6,
-          categoryPercentage: 0.7
-        },
-        {
-          label: 'WhatsApp',
-          data: whatsappData,
-          backgroundColor: 'rgba(75, 192, 192, 0.8)',
-          borderColor: 'rgba(75, 192, 192, 1)',
-          borderWidth: 1,
-          barPercentage: 0.6,
-          categoryPercentage: 0.7
-        },
-        {
-          label: 'Follow Ups',
-          data: followUpData,
-          backgroundColor: 'rgba(255, 159, 64, 0.8)',
-          borderColor: 'rgba(255, 159, 64, 1)',
-          borderWidth: 1,
-          barPercentage: 0.6,
-          categoryPercentage: 0.7
-        }
-      ]
-    };
-  };
-
-  // Chart options for daily activities - UPDATED TOOLTIP FUNCTION
-  const dailyActivitiesChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: true,
-        position: 'top',
-        labels: {
-          boxWidth: 12,
-          font: {
-            size: 10
-          }
-        }
-      },
-      tooltip: {
-        mode: 'index',
-        intersect: false,
-        callbacks: {
-          title: function(tooltipItems) {
-            // Show executive name in title
-            const executiveIndex = tooltipItems[0].dataIndex;
-            const executive = dailyReportData.executiveReports[executiveIndex];
-            return executive ? executive.executiveName : 'Executive';
-          },
-          label: function() {
-            // Don't show individual dataset labels in the default tooltip
-            return '';
-          },
-          afterBody: function(tooltipItems) {
-            // Show all three metrics in the tooltip body
-            const executiveIndex = tooltipItems[0].dataIndex;
-            const executive = dailyReportData.executiveReports[executiveIndex];
-            
-            if (executive) {
-              return [
-                `📞 Calls: ${executive.totalCalls}`,
-                `💬 WhatsApp: ${executive.totalWhatsapp}`,
-                `🔄 Follow Ups: ${executive.totalFollowUp}`,
-                '',
-                `📊 Total: ${executive.totalCalls + executive.totalWhatsapp + executive.totalFollowUp} activities`
-              ];
-            }
-            return [];
-          }
-        },
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        titleColor: '#fff',
-        bodyColor: '#fff',
-        borderColor: 'rgba(255, 255, 255, 0.2)',
-        borderWidth: 1,
-        padding: 10,
-        cornerRadius: 6
-      }
-    },
-    onClick: (event, elements) => {
-      if (elements.length > 0) {
-        handleChartClick('daily-report');
-      }
-    },
-    scales: {
-      x: {
-        grid: { 
-          display: false 
-        },
-        ticks: { 
-          autoSkip: false,
-          maxRotation: 45,
-          minRotation: 45,
-          font: {
-            size: 10
-          }
-        }
-      },
-      y: {
-        beginAtZero: true,
-        ticks: { 
-          precision: 0, 
-          stepSize: 1,
-          font: {
-            size: 10
-          }
-        },
-        grid: { 
-          color: 'rgba(0,0,0,0.05)' 
-        },
-        title: {
-          display: true,
-          text: 'Number of Activities',
-          font: {
-            size: 11
-          }
-        }
-      }
-    },
-    interaction: {
-      intersect: false,
-      mode: 'index'
-    }
-  };
-
-  // Revenue chart options with FIXED TOOLTIP
-  const revenueChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          title: function(tooltipItems) {
-            // Show month name in title
-            const dataIndex = tooltipItems[0].dataIndex;
-            if (selectedMonth !== null) {
-              return `Week ${dataIndex + 1}`;
-            } else {
-              return monthLabels[dataIndex];
-            }
-          },
-          label: function(context) {
-            const amount = context.raw;
-            const formattedAmount = formatAmount(amount);
-            const fullAmount = formatAmountFull(amount);
-            return [
-              `Revenue: ₹${formattedAmount}`,
-              `Amount: ${fullAmount}`
-            ];
-          }
-        }
-      }
-    },
-    scales: {
-      x: {
-        grid: { display: false },
-        ticks: { 
-          autoSkip: false,
-          color: '#666',
-          maxRotation: 45
-        }
-      },
-      y: {
-        display: true,
-        beginAtZero: true,
-        ticks: {
-          callback: function(value) {
-            if (value >= 100000) {
-              return (value / 100000) + 'L';
-            } else if (value >= 1000) {
-              return (value / 1000) + 'K';
-            }
-            return value;
-          },
-          color: '#666'
-        },
-        grid: {
-          color: 'rgba(0,0,0,0.05)'
-        }
-      }
-    },
-    elements: {
-      point: {
-        radius: 3,
-        hoverRadius: 6
-      }
-    }
   };
 
   // Styles - FIXED STYLE PROPERTIES TO AVOID CONFLICTS
@@ -1114,6 +809,15 @@ function AdminDashboard() {
               >
                 Ledger
               </NavLink>
+               <NavLink
+                to="purchase"
+                style={linkStyle('purchase')}
+                onMouseEnter={() => setHoveredItem('purchase')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Purchase
+              </NavLink>
             </>
           )}
         </div>
@@ -1657,134 +1361,150 @@ function AdminDashboard() {
                   <div>Error loading dashboard data.</div>
                 ) : (
                   <div style={styles.dashboardCards}>
-                    {/* Total Revenue Bar Graph - NOW THE FIRST CARD */}
-                    <div style={styles.card}>
-                      <div>Total Revenue {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : '(Monthly)'}</div>
-                      <div style={styles.chartContainer}>
-                        <Bar
-                          data={{
-                            labels: selectedMonth !== null
-                              ? chartData?.weeklyOrders?.map((_, i) => `Week ${i + 1}`) || ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
-                              : monthLabels,
-                            datasets: [
-                              {
-                                label: 'Total Revenue',
-                                data: selectedMonth !== null
-                                  ? chartData?.weeklyOrders?.map(w => w.amount || 0) || []
-                                  : safeArray(chartData?.amountByMonth),
-                                backgroundColor: 'rgba(75, 192, 192, 0.7)',
-                                borderColor: 'rgba(75, 192, 192, 1)',
-                                borderWidth: 1,
-                                barPercentage: 0.8,
-                                categoryPercentage: 0.9
-                              }
-                            ]
-                          }}
-                          options={{
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                              legend: { display: false },
-                              tooltip: {
-                                callbacks: {
-                                  title: function(tooltipItems) {
-                                    // Show month/week name in title
-                                    const dataIndex = tooltipItems[0].dataIndex;
-                                    if (selectedMonth !== null) {
-                                      return `Week ${dataIndex + 1}`;
-                                    } else {
-                                      return monthLabels[dataIndex];
-                                    }
-                                  },
-                                  label: (context) => {
-                                    const amount = context.raw;
-                                    const formattedAmount = formatAmount(amount);
-                                    const fullAmount = formatAmountFull(amount);
-                                    return [
-                                      `Revenue: ₹${formattedAmount}`,
-                                      `Amount: ${fullAmount}`
-                                    ];
-                                  }
-                                }
-                              }
-                            },
-                            onClick: (_, elements) => {
-                              if (elements.length > 0) {
-                                const queryParams = new URLSearchParams();
+                  {/* Total Revenue Line Graph - NOW THE FIRST CARD */}
+<div style={styles.card}>
+  <div>Total Revenue {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : '(Monthly)'}</div>
+  <div style={styles.chartContainer}>
+    <Line
+      data={{
+        labels: selectedMonth !== null
+          ? chartData?.weeklyOrders?.map((_, i) => `Week ${i + 1}`) || ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
+          : monthLabels,
+        datasets: [
+          {
+            label: 'Total Revenue',
+            data: selectedMonth !== null
+              ? chartData?.weeklyOrders?.map(w => w.amount || 0) || []
+              : safeArray(chartData?.amountByMonth),
+            borderColor: 'rgba(75, 192, 192, 1)',
+            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+            tension: 0.4, // Smooth curve
+            fill: true, // Fill area under the line
+            pointBackgroundColor: 'rgba(75, 192, 192, 1)',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 6
+          }
+        ]
+      }}
+      options={{
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: function(tooltipItems) {
+                const dataIndex = tooltipItems[0].dataIndex;
+                if (selectedMonth !== null) {
+                  return `Week ${dataIndex + 1}`;
+                } else {
+                  return monthLabels[dataIndex];
+                }
+              },
+              label: (context) => {
+                const amount = context.raw;
+                const formattedAmount = formatAmount(amount);
+                const fullAmount = formatAmountFull(amount);
+                return [
+                  `Revenue: ₹${formattedAmount}`,
+                  `Amount: ${fullAmount}`
+                ];
+              }
+            }
+          }
+        },
+        onClick: (_, elements) => {
+          if (elements.length > 0) {
+            const queryParams = new URLSearchParams();
 
-                                if (selectedMonth === null) {
-                                  // When viewing all months, click on a month bar
-                                  const clickedMonth = elements[0].index + 1;
-                                  queryParams.append('month', clickedMonth);
-                                  queryParams.append('year', year);
+            if (selectedMonth === null) {
+              const clickedMonth = elements[0].index + 1;
+              queryParams.append('month', clickedMonth);
+              queryParams.append('year', year);
 
-                                  // Add the amount for display in view orders
-                                  const monthAmount = safeArray(chartData?.amountByMonth)[elements[0].index] || 0;
-                                  queryParams.append('monthAmount', monthAmount);
-                                  queryParams.append('monthName', monthLabels[elements[0].index]);
-                                } else {
-                                  // When viewing specific month, click on a week bar
-                                  const weekNumber = elements[0].index + 1;
-                                  queryParams.append('month', selectedMonth + 1);
-                                  queryParams.append('year', year);
-                                  queryParams.append('week', weekNumber);
+              const monthAmount = safeArray(chartData?.amountByMonth)[elements[0].index] || 0;
+              queryParams.append('monthAmount', monthAmount);
+              queryParams.append('monthName', monthLabels[elements[0].index]);
+            } else {
+              const weekNumber = elements[0].index + 1;
+              queryParams.append('month', selectedMonth + 1);
+              queryParams.append('year', year);
+              queryParams.append('week', weekNumber);
 
-                                  // Add the amount for display in view orders
-                                  const weekAmount = chartData?.weeklyOrders?.[elements[0].index]?.amount || 0;
-                                  queryParams.append('weekAmount', weekAmount);
-                                  queryParams.append('monthName', monthLabels[selectedMonth]);
-                                }
+              const weekAmount = chartData?.weeklyOrders?.[elements[0].index]?.amount || 0;
+              queryParams.append('weekAmount', weekAmount);
+              queryParams.append('monthName', monthLabels[selectedMonth]);
+            }
 
-                                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-                              }
-                            },
-                            scales: {
-                              x: {
-                                grid: { display: false },
-                                ticks: { autoSkip: false }
-                              },
-                              y: {
-                                beginAtZero: true,
-                                ticks: {
-                                  callback: function(value) {
-                                    if (value >= 100000) {
-                                      return (value / 100000) + 'L';
-                                    } else if (value >= 1000) {
-                                      return (value / 1000) + 'K';
-                                    }
-                                    return value;
-                                  }
-                                },
-                                grid: { color: 'rgba(0,0,0,0.05)' }
-                              }
-                            }
-                          }}
-                        />
-                      </div>
-                      <div style={styles.number}>
-                        {formatAmount(calculateTotalRevenue())}
-                      </div>
-                      <div style={styles.revenueSubtext}>
-                        {formatAmountFull(calculateTotalRevenue())}
-                      </div>
-                      {selectedMonth !== null && (
-                        <button
-                          onClick={() => setSelectedMonth(null)}
-                          style={{
-                            padding: '5px 10px',
-                            backgroundColor: '#003366',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            marginTop: '10px'
-                          }}
-                        >
-                          View All Months
-                        </button>
-                      )}
-                    </div>
-
+            navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+          }
+        },
+        scales: {
+          x: {
+            grid: { 
+              display: true,
+              color: 'rgba(0,0,0,0.05)'
+            },
+            ticks: { 
+              autoSkip: false,
+              color: '#666'
+            }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                if (value >= 100000) {
+                  return (value / 100000) + 'L';
+                } else if (value >= 1000) {
+                  return (value / 1000) + 'K';
+                }
+                return value;
+              },
+              color: '#666'
+            },
+            grid: { 
+              color: 'rgba(0,0,0,0.05)'
+            }
+          }
+        },
+        interaction: {
+          intersect: false,
+          mode: 'index'
+        },
+        elements: {
+          line: {
+            borderWidth: 3
+          }
+        }
+      }}
+    />
+  </div>
+  <div style={styles.number}>
+    {formatAmount(calculateTotalRevenue())}
+  </div>
+  <div style={styles.revenueSubtext}>
+    {formatAmountFull(calculateTotalRevenue())}
+  </div>
+  {selectedMonth !== null && (
+    <button
+      onClick={() => setSelectedMonth(null)}
+      style={{
+        padding: '5px 10px',
+        backgroundColor: '#003366',
+        color: 'white',
+        border: 'none',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        marginTop: '10px'
+      }}
+    >
+      View All Months
+    </button>
+  )}
+</div>
                     {/* Total Orders Bar Chart - WITH AMOUNT TOOLTIP */}
                     <div style={styles.card}>
                       <div>Total Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : '(Monthly)'}</div>
@@ -2266,79 +1986,6 @@ function AdminDashboard() {
                         </>
                       )}
                     </div>
-
-                    {/* Daily Activities Card - UPDATED WITH ENHANCED TOOLTIP */}
-                    <div style={styles.dailyActivitiesCard}>
-                      <div>Daily Activities</div>
-                      {dailyReportLoading ? (
-                        <div style={{ 
-                          height: '220px', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          color: '#666',
-                          fontSize: '14px'
-                        }}>
-                          Loading daily activities...
-                        </div>
-                      ) : dailyReportData.executiveReports.length === 0 ? (
-                        <div style={{ 
-                          height: '220px', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          color: '#666',
-                          fontSize: '14px'
-                        }}>
-                          No daily activities data available
-                        </div>
-                      ) : (
-                        <>
-                          {/* Total Stats Summary */}
-                          <div style={styles.totalStats}>
-                            <div style={styles.statItem}>
-                              <div style={{...styles.statValue, color: '#36A2EB'}}>
-                                {dailyReportData.totalCalls}
-                              </div>
-                              <div style={styles.statLabel}>Total Calls</div>
-                            </div>
-                            <div style={styles.statItem}>
-                              <div style={{...styles.statValue, color: '#4BC0C0'}}>
-                                {dailyReportData.totalWhatsapp}
-                              </div>
-                              <div style={styles.statLabel}>Total WhatsApp</div>
-                            </div>
-                            <div style={styles.statItem}>
-                              <div style={{...styles.statValue, color: '#FF9F40'}}>
-                                {dailyReportData.totalFollowUp}
-                              </div>
-                              <div style={styles.statLabel}>Total Follow Ups</div>
-                            </div>
-                          </div>
-
-                          {/* Executive Activities Bar Chart */}
-                          <div style={styles.dailyActivitiesChart}>
-                            <Bar
-                              data={prepareDailyActivitiesChartData()}
-                              options={dailyActivitiesChartOptions}
-                            />
-                          </div>
-
-                          {/* Date Display */}
-                          <div style={styles.dateDisplay}>
-                            Updated: {getCurrentDate()}
-                          </div>
-                          
-                          {/* Clickable Overlay */}
-                          <div 
-                            style={styles.clickableSection} 
-                            onClick={() => handleChartClick('daily-report')}
-                            title="Click to view detailed daily reports"
-                          />
-                        </>
-                      )}
-                    </div>
-
                     {/* Prospective Clients Doughnut */}
                     <div style={styles.card}>
                       <div>Prospective Clients {getTimePeriodText()}</div>

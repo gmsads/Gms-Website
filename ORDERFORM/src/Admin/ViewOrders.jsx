@@ -27,7 +27,7 @@ function ViewOrders() {
   const [currentOrder, setCurrentOrder] = useState(null); // Order currently being viewed
   const [paymentHistory, setPaymentHistory] = useState([]); // Payment history for current order
   const [monthFilter, setMonthFilter] = useState(null); // Month filter value
-  const [yearFilter, setYearFilter] = useState(2025); // Year filter value (default 2025)
+  const [yearFilter, setYearFilter] = useState(new Date().getFullYear()); // Year filter value (default to current year)
   const [loading, setLoading] = useState(false); // Loading state
   const [error, setError] = useState(null); // Error state
   const [paymentLoading, setPaymentLoading] = useState(false); // Payment processing state
@@ -41,7 +41,7 @@ function ViewOrders() {
   
   // Month navigation states
   const [currentViewMonth, setCurrentViewMonth] = useState(null); // Current month being viewed
-  const [currentViewYear, setCurrentViewYear] = useState(2025); // Current year being viewed
+  const [currentViewYear, setCurrentViewYear] = useState(new Date().getFullYear()); // Current year being viewed
 
   // Month filter information state
   const [monthFilterInfo, setMonthFilterInfo] = useState({
@@ -144,7 +144,7 @@ function ViewOrders() {
 
   // Function to get month name from month number
   const getMonthName = (monthNumber) => {
-    return new Date(2025, monthNumber - 1).toLocaleString('default', { month: 'long' });
+    return new Date(yearFilter, monthNumber - 1).toLocaleString('default', { month: 'long' });
   };
 
   // Function to navigate between months
@@ -177,7 +177,7 @@ function ViewOrders() {
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
   };
 
-  // Function to group orders by month for 2025 only
+  // Function to group orders by month for selected year only
   const groupOrdersByMonth = (orders) => {
     // Initialize empty object for grouped orders
     const grouped = {};
@@ -211,17 +211,17 @@ function ViewOrders() {
       const month = date.getMonth() + 1;
       const year = date.getFullYear();
 
-      // Skip orders not from 2025
-      if (year !== 2025) return;
+      // Skip orders not from selected year
+      if (year !== yearFilter) return;
 
-      // Create month key (e.g., "2025-03")
+      // Create month key (e.g., "2026-03")
       const monthStr = month.toString().padStart(2, '0');
-      const monthYearKey = `2025-${monthStr}`;
+      const monthYearKey = `${yearFilter}-${monthStr}`;
 
       // Initialize month group if it doesn't exist
       if (!grouped[monthYearKey]) {
         // Create formatted month name
-        const monthYearName = new Date(2025, month - 1).toLocaleString('default', {
+        const monthYearName = new Date(yearFilter, month - 1).toLocaleString('default', {
           month: 'long',
           year: 'numeric'
         });
@@ -278,8 +278,8 @@ function ViewOrders() {
     // Iterate through all orders
     orders.forEach(order => {
       const orderDate = new Date(order.orderDate);
-      // Only process orders from 2025
-      if (orderDate.getFullYear() === 2025) {
+      // Only process orders from selected year
+      if (orderDate.getFullYear() === yearFilter) {
         // Calculate order total from rows
         const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
         totalAmount += orderTotal;
@@ -404,15 +404,15 @@ function ViewOrders() {
       const res = await axios.get(`${url}?${queryParams.toString()}`);
       console.log('📦 Total orders received from API:', res.data.length);
 
-      // Filter orders to only include 2025 orders
+      // Filter orders to only include selected year orders
       let filteredOrders = res.data.filter(order => {
         if (!order.orderDate) return false;
         const orderDate = new Date(order.orderDate);
         if (isNaN(orderDate.getTime())) return false;
-        return orderDate.getFullYear() === 2025;
+        return orderDate.getFullYear() === yearFilter;
       });
 
-      console.log('📊 Orders after 2025 filter:', filteredOrders.length);
+      console.log(`📊 Orders after ${yearFilter} filter:`, filteredOrders.length);
 
       // Verify filtering for debugging
       if (executiveNameFromUrl) {
@@ -510,13 +510,34 @@ function ViewOrders() {
     // Get user info and fetch orders
     const { role, name } = getUserInfo();
     fetchOrders(role, name, month, year, clientType, executive, executiveName);
-  }, [location.search, location.state]); // Re-run when search params or location state changes
+  }, [location.search, location.state, yearFilter]); // Re-run when search params, location state, or yearFilter changes
+
+  // Function to handle year change
+  const handleYearChange = (e) => {
+    const newYear = parseInt(e.target.value);
+    setYearFilter(newYear);
+    setCurrentViewYear(newYear);
+    
+    // Update URL with new year parameter
+    const params = new URLSearchParams(location.search);
+    params.set('year', newYear);
+    navigate(`/admin-dashboard/view-orders?${params.toString()}`);
+    
+    // Refresh orders with new year filter
+    const { role, name } = getUserInfo();
+    const month = params.get('month');
+    const clientType = params.get('clientType');
+    const executive = params.get('executive');
+    const executiveName = params.get('executiveName');
+    fetchOrders(role, name, month, newYear, clientType, executive, executiveName);
+  };
 
   // Function to clear all filters
   const clearAllFilters = () => {
     // Reset all filter states
     setMonthFilter(null);
-    setYearFilter(2025);
+    setYearFilter(new Date().getFullYear());
+    setCurrentViewYear(new Date().getFullYear());
     setClientTypeFilter(null);
     setAppliedExecutiveFilters({
       executive: '',
@@ -526,7 +547,6 @@ function ViewOrders() {
     setMonthFilterInfo({ monthCount: 0, monthName: '', weekCount: 0 });
     setSearchTerm(''); // Clear search term
     setCurrentViewMonth(null); // Clear current view month
-    setCurrentViewYear(2025); // Reset to default year
     navigate('/admin-dashboard/view-orders'); // Navigate to base URL
   };
 
@@ -1005,16 +1025,16 @@ function ViewOrders() {
       ordersToExport = orders.filter(order => order.executive === executiveName);
     }
 
-    // Filter to 2025 orders only
-    const orders2025 = ordersToExport.filter(order => {
+    // Filter to selected year orders only
+    const filteredOrders = ordersToExport.filter(order => {
       const orderDate = new Date(order.orderDate);
-      return orderDate.getFullYear() === 2025;
+      return orderDate.getFullYear() === yearFilter;
     });
 
     // Flatten orders for Excel export
-    const flattenedOrders = orders2025.flatMap(order =>
+    const flattenedOrders = filteredOrders.flatMap(order =>
       order.rows.map(row => ({
-        'S.No': orders2025.indexOf(order) + 1,
+        'S.No': filteredOrders.indexOf(order) + 1,
         'Executive': order.executive,
         'Business': order.business,
         'Customer': order.contactPerson,
@@ -1057,9 +1077,9 @@ function ViewOrders() {
     // Generate filename based on user role
     let filename;
     if (shouldSeeOnlyOwnOrders()) {
-      filename = `my_orders_2025_${executiveName}_export.xlsx`;
+      filename = `my_orders_${yearFilter}_${executiveName}_export.xlsx`;
     } else {
-      filename = 'orders_2025_export.xlsx';
+      filename = `orders_${yearFilter}_export.xlsx`;
     }
     
     // Download Excel file
@@ -1302,6 +1322,52 @@ function ViewOrders() {
         }
       </div>
 
+      {/* Year Selector */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: '20px',
+        backgroundColor: '#fff',
+        padding: '15px',
+        borderRadius: '8px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <label style={{ marginRight: '10px', fontWeight: 'bold', fontSize: '16px' }}>
+          Select Year:
+        </label>
+        <select
+          value={yearFilter}
+          onChange={handleYearChange}
+          style={{
+            padding: '10px 15px',
+            borderRadius: '6px',
+            border: '2px solid #218c74',
+            backgroundColor: 'white',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            color: '#218c74',
+            minWidth: '120px'
+          }}
+        >
+          <option value={2023}>2023</option>
+          <option value={2024}>2024</option>
+          <option value={2025}>2025</option>
+          <option value={2026}>2026</option>
+          <option value={2027}>2027</option>
+        </select>
+        <div style={{
+          marginLeft: '20px',
+          padding: '10px 15px',
+          backgroundColor: '#e3f2fd',
+          borderRadius: '6px',
+          fontWeight: 'bold',
+          color: '#1976d2'
+        }}>
+          Currently Viewing: <span style={{ color: '#218c74' }}>{yearFilter}</span>
+        </div>
+      </div>
+
       {/* Summary Cards - Only show for Admin, Account, and Service Executive */}
       {shouldShowSummaryCards() && (
         <div style={{
@@ -1321,7 +1387,7 @@ function ViewOrders() {
             border: '1px solid rgba(52, 152, 219, 0.3)',
             boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
           }}>
-            <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Amount</div>
+            <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Amount ({yearFilter})</div>
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3498db' }}>₹{totalAmount}</div>
           </div>
 
@@ -1335,7 +1401,7 @@ function ViewOrders() {
             border: '1px solid rgba(39, 174, 96, 0.3)',
             boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
           }}>
-            <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Received</div>
+            <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Received ({yearFilter})</div>
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#27ae60' }}>₹{totalReceived}</div>
           </div>
 
@@ -1349,7 +1415,7 @@ function ViewOrders() {
             border: `1px solid ${totalBalance > 0 ? 'rgba(231, 76, 60, 0.3)' : 'rgba(39, 174, 96, 0.3)'}`,
             boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
           }}>
-            <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Balance</div>
+            <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Balance ({yearFilter})</div>
             <div style={{
               fontSize: '24px',
               fontWeight: 'bold',
@@ -1422,7 +1488,7 @@ function ViewOrders() {
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
                 <option key={month} value={month}>
-                  {getMonthName(month)}
+                  {new Date(yearFilter, month - 1).toLocaleString('default', { month: 'long' })}
                 </option>
               ))}
             </select>
@@ -1446,7 +1512,7 @@ function ViewOrders() {
           
           <div style={{ textAlign: 'center', flex: 1 }}>
             <h3 style={{ margin: 0, color: '#1976d2' }}>
-              {getMonthName(currentViewMonth)} {currentViewYear}
+              {new Date(yearFilter, currentViewMonth - 1).toLocaleString('default', { month: 'long' })} {currentViewYear}
             </h3>
             <p style={{ margin: '5px 0 0 0', color: '#666', fontSize: '14px' }}>
               {groupedOrders[`${currentViewYear}-${currentViewMonth.toString().padStart(2, '0')}`]?.orders?.length || 0} orders
@@ -1553,7 +1619,7 @@ function ViewOrders() {
             borderRadius: '4px'
           }}>
             <span>
-              <strong>Month:</strong> {getMonthName(monthFilter)}
+              <strong>Month:</strong> {new Date(yearFilter, monthFilter - 1).toLocaleString('default', { month: 'long' })}
             </span>
             <button
               onClick={clearMonthFilter}
@@ -1727,7 +1793,7 @@ function ViewOrders() {
                 fontSize: '14px'
               }}
             >
-              Export to Excel
+              Export to Excel ({yearFilter})
             </button>
           )}
 
@@ -2108,11 +2174,11 @@ function ViewOrders() {
           borderRadius: '8px',
           marginTop: '20px'
         }}>
-          <h3 style={{ color: '#666' }}>No orders found for 2025</h3>
+          <h3 style={{ color: '#666' }}>No orders found for {yearFilter}</h3>
           <p style={{ color: '#999' }}>
             {appliedExecutiveFilters.executiveName && `for executive: ${appliedExecutiveFilters.executiveName}`}
             {appliedExecutiveFilters.executiveName && (monthFilter || clientTypeFilter) && ' and '}
-            {monthFilter && `in ${getMonthName(monthFilter)}`}
+            {monthFilter && `in ${new Date(yearFilter, monthFilter - 1).toLocaleString('default', { month: 'long' })}`}
             {clientTypeFilter && `with client type: ${clientTypeFilter}`}
             {searchTerm && `matching search: "${searchTerm}"`}
           </p>

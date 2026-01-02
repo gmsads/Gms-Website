@@ -282,10 +282,6 @@ router.get("/dashboard/chart-data", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch dashboard data" });
   }
 });
-
-
-
-
 // ============================
 // GET orders with pending payments
 // ============================
@@ -298,8 +294,6 @@ router.get("/orders/pending-payments", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch pending payments" });
   }
 });
-
-
 // ============================
 // GET orders with pending services
 // ============================

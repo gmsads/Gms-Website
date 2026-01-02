@@ -67,7 +67,7 @@ import InstallPWAButton from './components/InstallPWAButton';
 import FieldVisitsAdmin from './Admin/FieldVisitsAdmin';
 import AdvanceApprovalPage  from './Admin/AdvanceApprovalPage';
 import ServiceForm from './Service/ServiceForm.jsx';
-
+import Purchase from './Admin/Purchase';
 function App() {
   return (
     <BrowserRouter>
@@ -135,7 +135,7 @@ function App() {
             </ProtectedRoute>
           }
         >
-
+            <Route path="purchase" element={<Purchase />} />
           <Route path="appointments" element={<Appointment />} />
           <Route path="prospects" element={<Prospective />} />
             <Route path="vendors" element={<Vendors />} />
@@ -170,18 +170,7 @@ function App() {
           <Route path="advance-approvals" element={<AdvanceApprovalPage/>}/>
           <Route path="fieldvisitsadmin" element={<FieldVisitsAdmin/>} />
         </Route>
-       // Add these imports at the top with other imports
-import AgentDashboard from './Agent/AgentDashboard';
-import FieldExecutivePage from './Executive/FieldExecutivePage';
-import Record from './Executive/Record';
-import DailyReport from './Admin/DailyRecord';
-import Pricelist from './Service/Pricelist';
-import Prospective from './Executive/Prospective';
-import Viewprospective from './Admin/Viewprospective';
-import CreateOrder from './Admin/CreatOrder';
-import ViewOrders from './Admin/ViewOrders';
 
-// Then in the Routes section:
 <Route
   path="/agent-dashboard"
   element={
