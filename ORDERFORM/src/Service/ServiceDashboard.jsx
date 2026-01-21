@@ -155,31 +155,9 @@ const ServiceDashboard = () => {
   };
 
   // Helper functions for date checking
-  const isToday = (date) => {
-    const today = new Date();
-    return (
-      date.getDate() === today.getDate() &&
-      date.getMonth() === today.getMonth() &&
-      date.getFullYear() === today.getFullYear()
-    );
-  };
 
-  const isTomorrow = (date) => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return (
-      date.getDate() === tomorrow.getDate() &&
-      date.getMonth() === tomorrow.getMonth() &&
-      date.getFullYear() === tomorrow.getFullYear()
-    );
-  };
 
-  const isNextWeek = (date) => {
-    const nextWeek = new Date();
-    nextWeek.setDate(nextWeek.getDate() + 7);
-    const nextWeekRange = getWeekRange(nextWeek);
-    return date >= nextWeekRange.start && date <= nextWeekRange.end;
-  };
+  
 
   // Filter services by date range for current executive only
   const filterServicesByDate = (services, daysFromToday) => {
@@ -746,7 +724,7 @@ const revertUIChanges = (originalState) => {
 };
 
 // Helper function to show error messages
-const showErrorMessage = (error, originalState) => {
+const showErrorMessage = (error) => {
   let errorMessage = 'Failed to update status. ';
   
   if (error.response) {
@@ -1175,7 +1153,6 @@ const showErrorMessage = (error, originalState) => {
             fontSize: '16px',
             fontWeight: '500',
             backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
-            fontWeight: isActive ? 'bold' : '500',
           })}
           onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
         >
