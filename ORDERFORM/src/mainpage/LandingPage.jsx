@@ -56,7 +56,7 @@ function LandingPage() {
         } catch (geoError) {
           console.warn('Location access denied or failed, logging without location');
           // Fallback: Log without location
-          await axios.post('/api/executiveLogins', {
+          await axios.post('/api/order', {
             executiveName: name,
             location: null
           });
