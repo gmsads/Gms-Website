@@ -41,69 +41,149 @@ const ViewServices = () => {
   // Helper function to generate unique row keys
   const generateRowKey = (orderId, rowIndex) => `${orderId}-${rowIndex}`;
 
-  // Component styles
+  // Updated Component styles - More compact and grid-friendly
   const styles = {
     container: {
       padding: '20px',
-      fontFamily: 'Arial, sans-serif',
-      maxWidth: '1200px',
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      maxWidth: '1400px',
       margin: '0 auto',
+      backgroundColor: '#f5f7fa',
+      minHeight: '100vh',
     },
     header: {
-      marginBottom: '20px',
+      marginBottom: '30px',
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
       flexWrap: 'wrap',
       gap: '15px',
     },
+    title: {
+      fontSize: '28px',
+      fontWeight: '700',
+      color: '#1a237e',
+      margin: '0',
+    },
     searchContainer: {
       display: 'flex',
       alignItems: 'center',
       gap: '10px',
-      marginBottom: '15px',
+      marginBottom: '25px',
+      position: 'relative',
     },
     searchInput: {
-      padding: '8px 12px',
-      borderRadius: '4px',
-      border: '1px solid #ccc',
-      fontSize: '14px',
-      minWidth: '250px',
+      padding: '12px 16px 12px 42px',
+      borderRadius: '12px',
+      border: '2px solid #e0e0e0',
+      fontSize: '15px',
+      width: '100%',
+      maxWidth: '500px',
+      backgroundColor: 'white',
+      transition: 'all 0.3s ease',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+    },
+    searchIcon: {
+      position: 'absolute',
+      left: '15px',
+      color: '#666',
+    },
+    clearButton: {
+      position: 'absolute',
+      right: '15px',
+      background: 'none',
+      border: 'none',
+      color: '#666',
+      cursor: 'pointer',
+      fontSize: '18px',
+    },
+    gridContainer: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+      gap: '20px',
+      marginTop: '20px',
     },
     card: {
-      backgroundColor: '#f8f9fa',
+      backgroundColor: 'white',
       padding: '20px',
-      marginBottom: '20px',
-      borderRadius: '8px',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-      borderLeft: '4px solid #003366',
+      borderRadius: '16px',
+      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+      border: '1px solid #e8eaf6',
+      transition: 'all 0.3s ease',
+      height: 'fit-content',
+      position: 'relative',
+      overflow: 'hidden',
+      '&:hover': {
+        transform: 'translateY(-4px)',
+        boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
+      },
+    },
+    cardHeader: {
+      borderBottom: '2px solid #f0f2ff',
+      paddingBottom: '12px',
+      marginBottom: '15px',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+    },
+    orderNumber: {
+      fontSize: '16px',
+      fontWeight: '700',
+      color: '#1a237e',
+      backgroundColor: '#e8eaf6',
+      padding: '4px 10px',
+      borderRadius: '20px',
+    },
+    deliveryDate: {
+      fontSize: '13px',
+      fontWeight: '600',
+      color: '#5c6bc0',
+      backgroundColor: '#f0f2ff',
+      padding: '4px 10px',
+      borderRadius: '20px',
     },
     creatorInfo: {
-      backgroundColor: '#e9f5ff',
+      backgroundColor: '#f0f7ff',
       padding: '10px',
-      borderRadius: '4px',
+      borderRadius: '10px',
       marginBottom: '15px',
-      borderLeft: '4px solid #003366',
-    },
-    field: {
-      marginBottom: '10px',
+      fontSize: '12px',
+      color: '#1565c0',
       display: 'flex',
+      justifyContent: 'space-between',
       alignItems: 'center',
     },
+    creatorLabel: {
+      fontWeight: '600',
+      marginRight: '8px',
+    },
+    field: {
+      marginBottom: '12px',
+      display: 'flex',
+      alignItems: 'flex-start',
+    },
     label: {
-      fontWeight: 'bold',
-      minWidth: '150px',
-      color: '#333',
+      fontWeight: '600',
+      minWidth: '120px',
+      color: '#444',
+      fontSize: '13px',
+      opacity: 0.8,
     },
     value: {
       flex: '1',
+      fontSize: '14px',
+      color: '#222',
+      fontWeight: '500',
+      wordBreak: 'break-word',
     },
     serviceStatus: {
-      padding: '4px 8px',
-      borderRadius: '4px',
-      fontSize: '14px',
-      fontWeight: 'bold',
+      padding: '6px 12px',
+      borderRadius: '20px',
+      fontSize: '12px',
+      fontWeight: '700',
       display: 'inline-block',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
     },
     statusPending: {
       backgroundColor: '#FFF3E0',
@@ -126,95 +206,150 @@ const ViewServices = () => {
       color: '#FF8F00',
     },
     statusCustomize: {
-      backgroundColor: '#DCE775',
+      backgroundColor: '#E6EE9C',
       color: '#827717',
     },
     noServices: {
       textAlign: 'center',
-      padding: '40px',
-      backgroundColor: '#f0f0f0',
-      borderRadius: '8px',
+      padding: '60px 20px',
+      backgroundColor: 'white',
+      borderRadius: '16px',
       fontSize: '18px',
+      color: '#666',
+      gridColumn: '1 / -1',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
     },
     userBadge: {
-      backgroundColor: '#003366',
+      backgroundColor: '#1a237e',
       color: 'white',
-      padding: '5px 10px',
-      borderRadius: '4px',
+      padding: '8px 16px',
+      borderRadius: '20px',
       fontSize: '14px',
+      fontWeight: '600',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
     },
     loading: {
       textAlign: 'center',
-      padding: '40px',
+      padding: '60px 20px',
       fontSize: '18px',
+      color: '#666',
+      gridColumn: '1 / -1',
     },
     dropdown: {
-      padding: '6px 10px',
-      borderRadius: '4px',
-      border: '1px solid #ccc',
-      backgroundColor: '#fff',
+      padding: '8px 12px',
+      borderRadius: '10px',
+      border: '2px solid #e0e0e0',
+      backgroundColor: 'white',
       fontSize: '14px',
       flex: '1',
       cursor: 'pointer',
+      transition: 'border-color 0.3s ease',
+      '&:focus': {
+        outline: 'none',
+        borderColor: '#5c6bc0',
+      },
     },
     refreshButton: {
-      padding: '8px 16px',
-      backgroundColor: '#003366',
+      padding: '10px 20px',
+      backgroundColor: '#1a237e',
       color: 'white',
       border: 'none',
-      borderRadius: '4px',
+      borderRadius: '12px',
       cursor: 'pointer',
-      marginLeft: '10px',
+      fontSize: '14px',
+      fontWeight: '600',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      transition: 'all 0.3s ease',
+      '&:hover': {
+        backgroundColor: '#0d1844',
+        transform: 'translateY(-2px)',
+      },
+      '&:disabled': {
+        opacity: 0.6,
+        cursor: 'not-allowed',
+        transform: 'none',
+      },
     },
     error: {
       color: '#d32f2f',
-      backgroundColor: '#fdecea',
-      padding: '10px',
-      borderRadius: '4px',
-      marginBottom: '20px',
-    },
-    deliveryDateHighlight: {
-      backgroundColor: '#fff8e1',
-      padding: '8px',
-      borderRadius: '4px',
-      marginBottom: '15px',
-      fontWeight: 'bold',
+      backgroundColor: '#ffebee',
+      padding: '15px',
+      borderRadius: '12px',
+      marginBottom: '25px',
+      gridColumn: '1 / -1',
+      fontSize: '14px',
     },
     remarkInput: {
-      padding: '8px',
-      borderRadius: '4px',
-      border: '1px solid #ccc',
+      padding: '10px',
+      borderRadius: '10px',
+      border: '2px solid #e0e0e0',
       width: '100%',
-      marginTop: '5px'
+      fontSize: '14px',
+      transition: 'border-color 0.3s ease',
+      marginTop: '5px',
+      '&:focus': {
+        outline: 'none',
+        borderColor: '#5c6bc0',
+      },
     },
     remarkContainer: {
-      marginTop: '10px'
+      marginTop: '15px',
+      paddingTop: '15px',
+      borderTop: '2px dashed #f0f2ff',
     },
     saveButton: {
       padding: '8px 16px',
       backgroundColor: '#4CAF50',
       color: 'white',
       border: 'none',
-      borderRadius: '4px',
+      borderRadius: '10px',
       cursor: 'pointer',
-      marginTop: '5px',
-      marginLeft: '5px',
+      marginTop: '8px',
+      fontSize: '13px',
+      fontWeight: '600',
+      transition: 'all 0.3s ease',
+      '&:hover': {
+        backgroundColor: '#388e3c',
+        transform: 'translateY(-2px)',
+      },
+      '&:disabled': {
+        opacity: 0.6,
+        cursor: 'not-allowed',
+        transform: 'none',
+      },
     },
     assignButton: {
-      padding: '8px 16px',
+      padding: '10px 20px',
       backgroundColor: '#FF9800',
       color: 'white',
       border: 'none',
-      borderRadius: '4px',
+      borderRadius: '10px',
       cursor: 'pointer',
-      marginTop: '10px',
+      marginTop: '12px',
+      fontSize: '14px',
+      fontWeight: '600',
+      width: '100%',
+      transition: 'all 0.3s ease',
+      '&:hover': {
+        backgroundColor: '#F57C00',
+        transform: 'translateY(-2px)',
+      },
+      '&:disabled': {
+        opacity: 0.6,
+        cursor: 'not-allowed',
+        transform: 'none',
+      },
     },
     assignSection: {
-      marginTop: '15px',
+      marginTop: '20px',
       padding: '15px',
-      backgroundColor: '#FFF3E0',
-      borderRadius: '4px',
-      border: '1px dashed #FF9800',
+      backgroundColor: '#FFF8E1',
+      borderRadius: '12px',
+      border: '2px dashed #FFB300',
     },
     successPopup: {
       position: 'fixed',
@@ -223,29 +358,32 @@ const ViewServices = () => {
       backgroundColor: '#4BB543',
       color: 'white',
       padding: '20px',
-      borderRadius: '8px',
-      boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+      borderRadius: '12px',
+      boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
       zIndex: 1000,
       display: 'flex',
       flexDirection: 'column',
-      gap: '10px',
-      maxWidth: '400px',
+      gap: '12px',
+      width: '350px',
+      animation: 'slideIn 0.3s ease',
     },
     successTitle: {
-      fontSize: '18px',
-      fontWeight: 'bold',
-      marginBottom: '10px',
+      fontSize: '16px',
+      fontWeight: '700',
+      marginBottom: '5px',
       display: 'flex',
       alignItems: 'center',
       gap: '10px'
     },
     successItem: {
       display: 'flex',
-      gap: '10px'
+      gap: '10px',
+      fontSize: '14px',
     },
     successLabel: {
-      fontWeight: 'bold',
-      minWidth: '120px'
+      fontWeight: '600',
+      minWidth: '100px',
+      opacity: 0.9,
     },
     closeButton: {
       position: 'absolute',
@@ -255,9 +393,58 @@ const ViewServices = () => {
       border: 'none',
       color: 'white',
       cursor: 'pointer',
-      fontSize: '16px'
+      fontSize: '18px',
+      padding: '5px',
+      '&:hover': {
+        opacity: 0.8,
+      },
+    },
+    statusIndicator: {
+      position: 'absolute',
+      top: '0',
+      left: '0',
+      width: '6px',
+      height: '100%',
+      borderTopLeftRadius: '16px',
+      borderBottomLeftRadius: '16px',
+    },
+    statusDropdown: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      marginTop: '10px',
+    },
+    badge: {
+      padding: '3px 8px',
+      borderRadius: '12px',
+      fontSize: '11px',
+      fontWeight: '600',
+      backgroundColor: '#e0e0e0',
+      color: '#666',
+    },
+    requirementBadge: {
+      backgroundColor: '#E3F2FD',
+      color: '#1565C0',
+    },
+    contactBadge: {
+      backgroundColor: '#F3E5F5',
+      color: '#7B1FA2',
     },
   };
+
+  // Add keyframes for animation
+  const keyframesStyle = `
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+  `;
 
   // Get status style based on status value
   const getStatusStyle = (status) => {
@@ -269,6 +456,18 @@ const ViewServices = () => {
       case STATUS.PRINTING: return { ...baseStyle, ...styles.statusPrinting };
       case STATUS.CUSTOMIZE: return { ...baseStyle, ...styles.statusCustomize };
       default: return { ...baseStyle, ...styles.statusPending };
+    }
+  };
+
+  // Get status indicator color
+  const getStatusIndicatorColor = (status) => {
+    switch(status) {
+      case STATUS.COMPLETED: return '#2E7D32';
+      case STATUS.INSTALLATION_PENDING: return '#1565C0';
+      case STATUS.DESIGN_PENDING: return '#6A1B9A';
+      case STATUS.PRINTING: return '#FF8F00';
+      case STATUS.CUSTOMIZE: return '#827717';
+      default: return '#E65100';
     }
   };
 
@@ -479,6 +678,22 @@ const ViewServices = () => {
       .filter(order => order.rows.length > 0);
   }, [assignedOrders, searchTerm]);
 
+  // Flatten rows for grid display
+  const flattenedServices = useMemo(() => {
+    const services = [];
+    sortedAndFilteredOrders.forEach(order => {
+      order.rows.forEach(row => {
+        services.push({
+          ...row,
+          order,
+          rowKey: row.rowKey,
+          displayStatus: row.displayStatus
+        });
+      });
+    });
+    return services;
+  }, [sortedAndFilteredOrders]);
+
   // Fetch orders data
   useEffect(() => {
     const fetchOrders = async () => {
@@ -514,22 +729,28 @@ const ViewServices = () => {
 
   return (
     <div style={styles.container}>
+      {/* Add keyframes style */}
+      <style>{keyframesStyle}</style>
+
       <div style={styles.header}>
-        <h2>My Assigned Services</h2>
+        <h2 style={styles.title}>My Services Dashboard</h2>
         <div>
-          <span style={styles.userBadge}>{currentUser}</span>
+          <span style={styles.userBadge}>
+            👤 {currentUser}
+          </span>
           <button 
             style={styles.refreshButton}
             onClick={handleRefresh}
             disabled={loading}
           >
-            {loading ? 'Refreshing...' : 'Refresh'}
+            {loading ? '🔄 Refreshing...' : '🔄 Refresh'}
           </button>
         </div>
       </div>
 
       {/* Search input */}
       <div style={styles.searchContainer}>
+        <span style={styles.searchIcon}>🔍</span>
         <input
           type="text"
           placeholder="Search by order number, business, contact, requirement, quantity, or status..."
@@ -538,11 +759,16 @@ const ViewServices = () => {
           style={styles.searchInput}
         />
         {searchTerm && (
-          <button onClick={() => setSearchTerm('')}>Clear</button>
+          <button 
+            style={styles.clearButton}
+            onClick={() => setSearchTerm('')}
+          >
+            ✕
+          </button>
         )}
       </div>
 
-      {error && <div style={styles.error}>{error}</div>}
+      {error && <div style={styles.error}>❌ {error}</div>}
 
       {showAssignSuccess && (
         <div style={styles.successPopup}>
@@ -553,7 +779,7 @@ const ViewServices = () => {
             ×
           </button>
           <div style={styles.successTitle}>
-            <span>✓</span>
+            <span>✅</span>
             Service Assigned Successfully!
           </div>
           <div style={styles.successItem}>
@@ -579,41 +805,45 @@ const ViewServices = () => {
         </div>
       )}
 
-      {sortedAndFilteredOrders.length === 0 ? (
-        <div style={styles.noServices}>
-          {searchTerm ? 'No services match your search' : 'No services assigned to you'}
-        </div>
-      ) : (
-        sortedAndFilteredOrders.flatMap(order =>
-          order.rows.map(row => {
-            const rowKey = `${order._id}-${row.originalIndex}`;
-            const displayStatus = localStatuses[rowKey] || row.status || STATUS.PENDING;
+      <div style={styles.gridContainer}>
+        {flattenedServices.length === 0 ? (
+          <div style={styles.noServices}>
+            {searchTerm ? 'No services match your search' : 'No services assigned to you'}
+          </div>
+        ) : (
+          flattenedServices.map((service, index) => {
+            const rowKey = service.rowKey;
+            const displayStatus = service.displayStatus;
+            const order = service.order;
+            const indicatorColor = getStatusIndicatorColor(displayStatus);
             
             return (
-              <div key={row.rowKey} style={styles.card}>
+              <div key={rowKey} style={styles.card}>
+                {/* Status indicator bar */}
+                <div 
+                  style={{
+                    ...styles.statusIndicator,
+                    backgroundColor: indicatorColor
+                  }}
+                />
+                
+                <div style={styles.cardHeader}>
+                  <div style={styles.orderNumber}>
+                    #{order.orderNo || 'N/A'}
+                  </div>
+                  <div style={styles.deliveryDate}>
+                    📅 {service.deliveryDate ? new Date(service.deliveryDate).toLocaleDateString() : 'No date'}
+                  </div>
+                </div>
+
                 <div style={styles.creatorInfo}>
-                  <div style={styles.field}>
-                    <span style={styles.label}>Created by:</span>
-                    <span style={styles.value}>{order.executive || 'Not specified'}</span>
+                  <div>
+                    <span style={styles.creatorLabel}>Created by:</span>
+                    <span>{order.executive || 'Not specified'}</span>
                   </div>
-                  <div style={styles.field}>
-                    <span style={styles.label}>Created at:</span>
-                    <span style={styles.value}>
-                      {order.createdAt ? new Date(order.createdAt).toLocaleString() : 'Not specified'}
-                    </span>
+                  <div>
+                    {new Date(order.createdAt || order.orderDate || '').toLocaleDateString()}
                   </div>
-                </div>
-
-                <div style={styles.field}>
-                  <span style={styles.label}>Order Number:</span>
-                  <span style={styles.value}>{order.orderNo}</span>
-                </div>
-
-                <div style={styles.field}>
-                  <span style={styles.label}>Delivery Date:</span>
-                  <span style={styles.deliveryDateHighlight}>
-                    {row.deliveryDate ? new Date(row.deliveryDate).toLocaleDateString() : 'Not specified'}
-                  </span>
                 </div>
 
                 <div style={styles.field}>
@@ -622,21 +852,25 @@ const ViewServices = () => {
                 </div>
 
                 <div style={styles.field}>
-                  <span style={styles.label}>Contact Person:</span>
+                  <span style={styles.label}>Contact:</span>
                   <span style={styles.value}>
-                    {order.contactPerson || 'N/A'} ({order.phone || 'No phone'})
+                    <div>{order.contactPerson || 'N/A'}</div>
+                    <div style={{fontSize: '12px', color: '#666', marginTop: '2px'}}>
+                      📞 {order.phone || 'No phone'}
+                    </div>
                   </span>
                 </div>
 
                 <div style={styles.field}>
                   <span style={styles.label}>Requirement:</span>
-                  <span style={styles.value}>{row.requirement || 'No details'}</span>
-                </div>
-
-                {/* Quantity field */}
-                <div style={styles.field}>
-                  <span style={styles.label}>Quantity:</span>
-                  <span style={styles.value}>{row.quantity || 'N/A'}</span>
+                  <span style={styles.value}>
+                    {service.requirement || 'No details'}
+                    {service.quantity && (
+                      <span style={{...styles.badge, ...styles.requirementBadge, marginLeft: '8px'}}>
+                        Qty: {service.quantity}
+                      </span>
+                    )}
+                  </span>
                 </div>
 
                 <div style={styles.field}>
@@ -651,7 +885,7 @@ const ViewServices = () => {
                   <select
                     style={styles.dropdown}
                     value={displayStatus}
-                    onChange={(e) => handleStatusChange(order._id, row.originalIndex, e.target.value)}
+                    onChange={(e) => handleStatusChange(order._id, service.originalIndex, e.target.value)}
                     disabled={loading}
                   >
                     {Object.values(STATUS).map(status => (
@@ -663,27 +897,29 @@ const ViewServices = () => {
                 </div>
 
                 <div style={styles.remarkContainer}>
-                  <div style={styles.label}>Remark:</div>
+                  <div style={{...styles.label, marginBottom: '5px'}}>Remark:</div>
                   <input
                     type="text"
                     style={styles.remarkInput}
                     value={remarks[rowKey] || ''}
-                    onChange={(e) => handleRemarkChange(order._id, row.originalIndex, e.target.value)}
+                    onChange={(e) => handleRemarkChange(order._id, service.originalIndex, e.target.value)}
                     placeholder="Add any remarks here..."
                   />
                   <button 
                     style={styles.saveButton}
-                    onClick={() => handleSaveRemark(order._id, row.originalIndex)}
+                    onClick={() => handleSaveRemark(order._id, service.originalIndex)}
                     disabled={loading}
                   >
-                    Save Remark
+                    💾 Save Remark
                   </button>
                 </div>
 
                 {/* Always show the assignment section for unassigned services */}
-                <div style={styles.assignSection}>
-                  <div style={styles.field}>
-                    <span style={styles.label}>Assign Service Executive:</span>
+                {(!service.assignedExecutive || service.assignedExecutive === currentUser) && (
+                  <div style={styles.assignSection}>
+                    <div style={{fontSize: '13px', fontWeight: '600', color: '#FF6F00', marginBottom: '8px'}}>
+                      Assign Service Executive:
+                    </div>
                     <select
                       style={styles.dropdown}
                       value={assigningOrder === rowKey ? selectedExecutive : ''}
@@ -699,21 +935,21 @@ const ViewServices = () => {
                         </option>
                       ))}
                     </select>
-                  </div>
 
-                  <button
-                    style={styles.assignButton}
-                    disabled={!selectedExecutive || assigningOrder !== rowKey}
-                    onClick={() => handleAssignService(order._id, row.originalIndex)}
-                  >
-                    Assign Service
-                  </button>
-                </div>
+                    <button
+                      style={styles.assignButton}
+                      disabled={!selectedExecutive || assigningOrder !== rowKey}
+                      onClick={() => handleAssignService(order._id, service.originalIndex)}
+                    >
+                      👥 Assign Service
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })
-        )
-      )}
+        )}
+      </div>
     </div>
   );
 };

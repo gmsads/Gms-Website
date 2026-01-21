@@ -362,77 +362,6 @@ const ViewProspective = () => {
     }
   };
 
-  // Export to CSV function
-  const exportToCSV = () => {
-    setExporting(true);
-    
-    try {
-      const headers = [
-        'Created Date',
-        'Executive',
-        'Business Name',
-        'Contact Person',
-        'Phone Number',
-        'Location',
-        'Lead Source',
-        'Requirement',
-        'Follow-up Date',
-        'Status',
-        'Prospect Type',
-        'WhatsApp Status'
-      ];
-      
-      const csvData = filteredProspectives.map(prospect => [
-        prospect.createdAt ? format(new Date(prospect.createdAt), 'MMM dd, yyyy') : 'N/A',
-        prospect.ExcutiveName || prospect.executiveName || '',
-        prospect.businessName || '',
-        prospect.contactPerson || '',
-        prospect.phoneNumber || '',
-        prospect.location || '',
-        prospect.leadFrom || 'N/A',
-        prospect.requirementDescription || 'N/A',
-        prospect.followUpDate ? format(new Date(p.followUpDate), 'MMM dd, yyyy') : 'N/A',
-        prospect.status || 'New',
-        prospect.prospectType || 'N/A',
-        prospect.whatsappStatus || 'N/A'
-      ]);
-      
-      const csvContent = [
-        headers.join(','),
-        ...csvData.map(row => 
-          row.map(cell => 
-            typeof cell === 'string' && cell.includes(',') 
-              ? `"${cell.replace(/"/g, '""')}"` 
-              : cell
-          ).join(',')
-        )
-      ].join('\n');
-      
-      // Create and download file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      
-      const dateStr = format(new Date(), 'yyyy-MM-dd_HH-mm');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `Prospective_Clients_${dateStr}.csv`);
-      link.style.visibility = 'hidden';
-      
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      // Show success message
-      setSuccess(prev => ({ ...prev, export: true }));
-      setTimeout(() => setSuccess(prev => ({ ...prev, export: false })), 3000);
-    } catch (error) {
-      console.error('CSV export error:', error);
-      setError('Failed to export data to CSV');
-    } finally {
-      setExporting(false);
-    }
-  };
-
   // Print function
   const handlePrint = () => {
     setPrintMode(true);
@@ -898,14 +827,6 @@ const ViewProspective = () => {
         </button>
         
         <button 
-          onClick={exportToCSV} 
-          style={styles.exportButton}
-          disabled={exporting || filteredProspectives.length === 0}
-        >
-          {exporting ? 'Exporting...' : '📄 Export to CSV'}
-        </button>
-        
-        <button 
           onClick={handlePrint} 
           style={styles.printButton}
           disabled={printMode || filteredProspectives.length === 0}
@@ -1062,7 +983,7 @@ const ViewProspective = () => {
   );
 };
 
-// Updated Styles with new viewing context style
+// Updated Styles
 const styles = {
   container: {
     padding: '20px',

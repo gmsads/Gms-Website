@@ -350,6 +350,7 @@ export default function Employees() {
       formData.append('phone', employee.phone);
       formData.append('email', employee.email || '');
       formData.append('guardianName', employee.guardianName || '');
+      formData.append('guardiaContact', employee.guardianContact || '');
       formData.append('aadhar', employee.aadhar || '');
       formData.append('joiningDate', employee.joiningDate || '');
       formData.append('experience', employee.experience || '');
@@ -899,6 +900,23 @@ export default function Employees() {
                   </div>
                 </div>
               </div>
+              <div className="form-group">
+                    <label>Parent/Guardian Contcat Number</label>
+                    <input
+                      type="text"
+                      value={editModal.employee.guardianContact|| ''}
+                      onChange={(e) =>
+                        setEditModal(prev => ({
+                          ...prev,
+                          employee: {
+                            ...prev.employee,
+                            guardianName: e.target.value
+                          }
+                        }))
+                      }
+                      placeholder="Contact Number "
+                    />
+                  </div>
 
               <div className="form-group">
                 <label>Employment Status</label>

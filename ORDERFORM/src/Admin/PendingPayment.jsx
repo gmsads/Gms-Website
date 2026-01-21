@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { saveAs } from 'file-saver';
 import { Document, Packer, Paragraph, Table, TableCell, TableRow, WidthType, AlignmentType, TextRun } from 'docx';
 import jsPDF from 'jspdf';
@@ -12,6 +12,7 @@ function PendingPayment({ executiveFilter = null }) {
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams(); // NEW: Get URL params
   
   // Payment modal states
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -33,9 +34,15 @@ function PendingPayment({ executiveFilter = null }) {
     orderNo: ''
   });
 
-  // Filter states
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(null);
+  // Filter states - UPDATED: Initialize from URL params
+  const [year, setYear] = useState(() => {
+    const urlYear = searchParams.get('year');
+    return urlYear ? parseInt(urlYear) : new Date().getFullYear();
+  });
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const urlMonth = searchParams.get('month');
+    return urlMonth ? parseInt(urlMonth) - 1 : null;
+  });
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'today', 'other'
   const [exportLoading, setExportLoading] = useState(false);
@@ -71,6 +78,25 @@ function PendingPayment({ executiveFilter = null }) {
     applyFilters();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders, year, selectedMonth, searchTerm, activeFilter]);
+
+  // NEW EFFECT: Update URL when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    
+    if (year) {
+      params.set('year', year.toString());
+    }
+    
+    if (selectedMonth !== null) {
+      params.set('month', (selectedMonth + 1).toString());
+    }
+    
+    // Only update if params have changed
+    const currentParams = new URLSearchParams(window.location.search);
+    if (params.toString() !== currentParams.toString()) {
+      setSearchParams(params);
+    }
+  }, [year, selectedMonth, setSearchParams]);
 
   // NEW EFFECT: Show reminder when component mounts and when filtered orders change
   useEffect(() => {
@@ -1057,6 +1083,8 @@ function PendingPayment({ executiveFilter = null }) {
       
       <h2 style={styles.title}>
         {executiveFilter ? `${executiveFilter}'s Pending Payments` : 'Pending Payments'}
+        {/* Show active month/year filter in title */}
+        {selectedMonth !== null && ` - ${monthLabels[selectedMonth]} ${year}`}
       </h2>
 
       {/* NEW: Reminder Notification */}
@@ -1081,6 +1109,7 @@ function PendingPayment({ executiveFilter = null }) {
           <div style={reminderStyles.details}>
             Filter: {activeFilter === 'today' ? "Today's Delivery" : 
                     activeFilter === 'other' ? "Other Pending" : "All Pending"}
+            {selectedMonth !== null && ` - ${monthLabels[selectedMonth]} ${year}`}
           </div>
         </div>
       )}
@@ -1113,6 +1142,7 @@ function PendingPayment({ executiveFilter = null }) {
           <span style={styles.summaryLabel}>
             {activeFilter === 'today' ? "Today's Delivery Pending" : 
              activeFilter === 'other' ? "Other Pending Payments" : "Total Pending"}:
+            {selectedMonth !== null && ` (${monthLabels[selectedMonth]} ${year})`}
           </span>
           <span style={styles.summaryAmount}>₹{totalPendingAmount.toLocaleString()}</span>
           <span style={styles.summaryCount}>{filteredOrders.length} orders</span>
@@ -1203,6 +1233,7 @@ function PendingPayment({ executiveFilter = null }) {
                 <tr>
                   <td colSpan="10" style={styles.noData}>
                     No pending payments found for the selected filters
+                    {selectedMonth !== null && ` (${monthLabels[selectedMonth]} ${year})`}
                   </td>
                 </tr>
               ) : (

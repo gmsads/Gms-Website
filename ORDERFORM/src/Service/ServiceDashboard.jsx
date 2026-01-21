@@ -1,17 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Doughnut, Bar } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
-  ArcElement,
-  Tooltip as ChartJSTooltip,
-  Legend as ChartJSLegend,
   CategoryScale,
   LinearScale,
   BarElement,
   Title,
-  PointElement,
-  LineElement
+  Tooltip as ChartJSTooltip,
+  Legend as ChartJSLegend,
 } from 'chart.js';
 import axios from 'axios';
 import OrderForm from '../Executive/OrderForm';
@@ -19,22 +16,25 @@ import AutoLogout from "../mainpage/AutoLogout";
 
 // Register ChartJS components
 ChartJS.register(
-  ArcElement,
-  ChartJSTooltip,
-  ChartJSLegend,
   CategoryScale,
   LinearScale,
   BarElement,
   Title,
-  PointElement,
-  LineElement
+  ChartJSTooltip,
+  ChartJSLegend
 );
 
 // Month names for display
 const monthLabels = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
 ];
+
+// Week labels
+const weekLabels = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
+
+// Year options (2024 to 2030)
+const yearOptions = [2024, 2025, 2026, 2027, 2028, 2029, 2030];
 
 // Mock weekly data for the chart
 const mockWeeklyData = {
@@ -70,7 +70,7 @@ const ServiceDashboard = () => {
   const [searchError, setSearchError] = useState('');
   const [year, setYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(null);
-  const [, setSelectedWeek] = useState(null);
+  const [selectedWeek, setSelectedWeek] = useState(null);
   const [todaysServices, setTodaysServices] = useState([]);
   const [tomorrowsServices, setTomorrowsServices] = useState([]);
   const [nextWeekServices, setNextWeekServices] = useState([]);
@@ -87,6 +87,12 @@ const ServiceDashboard = () => {
     formattedAchieved: "₹0",
   });
   const [targetLoading, setTargetLoading] = useState(true);
+
+  // Dropdown states for sidebar
+  const [salesOpen, setSalesOpen] = useState(true);
+  const [servicesOpen, setServicesOpen] = useState(true);
+  const [reportsOpen, setReportsOpen] = useState(true);
+  const [additionalOpen, setAdditionalOpen] = useState(true);
 
   // Get current executive from localStorage
   const currentExecutive = localStorage.getItem('userName') || '';
@@ -118,13 +124,6 @@ const ServiceDashboard = () => {
 
   // Check if current route is dashboard home
   const isDashboardHome = location.pathname === '/service-dashboard';
-
-  // Generate year options for dropdown (current year ±5 years)
-  const years = [];
-  const currentYear = new Date().getFullYear();
-  for (let y = currentYear - 5; y <= currentYear + 5; y++) {
-    years.push(y);
-  }
 
   // Helper function to get start of day (00:00:00)
   const getStartOfDay = (date) => {
@@ -500,6 +499,15 @@ const ServiceDashboard = () => {
           })
         ).length;
 
+        const inProgress = servicesData.filter(service =>
+          service.rows.some(row => {
+            const isAssigned =
+              row.assignedExecutive === currentExecutive ||
+              (!row.assignedExecutive && service.executive === currentExecutive);
+            return isAssigned && row.status === 'In Progress';
+          })
+        ).length;
+
         // Mock monthly service data
         const mockMonthlyData = [12, 19, 15, 8, 12, 15, 18, 14, 16, 12, 10, 14];
 
@@ -515,8 +523,8 @@ const ServiceDashboard = () => {
           setStats({
             totalPending,
             totalCompleted,
-            inProgress: 0,
-            totalServices: totalPending + totalCompleted
+            inProgress,
+            totalServices: totalPending + totalCompleted + inProgress
           });
           setMonthlyServiceData(mockMonthlyData);
           setReportChartData(mockReportChartData);
@@ -768,15 +776,27 @@ const showErrorMessage = (error, originalState) => {
     navigate('/');
   };
 
-  // Data for service status chart (for current executive only)
+  // Data for service status bar chart (for current executive only)
   const serviceStatusData = {
-    labels: ['Pending', 'In Progress', 'Completed'],
+    labels: ['Completed', 'Pending', 'In Progress'],
     datasets: [
       {
-        data: [stats.totalPending, stats.inProgress, stats.totalCompleted],
-        backgroundColor: ['#4CAF50', '#FFA500', '#FF0000'],
-        borderColor: ['#fff', '#fff', '#fff'],
+        label: 'Number of Services',
+        data: [stats.totalCompleted, stats.totalPending, stats.inProgress],
+        backgroundColor: [
+          '#4CAF50', // Green for Completed
+          '#FF0000', // Red for Pending
+          '#FFA500'  // Orange for In Progress
+        ],
+        borderColor: [
+          '#388E3C', // Darker green border
+          '#D32F2F', // Darker red border
+          '#F57C00'  // Darker orange border
+        ],
         borderWidth: 1,
+        borderRadius: 5,
+        barPercentage: 0.6,
+        categoryPercentage: 0.8,
       },
     ],
   };
@@ -784,45 +804,19 @@ const showErrorMessage = (error, originalState) => {
   // Data for service trends chart (for current executive only)
   const serviceTrendsData = {
     labels: selectedMonth !== null
-      ? ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'].slice(
-        0, mockWeeklyData[selectedMonth]?.length || 4
-      )
+      ? weekLabels.slice(0, mockWeeklyData[selectedMonth]?.length || 4)
       : monthLabels,
     datasets: [
       {
         label: selectedMonth !== null ? 'Weekly Services' : 'Monthly Services',
         data: selectedMonth !== null
-          ? mockWeeklyData[selectedMonth] || [0, 0, 0, 0]
+          ? mockWeeklyData[selectedMonth] || [0, 0, 0, 0, 0]
           : monthlyServiceData,
         backgroundColor: 'rgba(54, 162, 235, 0.7)',
         borderColor: 'rgba(54, 162, 235, 1)',
         borderWidth: 1,
       },
     ],
-  };
-
-  // Handle pie chart click to navigate to appropriate service list
-  const handlePieChartClick = (event, elements) => {
-    if (elements.length > 0) {
-      const clickedIndex = elements[0].index;
-      let status = '';
-
-      switch (clickedIndex) {
-        case 0:
-          status = 'Pending';
-          break;
-        case 1:
-          status = 'In Progress';
-          break;
-        case 2:
-          status = 'Completed';
-          break;
-        default:
-          return;
-      }
-
-      navigate(`/service-dashboard/view-services?status=${status.toLowerCase().replace(' ', '-')}`);
-    }
   };
 
   // Calculate target percentage
@@ -983,6 +977,59 @@ const showErrorMessage = (error, originalState) => {
     );
   }
 
+  // Chart options
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          font: {
+            size: window.innerWidth <= 768 ? 10 : 12
+          },
+          padding: 10
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => {
+            const label = context.dataset.label || '';
+            const value = context.raw || 0;
+            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+            const percentage = Math.round((value / total) * 100);
+            return `${label}: ${value} (${percentage}%)`;
+          }
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          stepSize: 1,
+          font: {
+            size: window.innerWidth <= 768 ? 10 : 12
+          }
+        },
+        grid: {
+          display: true,
+          color: 'rgba(0,0,0,0.05)'
+        }
+      },
+      x: {
+        ticks: {
+          font: {
+            size: window.innerWidth <= 768 ? 10 : 12
+          }
+        },
+        grid: {
+          display: false
+        }
+      }
+    }
+  };
+
   // Main render
   return (
     <div style={{
@@ -1096,7 +1143,7 @@ const showErrorMessage = (error, originalState) => {
         </div>
       </div>
 
-      {/* Sidebar */}
+      {/* Sidebar with Dropdown */}
       <div style={{
         width: sidebarOpen ? '250px' : '0',
         backgroundColor: '#003366',
@@ -1111,9 +1158,12 @@ const showErrorMessage = (error, originalState) => {
         zIndex: 1,
         display: 'flex',
         flexDirection: 'column',
+        overflowY: 'auto',
       }}>
+        {/* Dashboard Link */}
         <NavLink
           to="/service-dashboard"
+          end
           style={({ isActive }) => ({
             padding: '15px 25px',
             cursor: 'pointer',
@@ -1124,478 +1174,437 @@ const showErrorMessage = (error, originalState) => {
             transition: 'background-color 0.3s',
             fontSize: '16px',
             fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
+            backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+            fontWeight: isActive ? 'bold' : '500',
           })}
           onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-          end
         >
           Dashboard
         </NavLink>
-        
-        <NavLink
-          to="/service-dashboard/expenses"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
+
+        {/* SALES DIVISION Dropdown */}
+        <div style={{
+          borderBottom: '1px solid rgba(255,255,255,0.2)',
+        }}>
+          <div
+            style={{
+              padding: '15px 25px',
+              cursor: 'pointer',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          Create Expense ➕
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/view-services"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
+              fontWeight: '600',
+              backgroundColor: 'rgba(255,255,255,0.1)',
+            }}
+            onClick={() => setSalesOpen(!salesOpen)}
+          >
+            <span>Sales </span>
+            <span style={{ transition: 'transform 0.3s', transform: salesOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+              ▼
+            </span>
+          </div>
+          
+          {salesOpen && (
+            <div style={{ backgroundColor: 'rgba(0,0,0,0.1)' }}>
+              <NavLink
+                to="/service-dashboard/create-order"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                Create Order ➕
+              </NavLink>
+              
+              <NavLink
+                to="/service-dashboard/expenses"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                Create Expense ➕
+              </NavLink>
+              <NavLink
+                to="/service-dashboard/field-executive"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+               Field Visits
+              </NavLink>
+              
+              
+              <NavLink
+                to="/service-dashboard/view-orders"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                View Orders
+              </NavLink>
+              
+              <NavLink
+                to="/service-dashboard/view-prospective"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                View Prospects
+              </NavLink>
+              
+              <NavLink
+                to="/service-dashboard/view-appointments"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                View Appointments
+              </NavLink>
+              
+              <NavLink
+                to="/service-dashboard/daily-record"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                Create Daily Report ➕
+              </NavLink>
+            </div>
+          )}
+        </div>
+
+        {/* SERVICES DIVISION Dropdown */}
+        <div style={{
+          borderBottom: '1px solid rgba(255,255,255,0.2)',
+        }}>
+          <div
+            style={{
+              padding: '15px 25px',
+              cursor: 'pointer',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          View Services
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/pending-services"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
+              fontWeight: '600',
+              backgroundColor: 'rgba(255,255,255,0.1)',
+            }}
+            onClick={() => setServicesOpen(!servicesOpen)}
+          >
+            <span>Services </span>
+            <span style={{ transition: 'transform 0.3s', transform: servicesOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+              ▼
+            </span>
+          </div>
+          
+          {servicesOpen && (
+            <div style={{ backgroundColor: 'rgba(0,0,0,0.1)' }}>
+              <NavLink
+                to="/service-dashboard/view-services"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                View Services
+              </NavLink>
+              
+              <NavLink
+                to="/service-dashboard/pending-services"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                Pending Services
+              </NavLink>
+              
+              <NavLink
+                to="/service-dashboard/serviceform"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                Mobile Van / Tri-Cycle Service
+              </NavLink>
+            </div>
+          )}
+        </div>
+
+        {/* REPORTS DIVISION Dropdown */}
+        <div style={{
+          borderBottom: '1px solid rgba(255,255,255,0.2)',
+        }}>
+          <div
+            style={{
+              padding: '15px 25px',
+              cursor: 'pointer',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          Pending Services
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/daily-record"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
+              fontWeight: '600',
+              backgroundColor: 'rgba(255,255,255,0.1)',
+            }}
+            onClick={() => setReportsOpen(!reportsOpen)}
+          >
+            <span>Reports & Design</span>
+            <span style={{ transition: 'transform 0.3s', transform: reportsOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+              ▼
+            </span>
+          </div>
+          
+          {reportsOpen && (
+            <div style={{ backgroundColor: 'rgba(0,0,0,0.1)' }}>
+              <NavLink
+                to="/service-dashboard/design-updates"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                Design Updates
+              </NavLink>
+              
+              <NavLink
+                to="/service-dashboard/ledger"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                Ledger
+              </NavLink>
+              
+              <NavLink
+                to="/service-dashboard/hour"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                Create Report ➕
+              </NavLink>
+              
+              <NavLink
+                to="/service-dashboard/hour-reeport"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                View Reports
+              </NavLink>
+            </div>
+          )}
+        </div>
+
+        {/* ADDITIONAL DIVISION Dropdown */}
+        <div style={{
+          borderBottom: '1px solid rgba(255,255,255,0.2)',
+        }}>
+          <div
+            style={{
+              padding: '15px 25px',
+              cursor: 'pointer',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-        Create Daily Report ➕
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/daily-report"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
+              fontWeight: '600',
+              backgroundColor: 'rgba(255,255,255,0.1)',
+            }}
+            onClick={() => setAdditionalOpen(!additionalOpen)}
+          >
+            <span>Additional</span>
+            <span style={{ transition: 'transform 0.3s', transform: additionalOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+              ▼
+            </span>
+          </div>
+          
+          {additionalOpen && (
+            <div style={{ backgroundColor: 'rgba(0,0,0,0.1)' }}>
+              <NavLink
+                to="/service-dashboard/vendors"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                Vendors
+              </NavLink>
+              
+              <NavLink
+                to="/service-dashboard/price-list"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                Price List
+              </NavLink>
+              
+              <NavLink
+                to="/service-dashboard/inventory"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+                Office Inventory
+              </NavLink>
+            </div>
+          )}
+        </div>
+
+        {/* Logout Button */}
+        <div style={{ marginTop: 'auto', padding: '20px 25px' }}>
+          <button
+            style={{
+              backgroundColor: '#d32f2f',
+              color: 'white',
+              border: 'none',
+              padding: '12px 0',
+              cursor: 'pointer',
+              fontSize: '14px',
+              width: '100%',
+              borderRadius: '5px',
               fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-        View Daily Report
-        </NavLink>
-  <NavLink
-          to="/service-dashboard/inventory"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-        Office Inventory
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/hour"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          Create Report ➕
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/hour-reeport"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          View Report
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/create-order"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          Create Order ➕
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/view-orders"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-         View Orders
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/design-updates"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          Design Updates
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/appointments"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          Appointments
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/ledger"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          Ledger
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/view-appointments"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          View Appointments
-        </NavLink>
-         
-        <NavLink
-          to="/service-dashboard/prospects"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          Prospects ➕
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/serviceform"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          Mobilevan /TryCycle service
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/view-prospective"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          View Prospects
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          View Prospects
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/vendors"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          Vendors
-        </NavLink>
-        <NavLink
-          to="/service-dashboard/price-list"
-          style={({ isActive }) => ({
-            padding: '15px 25px',
-            cursor: 'pointer',
-            borderBottom: '1px solid rgba(255,255,255,0.2)',
-            color: 'white',
-            textDecoration: 'none',
-            display: 'block',
-            transition: 'background-color 0.3s',
-            fontSize: '16px',
-            fontWeight: '500',
-            ...(isActive ? {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontWeight: 'bold',
-              fontSize: '16px',
-            } : {})
-          })}
-          onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-        >
-          Price List
-        </NavLink>
-        <button
-          style={{
-            backgroundColor: '#d32f2f',
-            color: 'white',
-            border: 'none',
-            padding: '12px 25px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            marginTop: 'auto',
-            marginBottom: '20px',
-            marginLeft: '25px',
-            marginRight: '25px',
-            borderRadius: '5px',
-            textAlign: 'center',
-          }}
-          onClick={handleLogout}
-        >
-          Logout
-        </button>
+              transition: 'background-color 0.3s',
+            }}
+            onClick={handleLogout}
+            onMouseEnter={(e) => e.target.style.backgroundColor = '#b71c1c'}
+            onMouseLeave={(e) => e.target.style.backgroundColor = '#d32f2f'}
+          >
+            Logout
+          </button>
+        </div>
       </div>
 
       {/* Main Content Area */}
@@ -1611,74 +1620,11 @@ const showErrorMessage = (error, originalState) => {
       }}>
         {isDashboardHome ? (
           <>
-            {/* Year and Month Selector */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              alignItems: 'center',
-              marginBottom: '15px',
-              gap: '10px',
-              flexWrap: 'wrap',
-            }}>
-              <label htmlFor="year-select" style={{
-                fontWeight: 'bold',
-                color: '#003366',
-                fontSize: '14px',
-              }}>
-                Select Year:
-              </label>
-              <select
-                id="year-select"
-                value={year}
-                onChange={(e) => {
-                  setYear(parseInt(e.target.value));
-                  setSelectedMonth(null);
-                  setSelectedWeek(null);
-                }}
-                style={{
-                  padding: '5px',
-                  fontSize: '14px',
-                  width: '80px',
-                }}
-              >
-                {years.map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-
-              <label htmlFor="month-select" style={{
-                fontWeight: 'bold',
-                color: '#003366',
-                fontSize: '14px',
-              }}>
-                Select Month:
-              </label>
-              <select
-                id="month-select"
-                value={selectedMonth !== null ? selectedMonth + 1 : ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setSelectedMonth(value ? parseInt(value) - 1 : null);
-                  setSelectedWeek(null);
-                }}
-                style={{
-                  padding: '5px',
-                  fontSize: '14px',
-                  width: '100px',
-                }}
-              >
-                <option value="">All Months</option>
-                {monthLabels.map((month, index) => (
-                  <option key={month} value={index + 1}>{month}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Stats Cards */}
+            {/* Stats Cards in a single row */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '20px',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: '15px',
               marginBottom: '20px',
             }}>
               <div style={{
@@ -1687,13 +1633,35 @@ const showErrorMessage = (error, originalState) => {
                 borderRadius: '8px',
                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                 textAlign: 'center',
+                borderTop: '4px solid #4CAF50'
               }}>
-                <div>Pending Services</div>
+                <div style={{ color: '#4CAF50', fontWeight: 'bold', marginBottom: '5px' }}>
+                  Completed Services
+                </div>
                 <div style={{
                   fontSize: '24px',
                   fontWeight: 'bold',
                   margin: '10px 0',
                   color: '#4CAF50'
+                }}>{stats.totalCompleted}</div>
+                <div style={{ fontSize: '12px', color: '#666' }}>Successfully delivered</div>
+              </div>
+              <div style={{
+                backgroundColor: 'white',
+                padding: '15px',
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                textAlign: 'center',
+                borderTop: '4px solid #FF0000'
+              }}>
+                <div style={{ color: '#FF0000', fontWeight: 'bold', marginBottom: '5px' }}>
+                  Pending Services
+                </div>
+                <div style={{
+                  fontSize: '24px',
+                  fontWeight: 'bold',
+                  margin: '10px 0',
+                  color: '#FF0000'
                 }}>{stats.totalPending}</div>
                 <div style={{ fontSize: '12px', color: '#666' }}>Require attention</div>
               </div>
@@ -1703,8 +1671,11 @@ const showErrorMessage = (error, originalState) => {
                 borderRadius: '8px',
                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                 textAlign: 'center',
+                borderTop: '4px solid #FFA500'
               }}>
-                <div>In Progress</div>
+                <div style={{ color: '#FFA500', fontWeight: 'bold', marginBottom: '5px' }}>
+                  In Progress
+                </div>
                 <div style={{
                   fontSize: '24px',
                   fontWeight: 'bold',
@@ -1719,24 +1690,11 @@ const showErrorMessage = (error, originalState) => {
                 borderRadius: '8px',
                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                 textAlign: 'center',
+                borderTop: '4px solid #003366'
               }}>
-                <div>Completed</div>
-                <div style={{
-                  fontSize: '24px',
-                  fontWeight: 'bold',
-                  margin: '10px 0',
-                  color: '#FF0000'
-                }}>{stats.totalCompleted}</div>
-                <div style={{ fontSize: '12px', color: '#666' }}>Finished this period</div>
-              </div>
-              <div style={{
-                backgroundColor: 'white',
-                padding: '15px',
-                borderRadius: '8px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                textAlign: 'center',
-              }}>
-                <div>Total Services</div>
+                <div style={{ color: '#003366', fontWeight: 'bold', marginBottom: '5px' }}>
+                  Total Services
+                </div>
                 <div style={{
                   fontSize: '24px',
                   fontWeight: 'bold',
@@ -1781,83 +1739,192 @@ const showErrorMessage = (error, originalState) => {
               />
             </div>
 
-            {/* Service Status Card - Mobile Responsive */}
+            {/* Service Status Bar Chart with Filters */}
             <div style={{
               backgroundColor: 'white',
-              padding: window.innerWidth <= 768 ? '10px' : '15px',
+              padding: window.innerWidth <= 768 ? '10px' : '20px',
               borderRadius: '10px',
               boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
               marginBottom: '20px',
               width: '100%',
-              minHeight: window.innerWidth <= 768 ? '300px' : '350px',
+              minHeight: window.innerWidth <= 768 ? '350px' : '400px',
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'center',
             }}>
               <div style={{
-                fontSize: window.innerWidth <= 768 ? '14px' : '16px',
-                fontWeight: 'bold',
-                color: '#003366',
-                marginBottom: '15px',
-                textAlign: 'center'
-              }}>
-                Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}
-              </div>
-              <div style={{
-                width: '100%',
-                height: window.innerWidth <= 768 ? '200px' : '220px',
                 display: 'flex',
-                justifyContent: 'center',
+                justifyContent: 'space-between',
                 alignItems: 'center',
-                position: 'relative',
-                margin: '10px 0'
+                marginBottom: '15px',
+                borderBottom: '2px solid #f0f0f0',
+                paddingBottom: '10px',
+                flexWrap: 'wrap',
+                gap: '10px'
               }}>
-                <Doughnut
+                <div style={{
+                  fontSize: window.innerWidth <= 768 ? '16px' : '18px',
+                  fontWeight: 'bold',
+                  color: '#003366',
+                }}>
+                  Service Status Distribution
+                </div>
+                
+                {/* Filters for the chart only */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  flexWrap: 'wrap',
+                }}>
+                  <label htmlFor="year-select" style={{
+                    fontWeight: 'bold',
+                    color: '#003366',
+                    fontSize: '14px',
+                  }}>
+                    Year:
+                  </label>
+                  <select
+                    id="year-select"
+                    value={year}
+                    onChange={(e) => {
+                      setYear(parseInt(e.target.value));
+                      setSelectedMonth(null);
+                      setSelectedWeek(null);
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      fontSize: '14px',
+                      width: '100px',
+                      borderRadius: '4px',
+                      border: '1px solid #ccc',
+                    }}
+                  >
+                    {yearOptions.map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+
+                  <label htmlFor="month-select" style={{
+                    fontWeight: 'bold',
+                    color: '#003366',
+                    fontSize: '14px',
+                  }}>
+                    Month:
+                  </label>
+                  <select
+                    id="month-select"
+                    value={selectedMonth !== null ? selectedMonth : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSelectedMonth(value !== '' ? parseInt(value) : null);
+                      setSelectedWeek(null);
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      fontSize: '14px',
+                      width: '120px',
+                      borderRadius: '4px',
+                      border: '1px solid #ccc',
+                    }}
+                  >
+                    <option value="">All Months</option>
+                    {monthLabels.map((month, index) => (
+                      <option key={month} value={index}>{month}</option>
+                    ))}
+                  </select>
+
+                  {selectedMonth !== null && (
+                    <>
+                      <label htmlFor="week-select" style={{
+                        fontWeight: 'bold',
+                        color: '#003366',
+                        fontSize: '14px',
+                      }}>
+                        Week:
+                      </label>
+                      <select
+                        id="week-select"
+                        value={selectedWeek !== null ? selectedWeek : ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setSelectedWeek(value !== '' ? parseInt(value) : null);
+                        }}
+                        style={{
+                          padding: '8px 12px',
+                          fontSize: '14px',
+                          width: '100px',
+                          borderRadius: '4px',
+                          border: '1px solid #ccc',
+                        }}
+                      >
+                        <option value="">All Weeks</option>
+                        {weekLabels.map((week, index) => (
+                          <option key={week} value={index}>{week}</option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                </div>
+              </div>
+              
+              <div style={{
+                flex: '1',
+                position: 'relative',
+                width: '100%',
+                height: window.innerWidth <= 768 ? '250px' : '300px'
+              }}>
+                <Bar
                   data={serviceStatusData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: window.innerWidth <= 768 ? 'bottom' : 'right',
-                        labels: {
-                          boxWidth: 12,
-                          padding: window.innerWidth <= 768 ? 8 : 15,
-                          font: {
-                            size: window.innerWidth <= 768 ? 10 : 12
-                          }
-                        }
-                      },
-                      tooltip: {
-                        callbacks: {
-                          label: (context) => {
-                            const label = context.label || '';
-                            const value = context.raw || 0;
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = Math.round((value / total) * 100);
-                            return `${label}: ${value} (${percentage}%)`;
-                          }
-                        }
-                      }
-                    },
-                    onClick: handlePieChartClick
-                  }}
+                  options={chartOptions}
                 />
               </div>
+              
               <div style={{
-                fontSize: window.innerWidth <= 768 ? '24px' : '40px',
-                color: '#002244',
-                marginTop: '10px',
-                fontWeight: 'bold'
+                marginTop: '20px',
+                display: 'flex',
+                justifyContent: 'space-around',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '10px',
+                borderTop: '1px solid #f0f0f0',
+                paddingTop: '15px'
               }}>
-                {stats.totalServices}
-              </div>
-              <div style={{
-                fontSize: window.innerWidth <= 768 ? '10px' : '12px',
-                color: '#666',
-                marginTop: '5px'
-              }}>
-                Total Services
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    backgroundColor: '#4CAF50',
+                    borderRadius: '2px'
+                  }}></div>
+                  <span style={{ fontSize: '12px', color: '#666' }}>Completed: {stats.totalCompleted}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    backgroundColor: '#FF0000',
+                    borderRadius: '2px'
+                  }}></div>
+                  <span style={{ fontSize: '12px', color: '#666' }}>Pending: {stats.totalPending}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    backgroundColor: '#FFA500',
+                    borderRadius: '2px'
+                  }}></div>
+                  <span style={{ fontSize: '12px', color: '#666' }}>In Progress: {stats.inProgress}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    backgroundColor: '#003366',
+                    borderRadius: '2px'
+                  }}></div>
+                  <span style={{ fontSize: '12px', color: '#666' }}>Total: {stats.totalServices}</span>
+                </div>
               </div>
             </div>
           </>

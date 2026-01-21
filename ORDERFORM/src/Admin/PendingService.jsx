@@ -1,21 +1,12 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-// Disabling ESLint rule for exhaustive-deps to avoid dependency array warnings
-
-// Import necessary React hooks and libraries
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
-// Main PendingService component function
 function PendingService() {
-  // State to store all orders fetched from API
   const [orders, setOrders] = useState([]);
-  
-  // State to store orders after applying filters
   const [filteredOrders, setFilteredOrders] = useState([]);
-  
-  
   const [searchTerm, setSearchTerm] = useState('');
   const [editingRemark, setEditingRemark] = useState(null);
   const [tempRemark, setTempRemark] = useState('');
@@ -23,28 +14,27 @@ function PendingService() {
   const [updateDescription, setUpdateDescription] = useState('');
   const navigate = useNavigate();
   
-  // Get current date for default filter values
-  const currentDate = new Date();
+  const [searchParams, setSearchParams] = useSearchParams();
   
-  // State for year filter - default to current year
-  const [year, setYear] = useState(currentDate.getFullYear());
+  const [year, setYear] = useState(() => {
+    const urlYear = searchParams.get('year');
+    return urlYear ? parseInt(urlYear) : new Date().getFullYear();
+  });
   
-  // State for month filter - default to current month (0-11 format)
-  const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth());
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const urlMonth = searchParams.get('month');
+    return urlMonth ? parseInt(urlMonth) - 1 : new Date().getMonth();
+  });
   
-  // State for status filter - default to 'all'
   const [statusFilter, setStatusFilter] = useState('all');
-  
-  // State for loading indicator
   const [loading, setLoading] = useState(true);
+  const tableContainerRef = useRef(null);
   
-  // Array of month labels for display
   const monthLabels = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
   ];
 
-  // Available status options for filtering
   const statusOptions = [
     { value: 'all', label: 'All Status' },
     { value: 'pending', label: 'Pending' },
@@ -57,143 +47,125 @@ function PendingService() {
     { value: 'completed', label: 'Completed' }
   ];
 
-  // Generate year options for dropdown (current year ± 5 years)
   const years = [];
   const currentYear = new Date().getFullYear();
   for (let y = currentYear - 5; y <= currentYear + 5; y++) {
     years.push(y);
   }
 
-  // useEffect to fetch orders when component mounts
   useEffect(() => {
     fetchOrders();
-  }, []); // Empty dependency array means run only once on mount
+  }, []);
 
-  // useEffect to apply filters whenever dependencies change
   useEffect(() => {
     applyFilters();
-  }, [orders, year, selectedMonth, searchTerm, statusFilter]); // Re-run when these values change
+  }, [orders, year, selectedMonth, searchTerm, statusFilter]);
 
-  // Function to fetch orders from API
+  useEffect(() => {
+    const params = new URLSearchParams();
+    
+    if (year) {
+      params.set('year', year.toString());
+    }
+    
+    if (selectedMonth !== null) {
+      params.set('month', (selectedMonth + 1).toString());
+    }
+    
+    const currentParams = new URLSearchParams(window.location.search);
+    if (params.toString() !== currentParams.toString()) {
+      setSearchParams(params);
+    }
+  }, [year, selectedMonth, setSearchParams]);
+
   const fetchOrders = async () => {
-    // Set loading state to true to show loading indicator
     setLoading(true);
     try {
-      // Make API request to get orders with cache buster parameter
       const res = await axios.get('/api/orders', {
         params: {
-          _: new Date().getTime() // Cache buster to prevent caching
+          _: new Date().getTime()
         }
       });
       
-      // Filter orders to only include those with rows
       const allOrders = res.data.filter(order => 
         order.rows && order.rows.length > 0
       );
       
-      // Sort orders by creation date (newest first)
       const sortedOrders = allOrders.sort((a, b) => {
-        // Use createdAt, date, or current date as fallback
         const dateA = new Date(a.createdAt || a.date || new Date());
         const dateB = new Date(b.createdAt || b.date || new Date());
-        return dateB - dateA; // Newest first (descending order)
+        return dateB - dateA;
       });
       
-      // Update orders state with sorted data
       setOrders(sortedOrders);
     } catch (err) {
-      // Log error if API call fails
       console.error('Error fetching orders:', err);
     } finally {
-      // Always set loading to false when API call completes
       setLoading(false);
     }
   };
 
-  // Function to apply all filters to orders
   const applyFilters = () => {
-    // Return early if no orders available
     if (!orders.length) return;
 
-    // Start with all orders
     let result = [...orders];
 
-    // Filter by year and month based on delivery date
     result = result.map(order => {
-      // Filter rows within each order
       const filteredRows = order.rows.filter(row => {
         try {
-          // Parse delivery date from row
           const deliveryDate = new Date(row.deliveryDate);
           
-          // Skip row if date is invalid
           if (isNaN(deliveryDate.getTime())) return false;
           
-          // Check if row matches selected year
           if (deliveryDate.getFullYear() !== year) {
             return false;
           }
           
-          // Check if row matches selected month
           if (selectedMonth !== null && deliveryDate.getMonth() !== selectedMonth) {
             return false;
           }
           
-          // Return true if row passes all date filters
           return true;
         } catch (e) {
-          // Log error and skip row if date parsing fails
           console.error('Error processing date:', row.deliveryDate, e);
           return false;
         }
       });
 
-      // Return order with filtered rows (empty arrays will be removed later)
       return { ...order, rows: filteredRows };
-    }).filter(order => order.rows.length > 0); // Remove orders with no matching rows
+    }).filter(order => order.rows.length > 0);
 
-    // Apply status filter if not 'all'
     if (statusFilter !== 'all') {
       result = result.map(order => {
-        // Filter rows based on status
         const filteredRows = order.rows.filter(row => {
           const currentRemark = row.remark || 'pending';
           
-          // Handle 'pending' status filter
           if (statusFilter === 'pending') {
             return currentRemark === 'Pending' || currentRemark === 'pending' || !currentRemark;
           }
           
-          // Handle 'assigned to' status filter
           if (statusFilter === 'assigned to') {
             return currentRemark.toLowerCase().includes('assigned to');
           }
           
-          // Handle 'updated' status filter
           if (statusFilter === 'updated') {
             return currentRemark.toLowerCase().includes('updated:');
           }
           
-          // Handle 'completed' status filter - FIXED: Check both remark and isCompleted flag
           if (statusFilter === 'completed') {
             return row.isCompleted === true || currentRemark.toLowerCase() === 'completed';
           }
           
-          // Handle other status filters with exact match
           return currentRemark.toLowerCase() === statusFilter.toLowerCase();
         });
         
-        // Return order with status-filtered rows
         return { ...order, rows: filteredRows };
-      }).filter(order => order.rows.length > 0); // Remove orders with no matching rows
+      }).filter(order => order.rows.length > 0);
     }
 
-    // Apply search term filter if search term exists
     if (searchTerm) {
       result = result.map(order => {
-        // Filter rows based on search term
         const filteredRows = order.rows.filter(row => {
-          // Create array of all searchable values
           const valuesToSearch = [
             order.executive,
             order.business,
@@ -208,31 +180,25 @@ function PendingService() {
             order.balance,
           ];
 
-          // Check if any value contains the search term (case-insensitive)
           return valuesToSearch.some(val =>
             String(val).toLowerCase().includes(searchTerm.toLowerCase())
           );
         });
 
-        // Return order with search-filtered rows
         return { ...order, rows: filteredRows };
-      }).filter(order => order.rows.length > 0); // Remove orders with no matching rows
+      }).filter(order => order.rows.length > 0);
     }
 
-    // Update filteredOrders state with final result
     setFilteredOrders(result);
   };
 
-  // Function to handle remark changes
   const handleRemarkChange = async (orderId, rowIndex, newRemark) => {
     try {
-      // Initialize variables for the update
       let remarkValue = newRemark;
       let isCompleted = false;
       let assignedExecutive = '';
       let updateTimestamp = null;
 
-      // Handle 'assigned to' remark type
       if (newRemark === 'assigned to') {
         if (!assignedToText.trim()) {
           alert('Please enter a name for "Assigned to"');
@@ -241,7 +207,6 @@ function PendingService() {
         remarkValue = `assigned to ${assignedToText.trim()}`;
         assignedExecutive = assignedToText.trim();
       } 
-      // Handle 'updated' remark type
       else if (newRemark === 'updated') {
         if (!updateDescription.trim()) {
           alert('Please enter an update description');
@@ -251,19 +216,16 @@ function PendingService() {
         const formattedTime = formatDateTime(updateTimestamp);
         remarkValue = `updated: ${updateDescription.trim()} (${formattedTime})`;
       }
-      // Handle 'completed' remark type
       else if (newRemark === 'completed') {
         isCompleted = true;
         remarkValue = 'completed';
       }
 
-      // Validate that a remark was selected
       if (!remarkValue && newRemark !== 'completed' && newRemark !== 'updated') {
         alert('Please select a remark');
         return;
       }
 
-      // OPTIMISTIC UI UPDATE
       setOrders(prevOrders => 
         prevOrders.map(order => {
           if (order._id === orderId) {
@@ -296,7 +258,6 @@ function PendingService() {
         })
       );
 
-      // API CALL with required fields
       const response = await axios.put(
         `/api/pending-services/${orderId}/row/${rowIndex}/remark`, 
         { 
@@ -307,13 +268,11 @@ function PendingService() {
         }
       );
 
-      // Check if API call was successful
       if (!response.data.success) {
-        fetchOrders(); // Refresh data if API failed
+        fetchOrders();
         throw new Error(response.data.error || 'Update failed');
       }
 
-      // Reset editing state on success
       setEditingRemark(null);
       setAssignedToText('');
       setUpdateDescription('');
@@ -321,52 +280,40 @@ function PendingService() {
     } catch (err) {
       console.error('Update failed:', err);
       alert(`Failed to update: ${err.response?.data?.error || err.message}`);
-      fetchOrders(); // Refresh data to ensure UI matches server state
+      fetchOrders();
     }
   };
 
-  // Function to start editing a remark
   const startEditingRemark = (orderId, rowIndex, currentRemark) => {
-    // FIXED: Check both remark and isCompleted flag
     const isRowCompleted = currentRemark === 'completed' || 
                           (orders.find(order => order._id === orderId)?.rows[rowIndex]?.isCompleted === true);
     
-    // Prevent editing if status is already completed
     if (isRowCompleted) {
       alert('This service is already completed and cannot be edited.');
       return;
     }
     
-    // Set which remark is being edited
     setEditingRemark({ orderId, rowIndex });
     
-    // Pre-fill the form based on current remark
     if (currentRemark && currentRemark.includes('assigned to')) {
       setTempRemark('assigned to');
-      // Extract the name from "assigned to [name]" format
       setAssignedToText(currentRemark.replace('assigned to', '').trim());
     } else if (currentRemark && currentRemark.includes('updated:')) {
-      // Extract description from "updated: description (timestamp)" format
       setTempRemark('updated');
       const descriptionMatch = currentRemark.match(/updated:\s*(.*?)\s*\(\d{2}-\d{2}-\d{4} \d{2}:\d{2}\)/);
       if (descriptionMatch && descriptionMatch[1]) {
         setUpdateDescription(descriptionMatch[1].trim());
       }
     } else {
-      // For other remarks, use the current value (or empty if 'Pending')
       setTempRemark(currentRemark === 'Pending' ? '' : currentRemark || '');
     }
   };
 
-  // Function to export data to Excel
   const handleExportToExcel = () => {
-    // Prepare data for export
     const exportData = [];
   
-    // Loop through filtered orders and their rows
     filteredOrders.forEach((order, orderIndex) => {
       order.rows.forEach((row) => {
-        // Create export object for each row
         exportData.push({
           'S.No': orderIndex + 1,
           'Executive': order.executive,
@@ -388,26 +335,21 @@ function PendingService() {
       });
     });
   
-    // Create Excel worksheet and workbook
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'PendingServices');
     
-    // Download the Excel file
     XLSX.writeFile(workbook, `pending_services_${monthLabels[selectedMonth]}_${year}.xlsx`);
   };
 
-  // Function to format date as DD-MM-YYYY
   const formatDate = (dateString) => {
     if (!dateString) return '';
 
     try {
-      // Handle ISO date format
       if (dateString.includes('T')) {
         return dateString.split('T')[0];
       }
       
-      // Parse date and format it
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return dateString;
 
@@ -417,12 +359,10 @@ function PendingService() {
 
       return `${day}-${month}-${year}`;
     } catch {
-      // Return original string if formatting fails
       return dateString;
     }
   };
 
-  // Function to format date and time
   const formatDateTime = (dateString) => {
     if (!dateString) return '';
 
@@ -430,7 +370,6 @@ function PendingService() {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return dateString;
 
-      // Extract date and time components
       const day = date.getDate().toString().padStart(2, '0');
       const month = (date.getMonth() + 1).toString().padStart(2, '0');
       const year = date.getFullYear();
@@ -443,9 +382,7 @@ function PendingService() {
     }
   };
 
-  // Function to get CSS styles for different remark types
   const getRemarkStyle = (remark, isCompletedFlag = false) => {
-    // Base style for all remarks
     const baseStyle = {
       padding: '4px 8px',
       borderRadius: '4px',
@@ -456,107 +393,95 @@ function PendingService() {
       fontWeight: 'bold'
     };
 
-    // FIXED: Check both remark and isCompleted flag for completed status
     if (isCompletedFlag || remark === 'completed') {
       return {
         ...baseStyle,
-        backgroundColor: '#2ecc71', // Green
-        cursor: 'default', // No pointer since completed can't be edited
+        backgroundColor: '#2ecc71',
+        cursor: 'default',
       };
     }
 
-    // Style for pending status
     if (!remark || remark === 'Pending' || remark === 'pending') {
       return {
         ...baseStyle,
-        backgroundColor: '#f39c12', // Orange
+        backgroundColor: '#f39c12',
         cursor: 'pointer',
       };
     }
 
-    // Style for assigned status
     if (remark.includes('assigned to')) {
       return {
         ...baseStyle,
-        backgroundColor: '#3498db', // Blue
+        backgroundColor: '#3498db',
         cursor: 'pointer',
       };
     }
 
-    // Style for updated status
     if (remark.includes('updated:')) {
       return {
         ...baseStyle,
-        backgroundColor: '#9b59b6', // Purple
+        backgroundColor: '#9b59b6',
         cursor: 'pointer',
       };
     }
 
-    // Style for design pending status
     if (remark === 'design pending') {
       return {
         ...baseStyle,
-        backgroundColor: '#e67e22', // Dark orange
+        backgroundColor: '#e67e22',
         cursor: 'pointer',
       };
     }
 
-    // Style for printing status
     if (remark === 'printing') {
       return {
         ...baseStyle,
-        backgroundColor: '#e74c3c', // Red
+        backgroundColor: '#e74c3c',
         cursor: 'pointer',
       };
     }
 
-    // Style for installation pending status
     if (remark === 'installation pending') {
       return {
         ...baseStyle,
-        backgroundColor: '#34495e', // Dark blue
+        backgroundColor: '#34495e',
         cursor: 'pointer',
       };
     }
 
-    // Style for onboarding status
     if (remark === 'onboarding') {
       return {
         ...baseStyle,
-        backgroundColor: '#1abc9c', // Teal
+        backgroundColor: '#1abc9c',
         cursor: 'pointer',
       };
     }
 
-    // Default style for unknown status
     return {
       ...baseStyle,
-      backgroundColor: '#95a5a6', // Gray
+      backgroundColor: '#95a5a6',
       cursor: 'pointer',
     };
   };
 
-  // FIXED: Improved function to check if a row is completed
   const isRowCompleted = (row) => {
     return row.isCompleted === true || row.remark === 'completed';
   };
 
-  // Function to reset filters to current month
   const resetToCurrentMonth = () => {
     const currentDate = new Date();
     setYear(currentDate.getFullYear());
     setSelectedMonth(currentDate.getMonth());
   };
 
-  // Main component render
   return (
     <div style={styles.container}>
-      {/* Page title */}
-      <h2 style={styles.title}>Service Management</h2>
+      <h2 style={styles.title}>
+        Service Management
+        {selectedMonth !== null && ` - ${monthLabels[selectedMonth]} ${year}`}
+      </h2>
 
-      {/* Filter and search section */}
       <div style={styles.filterContainer}>
-        {/* Search input */}
         <div style={styles.searchContainer}>
           <input
             type="text"
@@ -567,9 +492,7 @@ function PendingService() {
           />
         </div>
         
-        {/* Filter controls row */}
         <div style={styles.filterRow}>
-          {/* Year and month filters */}
           <div style={styles.yearMonthContainer}>
             <div style={styles.selectWrapper}>
               <label htmlFor="year-select" style={styles.filterLabel}>
@@ -607,7 +530,6 @@ function PendingService() {
               </select>
             </div>
             
-            {/* Reset to current month button */}
             <button 
               onClick={resetToCurrentMonth}
               style={styles.currentMonthButton}
@@ -617,7 +539,6 @@ function PendingService() {
             </button>
           </div>
 
-          {/* Status filter */}
           <div style={styles.statusFilterContainer}>
             <div style={styles.selectWrapper}>
               <label htmlFor="status-filter" style={styles.filterLabel}>
@@ -637,7 +558,6 @@ function PendingService() {
               </select>
             </div>
             
-            {/* Clear status filter button (only shown when filter is active) */}
             {statusFilter !== 'all' && (
               <button 
                 onClick={() => setStatusFilter('all')}
@@ -649,7 +569,6 @@ function PendingService() {
           </div>
         </div>
 
-        {/* Current filter information display */}
         <div style={styles.currentFilterInfo}>
           Currently showing: <strong>{monthLabels[selectedMonth]} {year}</strong>
           {statusFilter !== 'all' && (
@@ -658,177 +577,165 @@ function PendingService() {
         </div>
       </div>
 
-      {/* Main content - loading or data table */}
       {loading ? (
         <div style={styles.loading}>Loading service data...</div>
       ) : (
-        <div style={styles.tableContainer}>
-          <table style={styles.table}>
-            <thead style={styles.tableHeader}>
-              <tr>
-                {/* Table headers */}
-                {[
-                  'S.No', 'Executive', 'Business', 'Customer', 'Contact',
-                  'Requirement', 'Qty', 'Rate', 'Total', 
-                  'Delivery Date', 'Service Assigned To', 'Remarks', 'Last Update Time'
-                ].map((header) => (
-                  <th key={header} style={styles.th}>{header}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {/* No data message */}
-              {filteredOrders.length === 0 ? (
+        <div style={styles.tableWrapper}>
+          <div style={styles.tableContainer} ref={tableContainerRef}>
+            <table style={styles.table}>
+              <thead style={styles.tableHeader}>
                 <tr>
-                  <td colSpan="13" style={styles.noData}>
-                    No services found for {monthLabels[selectedMonth]} {year}
-                    {statusFilter !== 'all' ? ` with status "${statusOptions.find(opt => opt.value === statusFilter)?.label}"` : ''}
-                  </td>
+                  {[
+                    'S.No', 'Executive', 'Business', 'Customer', 'Contact',
+                    'Requirement', 'Qty', 'Rate', 'Total', 
+                    'Delivery Date', 'Service Assigned To', 'Remarks', 'Last Update Time'
+                  ].map((header) => (
+                    <th key={header} style={styles.th(header)}>{header}</th>
+                  ))}
                 </tr>
-              ) : (
-                /* Data rows */
-                filteredOrders.map((order, orderIndex) =>
-                  order.rows.map((row, rowIndex) => {
-                    const isCompleted = isRowCompleted(row);
-                    return (
-                      <tr
-                        key={`${order._id}-${rowIndex}`}
-                        style={{
-                          ...styles.tableRow(orderIndex + rowIndex),
-                          ...(isCompleted && styles.completedRow)
-                        }}
-                      >
-                        {/* Row data cells */}
-                        <td style={styles.td}>{orderIndex + 1}</td>
-                        <td style={styles.td}>{order.executive}</td>
-                        <td style={styles.td}>{order.business}</td>
-                        <td style={styles.td}>{order.contactPerson}</td>
-                        <td style={styles.td}>{order.contactCode} {order.phone}</td>
-                        <td style={styles.td}>{row.requirement}</td>
-                        <td style={styles.td}>{row.quantity}</td>
-                        <td style={styles.td}>{row.rate}</td>
-                        <td style={styles.td}>{row.total}</td>
-                        <td style={styles.td}>{formatDate(row.deliveryDate)}</td>
-                        
-                        {/* Service Assigned To column */}
-                        <td style={styles.td}>
-                          {row.assignedExecutive ? (
-                            <span style={{
-                              backgroundColor: '#e3f2fd',
-                              color: '#1565c0',
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              fontWeight: 'bold',
-                              display: 'inline-block'
-                            }}>
-                              {row.assignedExecutive}
-                            </span>
-                          ) : (
-                            <span style={{
-                              color: '#666',
-                              fontStyle: 'italic'
-                            }}>
-                              Not Assigned
-                            </span>
-                          )}
-                        </td>
-                        
-                        {/* Remarks column with edit functionality */}
-                        <td style={styles.td}>
-                          {editingRemark?.orderId === order._id && editingRemark?.rowIndex === rowIndex ? (
-                            /* Remark editor when editing */
-                            <div style={styles.remarkEditor}>
-                              <select
-                                value={tempRemark}
-                                onChange={(e) => setTempRemark(e.target.value)}
-                                style={styles.remarkSelect}
-                              >
-                                <option value="">Select Remark</option>
-                                <option value="completed">Completed</option>
-                                <option value="assigned to">Assigned to</option>
-                                <option value="updated">Updated</option>
-                                <option value="design pending">Design pending</option>
-                                <option value="printing">Printing</option>
-                                <option value="installation pending">Installation pending</option>
-                                <option value="onboarding">Onboarding</option>
-                              </select>
-                              
-                              {/* Show name input when 'assigned to' is selected */}
-                              {tempRemark === 'assigned to' && (
-                                <input
-                                  type="text"
-                                  value={assignedToText}
-                                  onChange={(e) => setAssignedToText(e.target.value)}
-                                  placeholder="Enter name"
-                                  style={styles.assignedInput}
-                                />
-                              )}
-
-                              {/* Show description input when 'updated' is selected */}
-                              {tempRemark === 'updated' && (
-                                <div style={styles.updateContainer}>
-                                  <textarea
-                                    value={updateDescription}
-                                    onChange={(e) => setUpdateDescription(e.target.value)}
-                                    placeholder="Enter update description (what was done, progress, etc.)"
-                                    style={styles.updateTextarea}
-                                    rows="3"
+              </thead>
+              <tbody>
+                {filteredOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan="13" style={styles.noData}>
+                      No services found for {monthLabels[selectedMonth]} {year}
+                      {statusFilter !== 'all' ? ` with status "${statusOptions.find(opt => opt.value === statusFilter)?.label}"` : ''}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredOrders.map((order, orderIndex) =>
+                    order.rows.map((row, rowIndex) => {
+                      const isCompleted = isRowCompleted(row);
+                      return (
+                        <tr
+                          key={`${order._id}-${rowIndex}`}
+                          style={{
+                            ...styles.tableRow(orderIndex + rowIndex),
+                            ...(isCompleted && styles.completedRow)
+                          }}
+                        >
+                          <td style={styles.td('S.No')}>{orderIndex + 1}</td>
+                          <td style={styles.td('Executive')}>{order.executive}</td>
+                          <td style={styles.td('Business')}>{order.business}</td>
+                          <td style={styles.td('Customer')}>{order.contactPerson}</td>
+                          <td style={styles.td('Contact')}>{order.contactCode} {order.phone}</td>
+                          <td style={styles.td('Requirement')}>{row.requirement}</td>
+                          <td style={styles.td('Qty')}>{row.quantity}</td>
+                          <td style={styles.td('Rate')}>{row.rate}</td>
+                          <td style={styles.td('Total')}>{row.total}</td>
+                          <td style={styles.td('Delivery Date')}>{formatDate(row.deliveryDate)}</td>
+                          
+                          <td style={styles.td('Service Assigned To')}>
+                            {row.assignedExecutive ? (
+                              <span style={{
+                                backgroundColor: '#e3f2fd',
+                                color: '#1565c0',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontWeight: 'bold',
+                                display: 'inline-block'
+                              }}>
+                                {row.assignedExecutive}
+                              </span>
+                            ) : (
+                              <span style={{
+                                color: '#666',
+                                fontStyle: 'italic'
+                              }}>
+                                Not Assigned
+                              </span>
+                            )}
+                          </td>
+                          
+                          <td style={styles.td('Remarks')}>
+                            {editingRemark?.orderId === order._id && editingRemark?.rowIndex === rowIndex ? (
+                              <div style={styles.remarkEditor}>
+                                <select
+                                  value={tempRemark}
+                                  onChange={(e) => setTempRemark(e.target.value)}
+                                  style={styles.remarkSelect}
+                                >
+                                  <option value="">Select Remark</option>
+                                  <option value="completed">Completed</option>
+                                  <option value="assigned to">Assigned to</option>
+                                  <option value="updated">Updated</option>
+                                  <option value="design pending">Design pending</option>
+                                  <option value="printing">Printing</option>
+                                  <option value="installation pending">Installation pending</option>
+                                  <option value="onboarding">Onboarding</option>
+                                </select>
+                                
+                                {tempRemark === 'assigned to' && (
+                                  <input
+                                    type="text"
+                                    value={assignedToText}
+                                    onChange={(e) => setAssignedToText(e.target.value)}
+                                    placeholder="Enter name"
+                                    style={styles.assignedInput}
                                   />
-                                  <div style={styles.updateHint}>
-                                    This update will be timestamped automatically
-                                  </div>
-                                </div>
-                              )}
+                                )}
 
-                              {/* Save and cancel buttons */}
-                              <div style={styles.remarkButtons}>
-                                <button
-                                  onClick={() => handleRemarkChange(order._id, rowIndex, tempRemark)}
-                                  style={styles.saveButton}
-                                  disabled={!tempRemark || (tempRemark === 'updated' && !updateDescription.trim())}
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setEditingRemark(null);
-                                    setAssignedToText('');
-                                    setUpdateDescription('');
-                                  }}
-                                  style={styles.cancelButton}
-                                >
-                                  Cancel
-                                </button>
+                                {tempRemark === 'updated' && (
+                                  <div style={styles.updateContainer}>
+                                    <textarea
+                                      value={updateDescription}
+                                      onChange={(e) => setUpdateDescription(e.target.value)}
+                                      placeholder="Enter update description (what was done, progress, etc.)"
+                                      style={styles.updateTextarea}
+                                      rows="3"
+                                    />
+                                    <div style={styles.updateHint}>
+                                      This update will be timestamped automatically
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div style={styles.remarkButtons}>
+                                  <button
+                                    onClick={() => handleRemarkChange(order._id, rowIndex, tempRemark)}
+                                    style={styles.saveButton}
+                                    disabled={!tempRemark || (tempRemark === 'updated' && !updateDescription.trim())}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingRemark(null);
+                                      setAssignedToText('');
+                                      setUpdateDescription('');
+                                    }}
+                                    style={styles.cancelButton}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          ) : (
-                            /* Display remark when not editing */
-                            <div 
-                              onClick={() => !isCompleted && startEditingRemark(order._id, rowIndex, row.remark || 'Pending')}
-                              style={getRemarkStyle(row.remark || 'Pending', isCompleted)}
-                              title={isCompleted ? "Completed - Cannot edit" : "Click to edit remark"}
-                            >
-                              {row.remark || 'Pending'}
-                              {isCompleted && ' ✓'}
-                            </div>
-                          )}
-                        </td>
-                        
-                        {/* Last Update Time column */}
-                        <td style={styles.td}>
-                          {row.lastUpdateTime ? formatDateTime(row.lastUpdateTime) : '-'}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )
-              )}
-            </tbody>
-          </table>
+                            ) : (
+                              <div 
+                                onClick={() => !isCompleted && startEditingRemark(order._id, rowIndex, row.remark || 'Pending')}
+                                style={getRemarkStyle(row.remark || 'Pending', isCompleted)}
+                                title={isCompleted ? "Completed - Cannot edit" : "Click to edit remark"}
+                              >
+                                {row.remark || 'Pending'}
+                                {isCompleted && ' ✓'}
+                              </div>
+                            )}
+                          </td>
+                          
+                          <td style={styles.td('Last Update Time')}>
+                            {row.lastUpdateTime ? formatDateTime(row.lastUpdateTime) : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      {/* Action buttons footer */}
       <div style={styles.footerButtons}>
         <button onClick={handleExportToExcel} style={styles.excelButton}>
           Export to Excel
@@ -847,7 +754,6 @@ function PendingService() {
   );
 }
 
-// CSS styles object for the component
 const styles = {
   container: {
     padding: '20px',
@@ -932,6 +838,9 @@ const styles = {
     fontSize: '14px',
     fontWeight: '600',
     transition: 'all 0.2s',
+    ':hover': {
+      backgroundColor: '#c0392b',
+    }
   },
   currentMonthButton: {
     padding: '8px 12px',
@@ -943,6 +852,9 @@ const styles = {
     fontSize: '14px',
     fontWeight: '600',
     transition: 'all 0.2s',
+    ':hover': {
+      backgroundColor: '#2980b9',
+    }
   },
   currentFilterInfo: {
     textAlign: 'center',
@@ -964,36 +876,71 @@ const styles = {
     color: '#7f8c8d',
     fontSize: '16px',
   },
-  tableContainer: {
+  tableWrapper: {
+    position: 'relative',
     width: '100%',
-    overflowX: 'auto',
+    overflow: 'hidden',
     borderRadius: '8px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
     marginBottom: '20px',
   },
+  tableContainer: {
+    width: '100%',
+    overflowX: 'auto',
+    overflowY: 'auto',
+    maxHeight: 'calc(100vh - 300px)',
+    backgroundColor: '#fff',
+    position: 'relative',
+  },
   table: {
     width: '100%',
-    borderCollapse: 'collapse',
-    backgroundColor: '#fff',
+    borderCollapse: 'separate',
+    borderSpacing: 0,
     fontSize: '14px',
+    minWidth: '1200px',
   },
   tableHeader: {
     backgroundColor: '#3498db',
     color: '#fff',
+    position: 'sticky',
+    top: 0,
+    zIndex: 10,
   },
-  th: {
+  th: (header) => ({
     padding: '12px 8px',
     textAlign: 'left',
     fontWeight: '600',
     whiteSpace: 'nowrap',
     borderRight: '1px solid rgba(255,255,255,0.1)',
-  },
-  td: {
+    position: ['S.No', 'Executive', 'Business'].includes(header) ? 'sticky' : 'relative',
+    left: header === 'S.No' ? 0 : 
+          header === 'Executive' ? '50px' : 
+          header === 'Business' ? '150px' : 'auto',
+    backgroundColor: '#3498db',
+    zIndex: header === 'S.No' ? 15 : 
+            header === 'Executive' ? 14 : 
+            header === 'Business' ? 13 : 1,
+    minWidth: header === 'S.No' ? '60px' : 
+              header === 'Executive' ? '100px' : 
+              header === 'Business' ? '120px' : 'auto',
+  }),
+  td: (columnName) => ({
     padding: '10px 8px',
     borderBottom: '1px solid #eee',
     whiteSpace: 'nowrap',
     textAlign: 'left',
-  },
+    position: ['S.No', 'Executive', 'Business'].includes(columnName) ? 'sticky' : 'relative',
+    left: columnName === 'S.No' ? 0 : 
+          columnName === 'Executive' ? '50px' : 
+          columnName === 'Business' ? '150px' : 'auto',
+    backgroundColor: '#fff',
+    zIndex: columnName === 'S.No' ? 5 : 
+            columnName === 'Executive' ? 4 : 
+            columnName === 'Business' ? 3 : 1,
+    minWidth: columnName === 'S.No' ? '60px' : 
+              columnName === 'Executive' ? '100px' : 
+              columnName === 'Business' ? '120px' : 'auto',
+  }),
   tableRow: (index) => ({
     backgroundColor: index % 2 === 0 ? '#ffffff' : '#f8f9fa',
     ':hover': {
@@ -1021,6 +968,9 @@ const styles = {
     fontSize: '14px',
     fontWeight: '600',
     transition: 'all 0.2s',
+    ':hover': {
+      backgroundColor: '#1abc9c',
+    }
   },
   backButton: {
     backgroundColor: '#7f8c8d',
@@ -1032,6 +982,9 @@ const styles = {
     fontSize: '14px',
     fontWeight: '600',
     transition: 'all 0.2s',
+    ':hover': {
+      backgroundColor: '#95a5a6',
+    }
   },
   refreshButton: {
     backgroundColor: '#3498db',
@@ -1043,6 +996,9 @@ const styles = {
     fontSize: '14px',
     fontWeight: '600',
     transition: 'all 0.2s',
+    ':hover': {
+      backgroundColor: '#2980b9',
+    }
   },
   remarkEditor: {
     display: 'flex',
@@ -1095,6 +1051,10 @@ const styles = {
     cursor: 'pointer',
     fontSize: '13px',
     fontWeight: 'bold',
+    transition: 'all 0.2s',
+    ':hover': {
+      backgroundColor: '#218838',
+    }
   },
   cancelButton: {
     flex: 1,
@@ -1106,51 +1066,11 @@ const styles = {
     cursor: 'pointer',
     fontSize: '13px',
     fontWeight: 'bold',
+    transition: 'all 0.2s',
+    ':hover': {
+      backgroundColor: '#c82333',
+    }
   },
 };
 
-// Add hover effects to buttons
-Object.assign(styles.clearFilterButton, {
-  ':hover': {
-    backgroundColor: '#c0392b',
-  }
-});
-
-Object.assign(styles.currentMonthButton, {
-  ':hover': {
-    backgroundColor: '#2980b9',
-  }
-});
-
-Object.assign(styles.excelButton, {
-  ':hover': {
-    backgroundColor: '#1abc9c',
-  }
-});
-
-Object.assign(styles.backButton, {
-  ':hover': {
-    backgroundColor: '#95a5a6',
-  }
-});
-
-Object.assign(styles.refreshButton, {
-  ':hover': {
-    backgroundColor: '#2980b9',
-  }
-});
-
-Object.assign(styles.saveButton, {
-  ':hover': {
-    backgroundColor: '#218838',
-  }
-});
-
-Object.assign(styles.cancelButton, {
-  ':hover': {
-    backgroundColor: '#c82333',
-  }
-});
-
-// Export the component as default
 export default PendingService;

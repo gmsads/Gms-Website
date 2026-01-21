@@ -68,6 +68,7 @@ import FieldVisitsAdmin from './Admin/FieldVisitsAdmin';
 import AdvanceApprovalPage  from './Admin/AdvanceApprovalPage';
 import ServiceForm from './Service/ServiceForm.jsx';
 import Purchase from './Admin/Purchase';
+import TeleBreaks from './Admin/TeleBreaks.jsx';
 function App() {
   return (
     <BrowserRouter>
@@ -136,6 +137,7 @@ function App() {
           }
         >
             <Route path="purchase" element={<Purchase />} />
+            <Route path="tele-breaks" element={<TeleBreaks/>} />
           <Route path="appointments" element={<Appointment />} />
           <Route path="prospects" element={<Prospective />} />
             <Route path="vendors" element={<Vendors />} />

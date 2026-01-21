@@ -11,6 +11,7 @@ const AddExecutiveAdmin = () => {
     password: '',
     email: '',
     guardianName: '',
+    guardianContact: '',
     aadhar: '',
     joiningDate: '',
     experience: '',
@@ -78,6 +79,7 @@ const handleSubmit = async (e) => {
     password: formData.password,
     email: formData.email || '',
     guardianName: formData.gardianName || '',
+    guardianContact: formData.gardianContact || '',
     aadhar: formData.aadhar || '',
     joiningDate: formData.joiningDate || '',
     experience: formData.experience || '',
@@ -114,6 +116,7 @@ const handleSubmit = async (e) => {
       password: '',
       email: '',
       guardianName: '',
+      guardianContact: '',
       aadhar: '',
       joiningDate: '',
       experience: '',
@@ -373,6 +376,7 @@ const handleSubmit = async (e) => {
           </div>
           <div style={styles.formColumn}>
             <div style={styles.formGroup}>
+              
               <label style={styles.label}>Parent/Guardian Name</label>
               <input
                 type="text"
@@ -385,6 +389,35 @@ const handleSubmit = async (e) => {
             </div>
           </div>
         </div>
+
+        <div style={styles.formRow}>
+          <div style={styles.formColumn}>
+            <div style={styles.formGroup}>
+              <label style={styles.label}> Parent Contact Number /Guardian contact Number</label>
+              <input
+              
+                onKeyPress={(e) => {
+                  if (!/^\d$/.test(e.key)) {
+                    e.preventDefault();
+                  }
+                }}
+                maxLength={10}
+                placeholder="Enter 10-digit phone number"
+                required
+             
+                type="number"
+                name="guardianContact"
+                value={formData.guardianContact}
+                style={styles.input}
+                onChange={handleChange}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+          
+          
+        </div>
+
 
         <div style={styles.formRow}>
           <div style={styles.formColumn}>
@@ -460,6 +493,7 @@ const handleSubmit = async (e) => {
           </div>
         </div>
 
+        
         <div style={styles.formGroup}>
           <label style={styles.label}>Employment Status</label>
           <div style={styles.statusToggle}>

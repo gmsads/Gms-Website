@@ -66,9 +66,7 @@ function OrderForm({
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [advanceError, setAdvanceError] = useState("");
   const [createdBy, setCreatedBy] = useState("");
-  // Add WhatsApp state variable
   const [whatsappSent, setWhatsappSent] = useState(false);
-  // Add advance approval states
   const [approvalReason, setApprovalReason] = useState("");
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
   const [hasAdvanceApproval, setHasAdvanceApproval] = useState(false);
@@ -76,7 +74,6 @@ function OrderForm({
 
   const printRef = useRef();
   const invoiceRef = useRef();
-  // Add polling interval reference for automatic approval checking
   const approvalPollingRef = useRef(null);
 
   function getEmptyRow() {
@@ -97,17 +94,15 @@ function OrderForm({
     };
   }
 
-  // Add WhatsApp message function
   const sendWhatsAppMessage = (phoneNumber, orderData) => {
     try {
       const cleanNumber = phoneNumber.replace(/\D/g, '');
       const finalNumber = cleanNumber.slice(-10);
-      
+
       if (finalNumber.length !== 10) {
         throw new Error('Invalid phone number');
       }
 
-      // Format payment methods for display
       let paymentMethodDisplay = "Not specified";
       if (orderData.paymentMethods && orderData.paymentMethods.length > 0) {
         if (typeof orderData.paymentMethods === 'string') {
@@ -157,9 +152,9 @@ Global Marketing Solutions Team`;
 
       const encodedMessage = encodeURIComponent(message);
       const whatsappUrl = `https://wa.me/91${finalNumber}?text=${encodedMessage}`;
-      
+
       window.open(whatsappUrl, '_blank');
-      
+
       setWhatsappSent(true);
       return { success: true, message: 'WhatsApp opened successfully' };
     } catch (error) {
@@ -173,24 +168,28 @@ Global Marketing Solutions Team`;
     setCreatedBy(currentUser);
   }, []);
 
-  // Enhanced checkAdvanceApproval function with automatic detection
+  const handleBusinessChange = (value) => {
+    const uppercaseValue = value.toUpperCase();
+    if (validateBusinessName(uppercaseValue) || uppercaseValue === "") {
+      setBusiness(uppercaseValue);
+    }
+  };
+
   const checkAdvanceApproval = async () => {
     try {
       const response = await axios.get(
         `/api/advance-approval-requests/check/${selectedExecutive}`,
         { params: { business, contactPerson } }
       );
-      
+
       const previousApprovalStatus = hasAdvanceApproval;
       const newApprovalStatus = response.data.hasApproval;
-      
+
       setHasAdvanceApproval(newApprovalStatus);
-      
-      // Show success message if approval was just granted
+
       if (!previousApprovalStatus && newApprovalStatus && approvalRequested) {
         alert("🎉 Your advance approval request has been approved! You can now submit the order.");
-        
-        // Stop polling since we got approval
+
         if (approvalPollingRef.current) {
           clearInterval(approvalPollingRef.current);
           approvalPollingRef.current = null;
@@ -201,22 +200,18 @@ Global Marketing Solutions Team`;
     }
   };
 
-  // Check for existing approval when form loads
   useEffect(() => {
     if (!isAdmin && business && contactPerson) {
       checkAdvanceApproval();
     }
   }, [business, contactPerson, isAdmin]);
 
-  // Poll for approval status when waiting for approval - AUTOMATIC DETECTION
   useEffect(() => {
     if (approvalRequested && !hasAdvanceApproval && !isAdmin && business && contactPerson) {
-      // Start polling every 5 seconds
       approvalPollingRef.current = setInterval(async () => {
         await checkAdvanceApproval();
-      }, 5000); // Check every 5 seconds
+      }, 5000);
 
-      // Cleanup on unmount or when approval is granted
       return () => {
         if (approvalPollingRef.current) {
           clearInterval(approvalPollingRef.current);
@@ -224,7 +219,6 @@ Global Marketing Solutions Team`;
         }
       };
     } else {
-      // Stop polling if we have approval or user is admin
       if (approvalPollingRef.current) {
         clearInterval(approvalPollingRef.current);
         approvalPollingRef.current = null;
@@ -298,7 +292,7 @@ Global Marketing Solutions Team`;
       </html>
     `);
     printWindow.document.close();
-    
+
     setTimeout(() => {
       printWindow.print();
       setTimeout(() => printWindow.close(), 500);
@@ -341,7 +335,7 @@ Global Marketing Solutions Team`;
       </html>
     `);
     printWindow.document.close();
-    
+
     setTimeout(() => {
       printWindow.print();
       setTimeout(() => printWindow.close(), 500);
@@ -352,50 +346,74 @@ Global Marketing Solutions Team`;
     setShowInvoice(true);
   };
 
-  const resetFormForNewOrder = () => {
-    setSelectedExecutive(isAdmin ? "" : localStorage.getItem("userName") || "");
-    setBusiness(routerLocation.state?.businessName || "");
-    setContactPerson(routerLocation.state?.customerName || "");
-    setClientLocation("");
-    setSaleClosedBy("");
-    setContactNumber(`+91 ${routerLocation.state?.phoneNumber || orderNumber}`);
-    setOrderDate(new Date().toISOString().split("T")[0]);
-    setAdvanceDate(new Date().toISOString().split("T")[0]);
-    setClientType("");
-    setTarget("");
-    setDiscount(0);
-    setRows([getEmptyRow()]);
-    setTotal(0);
-    setDiscountedTotal(0);
-    setAdvance("");
-    setBalance(0);
-    setPaymentMethods([]);
-    setSelectedUpi("");
-    setChequeNumber("");
-    setChequeImage(null);
-    setDesign("");
-    setBankName("");
-    setTransactionRef("");
-    setOtherMethod("");
-    setPoNumber("");
-    setPoDocument(null);
-    setSplitCommission(false);
-    setCommissionSplitInfo(null);
-    setAdvanceError("");
-    // Reset WhatsApp state
-    setWhatsappSent(false);
-    // Reset approval states
-    setHasAdvanceApproval(false);
-    setApprovalRequested(false);
-    setApprovalReason("");
-    // Stop polling when form is reset
-    if (approvalPollingRef.current) {
-      clearInterval(approvalPollingRef.current);
-      approvalPollingRef.current = null;
+const createNewOrderFromExisting = () => {
+  // Determine the new order type based on existing order type
+  let newClientType = "";
+  if (existingData?.clientType) {
+    switch (existingData.clientType) {
+      case "Retail":
+        newClientType = "Renewal";
+        break;
+      case "Agent":
+        newClientType = "Renewal-Agent";
+        break;
+      case "Renewal":
+      case "Renewal-Agent":
+      case "Corporate":
+      case "Walk-In":
+        // Keep as is for renewal types
+        newClientType = existingData.clientType;
+        break;
+      default:
+        newClientType = "";
     }
-    setIsCreatingNew(true);
-    if (onNewOrder) onNewOrder();
-  };
+  }
+  
+  // Keep business name (in uppercase) and contact number from existing order
+  const existingBusiness = business || "";
+  
+  setSelectedExecutive(isAdmin ? "" : localStorage.getItem("userName") || "");
+  setBusiness(existingBusiness);
+  setContactPerson("");
+  setClientLocation("");
+  setSaleClosedBy("");
+  setOrderDate(new Date().toISOString().split("T")[0]);
+  setAdvanceDate(new Date().toISOString().split("T")[0]);
+  setClientType(newClientType); // Set the determined client type
+  setTarget("");
+  setDiscount(0);
+  setRows([getEmptyRow()]);
+  setTotal(0);
+  setDiscountedTotal(0);
+  setAdvance("");
+  setBalance(0);
+  setPaymentMethods([]);
+  setSelectedUpi("");
+  setChequeNumber("");
+  setChequeImage(null);
+  setDesign("");
+  setBankName("");
+  setTransactionRef("");
+  setOtherMethod("");
+  setPoNumber("");
+  setPoDocument(null);
+  setSplitCommission(false);
+  setCommissionSplitInfo(null);
+  setAdvanceError("");
+  setWhatsappSent(false);
+  setHasAdvanceApproval(false);
+  setApprovalRequested(false);
+  setApprovalReason("");
+  
+  if (approvalPollingRef.current) {
+    clearInterval(approvalPollingRef.current);
+    approvalPollingRef.current = null;
+  }
+  
+  setIsCreatingNew(true);
+  
+  if (onNewOrder) onNewOrder();
+};
 
   const submitAdvanceApprovalRequest = async () => {
     if (!approvalReason.trim()) {
@@ -437,11 +455,11 @@ Global Marketing Solutions Team`;
       };
 
       await axios.post("/api/advance-approval-requests", requestData);
-      
+
       setShowAdvanceApprovalModal(false);
       setApprovalRequested(true);
       setApprovalReason("");
-      
+
       alert("Advance approval request submitted! The system will automatically check for approval every 5 seconds. You'll be notified when approved.");
     } catch (error) {
       console.error("Error submitting approval request:", error);
@@ -451,37 +469,32 @@ Global Marketing Solutions Team`;
     }
   };
 
-  // Updated useEffect to fetch regular executives, field executives, and service executives
   useEffect(() => {
     const fetchAllExecutives = async () => {
       try {
         setLoadingExecutives(true);
-        
-        // Fetch regular executives
+
         const execsRes = await axios.get("/api/executives");
         const regularExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
-        
-        // Fetch field executives
+
         const fieldExecsRes = await axios.get("/api/field-executive/admin/executives");
         const fieldExecutives = fieldExecsRes.data.map(name => ({ name, _id: name, type: 'field' }));
-        
-        // Fetch service executives
+
         const serviceExecsRes = await axios.get("/api/service-executives");
-        const serviceExecutives = serviceExecsRes.data.map(exec => ({ 
-          name: exec.name, 
-          _id: exec._id, 
-          type: 'service' 
+        const serviceExecutives = serviceExecsRes.data.map(exec => ({
+          name: exec.name,
+          _id: exec._id,
+          type: 'service'
         }));
-        
-        // Combine all lists and remove duplicates
+
         const allExecutives = [
           ...regularExecs,
           ...fieldExecutives,
           ...serviceExecutives
-        ].filter((exec, index, self) => 
+        ].filter((exec, index, self) =>
           index === self.findIndex(e => e.name === exec.name)
         ).sort((a, b) => a.name.localeCompare(b.name));
-        
+
         setSortedExecutives(allExecutives);
         setSaleClosedByExecutives(allExecutives);
 
@@ -503,7 +516,6 @@ Global Marketing Solutions Team`;
     fetchAllExecutives();
   }, [existingData, isAdmin, isCreatingNew]);
 
-  // Keep the existing useEffect for other initial data
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -522,7 +534,7 @@ Global Marketing Solutions Team`;
 
     if (existingData && !isCreatingNew) {
       setSelectedExecutive(existingData.executive || (isAdmin ? "" : localStorage.getItem("userName") || ""));
-      setBusiness(existingData.business || "");
+      setBusiness((existingData.business || "").toUpperCase());
       setContactPerson(existingData.contactPerson || "");
       setClientLocation(existingData.location || "");
       setSaleClosedBy(existingData.saleClosedBy || "");
@@ -555,10 +567,19 @@ Global Marketing Solutions Team`;
       setPaymentDate(existingData.paymentDate || "");
       setAdvance(existingData.advance?.toString() || "");
       setBalance(existingData.balance?.toString() || "");
+      
+      if (existingData.paymentMethods) {
+        const methods = typeof existingData.paymentMethods === 'string' 
+          ? existingData.paymentMethods.split(' + ') 
+          : existingData.paymentMethods;
+        setPaymentMethods(methods);
+      }
+      
+      setDesign(existingData.designStatus === "provided" ? "yes" : "no");
     }
 
     fetchInitialData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingData, orderNumber, isAdmin, executives, routerLocation.state, isCreatingNew]);
 
   useEffect(() => {
@@ -595,214 +616,205 @@ Global Marketing Solutions Team`;
     const totalNum = parseFloat(total) || 0;
     const advancePercentage = (advanceNum / totalNum) * 100;
 
-    // Check if advance is less than 50% for non-admin users
     if (totalNum > 0 && !isAdmin && advancePercentage < 50 && !hasAdvanceApproval) {
       setShowAdvanceApprovalModal(true);
       return;
     }
 
-    // Continue with normal submission...
     await submitOrder();
   };
 
-const submitOrder = async () => {
-  setIsSubmitting(true);
-  try {
-    const phone = contactNumber.replace(/\D/g, "").slice(-10);
-    if (phone.length !== 10) throw new Error("Please enter a valid 10-digit phone number");
+  const submitOrder = async () => {
+    setIsSubmitting(true);
+    try {
+      const phone = contactNumber.replace(/\D/g, "").slice(-10);
+      if (phone.length !== 10) throw new Error("Please enter a valid 10-digit phone number");
 
-    const totalNum = parseFloat(total) || 0;
-    const advanceNum = parseFloat(advance) || 0;
+      const totalNum = parseFloat(total) || 0;
+      const advanceNum = parseFloat(advance) || 0;
 
-    const designRequestData = {
-      executive: selectedExecutive,
-      businessName: business,
-      contactPerson: contactPerson,
-      phoneNumber: phone,
-      requirements: rows
-        .filter((row) => row.requirement)
-        .map((row) => row.requirement === "other" ? row.customRequirement : row.requirement)
-        .join(", "),
-      status: "pending",
-      requestDate: new Date().toISOString(),
-    };
-
-    let paymentMethodStr = paymentMethods.includes("UPI") && selectedUpi
-      ? paymentMethods.map((m) => m === "UPI" ? `UPI - ${selectedUpi}` : m).join(" + ")
-      : paymentMethods.join(" + ");
-
-    const shouldSplitCommission = saleClosedBy && selectedExecutive !== saleClosedBy;
-
-    const finalTotal = shouldSplitCommission ? (totalNum / 2).toFixed(2) : totalNum.toFixed(2);
-    const finalDiscountedTotal = shouldSplitCommission ? (parseFloat(discountedTotal) / 2).toFixed(2) : parseFloat(discountedTotal).toFixed(2);
-    const finalAdvance = shouldSplitCommission ? (advanceNum / 2).toFixed(2) : advanceNum.toFixed(2);
-    const finalBalance = shouldSplitCommission ? (parseFloat(balance) / 2).toFixed(2) : parseFloat(balance).toFixed(2);
-    const finalDiscount = shouldSplitCommission ? (parseFloat(discount) / 2).toFixed(2) : parseFloat(discount).toFixed(2);
-
-    const finalCreatedBy = isAdmin ? createdBy : (existingData?.createdBy || selectedExecutive);
-
-    // 🆕 Combine requirements with their quantities in a structured way
-    const requirementDetails = rows
-      .filter((row) => row.requirement)
-      .map((row) => {
-        const requirementName = row.requirement === "other" ? row.customRequirement : row.requirement;
-        const quantity = row.quantity ? parseFloat(row.quantity) : 0;
-        const rate = row.rate ? parseFloat(row.rate) : 0;
-        const rowTotal = row.total ? parseFloat(row.total) : 0;
-        
-        return {
-          name: requirementName,
-          quantity: quantity,
-          rate: rate,
-          total: rowTotal,
-          description: row.description || "",
-          days: row.days || "",
-          deliveryDate: row.deliveryDate || ""
-        };
-      });
-
-    // Create a single requirement string that includes quantities
-    const allRequirements = requirementDetails
-      .map(req => `${req.quantity} x ${req.name}`)
-      .join(", ");
-
-    // Create a single description that includes details
-    const allDescriptions = requirementDetails
-      .map(req => `${req.description}${req.days ? ` (${req.days} days)` : ''}`)
-      .filter(desc => desc.trim())
-      .join(" | ");
-
-    const mainOrderData = {
-      executive: selectedExecutive,
-      business,
-      contactPerson,
-      location: clientLocation,
-      saleClosedBy: saleClosedBy || selectedExecutive,
-      contactCode: "+91",
-      phone,
-      orderDate,
-      target,
-      clientType: clientType || "New",
-      // 🆕 SINGLE ROW WITH ALL REQUIREMENTS AND THEIR DETAILS
-      rows: [{
-        requirement: allRequirements, // Shows like "2 x Flyers, 1 x Banners, 3 x Business Cards"
-        description: allDescriptions || "Order Requirements", // Combined descriptions
-        quantity: 1, // Single line item for the whole order
-        rate: parseFloat(totalNum.toFixed(2)),
-        total: finalTotal,
-        deliveryDate: rows[0]?.deliveryDate || new Date().toISOString().split("T")[0],
-        customRequirement: allRequirements,
-        gstIncluded: rows.some(row => row.gstIncluded),
-        // 🆕 Store individual requirements as sub-items for reference
-        requirementDetails: requirementDetails
-      }],
-      advanceDate,
-      paymentDate,
-      paymentMethods: paymentMethodStr,
-      advance: finalAdvance,
-      balance: finalBalance,
-      total: finalTotal,
-      discount: finalDiscount,
-      discountedTotal: finalDiscountedTotal,
-      chequeNumber,
-      chequeImage,
-      designStatus: design === "no" ? "pending" : "provided",
-      createdBy: finalCreatedBy,
-      commissionSplit: shouldSplitCommission ? {
-        executive1: selectedExecutive,
-        executive2: saleClosedBy,
-        amount1: finalDiscountedTotal,
-        amount2: finalDiscountedTotal,
-        split: true
-      } : {
+      const designRequestData = {
         executive: selectedExecutive,
-        amount: parseFloat(discountedTotal),
-        split: false
-      },
-      // 🆕 Also store the individual rows for data integrity
-      originalRows: rows.map(row => ({
-        requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
-        description: row.description,
-        quantity: row.quantity,
-        rate: row.rate,
-        days: row.days,
-        total: row.total,
-        deliveryDate: row.deliveryDate,
-        gstIncluded: row.gstIncluded
-      }))
-    };
-
-    if (shouldSplitCommission) {
-      mainOrderData.isCommissionSplit = true;
-      mainOrderData.splitDetails = {
-        partnerExecutive: saleClosedBy,
-        splitPercentage: 50
+        businessName: business,
+        contactPerson: contactPerson,
+        phoneNumber: phone,
+        requirements: rows
+          .filter((row) => row.requirement)
+          .map((row) => row.requirement === "other" ? row.customRequirement : row.requirement)
+          .join(", "),
+        status: "pending",
+        requestDate: new Date().toISOString(),
       };
-    }
 
-    console.log('Final order data being submitted:', mainOrderData);
+      let paymentMethodStr = paymentMethods.includes("UPI") && selectedUpi
+        ? paymentMethods.map((m) => m === "UPI" ? `UPI - ${selectedUpi}` : m).join(" + ")
+        : paymentMethods.join(" + ");
 
-    setIsSubmittingDesign(true);
-    await axios.post("/api/design-requests", designRequestData);
-    setIsSubmittingDesign(false);
+      const shouldSplitCommission = saleClosedBy && selectedExecutive !== saleClosedBy;
 
-    const orderResponse = (existingData && !isCreatingNew)
-      ? await axios.put(`/api/orders/${existingData._id}`, mainOrderData)
-      : await axios.post("/api/submit", mainOrderData);
+      const finalTotal = shouldSplitCommission ? (totalNum / 2).toFixed(2) : totalNum.toFixed(2);
+      const finalDiscountedTotal = shouldSplitCommission ? (parseFloat(discountedTotal) / 2).toFixed(2) : parseFloat(discountedTotal).toFixed(2);
+      const finalAdvance = shouldSplitCommission ? (advanceNum / 2).toFixed(2) : advanceNum.toFixed(2);
+      const finalBalance = shouldSplitCommission ? (parseFloat(balance) / 2).toFixed(2) : parseFloat(balance).toFixed(2);
+      const finalDiscount = shouldSplitCommission ? (parseFloat(discount) / 2).toFixed(2) : parseFloat(discount).toFixed(2);
 
-    // If commission is split, create a duplicate entry for the sale closed by executive
-    if (shouldSplitCommission) {
-      const duplicateOrderData = {
-        ...mainOrderData,
-        executive: saleClosedBy,
-        isCommissionSplit: true,
-        originalOrderId: orderResponse.data._id,
-        splitDetails: {
-          partnerExecutive: selectedExecutive,
+      const finalCreatedBy = isAdmin ? createdBy : (existingData?.createdBy || selectedExecutive);
+
+      const requirementDetails = rows
+        .filter((row) => row.requirement)
+        .map((row) => {
+          const requirementName = row.requirement === "other" ? row.customRequirement : row.requirement;
+          const quantity = row.quantity ? parseFloat(row.quantity) : 0;
+          const rate = row.rate ? parseFloat(row.rate) : 0;
+          const rowTotal = row.total ? parseFloat(row.total) : 0;
+
+          return {
+            name: requirementName,
+            quantity: quantity,
+            rate: rate,
+            total: rowTotal,
+            description: row.description || "",
+            days: row.days || "",
+            deliveryDate: row.deliveryDate || ""
+          };
+        });
+
+      const allRequirements = requirementDetails
+        .map(req => `${req.quantity} x ${req.name}`)
+        .join(", ");
+
+      const allDescriptions = requirementDetails
+        .map(req => `${req.description}${req.days ? ` (${req.days} days)` : ''}`)
+        .filter(desc => desc.trim())
+        .join(" | ");
+
+      const mainOrderData = {
+        executive: selectedExecutive,
+        business,
+        contactPerson,
+        location: clientLocation,
+        saleClosedBy: saleClosedBy || selectedExecutive,
+        contactCode: "+91",
+        phone,
+        orderDate,
+        target,
+        clientType: clientType || "New",
+        rows: [{
+          requirement: allRequirements,
+          description: allDescriptions || "Order Requirements",
+          quantity: 1,
+          rate: parseFloat(totalNum.toFixed(2)),
+          total: finalTotal,
+          deliveryDate: rows[0]?.deliveryDate || new Date().toISOString().split("T")[0],
+          customRequirement: allRequirements,
+          gstIncluded: rows.some(row => row.gstIncluded),
+          requirementDetails: requirementDetails
+        }],
+        advanceDate,
+        paymentDate,
+        paymentMethods: paymentMethodStr,
+        advance: finalAdvance,
+        balance: finalBalance,
+        total: finalTotal,
+        discount: finalDiscount,
+        discountedTotal: finalDiscountedTotal,
+        chequeNumber,
+        chequeImage,
+        designStatus: design === "no" ? "pending" : "provided",
+        createdBy: finalCreatedBy,
+        commissionSplit: shouldSplitCommission ? {
+          executive1: selectedExecutive,
+          executive2: saleClosedBy,
+          amount1: finalDiscountedTotal,
+          amount2: finalDiscountedTotal,
+          split: true
+        } : {
+          executive: selectedExecutive,
+          amount: parseFloat(discountedTotal),
+          split: false
+        },
+        originalRows: rows.map(row => ({
+          requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
+          description: row.description,
+          quantity: row.quantity,
+          rate: row.rate,
+          days: row.days,
+          total: row.total,
+          deliveryDate: row.deliveryDate,
+          gstIncluded: row.gstIncluded
+        }))
+      };
+
+      if (shouldSplitCommission) {
+        mainOrderData.isCommissionSplit = true;
+        mainOrderData.splitDetails = {
+          partnerExecutive: saleClosedBy,
           splitPercentage: 50
-        }
+        };
+      }
+
+      console.log('Final order data being submitted:', mainOrderData);
+
+      setIsSubmittingDesign(true);
+      await axios.post("/api/design-requests", designRequestData);
+      setIsSubmittingDesign(false);
+
+      const orderResponse = (existingData && !isCreatingNew)
+        ? await axios.put(`/api/orders/${existingData._id}`, mainOrderData)
+        : await axios.post("/api/submit", mainOrderData);
+
+      if (shouldSplitCommission) {
+        const duplicateOrderData = {
+          ...mainOrderData,
+          executive: saleClosedBy,
+          isCommissionSplit: true,
+          originalOrderId: orderResponse.data._id,
+          splitDetails: {
+            partnerExecutive: selectedExecutive,
+            splitPercentage: 50
+          }
+        };
+
+        await axios.post("/api/submit", duplicateOrderData);
+      }
+
+      const orderDataForWhatsApp = {
+        business: business,
+        contactPerson: contactPerson,
+        orderNumber: orderResponse.data.orderNumber || `ORD-${Date.now()}`,
+        requirements: allRequirements,
+        requirementDetails: requirementDetails,
+        total: discountedTotal,
+        advance: advance,
+        balance: balance,
+        orderDate: orderDate,
+        location: clientLocation,
+        paymentMethods: paymentMethodStr,
+        advanceDate: advanceDate,
+        paymentDate: paymentDate,
+        chequeNumber: chequeNumber,
+        upiId: selectedUpi,
+        bankName: bankName,
+        transactionRef: transactionRef,
+        poNumber: poNumber
       };
 
-      await axios.post("/api/submit", duplicateOrderData);
-    }
+      sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
 
-    // WhatsApp message - Update to show quantities
-    const orderDataForWhatsApp = {
-      business: business,
-      contactPerson: contactPerson,
-      orderNumber: orderResponse.data.orderNumber || `ORD-${Date.now()}`,
-      requirements: allRequirements, // This will show quantities
-      requirementDetails: requirementDetails, // Include detailed info
-      total: discountedTotal,
-      advance: advance,
-      balance: balance,
-      orderDate: orderDate,
-      location: clientLocation,
-      paymentMethods: paymentMethodStr,
-      advanceDate: advanceDate,
-      paymentDate: paymentDate,
-      chequeNumber: chequeNumber,
-      upiId: selectedUpi,
-      bankName: bankName,
-      transactionRef: transactionRef,
-      poNumber: poNumber
-    };
-
-    sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
-
-    setShowSuccessModal(true);
-    setTimeout(() => {
-      setShowSuccessModal(false);
+      setShowSuccessModal(true);
+      setTimeout(() => {
+        setShowSuccessModal(false);
+        setIsSubmitting(false);
+        setIsCreatingNew(false);
+        if (onSuccess) onSuccess(orderResponse.data);
+      }, 2000);
+    } catch (err) {
+      console.error("Submission error:", err);
+      alert(`Submission failed: ${err.response?.data?.message || err.message}`);
       setIsSubmitting(false);
-      setIsCreatingNew(false);
-      if (onSuccess) onSuccess(orderResponse.data);
-    }, 2000);
-  } catch (err) {
-    console.error("Submission error:", err);
-    alert(`Submission failed: ${err.response?.data?.message || err.message}`);
-    setIsSubmitting(false);
-  }
-};
+    }
+  };
+
   const fetchTargetForDate = async (dateString) => {
     if (!dateString || !selectedExecutive) return;
     setLoadingTarget(true);
@@ -932,29 +944,23 @@ const submitOrder = async () => {
 
   const capitalizeFirst = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
-  // Validation functions
   const validateLocation = (value) => {
-    // Only allow letters, spaces, and common location characters
     return /^[a-zA-Z\s\-.,()]*$/.test(value);
   };
 
   const validateContactPerson = (value) => {
-    // Only allow letters and spaces
     return /^[a-zA-Z\s]*$/.test(value);
   };
 
   const validateBusinessName = (value) => {
-    // Allow both letters and numbers for business name
-    return /^[a-zA-Z0-9\s\-.,&()]*$/.test(value);
+    return /^[A-Z0-9\s\-.,&()]*$/.test(value);
   };
 
   const validateContactNumber = (value) => {
-    // Allow only digits and ensure exactly 10 digits
     const digits = value.replace(/\D/g, "");
     return digits.length <= 10;
   };
 
-  // Render advance validation section - UPDATED for automatic approval
   const renderAdvanceValidation = () => {
     const advanceNum = parseFloat(advance) || 0;
     const totalNum = parseFloat(total) || 0;
@@ -962,15 +968,15 @@ const submitOrder = async () => {
 
     if (totalNum > 0 && !isAdmin) {
       return (
-        <div style={{ 
-          marginTop: "10px", 
-          padding: "10px", 
-          backgroundColor: advancePercentage < 50 ? "#fff3cd" : "#d4edda", 
+        <div style={{
+          marginTop: "10px",
+          padding: "10px",
+          backgroundColor: advancePercentage < 50 ? "#fff3cd" : "#d4edda",
           borderRadius: "4px",
           border: `1px solid ${advancePercentage < 50 ? "#ffeaa7" : "#c3e6cb"}`
         }}>
           <strong>Advance Payment:</strong> {advancePercentage.toFixed(1)}% of total
-          
+
           {advancePercentage < 50 ? (
             <div>
               <span style={{ color: "#856404", marginLeft: "10px" }}>
@@ -1054,6 +1060,489 @@ const submitOrder = async () => {
     );
   }
 
+  // If viewing existing order, show clean document view
+  if (existingData && !isCreatingNew) {
+    return (
+      <div id="print-area" ref={printRef} style={{ 
+        fontFamily: 'Arial, sans-serif', 
+        maxWidth: '800px', 
+        margin: '0 auto', 
+        padding: '20px', 
+        backgroundColor: 'white',
+        fontSize: '14px'
+      }}>
+        {/* Header Section */}
+        <div style={{ 
+          backgroundColor: '#f0f8ff', 
+          padding: '15px', 
+          borderRadius: '8px', 
+          marginBottom: '20px', 
+          borderLeft: '4px solid #2196F3',
+          borderBottom: '2px solid #2196F3'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h1 style={{ margin: '0 0 5px 0', color: '#1976d2', fontSize: '18px' }}>📋 ORDER DETAILS</h1>
+              <div style={{ display: 'flex', gap: '15px' }}>
+                <div>
+                  <div style={{ color: '#666', fontSize: '12px' }}>Order Date</div>
+                  <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                    {new Date(existingData.orderDate).toLocaleDateString()}
+                  </div>
+                </div>
+                {existingData.orderNumber && (
+                  <div>
+                    <div style={{ color: '#666', fontSize: '12px' }}>Order Number</div>
+                    <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#1976d2' }}>
+                      #{existingData.orderNumber}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button 
+                onClick={createNewOrderFromExisting} 
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '12px',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                📝 Create New Order
+              </button>
+              <button 
+                onClick={handlePrint}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#2196F3',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                🖨️ Print
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Customer Information */}
+        <div style={{ 
+          backgroundColor: 'white', 
+          padding: '15px', 
+          borderRadius: '6px', 
+          marginBottom: '15px',
+          border: '1px solid #ddd'
+        }}>
+          <h3 style={{ 
+            margin: '0 0 10px 0', 
+            color: '#333', 
+            fontSize: '16px',
+            borderBottom: '1px solid #4CAF50', 
+            paddingBottom: '5px' 
+          }}>
+            Customer Information
+          </h3>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+            gap: '12px'
+          }}>
+            <div>
+              <div style={{ color: '#666', fontSize: '12px' }}>Business Name</div>
+              <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
+                {existingData.business?.toUpperCase()}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: '#666', fontSize: '12px' }}>Contact Person</div>
+              <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
+                {existingData.contactPerson}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: '#666', fontSize: '12px' }}>Contact Number</div>
+              <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
+                {existingData.contactCode || '+91'} {existingData.phone}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: '#666', fontSize: '12px' }}>Location</div>
+              <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
+                {existingData.location}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: '#666', fontSize: '12px' }}>Executive</div>
+              <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
+                {existingData.executive}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: '#666', fontSize: '12px' }}>Sale Closed By</div>
+              <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
+                {existingData.saleClosedBy || existingData.executive}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: '#666', fontSize: '12px' }}>Order Type</div>
+              <div style={{ 
+                fontWeight: 'bold', 
+                fontSize: '14px', 
+                color: existingData.clientType === 'Renewal' ? '#4CAF50' : '#2196F3' 
+              }}>
+                {existingData.clientType}
+              </div>
+            </div>
+            {isAdmin && existingData.createdBy && (
+              <div>
+                <div style={{ color: '#666', fontSize: '12px' }}>Created By</div>
+                <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#FF9800' }}>
+                  {existingData.createdBy}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Requirements Table */}
+        <div style={{ 
+          backgroundColor: 'white', 
+          padding: '15px', 
+          borderRadius: '6px', 
+          marginBottom: '15px',
+          border: '1px solid #ddd'
+        }}>
+          <h3 style={{ 
+            margin: '0 0 10px 0', 
+            color: '#333', 
+            fontSize: '16px',
+            borderBottom: '1px solid #4CAF50', 
+            paddingBottom: '5px' 
+          }}>
+            Order Requirements
+          </h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ 
+              width: '100%', 
+              borderCollapse: 'collapse', 
+              fontSize: '12px',
+              minWidth: '600px'
+            }}>
+              <thead>
+                <tr style={{ backgroundColor: '#2196F3', color: 'white' }}>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #ddd' }}>Requirement</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #ddd' }}>Description</th>
+                  <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #ddd' }}>Qty</th>
+                  <th style={{ padding: '8px', textAlign: 'right', border: '1px solid #ddd' }}>Rate (₹)</th>
+                  <th style={{ padding: '8px', textAlign: 'right', border: '1px solid #ddd' }}>Total (₹)</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #ddd' }}>Delivery</th>
+                </tr>
+              </thead>
+              <tbody>
+                {existingData.rows && existingData.rows.map((row, index) => (
+                  <tr key={index} style={{ 
+                    backgroundColor: index % 2 === 0 ? '#f9f9f9' : 'white',
+                    borderBottom: '1px solid #eee'
+                  }}>
+                    <td style={{ padding: '8px', border: '1px solid #ddd', verticalAlign: 'top' }}>
+                      {row.customRequirement || row.requirement}
+                    </td>
+                    <td style={{ padding: '8px', border: '1px solid #ddd', verticalAlign: 'top' }}>
+                      {row.description}
+                    </td>
+                    <td style={{ 
+                      padding: '8px', 
+                      border: '1px solid #ddd', 
+                      textAlign: 'center',
+                      verticalAlign: 'top'
+                    }}>
+                      {row.quantity}
+                    </td>
+                    <td style={{ 
+                      padding: '8px', 
+                      border: '1px solid #ddd', 
+                      textAlign: 'right',
+                      verticalAlign: 'top'
+                    }}>
+                      ₹{parseFloat(row.rate).toFixed(2)}
+                    </td>
+                    <td style={{ 
+                      padding: '8px', 
+                      border: '1px solid #ddd', 
+                      textAlign: 'right', 
+                      fontWeight: 'bold',
+                      verticalAlign: 'top'
+                    }}>
+                      ₹{parseFloat(row.total).toFixed(2)}
+                    </td>
+                    <td style={{ 
+                      padding: '8px', 
+                      border: '1px solid #ddd',
+                      verticalAlign: 'top'
+                    }}>
+                      {new Date(row.deliveryDate).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Payment Information */}
+        <div style={{ 
+          backgroundColor: 'white', 
+          padding: '15px', 
+          borderRadius: '6px', 
+          marginBottom: '15px',
+          border: '1px solid #ddd'
+        }}>
+          <h3 style={{ 
+            margin: '0 0 10px 0', 
+            color: '#333', 
+            fontSize: '16px',
+            borderBottom: '1px solid #4CAF50', 
+            paddingBottom: '5px' 
+          }}>
+            Payment Summary
+          </h3>
+          
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
+            gap: '15px',
+            marginBottom: '15px'
+          }}>
+            <div>
+              <div style={{ color: '#666', fontSize: '12px' }}>Total Amount</div>
+              <div style={{ fontWeight: 'bold', fontSize: '18px', color: '#333' }}>
+                ₹{parseFloat(existingData.total).toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: '#666', fontSize: '12px' }}>Discount</div>
+              <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#4CAF50' }}>
+                ₹{parseFloat(existingData.discount || 0).toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: '#666', fontSize: '12px' }}>Final Amount</div>
+              <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#2196F3' }}>
+                ₹{(parseFloat(existingData.total) - parseFloat(existingData.discount || 0)).toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: '#666', fontSize: '12px' }}>Advance Paid</div>
+              <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#FF9800' }}>
+                ₹{parseFloat(existingData.advance || 0).toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: '#666', fontSize: '12px' }}>Balance</div>
+              <div style={{ 
+                fontWeight: 'bold', 
+                fontSize: '16px', 
+                color: existingData.balance > 0 ? '#F44336' : '#4CAF50' 
+              }}>
+                ₹{parseFloat(existingData.balance || 0).toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: '#666', fontSize: '12px' }}>Advance Date</div>
+              <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
+                {existingData.advanceDate ? new Date(existingData.advanceDate).toLocaleDateString() : 'N/A'}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: '10px' }}>
+            <div style={{ color: '#666', fontSize: '12px', marginBottom: '3px' }}>Payment Method</div>
+            <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
+              {existingData.paymentMethods || 'Not specified'}
+            </div>
+          </div>
+
+          {/* Additional Payment Details */}
+          {(existingData.chequeNumber || existingData.poNumber || existingData.bankName) && (
+            <div style={{ 
+              marginTop: '12px', 
+              padding: '10px', 
+              backgroundColor: '#f5f5f5', 
+              borderRadius: '4px',
+              fontSize: '12px'
+            }}>
+              <h4 style={{ margin: '0 0 8px 0', color: '#666', fontSize: '13px' }}>Additional Details</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px' }}>
+                {existingData.chequeNumber && (
+                  <div>
+                    <div style={{ color: '#666', fontSize: '11px' }}>Cheque Number</div>
+                    <div style={{ fontWeight: 'bold', fontSize: '12px' }}>{existingData.chequeNumber}</div>
+                  </div>
+                )}
+                {existingData.poNumber && (
+                  <div>
+                    <div style={{ color: '#666', fontSize: '11px' }}>PO Number</div>
+                    <div style={{ fontWeight: 'bold', fontSize: '12px' }}>{existingData.poNumber}</div>
+                  </div>
+                )}
+                {existingData.bankName && (
+                  <div>
+                    <div style={{ color: '#666', fontSize: '11px' }}>Bank Name</div>
+                    <div style={{ fontWeight: 'bold', fontSize: '12px' }}>{existingData.bankName}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Design Status */}
+        <div style={{ 
+          backgroundColor: 'white', 
+          padding: '15px', 
+          borderRadius: '6px',
+          border: '1px solid #ddd',
+          marginBottom: '20px'
+        }}>
+          <h3 style={{ 
+            margin: '0 0 10px 0', 
+            color: '#333', 
+            fontSize: '16px',
+            borderBottom: '1px solid #4CAF50', 
+            paddingBottom: '5px' 
+          }}>
+            Design Status
+          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '16px',
+              height: '16px',
+              borderRadius: '50%',
+              backgroundColor: existingData.designStatus === 'provided' ? '#4CAF50' : '#FF9800',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontSize: '10px',
+              fontWeight: 'bold'
+            }}>
+              {existingData.designStatus === 'provided' ? '✓' : '!'}
+            </div>
+            <span style={{ 
+              fontSize: '14px', 
+              fontWeight: 'bold',
+              color: existingData.designStatus === 'provided' ? '#4CAF50' : '#FF9800'
+            }}>
+              {existingData.designStatus === 'provided' ? 'Design Provided' : 'Design Pending'}
+            </span>
+          </div>
+          {existingData.designStatus !== 'provided' && (
+            <div style={{ 
+              marginTop: '8px', 
+              padding: '8px', 
+              backgroundColor: '#FFF8E1', 
+              borderRadius: '4px', 
+              fontSize: '12px', 
+              color: '#E65100' 
+            }}>
+              This order requires design work. The design team has been notified.
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{ 
+          marginTop: '20px', 
+          display: 'flex', 
+          gap: '10px', 
+          justifyContent: 'center',
+          flexWrap: 'wrap'
+        }}>
+          <button 
+            onClick={onBack}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#f44336',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              minWidth: '120px'
+            }}
+          >
+            ← Back to Search
+          </button>
+          <button 
+            onClick={createNewOrderFromExisting}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              minWidth: '120px'
+            }}
+          >
+            📝 Create New Order
+          </button>
+          <button 
+            onClick={generateInvoice}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#2196F3',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              minWidth: '120px'
+            }}
+          >
+            🧾 Generate Invoice
+          </button>
+        </div>
+
+        <style>{`
+          @media print {
+            button {
+              display: none !important;
+            }
+            #print-area {
+              padding: 10px !important;
+              margin: 0 !important;
+              font-size: 12px !important;
+            }
+            h1, h2, h3 {
+              font-size: 14px !important;
+              margin: 5px 0 !important;
+            }
+            table {
+              font-size: 10px !important;
+            }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // Regular editable form for new orders
   return (
     <div id="print-area" ref={printRef}>
       {showSuccessModal && (
@@ -1061,12 +1550,11 @@ const submitOrder = async () => {
           <div className="success-modal">
             <div className="success-checkmark">✓</div>
             <h2>Order {existingData && !isCreatingNew ? "Updated" : "Submitted"} Successfully!</h2>
-            {/* Add WhatsApp success message */}
             {whatsappSent && (
-              <div style={{ 
-                marginTop: '15px', 
-                padding: '10px', 
-                backgroundColor: '#e8f5e8', 
+              <div style={{
+                marginTop: '15px',
+                padding: '10px',
+                backgroundColor: '#e8f5e8',
                 borderRadius: '4px',
                 border: '1px solid #4caf50'
               }}>
@@ -1103,10 +1591,10 @@ const submitOrder = async () => {
           }}>
             <h3>Request Advance Payment Approval</h3>
             <p>
-              Your advance payment is less than 50% of the total amount. 
+              Your advance payment is less than 50% of the total amount.
               Please provide a reason for the low advance payment to request admin approval.
             </p>
-            
+
             <div style={{ margin: "15px 0", padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
               <strong>Order Details:</strong>
               <div>Business: {business}</div>
@@ -1165,26 +1653,6 @@ const submitOrder = async () => {
         </div>
       )}
 
-      {existingData && !isCreatingNew && (
-        <div className="existing-order-notice">
-          <p>Loaded existing order from {new Date(existingData.orderDate).toLocaleDateString()}</p>
-          <button onClick={resetFormForNewOrder}>
-            Create New Order Instead
-          </button>
-        </div>
-      )}
-
-      {isAdmin && (
-        <div className="created-by-info">
-          <strong>Order Created By: {createdBy}</strong>
-          {createdBy !== selectedExecutive && (
-            <span style={{ marginLeft: '10px', color: '#666' }}>
-              (on behalf of {selectedExecutive})
-            </span>
-          )}
-        </div>
-      )}
-
       <div className="form-header">
         <h2 className="subtitle">ORDER FORM</h2>
         <div className="print-actions no-print">
@@ -1226,7 +1694,10 @@ const submitOrder = async () => {
 
           <label>
             Order Type:
-            <select value={clientType} onChange={(e) => setClientType(e.target.value)}>
+            <select 
+              value={clientType} 
+              onChange={(e) => setClientType(e.target.value)}
+            >
               <option value="">Select</option>
               <option value="Retail">Retail</option>
               <option value="Renewal">Renewal</option>
@@ -1242,12 +1713,9 @@ const submitOrder = async () => {
             <input
               type="text"
               value={business}
-              onChange={(e) => {
-                if (validateBusinessName(e.target.value) || e.target.value === "") {
-                  setBusiness(capitalizeFirst(e.target.value));
-                }
-              }}
-              placeholder="Enter business name"
+              onChange={(e) => handleBusinessChange(e.target.value)}
+              placeholder="ENTER BUSINESS NAME"
+              style={{ textTransform: 'uppercase' }}
             />
           </label>
 
@@ -1324,7 +1792,7 @@ const submitOrder = async () => {
                 Design Status:
               </legend>
               <div style={{ display: "flex", gap: "24px", fontSize: "15px", alignItems: "center" }}>
-                <label htmlFor="design-provided" style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                <label htmlFor="design-provided" style={{ display: "flex", alignItems: "center", gap: "8px", cursor: 'pointer' }}>
                   <input
                     type="radio"
                     id="design-provided"
@@ -1332,13 +1800,13 @@ const submitOrder = async () => {
                     value="yes"
                     checked={design === "yes"}
                     onChange={(e) => setDesign(e.target.value)}
-                    style={{ width: "16px", height: "16px", accentColor: "#4CAF50", cursor: "pointer" }}
+                    style={{ width: "16px", height: "16px", accentColor: "#4CAF50", cursor: 'pointer' }}
                   />
                   <span style={{ color: design === "yes" ? "#4CAF50" : "#555", fontWeight: design === "yes" ? "600" : "400" }}>
                     Design Provided
                   </span>
                 </label>
-                <label htmlFor="design-needed" style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                <label htmlFor="design-needed" style={{ display: "flex", alignItems: "center", gap: "8px", cursor: 'pointer' }}>
                   <input
                     type="radio"
                     id="design-needed"
@@ -1346,7 +1814,7 @@ const submitOrder = async () => {
                     value="no"
                     checked={design === "no"}
                     onChange={(e) => setDesign(e.target.value)}
-                    style={{ width: "16px", height: "16px", accentColor: "#FF5722", cursor: "pointer" }}
+                    style={{ width: "16px", height: "16px", accentColor: "#FF5722", cursor: 'pointer' }}
                   />
                   <span style={{ color: design === "no" ? "#FF5722" : "#555", fontWeight: design === "no" ? "600" : "400" }}>
                     Need Design
@@ -1365,7 +1833,11 @@ const submitOrder = async () => {
         <div className="right">
           <label>
             Order Date:
-            <input type="date" value={orderDate} onChange={handleOrderDateChange} />
+            <input 
+              type="date" 
+              value={orderDate} 
+              onChange={handleOrderDateChange} 
+            />
           </label>
 
           <label>
@@ -1595,7 +2067,6 @@ const submitOrder = async () => {
           </div>
         </div>
 
-        {/* Replace the existing advance validation with the new one */}
         {renderAdvanceValidation()}
       </div>
 
@@ -1603,12 +2074,12 @@ const submitOrder = async () => {
         <label>Payment Method:</label>
         <div className="payment-options">
           {["Cash", "UPI", "Cheque", "Bank Transfer", "Others", "PO"].map((method) => (
-            <label key={method} style={{ marginRight: "15px" }}>
+            <label key={method} style={{ marginRight: "15px", cursor: 'pointer' }}>
               <input
                 type="checkbox"
                 checked={paymentMethods.includes(method)}
                 onChange={() => handlePaymentMethodChange(method)}
-                style={{ marginRight: "5px" }}
+                style={{ marginRight: "5px", cursor: 'pointer' }}
               />
               {method}
             </label>
@@ -1742,7 +2213,7 @@ const submitOrder = async () => {
           disabled={isSubmitting || (!isAdmin && advanceError && !hasAdvanceApproval)}
           className="btn btn-primary"
         >
-          {isSubmitting ? "Submitting..." : (existingData && !isCreatingNew) ? "Update Order" : "Submit Order"}
+          {isSubmitting ? "Submitting..." : "Submit Order"}
         </button>
       </div>
 
@@ -1782,7 +2253,7 @@ const submitOrder = async () => {
           display: flex;
           justify-content: center;
           align-items: center;
-          z-index: 1000;
+          zIndex: 1000;
         }
         .success-modal {
           background: white;
@@ -1795,30 +2266,6 @@ const submitOrder = async () => {
           font-size: 48px;
           color: #4CAF50;
           margin-bottom: 15px;
-        }
-        .existing-order-notice {
-          background-color: #e3f2fd;
-          padding: 15px;
-          border-radius: 6px;
-          margin-bottom: 20px;
-          border-left: 4px solid #2196F3;
-        }
-        .existing-order-notice button {
-          margin-top: 10px;
-          padding: 8px 16px;
-          background-color: #ff9800;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-        }
-        .created-by-info {
-          background-color: #e8f5e8;
-          border: 1px solid #4caf50;
-          border-radius: 6px;
-          padding: 10px 15px;
-          margin-bottom: 15px;
-          font-size: 14px;
         }
         .form-top {
           display: flex;
@@ -1857,6 +2304,15 @@ const submitOrder = async () => {
         .rows-section th {
           background-color: navyblue;
           color: white;
+        }
+        .rows-section button {
+          padding: 8px 16px;
+          background-color: #4CAF50;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          margin-top: 10px;
         }
         .payment-section, .payment-method-section {
           margin-bottom: 20px;
@@ -1919,9 +2375,6 @@ const submitOrder = async () => {
             display: none !important;
           }
           .print-actions {
-            display: none !important;
-          }
-          .existing-order-notice {
             display: none !important;
           }
         }

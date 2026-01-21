@@ -228,18 +228,29 @@ function AdminDashboard() {
     years.push(y);
   }
 
-  // Handle chart clicks
-  const handleChartClick = (chartType) => {
-    if (chartType === 'pending-payment') {
-      navigate('/admin-dashboard/pending-payment');
-    } else if (chartType === 'pending-service') {
-      navigate('/admin-dashboard/pending-service');
-    } else if (chartType === 'revenue') {
-      navigate('/admin-dashboard/view-orders');
-    } else if (chartType === 'daily-report') {
-      navigate('/admin-dashboard/daily-report');
+ // Handle chart clicks - UPDATED FUNCTION
+const handleChartClick = (chartType) => {
+  if (chartType === 'pending-payment') {
+    // Prepare query parameters for month/year filtering
+    const queryParams = new URLSearchParams();
+    
+    if (year) {
+      queryParams.append('year', year);
     }
-  };
+    
+    if (selectedMonth !== null) {
+      queryParams.append('month', selectedMonth + 1);
+    }
+    
+    navigate(`/admin-dashboard/pending-payment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
+  } else if (chartType === 'pending-service') {
+    navigate('/admin-dashboard/pending-service');
+  } else if (chartType === 'revenue') {
+    navigate('/admin-dashboard/view-orders');
+  } else if (chartType === 'daily-report') {
+    navigate('/admin-dashboard/daily-report');
+  }
+};
 
   const handleCreateOrderClick = (e) => {
     e.preventDefault();
@@ -1361,11 +1372,11 @@ function AdminDashboard() {
                   <div>Error loading dashboard data.</div>
                 ) : (
                   <div style={styles.dashboardCards}>
-                  {/* Total Revenue Line Graph - NOW THE FIRST CARD */}
+{/* Total Revenue Bar Chart - FIRST CARD */}
 <div style={styles.card}>
   <div>Total Revenue {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : '(Monthly)'}</div>
   <div style={styles.chartContainer}>
-    <Line
+    <Bar
       data={{
         labels: selectedMonth !== null
           ? chartData?.weeklyOrders?.map((_, i) => `Week ${i + 1}`) || ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
@@ -1376,15 +1387,78 @@ function AdminDashboard() {
             data: selectedMonth !== null
               ? chartData?.weeklyOrders?.map(w => w.amount || 0) || []
               : safeArray(chartData?.amountByMonth),
-            borderColor: 'rgba(75, 192, 192, 1)',
-            backgroundColor: 'rgba(75, 192, 192, 0.1)',
-            tension: 0.4, // Smooth curve
-            fill: true, // Fill area under the line
-            pointBackgroundColor: 'rgba(75, 192, 192, 1)',
-            pointBorderColor: '#fff',
-            pointBorderWidth: 2,
-            pointRadius: 4,
-            pointHoverRadius: 6
+            backgroundColor: selectedMonth !== null
+              ? [
+                  'rgba(49, 122, 176, 0.8)',  // Blue Grotto - Week 1
+                  'rgba(49, 122, 176, 0.7)',  // Lighter - Week 2
+                  'rgba(49, 122, 176, 0.6)',  // Lighter - Week 3
+                  'rgba(49, 122, 176, 0.5)',  // Lighter - Week 4
+                  'rgba(49, 122, 176, 0.4)',  // Lightest - Week 5
+                ]
+              : [
+                  'rgba(49, 122, 176, 0.9)',   // Jan - Solid Blue Grotto
+                  'rgba(49, 122, 176, 0.85)',  // Feb
+                  'rgba(49, 122, 176, 0.8)',   // Mar
+                  'rgba(49, 122, 176, 0.75)',  // Apr
+                  'rgba(49, 122, 176, 0.7)',   // May
+                  'rgba(49, 122, 176, 0.65)',  // Jun
+                  'rgba(49, 122, 176, 0.6)',   // Jul
+                  'rgba(49, 122, 176, 0.65)',  // Aug
+                  'rgba(49, 122, 176, 0.7)',   // Sep
+                  'rgba(49, 122, 176, 0.75)',  // Oct
+                  'rgba(49, 122, 176, 0.8)',   // Nov
+                  'rgba(49, 122, 176, 0.85)',  // Dec
+                ],
+            borderColor: selectedMonth !== null
+              ? [
+                  'rgba(49, 122, 176, 1)',
+                  'rgba(49, 122, 176, 0.9)',
+                  'rgba(49, 122, 176, 0.8)',
+                  'rgba(49, 122, 176, 0.7)',
+                  'rgba(49, 122, 176, 0.6)',
+                ]
+              : [
+                  'rgba(49, 122, 176, 1)',
+                  'rgba(49, 122, 176, 0.95)',
+                  'rgba(49, 122, 176, 0.9)',
+                  'rgba(49, 122, 176, 0.85)',
+                  'rgba(49, 122, 176, 0.8)',
+                  'rgba(49, 122, 176, 0.75)',
+                  'rgba(49, 122, 176, 0.7)',
+                  'rgba(49, 122, 176, 0.75)',
+                  'rgba(49, 122, 176, 0.8)',
+                  'rgba(49, 122, 176, 0.85)',
+                  'rgba(49, 122, 176, 0.9)',
+                  'rgba(49, 122, 176, 0.95)',
+                ],
+            borderWidth: 1,
+            borderRadius: 8,
+            hoverBackgroundColor: selectedMonth !== null
+              ? [
+                  'rgba(49, 122, 176, 1)',
+                  'rgba(49, 122, 176, 0.9)',
+                  'rgba(49, 122, 176, 0.8)',
+                  'rgba(49, 122, 176, 0.7)',
+                  'rgba(49, 122, 176, 0.6)',
+                ]
+              : [
+                  'rgba(49, 122, 176, 1)',
+                  'rgba(49, 122, 176, 0.95)',
+                  'rgba(49, 122, 176, 0.9)',
+                  'rgba(49, 122, 176, 0.85)',
+                  'rgba(49, 122, 176, 0.8)',
+                  'rgba(49, 122, 176, 0.75)',
+                  'rgba(49, 122, 176, 0.7)',
+                  'rgba(49, 122, 176, 0.75)',
+                  'rgba(49, 122, 176, 0.8)',
+                  'rgba(49, 122, 176, 0.85)',
+                  'rgba(49, 122, 176, 0.9)',
+                  'rgba(49, 122, 176, 0.95)',
+                ],
+            hoverBorderColor: '#FFFFFF',
+            hoverBorderWidth: 2,
+            barPercentage: 0.7,
+            categoryPercentage: 0.8
           }
         ]
       }}
@@ -1394,6 +1468,20 @@ function AdminDashboard() {
         plugins: {
           legend: { display: false },
           tooltip: {
+            backgroundColor: 'rgba(49, 122, 176, 0.95)',
+            titleColor: '#FFFFFF',
+            bodyColor: '#FFFFFF',
+            borderColor: '#317ab0',
+            borderWidth: 1,
+            cornerRadius: 8,
+            padding: 12,
+            titleFont: {
+              size: 13,
+              weight: 'bold'
+            },
+            bodyFont: {
+              size: 12
+            },
             callbacks: {
               title: function(tooltipItems) {
                 const dataIndex = tooltipItems[0].dataIndex;
@@ -1445,28 +1533,40 @@ function AdminDashboard() {
           x: {
             grid: { 
               display: true,
-              color: 'rgba(0,0,0,0.05)'
+              color: 'rgba(49, 122, 176, 0.1)',
+              drawBorder: false
             },
             ticks: { 
               autoSkip: false,
-              color: '#666'
+              color: '#317ab0',
+              font: {
+                size: 11,
+                weight: '500'
+              }
             }
           },
           y: {
             beginAtZero: true,
+            grid: { 
+              color: 'rgba(49, 122, 176, 0.1)',
+              drawBorder: false
+            },
             ticks: {
               callback: function(value) {
-                if (value >= 100000) {
-                  return (value / 100000) + 'L';
+                if (value >= 10000000) {
+                  return (value / 10000000).toFixed(1) + 'Cr';
+                } else if (value >= 100000) {
+                  return (value / 100000).toFixed(1) + 'L';
                 } else if (value >= 1000) {
-                  return (value / 1000) + 'K';
+                  return (value / 1000).toFixed(1) + 'K';
                 }
                 return value;
               },
-              color: '#666'
-            },
-            grid: { 
-              color: 'rgba(0,0,0,0.05)'
+              color: '#317ab0',
+              font: {
+                size: 10
+              },
+              padding: 5
             }
           }
         },
@@ -1474,10 +1574,9 @@ function AdminDashboard() {
           intersect: false,
           mode: 'index'
         },
-        elements: {
-          line: {
-            borderWidth: 3
-          }
+        animation: {
+          duration: 1000,
+          easing: 'easeOutQuart'
         }
       }}
     />
@@ -1492,13 +1591,27 @@ function AdminDashboard() {
     <button
       onClick={() => setSelectedMonth(null)}
       style={{
-        padding: '5px 10px',
-        backgroundColor: '#003366',
+        padding: '6px 12px',
+        backgroundColor: '#317ab0',
         color: 'white',
         border: 'none',
-        borderRadius: '4px',
+        borderRadius: '6px',
         cursor: 'pointer',
-        marginTop: '10px'
+        marginTop: '10px',
+        fontWeight: 'bold',
+        fontSize: '12px',
+        transition: 'all 0.3s',
+        boxShadow: '0 2px 4px rgba(49, 122, 176, 0.3)'
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = '#2a6a9d';
+        e.currentTarget.style.transform = 'translateY(-1px)';
+        e.currentTarget.style.boxShadow = '0 4px 8px rgba(49, 122, 176, 0.4)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = '#317ab0';
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = '0 2px 4px rgba(49, 122, 176, 0.3)';
       }}
     >
       View All Months
