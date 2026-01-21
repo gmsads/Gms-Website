@@ -1,4 +1,4 @@
-/* eslint-disable no-unused-vars */
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -36,32 +36,6 @@ function LandingPage() {
       localStorage.setItem('isLoggedIn', 'true');
       localStorage.setItem('role', role);
       localStorage.setItem('userName', name);
-      
-
-      // 3. Track executive login if role is Executive
-      if (role === 'Executive') {
-        try {
-          // Attempt to get location first
-          const position = await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject);
-          });
-
-          await axios.post('/api/executiveLogins', {
-            executiveName: name,
-            location: {
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude
-            }
-          });
-        } catch (geoError) {
-          console.warn('Location access denied or failed, logging without location');
-          // Fallback: Log without location
-          await axios.post('/api/executiveLogins', {
-            executiveName: name,
-            location: null
-          });
-        }
-      }
 
       // 4. Redirect based on role
 const roleRoutes = {
