@@ -215,7 +215,7 @@ const ExecutiveDashboard = () => {
     byStatus: []
   });
   const [isFieldExec, setIsFieldExec] = useState(false);
-  const [buttonsLoaded, setButtonsLoaded] = useState(false); // NEW: Track when all buttons should be visible
+  const [buttonsLoaded, setButtonsLoaded] = useState(false);
 
   const navigate = useNavigate();
 
@@ -290,32 +290,50 @@ const ExecutiveDashboard = () => {
   };
 
   const handleMonthYearChange = (date) => {
+    console.log('Date changed to:', date);
+    console.log('Month:', date.getMonth() + 1, 'Year:', date.getFullYear());
     setSelectedDate(date);
     setShowMonthPicker(false);
   };
 
   const handleServiceSliceClick = (data) => {
     if (data.name === 'Pending') {
-      navigate('/pending-service', { state: { executive: selectedExecutive } });
+      navigate('/pending-service', { 
+        state: { 
+          executive: selectedExecutive,
+          month: selectedDate.getMonth() + 1,
+          year: selectedDate.getFullYear()
+        } 
+      });
     }
   };
 
   const handlePaymentSliceClick = (data) => {
     if (data.name === 'Unpaid') {
-      navigate('/pending-payment', { state: { executive: selectedExecutive } });
+      navigate('/pending-payment', { 
+        state: { 
+          executive: selectedExecutive,
+          month: selectedDate.getMonth() + 1,
+          year: selectedDate.getFullYear()
+        } 
+      });
     }
   };
 
-  // Data fetching functions
+  // Data fetching functions - ALL FUNCTIONS NOW USE selectedDate
   const fetchExecutiveData = useCallback(async (executiveName) => {
     try {
       const month = selectedDate.getMonth() + 1;
       const year = selectedDate.getFullYear();
 
+      console.log(`Fetching executive data for ${executiveName} - Month: ${month}, Year: ${year}`);
+
       const res = await axios.get(`/api/executive/${executiveName}`, {
         params: { month, year }
       });
       const orders = res.data;
+
+      console.log(`Executive data received:`, orders);
 
       let totalAchieved = 0;
       let executiveTarget = 100;
@@ -333,6 +351,7 @@ const ExecutiveDashboard = () => {
         });
       });
 
+      console.log(`Target: ${executiveTarget}, Achieved: ${totalAchieved}`);
       setTarget(executiveTarget);
       setAchieved(totalAchieved);
       setServiceData([{ name: 'Services', pending, completed, total: pending + completed }]);
@@ -346,6 +365,8 @@ const ExecutiveDashboard = () => {
       const month = selectedDate.getMonth() + 1;
       const year = selectedDate.getFullYear();
 
+      console.log(`Fetching payments for ${selectedExecutive} - Month: ${month}, Year: ${year}`);
+
       const res = await axios.get('/api/orders/pending-payments', {
         params: { month, year }
       });
@@ -353,6 +374,8 @@ const ExecutiveDashboard = () => {
 
       const totalAdvance = orders.reduce((sum, o) => sum + parseFloat(o.advance || 0), 0);
       const totalBalance = orders.reduce((sum, o) => sum + parseFloat(o.balance || 0), 0);
+
+      console.log(`Payments - Paid: ${totalAdvance}, Unpaid: ${totalBalance}`);
 
       setPaymentData([
         { name: 'Paid', value: totalAdvance, fill: '#4CAF50' },
@@ -368,6 +391,8 @@ const ExecutiveDashboard = () => {
       const month = selectedDate.getMonth() + 1;
       const year = selectedDate.getFullYear();
 
+      console.log(`Fetching appointments for ${selectedExecutive} - Month: ${month}, Year: ${year}`);
+
       const res = await axios.get('/api/appointments', {
         params: { month, year }
       });
@@ -377,6 +402,7 @@ const ExecutiveDashboard = () => {
       const newCount = assigned.length;
       const storedCount = parseInt(localStorage.getItem('lastSeenAppointmentCount')) || 0;
 
+      console.log(`Appointments count: ${newCount}`);
       setHasNewAppointments(newCount > storedCount);
       setAppointmentCount(newCount);
     } catch (error) {
@@ -389,6 +415,8 @@ const ExecutiveDashboard = () => {
       const month = selectedDate.getMonth() + 1;
       const year = selectedDate.getFullYear();
 
+      console.log(`Fetching follow-ups for ${selectedExecutive} - Month: ${month}, Year: ${year}`);
+
       const res = await axios.get('/api/follow-ups', {
         params: {
           month,
@@ -396,7 +424,9 @@ const ExecutiveDashboard = () => {
           executive: selectedExecutive
         }
       });
-      setFollowUpCount(res.data.length || 0);
+      const count = res.data.length || 0;
+      console.log(`Follow-ups count: ${count}`);
+      setFollowUpCount(count);
     } catch (error) {
       console.error('Error fetching follow-up count:', error);
     }
@@ -445,6 +475,8 @@ const ExecutiveDashboard = () => {
       const month = selectedDate.getMonth() + 1;
       const year = selectedDate.getFullYear();
 
+      console.log(`Fetching prospects for ${selectedExecutive} - Month: ${month}, Year: ${year}, Role: ${userProfile.role}`);
+
       const res = await axios.get('/api/prospective-clients', {
         params: {
           month,
@@ -455,6 +487,8 @@ const ExecutiveDashboard = () => {
       });
 
       const prospects = res.data || [];
+      console.log(`Prospects count: ${prospects.length}`);
+      
       const statusCount = {};
 
       prospects.forEach((prospect) => {
@@ -503,7 +537,7 @@ const ExecutiveDashboard = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // IMPROVED: Initialize user and show all buttons immediately
+  // Initialize user
   useEffect(() => {
     const loggedInUser = localStorage.getItem('userName');
     console.log('Initializing user:', loggedInUser);
@@ -520,10 +554,14 @@ const ExecutiveDashboard = () => {
     }
   }, [fetchUserProfile]);
 
-  // Fetch data when selectedExecutive changes
+  // MAIN DATA FETCHING EFFECT - This triggers when selectedDate changes
   useEffect(() => {
     if (selectedExecutive) {
-      console.log('Fetching data for:', selectedExecutive);
+      console.log('=== FETCHING ALL DATA FOR SELECTED MONTH/YEAR ===');
+      console.log('Date:', selectedDate);
+      console.log('Month:', selectedDate.getMonth() + 1);
+      console.log('Year:', selectedDate.getFullYear());
+      
       fetchExecutiveData(selectedExecutive);
       fetchPendingPayments();
       fetchAppointmentCount();
@@ -532,7 +570,7 @@ const ExecutiveDashboard = () => {
     }
   }, [
     selectedExecutive, 
-    selectedDate, 
+    selectedDate,  // This dependency ensures data is refetched when date changes
     fetchExecutiveData, 
     fetchPendingPayments,
     fetchAppointmentCount, 
@@ -540,6 +578,7 @@ const ExecutiveDashboard = () => {
     fetchProspects
   ]);
 
+  // Auto-refresh interval
   useEffect(() => {
     const interval = setInterval(() => {
       if (selectedExecutive) {
@@ -574,7 +613,7 @@ const ExecutiveDashboard = () => {
           <span className="congrats-icon">🎉</span>
           <div>
             <h2>Congratulations!</h2>
-            <p>You've reached your target of ₹{target.toLocaleString()}</p>
+            <p>You've reached your target of ₹{target.toLocaleString()} for {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
           </div>
           <button onClick={() => setShowCongrats(false)} className="close-popup-btn">
             ×
@@ -700,7 +739,7 @@ const ExecutiveDashboard = () => {
         {/* Target Card - Large */}
         <div className="dashboard-card target-card">
           <div className="card-header">
-            <h3>🎯 Target</h3>
+            <h3>🎯 Target - {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
             {achieved >= target && target > 0 && (
               <span className="target-achieved">Target Achieved!</span>
             )}
@@ -713,6 +752,10 @@ const ExecutiveDashboard = () => {
             <div className="summary-item">
               <span>Achieved:</span>
               <span className="value">₹{achieved.toLocaleString()}</span>
+            </div>
+            <div className="summary-item">
+              <span>Period:</span>
+              <span className="value">{selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
             </div>
           </div>
           <div className="chart-container">
@@ -754,7 +797,7 @@ const ExecutiveDashboard = () => {
         {/* Services Card - Medium */}
         <div className="dashboard-card services-card">
           <div className="card-header">
-            <h3>🛠 Services Status</h3>
+            <h3>🛠 Services Status - {selectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</h3>
           </div>
           <div className="chart-container">
             <ResponsiveContainer width="100%" height={isMobile ? 200 : 250}>
@@ -782,13 +825,14 @@ const ExecutiveDashboard = () => {
           <div className="card-footer">
             <span>Total: {serviceData[0]?.total || 0}</span>
             <span>Pending: {serviceData[0]?.pending || 0}</span>
+            <span>Month: {selectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
           </div>
         </div>
 
         {/* Payments Card - Small */}
         <div className="dashboard-card payments-card">
           <div className="card-header">
-            <h3>💳 Payment Status</h3>
+            <h3>💳 Payment Status - {selectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</h3>
           </div>
           <div className="chart-container">
             <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
@@ -814,16 +858,17 @@ const ExecutiveDashboard = () => {
           <div className="card-footer">
             <span>Total: ₹{totalPayments.toLocaleString()}</span>
             <span>Unpaid: ₹{(paymentData[1]?.value || 0).toLocaleString()}</span>
+            <span>Month: {selectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
           </div>
         </div>
 
         {/* Prospects Card - Small */}
         <div className="dashboard-card prospects-card">
           <div className="card-header">
-            <h3>👥 Prospects</h3>
+            <h3>👥 Prospects - {selectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</h3>
           </div>
           <div className="prospect-chart">
-            <h3>Total Prospects: {prospectData.count}</h3>
+            <h3>Total Prospects: {prospectData.count} for {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
             {hasProspectData ? (
               <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
                 <PieChart>
@@ -848,7 +893,7 @@ const ExecutiveDashboard = () => {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <p>No prospect data available.</p>
+              <p>No prospect data available for {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
             )}
           </div>
         </div>
@@ -1166,7 +1211,7 @@ const ExecutiveDashboard = () => {
 
         .target-summary {
           display: flex;
-          flexDirection: column;
+          flex-direction: column;
           gap: 0.5rem;
           background: rgba(0, 0, 0, 0.02);
           border-radius: var(--radius);
@@ -1202,7 +1247,7 @@ const ExecutiveDashboard = () => {
         /* Prospects Chart Styles */
         .prospect-chart {
           flex: 1;
-          width: '100%';
+          width: 100%;
         }
 
         .prospect-chart h3 {

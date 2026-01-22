@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-// Add to Visit schema
 
 const fieldExecutiveSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },

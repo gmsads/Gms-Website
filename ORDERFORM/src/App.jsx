@@ -264,7 +264,6 @@ function App() {
         </Route>
 
         {/* Executive Dashboard Route */}
-        {/* Executive Dashboard Route */}
         <Route
           path="/executive-dashboard"
           element={
@@ -349,7 +348,7 @@ function App() {
           <Route path="daily-record" element={<Record />} />
           <Route path="inventory" element={<Inventory />} />
           <Route path="serviceform" element={<ServiceForm/>} />
-
+             <Route path="field-executive" element={<FieldExecutivePage/>} />
         </Route>
         <Route
           path="/designer-dashboard"

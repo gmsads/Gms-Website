@@ -470,48 +470,80 @@ const createNewOrderFromExisting = () => {
   };
 
   useEffect(() => {
-    const fetchAllExecutives = async () => {
-      try {
-        setLoadingExecutives(true);
+  const fetchAllExecutives = async () => {
+  try {
+    setLoadingExecutives(true);
 
-        const execsRes = await axios.get("/api/executives");
-        const regularExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
+    // Regular executives
+    const execsRes = await axios.get("/api/executives");
+    const regularExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
 
-        const fieldExecsRes = await axios.get("/api/field-executive/admin/executives");
-        const fieldExecutives = fieldExecsRes.data.map(name => ({ name, _id: name, type: 'field' }));
-
-        const serviceExecsRes = await axios.get("/api/service-executives");
-        const serviceExecutives = serviceExecsRes.data.map(exec => ({
-          name: exec.name,
-          _id: exec._id,
-          type: 'service'
+    // Field executives
+    const fieldExecsRes = await axios.get("/api/field-executive/admin/executives");
+    console.log("Field executives response:", fieldExecsRes.data);
+    
+    // Handle both string and object formats
+    let fieldExecutives = [];
+    if (fieldExecsRes.data && fieldExecsRes.data.length > 0) {
+      // Check if it's an array of strings or objects
+      if (typeof fieldExecsRes.data[0] === 'string') {
+        // It's an array of names (strings)
+        fieldExecutives = fieldExecsRes.data.map(name => ({ 
+          name, 
+          _id: name, 
+          type: 'field' 
         }));
-
-        const allExecutives = [
-          ...regularExecs,
-          ...fieldExecutives,
-          ...serviceExecutives
-        ].filter((exec, index, self) =>
-          index === self.findIndex(e => e.name === exec.name)
-        ).sort((a, b) => a.name.localeCompare(b.name));
-
-        setSortedExecutives(allExecutives);
-        setSaleClosedByExecutives(allExecutives);
-
-        if (isAdmin) {
-          setSortedExecutives(allExecutives);
-        }
-
-        if (existingData?.executive && !isCreatingNew) {
-          setSelectedExecutive(existingData.executive);
-        }
-
-      } catch (error) {
-        console.error("Error fetching executives:", error);
-      } finally {
-        setLoadingExecutives(false);
+      } else {
+        // It's an array of objects
+        fieldExecutives = fieldExecsRes.data.map(exec => ({
+          name: exec.name || exec,
+          _id: exec._id || exec,
+          type: 'field'
+        }));
       }
-    };
+    }
+
+    // Service executives
+    const serviceExecsRes = await axios.get("/api/service-executives");
+    const serviceExecutives = serviceExecsRes.data.map(exec => ({
+      name: exec.name,
+      _id: exec._id,
+      type: 'service'
+    }));
+
+    // Combine all executives
+    const allExecutives = [
+      ...regularExecs,
+      ...fieldExecutives,
+      ...serviceExecutives
+    ].filter((exec, index, self) => {
+      // Remove duplicates based on name
+      const findIndex = self.findIndex(e => 
+        e.name.trim().toLowerCase() === exec.name.trim().toLowerCase()
+      );
+      return index === findIndex;
+    }).sort((a, b) => a.name.localeCompare(b.name));
+
+    console.log("All executives combined:", allExecutives);
+    setSortedExecutives(allExecutives);
+    setSaleClosedByExecutives(allExecutives);
+
+    if (isAdmin) {
+      setSortedExecutives(allExecutives);
+    }
+
+    if (existingData?.executive && !isCreatingNew) {
+      setSelectedExecutive(existingData.executive);
+    }
+
+  } catch (error) {
+    console.error("Error fetching executives:", error);
+    // Show error but continue with available data
+    alert("Error loading field executives. Showing available options.");
+  } finally {
+    setLoadingExecutives(false);
+  }
+};
 
     fetchAllExecutives();
   }, [existingData, isAdmin, isCreatingNew]);
