@@ -1,5 +1,5 @@
 // Import necessary React hooks and external libraries
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -38,7 +38,12 @@ function ViewOrders() {
     executiveName: '' // Executive name
   });
   const [showDeleteModal, setShowDeleteModal] = useState(false); // Delete confirmation modal
+  const [leadSourceFilter, setLeadSourceFilter] = useState(null); // Lead source filter
   
+  // NEW: Lead source filter dropdown visibility state
+  const [showLeadSourceFilter, setShowLeadSourceFilter] = useState(false); // Lead source filter dropdown
+  const leadSourceFilterRef = useRef(null); // Ref for click outside detection
+
   // Month navigation states
   const [currentViewMonth, setCurrentViewMonth] = useState(null); // Current month being viewed
   const [currentViewYear, setCurrentViewYear] = useState(new Date().getFullYear()); // Current year being viewed
@@ -49,6 +54,18 @@ function ViewOrders() {
     monthName: '', // Month name
     weekCount: 0 // Number of orders in week
   });
+
+  // Lead source options
+  const leadSources = [
+    'India Mart',
+    'Just Dial',
+    'Meta (Facebook/Instagram)',
+    'Google Ads',
+    'Website',
+    'Referral',
+    'Walk-in',
+    'Other Specify'
+  ];
 
   // React Router hooks for navigation and location
   const location = useLocation(); // Get current route location
@@ -142,11 +159,6 @@ function ViewOrders() {
     }
   };
 
-  // Function to get month name from month number
-  const getMonthName = (monthNumber) => {
-    return new Date(yearFilter, monthNumber - 1).toLocaleString('default', { month: 'long' });
-  };
-
   // Function to navigate between months
   const navigateToMonth = (direction) => {
     let newMonth = currentViewMonth;
@@ -173,6 +185,7 @@ function ViewOrders() {
     params.delete('monthCount');
     params.delete('monthName');
     params.delete('weekCount');
+    params.delete('leadSource');
     
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
   };
@@ -342,7 +355,7 @@ function ViewOrders() {
   };
 
   // Function to fetch orders from API with proper role-based filtering
-  const fetchOrders = async (role, name, month = null, year = null, clientType = null, executive = null, executiveName = null) => {
+  const fetchOrders = async (role, name, month = null, year = null, clientType = null, executive = null, executiveName = null, leadSource = null) => {
     // Set loading state and clear errors
     setLoading(true);
     setError(null);
@@ -354,6 +367,7 @@ function ViewOrders() {
       const executiveFromUrl = searchParams.get('executive');
       const executiveTypeFromUrl = searchParams.get('executiveType');
       const executiveNameFromUrl = searchParams.get('executiveName');
+      const leadSourceFromUrl = searchParams.get('leadSource');
 
       console.log('🔍 Fetching orders with params:', {
         role, 
@@ -365,7 +379,8 @@ function ViewOrders() {
         executiveName,
         executiveFromUrl,
         executiveTypeFromUrl,
-        executiveNameFromUrl
+        executiveNameFromUrl,
+        leadSource: leadSourceFromUrl
       });
 
       // Build query parameters
@@ -396,6 +411,7 @@ function ViewOrders() {
       if (clientType) queryParams.append('clientType', clientType);
       if (executive) queryParams.append('executive', executive);
       if (executiveName) queryParams.append('executiveName', executiveName);
+      if (leadSource) queryParams.append('leadSource', leadSource);
 
       // Log API call for debugging
       console.log('📡 API Call:', `${url}?${queryParams.toString()}`);
@@ -448,6 +464,43 @@ function ViewOrders() {
     }
   };
 
+  // Function to handle lead source filter selection
+  const handleLeadSourceFilterSelect = (source) => {
+    const params = new URLSearchParams(location.search);
+    
+    if (source) {
+      params.set('leadSource', source);
+      setLeadSourceFilter(source);
+    } else {
+      params.delete('leadSource');
+      setLeadSourceFilter(null);
+    }
+    
+    // Remove other filters when selecting lead source
+    params.delete('month');
+    params.delete('year');
+    params.delete('clientType');
+    params.delete('executive');
+    params.delete('executiveType');
+    params.delete('executiveName');
+    params.delete('week');
+    params.delete('monthCount');
+    params.delete('monthName');
+    params.delete('weekCount');
+    
+    navigate(`/admin-dashboard/view-orders?${params.toString()}`);
+    setShowLeadSourceFilter(false); // Close the dropdown
+    
+    // Fetch orders with new filter
+    const { role, name } = getUserInfo();
+    const month = params.get('month');
+    const year = params.get('year');
+    const clientType = params.get('clientType');
+    const executive = params.get('executive');
+    const executiveName = params.get('executiveName');
+    fetchOrders(role, name, month, year, clientType, executive, executiveName, source);
+  };
+
   // useEffect hook to fetch orders on component mount or when filters change
   useEffect(() => {
     // Parse URL query parameters
@@ -458,6 +511,7 @@ function ViewOrders() {
     const executive = params.get('executive');
     const executiveType = params.get('executiveType');
     const executiveName = params.get('executiveName');
+    const leadSource = params.get('leadSource');
     
     // Parse month filter info
     const monthCount = params.get('monthCount');
@@ -474,6 +528,7 @@ function ViewOrders() {
       setCurrentViewYear(parseInt(year));
     }
     if (clientType) setClientTypeFilter(clientType);
+    if (leadSource) setLeadSourceFilter(leadSource);
 
     // Update month filter info state
     if (monthCount || monthName || weekCount) {
@@ -509,8 +564,20 @@ function ViewOrders() {
 
     // Get user info and fetch orders
     const { role, name } = getUserInfo();
-    fetchOrders(role, name, month, year, clientType, executive, executiveName);
+    fetchOrders(role, name, month, year, clientType, executive, executiveName, leadSource);
   }, [location.search, location.state, yearFilter]); // Re-run when search params, location state, or yearFilter changes
+
+  // useEffect to handle click outside lead source filter dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (leadSourceFilterRef.current && !leadSourceFilterRef.current.contains(event.target)) {
+        setShowLeadSourceFilter(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Function to handle year change
   const handleYearChange = (e) => {
@@ -529,7 +596,8 @@ function ViewOrders() {
     const clientType = params.get('clientType');
     const executive = params.get('executive');
     const executiveName = params.get('executiveName');
-    fetchOrders(role, name, month, newYear, clientType, executive, executiveName);
+    const leadSource = params.get('leadSource');
+    fetchOrders(role, name, month, newYear, clientType, executive, executiveName, leadSource);
   };
 
   // Function to clear all filters
@@ -539,6 +607,7 @@ function ViewOrders() {
     setYearFilter(new Date().getFullYear());
     setCurrentViewYear(new Date().getFullYear());
     setClientTypeFilter(null);
+    setLeadSourceFilter(null);
     setAppliedExecutiveFilters({
       executive: '',
       executiveType: '',
@@ -547,6 +616,7 @@ function ViewOrders() {
     setMonthFilterInfo({ monthCount: 0, monthName: '', weekCount: 0 });
     setSearchTerm(''); // Clear search term
     setCurrentViewMonth(null); // Clear current view month
+    setShowLeadSourceFilter(false); // Close lead source dropdown
     navigate('/admin-dashboard/view-orders'); // Navigate to base URL
   };
 
@@ -585,6 +655,19 @@ function ViewOrders() {
       executiveType: '',
       executiveName: ''
     });
+  };
+
+  // Function to clear lead source filter only
+  const clearLeadSourceFilter = () => {
+    const params = new URLSearchParams(location.search);
+    params.delete('leadSource'); // Remove lead source from URL
+    navigate(`/admin-dashboard/view-orders?${params.toString()}`); // Update URL
+    setLeadSourceFilter(null); // Reset lead source filter state
+    setShowLeadSourceFilter(false); // Close dropdown
+    
+    // Refresh orders without lead source filter
+    const { role, name } = getUserInfo();
+    fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, null);
   };
 
   // Function to clear search filter only
@@ -691,7 +774,7 @@ function ViewOrders() {
       
       // Refresh orders list
       const { role, name } = getUserInfo();
-      fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
+      fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, leadSourceFilter);
       
       toast.success('Order updated successfully!'); // Show success message
     } catch (err) {
@@ -743,7 +826,7 @@ function ViewOrders() {
 
       // Refresh orders list
       const { role, name } = getUserInfo();
-      fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
+      fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, leadSourceFilter);
 
       toast.success('Order moved to trash successfully!'); // Show success message
     } catch (err) {
@@ -904,6 +987,7 @@ function ViewOrders() {
           <p><strong>Customer:</strong> ${currentOrder.contactPerson}</p>
           <p><strong>Business:</strong> ${currentOrder.business}</p>
           <p><strong>Location:</strong> ${currentOrder.location}</p>
+          <p><strong>Lead Source:</strong> ${currentOrder.leadSource || 'Not specified'}${currentOrder.otherLeadSource ? ` (${currentOrder.otherLeadSource})` : ''}</p>
           <p><strong>Total Amount:</strong> ₹${currentOrder.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0).toFixed(2)}</p>
           <p><strong>Discount:</strong> ₹${parseFloat(currentOrder.discount || 0).toFixed(2)}</p>
           <p><strong>Final Amount:</strong> ₹${parseFloat(currentOrder.discountedTotal || 0).toFixed(2)}</p>
@@ -1001,7 +1085,7 @@ function ViewOrders() {
       
       // Refresh orders list
       const { role, name } = getUserInfo();
-      fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
+      fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, leadSourceFilter);
       
       setShowPaymentsModal(false); // Close modal
     } catch (err) {
@@ -1031,7 +1115,7 @@ function ViewOrders() {
       return orderDate.getFullYear() === yearFilter;
     });
 
-    // Flatten orders for Excel export
+    // Flatten orders for Excel export with lead source fields
     const flattenedOrders = filteredOrders.flatMap(order =>
       order.rows.map(row => ({
         'S.No': filteredOrders.indexOf(order) + 1,
@@ -1040,6 +1124,8 @@ function ViewOrders() {
         'Customer': order.contactPerson,
         'Location': order.location,
         'Sale Closed By': order.saleClosedBy,
+        'Lead Source': order.leadSource || '',
+        'Other Lead Source': order.otherLeadSource || '',
         'Contact': `${order.contactCode} ${order.phone}`,
         'Order No': order.orderNo,
         'Order Date': formatDate(order.orderDate),
@@ -1118,13 +1204,15 @@ function ViewOrders() {
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        // Map Excel data to order format
+        // Map Excel data to order format with lead source fields
         const ordersToImport = jsonData.map(item => {
           const baseOrder = {
             business: item['Business'],
             contactPerson: item['Customer'],
             location: item['Location'],
             saleClosedBy: item['Sale Closed By'],
+            leadSource: item['Lead Source'] || '',
+            otherLeadSource: item['Other Lead Source'] || '',
             contactCode: item['Contact']?.split(' ')[0] || '+91',
             phone: item['Contact']?.split(' ')[1] || '',
             orderNo: item['Order No'] || `ORDER-${Math.random().toString(36).substr(2, 8)}`,
@@ -1176,7 +1264,7 @@ function ViewOrders() {
         
         // Refresh orders list
         const { role, name } = getUserInfo();
-        fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
+        fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, leadSourceFilter);
         
         toast.success(`Successfully imported ${ordersToImport.length} orders!`);
         
@@ -1203,6 +1291,8 @@ function ViewOrders() {
       order.contactPerson || '',
       order.location || '',
       order.saleClosedBy || '',
+      order.leadSource || '',
+      order.otherLeadSource || '',
       `${order.contactCode || ''} ${order.phone || ''}`,
       order.orderNo || '',
       order.orderDate || '',
@@ -1246,7 +1336,7 @@ function ViewOrders() {
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '24px', marginBottom: '20px' }}>Loading orders...</div>
-          <div className="spinner"></div> {/* Spinner element */}
+          <div className="spinner"></div>
         </div>
       </div>
     );
@@ -1276,7 +1366,7 @@ function ViewOrders() {
             onClick={() => {
               // Retry fetching orders
               const { role, name } = getUserInfo();
-              fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName);
+              fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, leadSourceFilter);
             }}
             style={{
               backgroundColor: '#1565c0',
@@ -1475,6 +1565,7 @@ function ViewOrders() {
                 params.delete('monthCount');
                 params.delete('monthName');
                 params.delete('weekCount');
+                params.delete('leadSource');
                 
                 navigate(`/admin-dashboard/view-orders?${params.toString()}`);
               }}
@@ -1604,7 +1695,7 @@ function ViewOrders() {
         padding: '15px',
         borderRadius: '8px'
       }}>
-        {(monthFilter || clientTypeFilter || appliedExecutiveFilters.executiveName || searchTerm) && (
+        {(monthFilter || clientTypeFilter || appliedExecutiveFilters.executiveName || leadSourceFilter || searchTerm) && (
           <h3 style={{ margin: '0 0 10px 0' }}>Active Filters:</h3>
         )}
 
@@ -1662,6 +1753,37 @@ function ViewOrders() {
               }}
             >
               Clear
+            </button>
+          </div>
+        )}
+
+        {/* Lead Source Filter Display */}
+        {leadSourceFilter && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: '#e8f5e9',
+            padding: '8px 12px',
+            borderRadius: '4px',
+            border: '1px solid #4caf50'
+          }}>
+            <span>
+              <strong>📋 Lead Source:</strong> {leadSourceFilter}
+            </span>
+            <button
+              onClick={clearLeadSourceFilter}
+              style={{
+                backgroundColor: '#f44336',
+                color: 'white',
+                border: 'none',
+                padding: '4px 8px',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+            >
+              Clear Filter
             </button>
           </div>
         )}
@@ -1731,7 +1853,7 @@ function ViewOrders() {
         )}
 
         {/* Clear All Filters Button */}
-        {(monthFilter || clientTypeFilter || appliedExecutiveFilters.executiveName || searchTerm) && (
+        {(monthFilter || clientTypeFilter || appliedExecutiveFilters.executiveName || leadSourceFilter || searchTerm) && (
           <button
             onClick={clearAllFilters}
             style={{
@@ -1776,9 +1898,124 @@ function ViewOrders() {
           />
         </div>
 
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', gap: '10px' }}>
-          {/* Export to Excel Button - Show for Admin, Account, Service Executive AND regular Executives */}
+        {/* Action Buttons - Now includes Lead Source Filter */}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Lead Source Filter Button - Small filter button */}
+          <div style={{ position: 'relative' }} ref={leadSourceFilterRef}>
+            <button
+              onClick={() => setShowLeadSourceFilter(!showLeadSourceFilter)}
+              style={{
+                backgroundColor: leadSourceFilter ? '#4caf50' : '#9c27b0',
+                color: 'white',
+                padding: '8px 12px',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                minWidth: '130px'
+              }}
+            >
+              <span>📋</span>
+              {leadSourceFilter ? `${leadSourceFilter}` : 'Lead Source'}
+              {leadSourceFilter && (
+                <span 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleLeadSourceFilterSelect(null);
+                  }}
+                  style={{
+                    marginLeft: '6px',
+                    backgroundColor: 'rgba(255,255,255,0.3)',
+                    borderRadius: '50%',
+                    width: '18px',
+                    height: '18px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ×
+                </span>
+              )}
+            </button>
+            
+            {/* Lead Source Filter Dropdown */}
+            {showLeadSourceFilter && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                backgroundColor: 'white',
+                borderRadius: '6px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                zIndex: 100,
+                minWidth: '200px',
+                marginTop: '5px',
+                border: '1px solid #e0e0e0'
+              }}>
+                <div style={{
+                  padding: '10px',
+                  borderBottom: '1px solid #eee',
+                  backgroundColor: '#f9f9f9',
+                  fontWeight: 'bold',
+                  color: '#333'
+                }}>
+                  Filter by Lead Source
+                </div>
+                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                  <button
+                    onClick={() => handleLeadSourceFilterSelect(null)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 15px',
+                      border: 'none',
+                      backgroundColor: 'white',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      color: '#666',
+                      borderBottom: '1px solid #eee'
+                    }}
+                    onMouseOver={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                  >
+                    All Lead Sources
+                  </button>
+                  
+                  {leadSources.map((source, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleLeadSourceFilterSelect(source)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 15px',
+                        border: 'none',
+                        backgroundColor: leadSourceFilter === source ? '#e8f5e9' : 'white',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        color: leadSourceFilter === source ? '#2e7d32' : '#333',
+                        borderBottom: '1px solid #eee',
+                        fontWeight: leadSourceFilter === source ? 'bold' : 'normal'
+                      }}
+                      onMouseOver={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = leadSourceFilter === source ? '#e8f5e9' : 'white'}
+                    >
+                      {source}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Export to Excel Button */}
           {canExportToExcel() && (
             <button
               onClick={handleExportToExcel}
@@ -1797,7 +2034,7 @@ function ViewOrders() {
             </button>
           )}
 
-          {/* Import from Excel Button - Show for Admin, Account, Service Executive AND regular Executives */}
+          {/* Import from Excel Button */}
           {canImportFromExcel() && (
             <button
               onClick={() => document.getElementById('importExcelInput').click()}
@@ -1878,270 +2115,336 @@ function ViewOrders() {
                 </div>
               </div>
 
-              {/* Orders Table */}
-              <div style={{ overflowX: 'auto', height: '500px' }}>
+              {/* Orders Table with Horizontal Scroll */}
+              <div style={{ overflowX: 'auto', height: '500px', position: 'relative' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
                   <thead style={{ backgroundColor: '#218c74', color: '#fff', position: 'sticky', top: 0, zIndex: 10 }}>
                     <tr>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>S.No</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Executive</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Business</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Customer</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Location</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Sale Closed By</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Contact</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Order No</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Order Date</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Client Type</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Description</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Requirement</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Qty</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Rate</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Total</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Discount</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Final Amount</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Delivery Date</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Service Assigned</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Status</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Created By</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Advance</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Balance</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Advance Date</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Payment Date</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Payment Method</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Cheque Number</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74' }}>Action</th>
+                      {/* Sticky Columns - S.No, Executive, Business */}
+                      <th style={{ 
+                        padding: '12px 8px', 
+                        fontSize: '14px', 
+                        textAlign: 'center', 
+                        backgroundColor: '#218c74',
+                        position: 'sticky',
+                        left: 0,
+                        zIndex: 11,
+                        minWidth: '50px'
+                      }}>S.No</th>
+                      
+                      <th style={{ 
+                        padding: '12px 8px', 
+                        fontSize: '14px', 
+                        textAlign: 'center', 
+                        backgroundColor: '#218c74',
+                        position: 'sticky',
+                        left: '50px',
+                        zIndex: 11,
+                        minWidth: '100px'
+                      }}>Executive</th>
+                      
+                      <th style={{ 
+                        padding: '12px 8px', 
+                        fontSize: '14px', 
+                        textAlign: 'center', 
+                        backgroundColor: '#218c74',
+                        position: 'sticky',
+                        left: '150px',
+                        zIndex: 11,
+                        minWidth: '150px'
+                      }}>Business</th>
+                      
+                      {/* Regular Headers */}
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Customer</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Location</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Sale Closed By</th>
+                      {/* Lead Source Header */}
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Lead Source</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Contact</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Order No</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Order Date</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Client Type</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '150px' }}>Description</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Requirement</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '80px' }}>Qty</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Rate</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Total</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '80px' }}>Discount</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Final Amount</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Delivery Date</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Service Assigned</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Status</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Created By</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Advance</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Balance</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Advance Date</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Payment Date</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Payment Method</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Cheque Number</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '150px' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {group.orders.map((order, orderIndex) =>
-                      order.rows.filter(filterOrders(order)).map((row, rowIndex) => (
-                        <tr
-                          key={`${order._id}-${rowIndex}`}
-                          style={{
-                            backgroundColor: (orderIndex + rowIndex) % 2 === 0 ? '#fdfdfd' : '#f5f9fa',
-                            borderBottom: '1px solid #eee'
-                          }}
-                        >
-                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{orderIndex + 1}</td>
-                          <td style={{ padding: '10px 8px' }}>{order.executive}</td>
-
-                          {/* Business name - clickable only for Admin */}
-                          <td style={{ padding: '10px 8px' }}>
-                            {userRole === 'Admin' ? (
-                              <button
-                                onClick={() => navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(order.business)}`)}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: '#003366',
-                                  cursor: 'pointer',
+                      order.rows.filter(filterOrders(order)).map((row, rowIndex) => {
+                        // Calculate background color based on row index
+                        const rowBgColor = (orderIndex + rowIndex) % 2 === 0 ? '#fdfdfd' : '#f5f9fa';
+                        
+                        return (
+                          <tr
+                            key={`${order._id}-${rowIndex}`}
+                            style={{
+                              backgroundColor: rowBgColor,
+                              borderBottom: '1px solid #eee'
+                            }}
+                          >
+                            {/* Sticky Cells - S.No, Executive, Business */}
+                            <td style={{ 
+                              padding: '10px 8px', 
+                              textAlign: 'center',
+                              position: 'sticky',
+                              left: 0,
+                              backgroundColor: rowBgColor,
+                              zIndex: 9,
+                              minWidth: '50px'
+                            }}>{orderIndex + 1}</td>
+                            
+                            <td style={{ 
+                              padding: '10px 8px',
+                              position: 'sticky',
+                              left: '50px',
+                              backgroundColor: rowBgColor,
+                              zIndex: 9,
+                              minWidth: '100px'
+                            }}>{order.executive}</td>
+                            
+                            <td style={{ 
+                              padding: '10px 8px',
+                              position: 'sticky',
+                              left: '150px',
+                              backgroundColor: rowBgColor,
+                              zIndex: 9,
+                              minWidth: '150px'
+                            }}>
+                              {userRole === 'Admin' ? (
+                                <button
+                                  onClick={() => navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(order.business)}`)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#003366',
+                                    cursor: 'pointer',
+                                    padding: '4px 8px',
+                                    fontSize: 'inherit',
+                                    fontFamily: 'inherit',
+                                    borderRadius: '4px',
+                                    transition: 'all 0.2s ease',
+                                    fontWeight: '500',
+                                    textAlign: 'left'
+                                  }}
+                                  onMouseOver={(e) => {
+                                    e.target.style.backgroundColor = '#e3f2fd';
+                                    e.target.style.color = '#003366';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.target.style.backgroundColor = 'transparent';
+                                    e.target.style.color = '#003366';
+                                  }}
+                                >
+                                  {order.business}
+                                </button>
+                              ) : (
+                                <span style={{ color: '#003366', fontWeight: '500' }}>
+                                  {order.business}
+                                </span>
+                              )}
+                            </td>
+                            
+                            {/* Regular Cells */}
+                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactPerson}</td>
+                            <td style={{ padding: '10px 8px', minWidth: '100px' }}>{order.location}</td>
+                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.saleClosedBy}</td>
+                            {/* Lead Source Cell */}
+                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>
+                              <span style={{
+                                backgroundColor: order.leadSource ? '#e3f2fd' : '#f5f5f5',
+                                color: order.leadSource ? '#1976d2' : '#666',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                fontWeight: order.leadSource ? '500' : 'normal',
+                                display: 'inline-block',
+                                minWidth: '100px'
+                              }}>
+                                {order.leadSource || 'Not specified'}
+                                {order.otherLeadSource && order.leadSource === 'Other Specify' && (
+                                  <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
+                                    ({order.otherLeadSource})
+                                  </div>
+                                )}
+                              </span>
+                            </td>
+                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactCode} {order.phone}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.orderNo}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.orderDate)}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.clientType}</td>
+                            <td style={{ padding: '10px 8px', minWidth: '150px' }}>{row.description}</td>
+                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>{row.requirement}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '80px' }}>{row.quantity}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '100px' }}>{row.rate}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', minWidth: '100px' }}>{row.total}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'right', color: '#e67e22', minWidth: '80px' }}>{order.discount}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60', minWidth: '100px' }}>{order.discountedTotal}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(row.deliveryDate)}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'left', minWidth: '120px' }}>
+                              {row.assignedExecutive ? (
+                                <span style={{
+                                  backgroundColor: '#e3f2fd',
+                                  color: '#1565c0',
                                   padding: '4px 8px',
-                                  fontSize: 'inherit',
-                                  fontFamily: 'inherit',
                                   borderRadius: '4px',
-                                  transition: 'all 0.2s ease',
-                                  fontWeight: '500'
-                                }}
-                                onMouseOver={(e) => {
-                                  e.target.style.backgroundColor = '#e3f2fd';
-                                  e.target.style.color = '#003366';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.target.style.backgroundColor = 'transparent';
-                                  e.target.style.color = '#003366';
+                                  fontWeight: 'bold',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}>
+                                  {row.assignedExecutive}
+                                </span>
+                              ) : (
+                                <span style={{
+                                  backgroundColor: '#fff3e0',
+                                  color: '#e65100',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontWeight: 'bold',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}>
+                                  Not Assigned
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>
+                              <span style={{
+                                backgroundColor: row.status === 'Completed' ? '#d4edda' :
+                                  row.status === 'In Progress' ? '#fff3cd' :
+                                    row.status === 'Pending' ? '#f8d7da' : '#e2e3e5',
+                                color: row.status === 'Completed' ? '#155724' :
+                                  row.status === 'In Progress' ? '#856404' :
+                                    row.status === 'Pending' ? '#721c24' : '#383d41',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontWeight: 'bold',
+                                display: 'inline-block',
+                                minWidth: '80px'
+                              }}>
+                                {row.status || 'Not Set'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
+                              {order.createdBy && order.createdBy !== order.executive ? (
+                                <span style={{
+                                  backgroundColor: '#e8f5e8',
+                                  color: '#2e7d32',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontWeight: 'bold',
+                                  fontSize: '12px',
+                                  display: 'inline-block'
+                                }}>
+                                  Admin: {order.createdBy}
+                                </span>
+                              ) : (
+                                <span style={{
+                                  color: '#666',
+                                  fontSize: '12px'
+                                }}>
+                                  {order.executive}
+                                </span>
+                              )}
+                            </td>
+
+                            <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '100px' }}>{order.advance}</td>
+                            <td style={{
+                              padding: '10px 8px',
+                              textAlign: 'right',
+                              fontWeight: 'bold',
+                              color: order.balance > 0 ? '#e74c3c' : '#2ecc71',
+                              minWidth: '100px'
+                            }}>
+                              {order.balance}
+                            </td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.advanceDate)}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.paymentDate)}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
+                              {order.paymentMethods && order.paymentMethods.length > 0
+                                ? order.paymentMethods.join(', ')
+                                : 'Not specified'}
+                            </td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>{order.chequeNumber}</td>
+
+                            {/* Action Buttons */}
+                            <td style={{
+                              padding: '10px 8px',
+                              display: 'flex',
+                              gap: '8px',
+                              justifyContent: 'center',
+                              flexWrap: 'wrap',
+                              minWidth: '150px'
+                            }}>
+                              {/* Always show View Payments button */}
+                              <button
+                                onClick={() => handleViewPayments(order)}
+                                disabled={paymentLoading}
+                                style={{
+                                  backgroundColor: '#3498db',
+                                  color: 'white',
+                                  padding: '6px 12px',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
+                                  cursor: paymentLoading ? 'not-allowed' : 'pointer',
+                                  whiteSpace: 'nowrap'
                                 }}
                               >
-                                {order.business}
+                                {paymentLoading ? 'Loading...' : 'View Payments'}
                               </button>
-                            ) : (
-                              // For non-admin users (executives), just show the business name as plain text
-                              <span style={{ color: '#003366', fontWeight: '500' }}>
-                                {order.business}
-                              </span>
-                            )}
-                          </td>
 
-                          <td style={{ padding: '10px 8px' }}>{order.contactPerson}</td>
-                          <td style={{ padding: '10px 8px' }}>{order.location}</td>
-                          <td style={{ padding: '10px 8px' }}>{order.saleClosedBy}</td>
-                          <td style={{ padding: '10px 8px' }}>{order.contactCode} {order.phone}</td>
-                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{order.orderNo}</td>
-                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{formatDate(order.orderDate)}</td>
-                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{order.clientType}</td>
-                          <td style={{ padding: '10px 8px' }}>{row.description}</td>
-                          <td style={{ padding: '10px 8px' }}>{row.requirement}</td>
-                          <td style={{ padding: '10px 8px', textAlign: 'right' }}>{row.quantity}</td>
-                          <td style={{ padding: '10px 8px', textAlign: 'right' }}>{row.rate}</td>
-                          <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold' }}>{row.total}</td>
-                          <td style={{ padding: '10px 8px', textAlign: 'right', color: '#e67e22' }}>{order.discount}</td>
-                          <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>{order.discountedTotal}</td>
-                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{formatDate(row.deliveryDate)}</td>
-                          <td style={{ padding: '10px 8px', textAlign: 'left' }}>
-                            {row.assignedExecutive ? (
-                              <span style={{
-                                backgroundColor: '#e3f2fd',
-                                color: '#1565c0',
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                fontWeight: 'bold',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}>
-                                {row.assignedExecutive}
-                              </span>
-                            ) : (
-                              <span style={{
-                                backgroundColor: '#fff3e0',
-                                color: '#e65100',
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                fontWeight: 'bold',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}>
-                                Not Assigned
-                              </span>
-                            )}
-                          </td>
-                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                            <span style={{
-                              backgroundColor: row.status === 'Completed' ? '#d4edda' :
-                                row.status === 'In Progress' ? '#fff3cd' :
-                                  row.status === 'Pending' ? '#f8d7da' : '#e2e3e5',
-                              color: row.status === 'Completed' ? '#155724' :
-                                row.status === 'In Progress' ? '#856404' :
-                                  row.status === 'Pending' ? '#721c24' : '#383d41',
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              fontWeight: 'bold',
-                              display: 'inline-block',
-                              minWidth: '80px'
-                            }}>
-                              {row.status || 'Not Set'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                            {order.createdBy && order.createdBy !== order.executive ? (
-                              <span style={{
-                                backgroundColor: '#e8f5e8',
-                                color: '#2e7d32',
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                fontWeight: 'bold',
-                                fontSize: '12px',
-                                display: 'inline-block'
-                              }}>
-                                Admin: {order.createdBy}
-                              </span>
-                            ) : (
-                              <span style={{
-                                color: '#666',
-                                fontSize: '12px'
-                              }}>
-                                {order.executive}
-                              </span>
-                            )}
-                          </td>
-
-                          <td style={{ padding: '10px 8px', textAlign: 'right' }}>{order.advance}</td>
-                          <td style={{
-                            padding: '10px 8px',
-                            textAlign: 'right',
-                            fontWeight: 'bold',
-                            color: order.balance > 0 ? '#e74c3c' : '#2ecc71'
-                          }}>
-                            {order.balance}
-                          </td>
-                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{formatDate(order.advanceDate)}</td>
-                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{formatDate(order.paymentDate)}</td>
-                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                            {order.paymentMethods && order.paymentMethods.length > 0
-                              ? order.paymentMethods.join(', ')
-                              : 'Not specified'}
-                          </td>
-                          <td style={{ padding: '10px 8px', textAlign: 'center' }}>{order.chequeNumber}</td>
-
-                          {/* Action Buttons */}
-                          <td style={{
-                            padding: '10px 8px',
-                            display: 'flex',
-                            gap: '8px',
-                            justifyContent: 'center',
-                            flexWrap: 'wrap'
-                          }}>
-                            {/* Always show View Payments button */}
-                            <button
-                              onClick={() => handleViewPayments(order)}
-                              disabled={paymentLoading}
-                              style={{
-                                backgroundColor: '#3498db',
-                                color: 'white',
-                                padding: '6px 12px',
-                                border: 'none',
-                                borderRadius: '4px',
-                                fontSize: '12px',
-                                cursor: paymentLoading ? 'not-allowed' : 'pointer',
-                                whiteSpace: 'nowrap'
-                              }}
-                            >
-                              {paymentLoading ? 'Loading...' : 'View Payments'}
-                            </button>
-
-                            {order.balance <= 0 ? (
-                              <span style={{
-                                backgroundColor: '#2ecc71',
-                                color: 'white',
-                                padding: '6px 12px',
-                                borderRadius: '4px',
-                                fontSize: '12px',
-                                whiteSpace: 'nowrap'
-                              }}>
-                                Paid
-                              </span>
-                            ) : (
-                              <>
-                                <button
-                                  onClick={() => handleRecordPayment(order)}
-                                  disabled={paymentLoading}
-                                  style={{
-                                    backgroundColor: paymentLoading ? '#bdc3c7' : '#9b59b6',
-                                    color: 'white',
-                                    padding: '6px 12px',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    fontSize: '12px',
-                                    cursor: paymentLoading ? 'not-allowed' : 'pointer',
-                                    whiteSpace: 'nowrap'
-                                  }}
-                                >
-                                  {paymentLoading ? 'Loading...' : 'Record Payment'}
-                                </button>
-
-                                <button
-                                  onClick={() => handleEdit(order)}
-                                  style={{
-                                    backgroundColor: '#f39c12',
-                                    color: 'white',
-                                    padding: '6px 12px',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    fontSize: '12px',
-                                    cursor: 'pointer',
-                                    whiteSpace: 'nowrap'
-                                  }}
-                                >
-                                  Edit
-                                </button>
-
-                                {/* DELETE BUTTON - ONLY SHOW FOR ADMIN USERS */}
-                                {canDeleteOrders() && (
+                              {order.balance <= 0 ? (
+                                <span style={{
+                                  backgroundColor: '#2ecc71',
+                                  color: 'white',
+                                  padding: '6px 12px',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  Paid
+                                </span>
+                              ) : (
+                                <>
                                   <button
-                                    onClick={() => confirmDelete(order._id)}
+                                    onClick={() => handleRecordPayment(order)}
+                                    disabled={paymentLoading}
                                     style={{
-                                      backgroundColor: '#e74c3c',
+                                      backgroundColor: paymentLoading ? '#bdc3c7' : '#9b59b6',
+                                      color: 'white',
+                                      padding: '6px 12px',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '12px',
+                                      cursor: paymentLoading ? 'not-allowed' : 'pointer',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    {paymentLoading ? 'Loading...' : 'Record Payment'}
+                                  </button>
+
+                                  <button
+                                    onClick={() => handleEdit(order)}
+                                    style={{
+                                      backgroundColor: '#f39c12',
                                       color: 'white',
                                       padding: '6px 12px',
                                       border: 'none',
@@ -2151,14 +2454,33 @@ function ViewOrders() {
                                       whiteSpace: 'nowrap'
                                     }}
                                   >
-                                    Delete
+                                    Edit
                                   </button>
-                                )}
-                              </>
-                            )}
-                          </td>
-                        </tr>
-                      ))
+
+                                  {/* DELETE BUTTON - ONLY SHOW FOR ADMIN USERS */}
+                                  {canDeleteOrders() && (
+                                    <button
+                                      onClick={() => confirmDelete(order._id)}
+                                      style={{
+                                        backgroundColor: '#e74c3c',
+                                        color: 'white',
+                                        padding: '6px 12px',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        fontSize: '12px',
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      Delete
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -2177,9 +2499,12 @@ function ViewOrders() {
           <h3 style={{ color: '#666' }}>No orders found for {yearFilter}</h3>
           <p style={{ color: '#999' }}>
             {appliedExecutiveFilters.executiveName && `for executive: ${appliedExecutiveFilters.executiveName}`}
-            {appliedExecutiveFilters.executiveName && (monthFilter || clientTypeFilter) && ' and '}
+            {appliedExecutiveFilters.executiveName && (monthFilter || clientTypeFilter || leadSourceFilter) && ' and '}
             {monthFilter && `in ${new Date(yearFilter, monthFilter - 1).toLocaleString('default', { month: 'long' })}`}
+            {monthFilter && (clientTypeFilter || leadSourceFilter) && ' and '}
             {clientTypeFilter && `with client type: ${clientTypeFilter}`}
+            {clientTypeFilter && leadSourceFilter && ' and '}
+            {leadSourceFilter && `with lead source: ${leadSourceFilter}`}
             {searchTerm && `matching search: "${searchTerm}"`}
           </p>
           <p style={{ color: '#999' }}>Try adjusting your search or importing orders</p>
@@ -2230,6 +2555,15 @@ function ViewOrders() {
                 </div>
                 <div>
                   <strong>Sale Closed By:</strong> {currentOrder.saleClosedBy}
+                </div>
+                {/* Lead Source */}
+                <div>
+                  <strong>Lead Source:</strong> {currentOrder.leadSource || 'Not specified'}
+                  {currentOrder.otherLeadSource && currentOrder.leadSource === 'Other Specify' && (
+                    <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                      ({currentOrder.otherLeadSource})
+                    </div>
+                  )}
                 </div>
                 <div>
                   <strong>Created By:</strong> {currentOrder.createdBy || currentOrder.executive}
@@ -2597,7 +2931,7 @@ function ViewOrders() {
           }}>
             <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Edit Order</h2>
 
-            {/* Order Details Form */}
+            {/* Order Details Form with lead source fields */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
               {/* Business Input */}
               <div>
@@ -2641,6 +2975,38 @@ function ViewOrders() {
                   onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
+              </div>
+
+              {/* Lead Source Input */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px' }}>Lead Source</label>
+                <select
+                  name="leadSource"
+                  value={editingOrder.leadSource || ''}
+                  onChange={handleEditChange}
+                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                >
+                  <option value="">Select Lead Source</option>
+                  {leadSources.map((source, index) => (
+                    <option key={index} value={source}>{source}</option>
+                  ))}
+                </select>
+                {editingOrder.leadSource === 'Other Specify' && (
+                  <input
+                    type="text"
+                    name="otherLeadSource"
+                    value={editingOrder.otherLeadSource || ''}
+                    onChange={handleEditChange}
+                    placeholder="Please specify lead source"
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      border: '1px solid #ccc',
+                      marginTop: '5px'
+                    }}
+                  />
+                )}
               </div>
 
               {/* Contact Code Input */}

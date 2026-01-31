@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useLocation } from "react-router-dom";
-
 import Invoice from "./Invoice";
 import Select from 'react-select';
 
@@ -31,6 +30,22 @@ function OrderForm({
   const [contactPerson, setContactPerson] = useState(routerLocation.state?.customerName || "");
   const [clientLocation, setClientLocation] = useState(existingData?.location || "");
   const [saleClosedBy, setSaleClosedBy] = useState(existingData?.saleClosedBy || "");
+  
+  // NEW: Lead Source states
+  const [leadSources] = useState([
+    'India Mart',
+    'Just Dial',
+    'Meta (Facebook/Instagram)',
+    'Google Ads',
+    'Website',
+    'Referral',
+    'Walk-in',
+    'Newspaper',
+    'Other Specify'
+  ]);
+  const [leadSource, setLeadSource] = useState(existingData?.leadSource || '');
+  const [otherLeadSource, setOtherLeadSource] = useState(existingData?.otherLeadSource || '');
+  
   const [contactNumber, setContactNumber] = useState(
     existingData
       ? `${existingData.contactCode || "+91"} ${existingData.phone || ""}`
@@ -93,6 +108,14 @@ function OrderForm({
       gstIncluded: false,
     };
   }
+
+  // NEW: Handle lead source change
+  const handleLeadSourceChange = (value) => {
+    setLeadSource(value);
+    if (value !== 'Other Specify') {
+      setOtherLeadSource('');
+    }
+  };
 
   const sendWhatsAppMessage = (phoneNumber, orderData) => {
     try {
@@ -346,74 +369,76 @@ Global Marketing Solutions Team`;
     setShowInvoice(true);
   };
 
-const createNewOrderFromExisting = () => {
-  // Determine the new order type based on existing order type
-  let newClientType = "";
-  if (existingData?.clientType) {
-    switch (existingData.clientType) {
-      case "Retail":
-        newClientType = "Renewal";
-        break;
-      case "Agent":
-        newClientType = "Renewal-Agent";
-        break;
-      case "Renewal":
-      case "Renewal-Agent":
-      case "Corporate":
-      case "Walk-In":
-        // Keep as is for renewal types
-        newClientType = existingData.clientType;
-        break;
-      default:
-        newClientType = "";
+  const createNewOrderFromExisting = () => {
+    // Determine the new order type based on existing order type
+    let newClientType = "";
+    if (existingData?.clientType) {
+      switch (existingData.clientType) {
+        case "Retail":
+          newClientType = "Renewal";
+          break;
+        case "Agent":
+          newClientType = "Renewal-Agent";
+          break;
+        case "Renewal":
+        case "Renewal-Agent":
+        case "Corporate":
+        case "Walk-In":
+          // Keep as is for renewal types
+          newClientType = existingData.clientType;
+          break;
+        default:
+          newClientType = "";
+      }
     }
-  }
-  
-  // Keep business name (in uppercase) and contact number from existing order
-  const existingBusiness = business || "";
-  
-  setSelectedExecutive(isAdmin ? "" : localStorage.getItem("userName") || "");
-  setBusiness(existingBusiness);
-  setContactPerson("");
-  setClientLocation("");
-  setSaleClosedBy("");
-  setOrderDate(new Date().toISOString().split("T")[0]);
-  setAdvanceDate(new Date().toISOString().split("T")[0]);
-  setClientType(newClientType); // Set the determined client type
-  setTarget("");
-  setDiscount(0);
-  setRows([getEmptyRow()]);
-  setTotal(0);
-  setDiscountedTotal(0);
-  setAdvance("");
-  setBalance(0);
-  setPaymentMethods([]);
-  setSelectedUpi("");
-  setChequeNumber("");
-  setChequeImage(null);
-  setDesign("");
-  setBankName("");
-  setTransactionRef("");
-  setOtherMethod("");
-  setPoNumber("");
-  setPoDocument(null);
-  setSplitCommission(false);
-  setCommissionSplitInfo(null);
-  setAdvanceError("");
-  setWhatsappSent(false);
-  setHasAdvanceApproval(false);
-  setApprovalRequested(false);
-  setApprovalReason("");
-  
-  if (approvalPollingRef.current) {
-    clearInterval(approvalPollingRef.current);
-    approvalPollingRef.current = null;
-  }
-  
-  setIsCreatingNew(true);
-  
-  if (onNewOrder) onNewOrder();
-};
+    
+    // Keep business name (in uppercase) and contact number from existing order
+    const existingBusiness = business || "";
+    
+    setSelectedExecutive(isAdmin ? "" : localStorage.getItem("userName") || "");
+    setBusiness(existingBusiness);
+    setContactPerson("");
+    setClientLocation("");
+    setSaleClosedBy("");
+    setLeadSource(""); // NEW: Reset lead source
+    setOtherLeadSource(""); // NEW: Reset other lead source
+    setOrderDate(new Date().toISOString().split("T")[0]);
+    setAdvanceDate(new Date().toISOString().split("T")[0]);
+    setClientType(newClientType); // Set the determined client type
+    setTarget("");
+    setDiscount(0);
+    setRows([getEmptyRow()]);
+    setTotal(0);
+    setDiscountedTotal(0);
+    setAdvance("");
+    setBalance(0);
+    setPaymentMethods([]);
+    setSelectedUpi("");
+    setChequeNumber("");
+    setChequeImage(null);
+    setDesign("");
+    setBankName("");
+    setTransactionRef("");
+    setOtherMethod("");
+    setPoNumber("");
+    setPoDocument(null);
+    setSplitCommission(false);
+    setCommissionSplitInfo(null);
+    setAdvanceError("");
+    setWhatsappSent(false);
+    setHasAdvanceApproval(false);
+    setApprovalRequested(false);
+    setApprovalReason("");
+    
+    if (approvalPollingRef.current) {
+      clearInterval(approvalPollingRef.current);
+      approvalPollingRef.current = null;
+    }
+    
+    setIsCreatingNew(true);
+    
+    if (onNewOrder) onNewOrder();
+  };
 
   const submitAdvanceApprovalRequest = async () => {
     if (!approvalReason.trim()) {
@@ -470,80 +495,48 @@ const createNewOrderFromExisting = () => {
   };
 
   useEffect(() => {
-  const fetchAllExecutives = async () => {
-  try {
-    setLoadingExecutives(true);
+    const fetchAllExecutives = async () => {
+      try {
+        setLoadingExecutives(true);
 
-    // Regular executives
-    const execsRes = await axios.get("/api/executives");
-    const regularExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
+        const execsRes = await axios.get("/api/executives");
+        const regularExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
 
-    // Field executives
-    const fieldExecsRes = await axios.get("/api/field-executive/admin/executives");
-    console.log("Field executives response:", fieldExecsRes.data);
-    
-    // Handle both string and object formats
-    let fieldExecutives = [];
-    if (fieldExecsRes.data && fieldExecsRes.data.length > 0) {
-      // Check if it's an array of strings or objects
-      if (typeof fieldExecsRes.data[0] === 'string') {
-        // It's an array of names (strings)
-        fieldExecutives = fieldExecsRes.data.map(name => ({ 
-          name, 
-          _id: name, 
-          type: 'field' 
+        const fieldExecsRes = await axios.get("/api/field-executive/admin/executives");
+        const fieldExecutives = fieldExecsRes.data.map(name => ({ name, _id: name, type: 'field' }));
+
+        const serviceExecsRes = await axios.get("/api/service-executives");
+        const serviceExecutives = serviceExecsRes.data.map(exec => ({
+          name: exec.name,
+          _id: exec._id,
+          type: 'service'
         }));
-      } else {
-        // It's an array of objects
-        fieldExecutives = fieldExecsRes.data.map(exec => ({
-          name: exec.name || exec,
-          _id: exec._id || exec,
-          type: 'field'
-        }));
+
+        const allExecutives = [
+          ...regularExecs,
+          ...fieldExecutives,
+          ...serviceExecutives
+        ].filter((exec, index, self) =>
+          index === self.findIndex(e => e.name === exec.name)
+        ).sort((a, b) => a.name.localeCompare(b.name));
+
+        setSortedExecutives(allExecutives);
+        setSaleClosedByExecutives(allExecutives);
+
+        if (isAdmin) {
+          setSortedExecutives(allExecutives);
+        }
+
+        if (existingData?.executive && !isCreatingNew) {
+          setSelectedExecutive(existingData.executive);
+        }
+
+      } catch (error) {
+        console.error("Error fetching executives:", error);
+      } finally {
+        setLoadingExecutives(false);
       }
-    }
-
-    // Service executives
-    const serviceExecsRes = await axios.get("/api/service-executives");
-    const serviceExecutives = serviceExecsRes.data.map(exec => ({
-      name: exec.name,
-      _id: exec._id,
-      type: 'service'
-    }));
-
-    // Combine all executives
-    const allExecutives = [
-      ...regularExecs,
-      ...fieldExecutives,
-      ...serviceExecutives
-    ].filter((exec, index, self) => {
-      // Remove duplicates based on name
-      const findIndex = self.findIndex(e => 
-        e.name.trim().toLowerCase() === exec.name.trim().toLowerCase()
-      );
-      return index === findIndex;
-    }).sort((a, b) => a.name.localeCompare(b.name));
-
-    console.log("All executives combined:", allExecutives);
-    setSortedExecutives(allExecutives);
-    setSaleClosedByExecutives(allExecutives);
-
-    if (isAdmin) {
-      setSortedExecutives(allExecutives);
-    }
-
-    if (existingData?.executive && !isCreatingNew) {
-      setSelectedExecutive(existingData.executive);
-    }
-
-  } catch (error) {
-    console.error("Error fetching executives:", error);
-    // Show error but continue with available data
-    alert("Error loading field executives. Showing available options.");
-  } finally {
-    setLoadingExecutives(false);
-  }
-};
+    };
 
     fetchAllExecutives();
   }, [existingData, isAdmin, isCreatingNew]);
@@ -570,6 +563,8 @@ const createNewOrderFromExisting = () => {
       setContactPerson(existingData.contactPerson || "");
       setClientLocation(existingData.location || "");
       setSaleClosedBy(existingData.saleClosedBy || "");
+      setLeadSource(existingData.leadSource || ''); // NEW: Set lead source
+      setOtherLeadSource(existingData.otherLeadSource || ''); // NEW: Set other lead source
       setContactNumber(`${existingData.contactCode || "+91"} ${existingData.phone || ""}`);
       setOrderDate(existingData.orderDate || new Date().toISOString().split("T")[0]);
       setClientType(existingData.clientType || "");
@@ -644,6 +639,12 @@ const createNewOrderFromExisting = () => {
       return;
     }
 
+    // NEW: Validate lead source if selected
+    if (leadSource === 'Other Specify' && !otherLeadSource.trim()) {
+      alert("Please specify the lead source");
+      return;
+    }
+
     const advanceNum = parseFloat(advance) || 0;
     const totalNum = parseFloat(total) || 0;
     const advancePercentage = (advanceNum / totalNum) * 100;
@@ -664,6 +665,11 @@ const createNewOrderFromExisting = () => {
 
       const totalNum = parseFloat(total) || 0;
       const advanceNum = parseFloat(advance) || 0;
+
+      // NEW: Determine final lead source value
+      const finalLeadSource = leadSource === 'Other Specify' 
+        ? otherLeadSource 
+        : leadSource;
 
       const designRequestData = {
         executive: selectedExecutive,
@@ -726,6 +732,7 @@ const createNewOrderFromExisting = () => {
         contactPerson,
         location: clientLocation,
         saleClosedBy: saleClosedBy || selectedExecutive,
+        leadSource: finalLeadSource, // NEW: Add lead source to order data
         contactCode: "+91",
         phone,
         orderDate,
@@ -1226,6 +1233,16 @@ const createNewOrderFromExisting = () => {
                 {existingData.saleClosedBy || existingData.executive}
               </div>
             </div>
+            {/* NEW: Lead Source display */}
+            {existingData.leadSource && (
+              <div>
+                <div style={{ color: '#666', fontSize: '12px' }}>Lead Source</div>
+                <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#FF9800' }}>
+                  {existingData.leadSource}
+                  {existingData.otherLeadSource && ` (${existingData.otherLeadSource})`}
+                </div>
+              </div>
+            )}
             <div>
               <div style={{ color: '#666', fontSize: '12px' }}>Order Type</div>
               <div style={{ 
@@ -1751,8 +1768,9 @@ const createNewOrderFromExisting = () => {
             />
           </label>
 
-          <div style={{ display: 'flex', gap: '15px', marginBottom: '15px' }}>
-            <div style={{ flex: 1 }}>
+          {/* UPDATED SECTION: Added Lead Source field */}
+          <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '200px' }}>
               <label>
                 Contact Person:
                 <input
@@ -1767,7 +1785,7 @@ const createNewOrderFromExisting = () => {
                 />
               </label>
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: '200px' }}>
               <label>
                 Location:
                 <input
@@ -1782,7 +1800,7 @@ const createNewOrderFromExisting = () => {
                 />
               </label>
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: '200px' }}>
               <label>
                 Sale Closed By:
                 <select
@@ -1794,6 +1812,31 @@ const createNewOrderFromExisting = () => {
                     <option key={exec._id} value={exec.name}>{exec.name}</option>
                   ))}
                 </select>
+              </label>
+            </div>
+            {/* NEW: Lead Source Field */}
+            <div style={{ flex: 1, minWidth: '200px' }}>
+              <label>
+                Lead Source:
+                <select
+                  value={leadSource}
+                  onChange={(e) => handleLeadSourceChange(e.target.value)}
+                >
+                  <option value="">Select Lead Source</option>
+                  {leadSources.map((source, index) => (
+                    <option key={index} value={source}>{source}</option>
+                  ))}
+                </select>
+                {leadSource === 'Other Specify' && (
+                  <input
+                    type="text"
+                    value={otherLeadSource}
+                    onChange={(e) => setOtherLeadSource(e.target.value)}
+                    placeholder="Please specify lead source"
+                    style={{ marginTop: '8px', width: '100%' }}
+                    required
+                  />
+                )}
               </label>
             </div>
           </div>
@@ -2396,6 +2439,9 @@ const createNewOrderFromExisting = () => {
             flex-direction: column;
           }
           .payment-section > div {
+            flex-direction: column;
+          }
+          .left > div {
             flex-direction: column;
           }
         }

@@ -25,7 +25,9 @@ const orderSchema = new mongoose.Schema({
   saleClosedBy: String,
   contactCode: { type: String, default: "+91" },
   phone: { type: String, required: true },
-  
+    // NEW: Lead Source Information
+  leadSource: String,
+  otherLeadSource: String,
   // Order Details
   clientType: String,
    createdBy: { type: String, required: true },

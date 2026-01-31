@@ -871,7 +871,15 @@ const handleChartClick = (chartType) => {
               >
                 Employees
               </NavLink>
-
+ <NavLink
+                to="tele-breaks"
+                style={linkStyle('tele-breaks')}
+                onMouseEnter={() => setHoveredItem('tele-breaks')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Tele-Breaks
+              </NavLink>
               <NavLink
                 to="unit-attendance"
                 style={linkStyle('unit-attendance')}

@@ -65,7 +65,8 @@ router.get("/requirements", async (req, res) => {
   }
 });
 
-// POST a new order (auto-generate orderNo)
+// ============================
+// POST: Create new order (auto-generate orderNo)
 // ============================
 router.post("/submit", async (req, res) => {
   try {
@@ -102,6 +103,12 @@ router.post("/submit", async (req, res) => {
       createdBy: req.body.createdBy || req.body.executive // Fallback to executive if not provided
     };
 
+    // NEW: Log lead source for debugging
+    console.log('Lead source in order data:', {
+      leadSource: req.body.leadSource,
+      otherLeadSource: req.body.otherLeadSource
+    });
+
     console.log('Final order data to save:', orderData); // Debug log
 
     const newOrder = new Order(orderData);
@@ -133,6 +140,12 @@ router.put("/orders/:id", async (req, res) => {
         updateData.createdBy = existingOrder.createdBy;
       }
     }
+
+    // NEW: Log lead source update
+    console.log('Lead source in update:', {
+      leadSource: updateData.leadSource,
+      otherLeadSource: updateData.otherLeadSource
+    });
 
     const updatedOrder = await Order.findByIdAndUpdate(
       id,
@@ -180,6 +193,11 @@ router.get("/orders", async (req, res) => {
       query.clientType = req.query.clientType;
     }
 
+    // NEW: Filter by lead source if specified
+    if (req.query.leadSource) {
+      query.leadSource = req.query.leadSource;
+    }
+
     // Filter by month/year if specified
     if (req.query.month && req.query.year) {
       const month = parseInt(req.query.month);
@@ -200,7 +218,7 @@ router.get("/orders", async (req, res) => {
     
     // Debug: Log createdBy field for each order
     orders.forEach(order => {
-      console.log(`Order ${order.orderNo}: executive=${order.executive}, createdBy=${order.createdBy}`);
+      console.log(`Order ${order.orderNo}: leadSource=${order.leadSource}, otherLeadSource=${order.otherLeadSource}`);
     });
     
     res.json(orders);
@@ -209,6 +227,44 @@ router.get("/orders", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch orders" });
   }
 });
+
+// ============================
+// UPDATE an existing order
+// ============================
+router.put("/orders/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log("Updating order:", id, "with data:", req.body);
+
+    // FIXED: Ensure createdBy field is preserved during update
+    const updateData = { ...req.body };
+    
+    // If createdBy is not provided in update, preserve the existing one
+    if (!updateData.createdBy) {
+      const existingOrder = await Order.findById(id);
+      if (existingOrder && existingOrder.createdBy) {
+        updateData.createdBy = existingOrder.createdBy;
+      }
+    }
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedOrder) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json({ message: "Order updated successfully", order: updatedOrder });
+  } catch (err) {
+    console.error("Error updating order:", err);
+    res.status(500).json({ error: "Failed to update order" });
+  }
+});
+
+
 // ============================
 // GET dashboard chart data
 // ============================

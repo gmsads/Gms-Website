@@ -5,6 +5,7 @@ const dayjs = require('dayjs');
 const Executive = require('../models/Executive');
 const ServiceExecutive = require('../models/ServiceExecutive');
 const Account = require('../models/Account');
+const FieldExecutive = require('../models/FieldExecutive'); // Use your existing model
 const ProspectiveClient = require('../models/ProspectiveClients');
 const Report = require('../models/ExecutiveRecord');
 const Target = require('../models/Target');
@@ -37,17 +38,19 @@ router.get('/overall', async (req, res) => {
 
     console.log(`Date range: ${startDate} to ${endDate}`);
 
-    // Fetch all executives from all types
-    const [salesExecs, serviceExecs, accounts] = await Promise.all([
+    // Fetch all executives from all types INCLUDING FIELD EXECUTIVES
+    const [salesExecs, serviceExecs, accounts, fieldExecs] = await Promise.all([
       Executive.find().select('name dateOfJoining'),
       ServiceExecutive.find().select('name dateOfJoining'),
-      Account.find().select('name dateOfJoining')
+      Account.find().select('name dateOfJoining'),
+      FieldExecutive.find().select('name joiningDate') // Use joiningDate instead of dateOfJoining
     ]);
 
     const allExecutives = [
-      ...salesExecs.map(e => ({...e.toObject(), type: 'executive'})),
-      ...serviceExecs.map(e => ({...e.toObject(), type: 'service'})),
-      ...accounts.map(e => ({...e.toObject(), type: 'account'}))
+      ...salesExecs.map(e => ({...e.toObject(), type: 'executive', dateOfJoining: e.dateOfJoining})),
+      ...serviceExecs.map(e => ({...e.toObject(), type: 'service', dateOfJoining: e.dateOfJoining})),
+      ...accounts.map(e => ({...e.toObject(), type: 'account', dateOfJoining: e.dateOfJoining})),
+      ...fieldExecs.map(e => ({...e.toObject(), type: 'field', dateOfJoining: e.joiningDate})) // Map joiningDate to dateOfJoining
     ];
 
     const performanceData = [];
@@ -149,7 +152,7 @@ router.get('/', async (req, res) => {
     let executive;
     let executiveName;
     
-    // Find executive based on type
+    // Find executive based on type - ADD FIELD EXECUTIVE CASE
     switch(executiveType) {
       case 'executive':
         executive = await Executive.findById(executiveId);
@@ -163,12 +166,33 @@ router.get('/', async (req, res) => {
         executive = await Account.findById(executiveId);
         executiveName = executive?.name;
         break;
+      case 'field': // ADD FIELD EXECUTIVE CASE
+        // For field executives, find by _id
+        executive = await FieldExecutive.findById(executiveId);
+        if (!executive) {
+          // Try to find by name if ID lookup fails
+          executive = await FieldExecutive.findOne({ name: executiveId });
+        }
+        executiveName = executive?.name || executiveId;
+        break;
       default:
         return res.status(400).json({ error: 'Invalid executive type' });
     }
 
-    if (!executive) {
+    if (!executive && executiveType !== 'field') {
       return res.status(404).json({ error: 'Executive not found' });
+    }
+
+    // If it's a field executive and we couldn't find it in DB, create a minimal object
+    if (executiveType === 'field' && !executive) {
+      executive = {
+        _id: executiveId,
+        name: executiveName,
+        dateOfJoining: new Date('2024-01-01') // Default date
+      };
+    } else if (executiveType === 'field' && executive) {
+      // For field executives, map joiningDate to dateOfJoining
+      executive.dateOfJoining = executive.joiningDate || new Date('2024-01-01');
     }
 
     // Determine date window
@@ -358,7 +382,7 @@ router.get('/', async (req, res) => {
       avgMonthlyTarget,
       avgMonthlyOrders,
       avgMonthlyProspects,
-      totalProspects: totalMonthlyProspects, // Use the calculated total from monthly data
+      totalProspects: totalMonthlyProspects,
       totalCalls,
       totalWhatsapp,
       totalOrders,
@@ -382,41 +406,49 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Executive dropdown list - update to include all types
+// Executive dropdown list - update to include all types INCLUDING FIELD
 router.get('/executives', async (_req, res) => {
   try {
-    const [salesExecs, serviceExecs, accounts] = await Promise.all([
+    const [salesExecs, serviceExecs, accounts, fieldExecs] = await Promise.all([
       Executive.find().select('name dateOfJoining'),
       ServiceExecutive.find().select('name dateOfJoining'),
-      Account.find().select('name dateOfJoining')
+      Account.find().select('name dateOfJoining'),
+      FieldExecutive.find().select('name joiningDate') // Select joiningDate for field executives
     ]);
     
-    res.json([
-      ...salesExecs.map(e => ({...e.toObject(), type: 'executive'})),
-      ...serviceExecs.map(e => ({...e.toObject(), type: 'service'})),
-      ...accounts.map(e => ({...e.toObject(), type: 'account'}))
-    ]);
+    // Map all executives to a consistent format
+    const allExecutives = [
+      ...salesExecs.map(e => ({...e.toObject(), type: 'executive', dateOfJoining: e.dateOfJoining})),
+      ...serviceExecs.map(e => ({...e.toObject(), type: 'service', dateOfJoining: e.dateOfJoining})),
+      ...accounts.map(e => ({...e.toObject(), type: 'account', dateOfJoining: e.dateOfJoining})),
+      ...fieldExecs.map(e => ({...e.toObject(), type: 'field', dateOfJoining: e.joiningDate})) // Map joiningDate to dateOfJoining
+    ];
+    
+    res.json(allExecutives);
   } catch (err) {
     console.error('Error fetching executives:', err);
     res.status(500).json({ error: 'Failed to fetch executives' });
   }
 });
+
 // ========================================
 // GET overall performance for all time (when no month/year filters)
 // ========================================
 router.get('/overall/all-time', async (req, res) => {
   try {
-    // Fetch all executives from all types
-    const [salesExecs, serviceExecs, accounts] = await Promise.all([
+    // Fetch all executives from all types INCLUDING FIELD
+    const [salesExecs, serviceExecs, accounts, fieldExecs] = await Promise.all([
       Executive.find().select('name dateOfJoining'),
       ServiceExecutive.find().select('name dateOfJoining'),
-      Account.find().select('name dateOfJoining')
+      Account.find().select('name dateOfJoining'),
+      FieldExecutive.find().select('name joiningDate') // Select joiningDate
     ]);
 
     const allExecutives = [
-      ...salesExecs.map(e => ({...e.toObject(), type: 'executive'})),
-      ...serviceExecs.map(e => ({...e.toObject(), type: 'service'})),
-      ...accounts.map(e => ({...e.toObject(), type: 'account'}))
+      ...salesExecs.map(e => ({...e.toObject(), type: 'executive', dateOfJoining: e.dateOfJoining})),
+      ...serviceExecs.map(e => ({...e.toObject(), type: 'service', dateOfJoining: e.dateOfJoining})),
+      ...accounts.map(e => ({...e.toObject(), type: 'account', dateOfJoining: e.dateOfJoining})),
+      ...fieldExecs.map(e => ({...e.toObject(), type: 'field', dateOfJoining: e.joiningDate}))
     ];
 
     const performanceData = [];
@@ -484,4 +516,5 @@ router.get('/overall/all-time', async (req, res) => {
     });
   }
 });
+
 module.exports = router;

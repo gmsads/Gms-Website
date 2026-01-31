@@ -474,6 +474,39 @@ function PendingService() {
     setSelectedMonth(currentDate.getMonth());
   };
 
+  // Column widths for better control
+  const columnWidths = {
+    sno: '60px',
+    executive: '150px',
+    business: '200px',
+    customer: '150px',
+    contact: '150px',
+    requirement: '180px',
+    qty: '80px',
+    rate: '100px',
+    total: '120px',
+    deliveryDate: '130px',
+    assignedTo: '150px',
+    remarks: '200px',
+    lastUpdateTime: '150px'
+  };
+
+  // Calculate left positions for sticky columns
+  const getLeftPosition = (columnIndex) => {
+    const widths = {
+      0: parseInt(columnWidths.sno),
+      1: parseInt(columnWidths.executive),
+      2: parseInt(columnWidths.business),
+      3: parseInt(columnWidths.customer)
+    };
+    
+    let left = 0;
+    for (let i = 0; i < columnIndex; i++) {
+      left += widths[i];
+    }
+    return left;
+  };
+
   return (
     <div style={styles.container}>
       <h2 style={styles.title}>
@@ -585,13 +618,22 @@ function PendingService() {
             <table style={styles.table}>
               <thead style={styles.tableHeader}>
                 <tr>
-                  {[
-                    'S.No', 'Executive', 'Business', 'Customer', 'Contact',
-                    'Requirement', 'Qty', 'Rate', 'Total', 
-                    'Delivery Date', 'Service Assigned To', 'Remarks', 'Last Update Time'
-                  ].map((header) => (
-                    <th key={header} style={styles.th(header)}>{header}</th>
-                  ))}
+                  {/* Sticky columns */}
+                  <th style={styles.stickyHeader(0, columnWidths.sno, getLeftPosition(0))}>S.No</th>
+                  <th style={styles.stickyHeader(1, columnWidths.executive, getLeftPosition(1))}>Executive</th>
+                  <th style={styles.stickyHeader(2, columnWidths.business, getLeftPosition(2))}>Business</th>
+                  <th style={styles.stickyHeader(3, columnWidths.customer, getLeftPosition(3))}>Customer</th>
+                  
+                  {/* Regular columns */}
+                  <th style={styles.regularHeader(columnWidths.contact)}>Contact</th>
+                  <th style={styles.regularHeader(columnWidths.requirement)}>Requirement</th>
+                  <th style={styles.regularHeader(columnWidths.qty)}>Qty</th>
+                  <th style={styles.regularHeader(columnWidths.rate)}>Rate</th>
+                  <th style={styles.regularHeader(columnWidths.total)}>Total</th>
+                  <th style={styles.regularHeader(columnWidths.deliveryDate)}>Delivery Date</th>
+                  <th style={styles.regularHeader(columnWidths.assignedTo)}>Service Assigned To</th>
+                  <th style={styles.regularHeader(columnWidths.remarks)}>Remarks</th>
+                  <th style={styles.regularHeader(columnWidths.lastUpdateTime)}>Last Update Time</th>
                 </tr>
               </thead>
               <tbody>
@@ -606,26 +648,74 @@ function PendingService() {
                   filteredOrders.map((order, orderIndex) =>
                     order.rows.map((row, rowIndex) => {
                       const isCompleted = isRowCompleted(row);
+                      const rowBgColor = (orderIndex + rowIndex) % 2 === 0 ? '#ffffff' : '#f8f9fa';
+                      const completedBgColor = '#d4edda';
+                      const backgroundColor = isCompleted ? completedBgColor : rowBgColor;
+                      
                       return (
                         <tr
                           key={`${order._id}-${rowIndex}`}
                           style={{
-                            ...styles.tableRow(orderIndex + rowIndex),
-                            ...(isCompleted && styles.completedRow)
+                            backgroundColor: backgroundColor,
+                            ...(isCompleted && styles.completedRow),
+                            ':hover': {
+                              backgroundColor: isCompleted ? '#c3e6cb' : '#f1f5f9',
+                            }
                           }}
                         >
-                          <td style={styles.td('S.No')}>{orderIndex + 1}</td>
-                          <td style={styles.td('Executive')}>{order.executive}</td>
-                          <td style={styles.td('Business')}>{order.business}</td>
-                          <td style={styles.td('Customer')}>{order.contactPerson}</td>
-                          <td style={styles.td('Contact')}>{order.contactCode} {order.phone}</td>
-                          <td style={styles.td('Requirement')}>{row.requirement}</td>
-                          <td style={styles.td('Qty')}>{row.quantity}</td>
-                          <td style={styles.td('Rate')}>{row.rate}</td>
-                          <td style={styles.td('Total')}>{row.total}</td>
-                          <td style={styles.td('Delivery Date')}>{formatDate(row.deliveryDate)}</td>
+                          {/* Sticky columns */}
+                          <td style={styles.stickyCell(0, columnWidths.sno, getLeftPosition(0), backgroundColor)}>
+                            {orderIndex + 1}
+                          </td>
                           
-                          <td style={styles.td('Service Assigned To')}>
+                          <td style={styles.stickyCell(1, columnWidths.executive, getLeftPosition(1), backgroundColor)}>
+                            <div style={styles.textCell}>
+                              {order.executive}
+                            </div>
+                          </td>
+                          
+                          <td style={styles.stickyCell(2, columnWidths.business, getLeftPosition(2), backgroundColor)}>
+                            <div style={styles.textCell}>
+                              {order.business}
+                            </div>
+                          </td>
+                          
+                          <td style={styles.stickyCell(3, columnWidths.customer, getLeftPosition(3), backgroundColor)}>
+                            <div style={styles.textCell}>
+                              {order.contactPerson}
+                            </div>
+                          </td>
+                          
+                          {/* Regular columns */}
+                          <td style={styles.regularTd(columnWidths.contact)}>
+                            <div style={styles.textCell}>
+                              {order.contactCode} {order.phone}
+                            </div>
+                          </td>
+                          
+                          <td style={styles.regularTd(columnWidths.requirement)}>
+                            <div style={styles.textCell}>
+                              {row.requirement}
+                            </div>
+                          </td>
+                          
+                          <td style={styles.regularTd(columnWidths.qty)}>
+                            {row.quantity}
+                          </td>
+                          
+                          <td style={styles.regularTd(columnWidths.rate)}>
+                            {row.rate}
+                          </td>
+                          
+                          <td style={styles.regularTd(columnWidths.total)}>
+                            {row.total}
+                          </td>
+                          
+                          <td style={styles.regularTd(columnWidths.deliveryDate)}>
+                            {formatDate(row.deliveryDate)}
+                          </td>
+                          
+                          <td style={styles.regularTd(columnWidths.assignedTo)}>
                             {row.assignedExecutive ? (
                               <span style={{
                                 backgroundColor: '#e3f2fd',
@@ -633,7 +723,9 @@ function PendingService() {
                                 padding: '4px 8px',
                                 borderRadius: '4px',
                                 fontWeight: 'bold',
-                                display: 'inline-block'
+                                display: 'inline-block',
+                                whiteSpace: 'normal',
+                                wordBreak: 'break-word'
                               }}>
                                 {row.assignedExecutive}
                               </span>
@@ -647,7 +739,7 @@ function PendingService() {
                             )}
                           </td>
                           
-                          <td style={styles.td('Remarks')}>
+                          <td style={styles.regularTd(columnWidths.remarks)}>
                             {editingRemark?.orderId === order._id && editingRemark?.rowIndex === rowIndex ? (
                               <div style={styles.remarkEditor}>
                                 <select
@@ -722,7 +814,7 @@ function PendingService() {
                             )}
                           </td>
                           
-                          <td style={styles.td('Last Update Time')}>
+                          <td style={styles.regularTd(columnWidths.lastUpdateTime)}>
                             {row.lastUpdateTime ? formatDateTime(row.lastUpdateTime) : '-'}
                           </td>
                         </tr>
@@ -883,6 +975,7 @@ const styles = {
     borderRadius: '8px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
     marginBottom: '20px',
+    backgroundColor: '#fff',
   },
   tableContainer: {
     width: '100%',
@@ -891,64 +984,87 @@ const styles = {
     maxHeight: 'calc(100vh - 300px)',
     backgroundColor: '#fff',
     position: 'relative',
+    border: '1px solid #ddd',
+    WebkitOverflowScrolling: 'touch',
   },
   table: {
     width: '100%',
-    borderCollapse: 'separate',
-    borderSpacing: 0,
+    borderCollapse: 'collapse',
     fontSize: '14px',
-    minWidth: '1200px',
+    minWidth: '1600px',
   },
   tableHeader: {
     backgroundColor: '#3498db',
     color: '#fff',
     position: 'sticky',
     top: 0,
-    zIndex: 10,
+    zIndex: 100,
   },
-  th: (header) => ({
+  stickyHeader: (index, width, left) => ({
     padding: '12px 8px',
     textAlign: 'left',
     fontWeight: '600',
     whiteSpace: 'nowrap',
-    borderRight: '1px solid rgba(255,255,255,0.1)',
-    position: ['S.No', 'Executive', 'Business'].includes(header) ? 'sticky' : 'relative',
-    left: header === 'S.No' ? 0 : 
-          header === 'Executive' ? '50px' : 
-          header === 'Business' ? '150px' : 'auto',
+    borderRight: '1px solid rgba(255,255,255,0.2)',
+    position: 'sticky',
+    left: `${left}px`,
     backgroundColor: '#3498db',
-    zIndex: header === 'S.No' ? 15 : 
-            header === 'Executive' ? 14 : 
-            header === 'Business' ? 13 : 1,
-    minWidth: header === 'S.No' ? '60px' : 
-              header === 'Executive' ? '100px' : 
-              header === 'Business' ? '120px' : 'auto',
+    zIndex: 100 + (index + 1) * 10,
+    minWidth: width,
+    width: width,
+    boxShadow: '2px 0 3px rgba(0,0,0,0.1)',
+    overflow: 'visible !important',
   }),
-  td: (columnName) => ({
-    padding: '10px 8px',
-    borderBottom: '1px solid #eee',
-    whiteSpace: 'nowrap',
+  regularHeader: (width) => ({
+    padding: '12px 8px',
     textAlign: 'left',
-    position: ['S.No', 'Executive', 'Business'].includes(columnName) ? 'sticky' : 'relative',
-    left: columnName === 'S.No' ? 0 : 
-          columnName === 'Executive' ? '50px' : 
-          columnName === 'Business' ? '150px' : 'auto',
-    backgroundColor: '#fff',
-    zIndex: columnName === 'S.No' ? 5 : 
-            columnName === 'Executive' ? 4 : 
-            columnName === 'Business' ? 3 : 1,
-    minWidth: columnName === 'S.No' ? '60px' : 
-              columnName === 'Executive' ? '100px' : 
-              columnName === 'Business' ? '120px' : 'auto',
+    fontWeight: '600',
+    whiteSpace: 'nowrap',
+    borderRight: '1px solid rgba(255,255,255,0.2)',
+    minWidth: width,
+    width: width,
   }),
-  tableRow: (index) => ({
-    backgroundColor: index % 2 === 0 ? '#ffffff' : '#f8f9fa',
-    ':hover': {
-      backgroundColor: '#f1f5f9',
-    },
+  stickyCell: (index, width, left, backgroundColor) => ({
+    padding: '12px 8px',
+    borderBottom: '1px solid #eee',
+    borderRight: '1px solid #eee',
+    textAlign: 'left',
+    position: 'sticky',
+    left: `${left}px`,
+    backgroundColor: backgroundColor,
+    zIndex: 10 + (index + 1) * 10,
+    minWidth: width,
+    width: width,
+    boxShadow: '2px 0 3px rgba(0,0,0,0.1)',
+    verticalAlign: 'top',
+    overflow: 'visible !important',
+    whiteSpace: 'normal',
+    wordWrap: 'break-word',
+    maxWidth: width,
   }),
+  regularTd: (width) => ({
+    padding: '12px 8px',
+    borderBottom: '1px solid #eee',
+    borderRight: '1px solid #eee',
+    textAlign: 'left',
+    verticalAlign: 'top',
+    whiteSpace: 'normal',
+    wordWrap: 'break-word',
+    minWidth: width,
+    width: width,
+    maxWidth: width,
+  }),
+  textCell: {
+    whiteSpace: 'normal',
+    wordWrap: 'break-word',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    maxWidth: '100%',
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+  },
   completedRow: {
-    backgroundColor: '#d4edda !important',
     borderLeft: '4px solid #28a745',
   },
   footerButtons: {

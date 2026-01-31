@@ -22,6 +22,7 @@ const PerformanceView = () => {
   const [executives, setExecutives] = useState([]);
   const [serviceExecutives, setServiceExecutives] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  const [fieldExecutives, setFieldExecutives] = useState([]); // NEW: Field executives state
   const [selectedExecutive, setSelectedExecutive] = useState('');
   const [performanceData, setPerformanceData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -33,11 +34,17 @@ const PerformanceView = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [overallPerformance, setOverallPerformance] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
+  const [loadingExecutives, setLoadingExecutives] = useState(false); // NEW: Loading state
   
   // NEW: Month and Year filter state for overall performance chart
   const [chartFilters, setChartFilters] = useState({
     month: new Date().getMonth() + 1, // Current month (1-12)
     year: new Date().getFullYear() // Current year
+  });
+
+  // NEW: Year filter for individual executive performance data
+  const [yearlyFilter, setYearlyFilter] = useState({
+    year: new Date().getFullYear() // Start with current year
   });
   
   // PERSISTENT: Load from localStorage on component mount
@@ -50,7 +57,6 @@ const PerformanceView = () => {
       return {};
     }
   });
-
 
   // PERSISTENT: Save to localStorage whenever manuallyEligibleMonths changes
   useEffect(() => {
@@ -84,8 +90,16 @@ const PerformanceView = () => {
       value: `account_${account._id}`
     }));
     
-    return [...execs, ...serviceExecs, ...accountExecs];
-  }, [executives, serviceExecutives, accounts]);
+    // NEW: Add field executives
+    const fieldExecs = fieldExecutives.map(exec => ({
+      ...exec,
+      type: 'Field',
+      displayName: `${exec.name} (Field)`,
+      value: `field_${exec._id || exec.name}` // Use name as ID if _id doesn't exist
+    }));
+    
+    return [...execs, ...serviceExecs, ...accountExecs, ...fieldExecs];
+  }, [executives, serviceExecutives, accounts, fieldExecutives]);
 
   // Filter executives based on search term
   const filteredExecutives = useMemo(() => {
@@ -102,13 +116,138 @@ const PerformanceView = () => {
     return allExecutives.find(exec => exec.value === selectedExecutive);
   }, [allExecutives, selectedExecutive]);
 
-  // Calculate balance for overall performance
+  // ========================================
+  // NEW: Calculate yearly performance data from monthly breakdown
+  // ========================================
+  const calculateYearlyData = useMemo(() => {
+    if (!performanceData || !performanceData.detailedData?.byMonth) {
+      return null;
+    }
+    
+    const monthlyData = performanceData.detailedData.byMonth;
+    
+    // Filter months by selected year
+    const filteredMonths = monthlyData.filter(monthData => {
+      const [_, yearStr] = monthData.month.split(' ');
+      const year = parseInt(yearStr);
+      return yearlyFilter.year ? year === yearlyFilter.year : true;
+    });
+    
+    // Calculate totals for filtered months
+    const totals = filteredMonths.reduce((acc, month) => ({
+      target: acc.target + (month.target || 0),
+      achieved: acc.achieved + (month.achieved || 0),
+      advance: acc.advance + (month.advance || 0),
+      orders: acc.orders + (month.orders || 0),
+      prospects: acc.prospects + (month.prospects || 0)
+    }), { target: 0, achieved: 0, advance: 0, orders: 0, prospects: 0 });
+    
+    // Calculate percentage
+    const percentage = totals.target > 0 
+      ? (totals.achieved / totals.target) * 100 
+      : totals.achieved > 0 ? 100 : 0;
+    
+    return {
+      target: totals.target,
+      achieved: totals.achieved,
+      advance: totals.advance,
+      totalOrders: totals.orders,
+      totalProspects: totals.prospects,
+      achievedPercentage: percentage
+    };
+  }, [performanceData, yearlyFilter.year]);
+
+  // ========================================
+  // Calculate balance for overall performance - NOW RESPECTS YEAR FILTER
+  // ========================================
   const overallBalance = useMemo(() => {
     if (!performanceData) return 0;
+    
+    // Use calculated yearly data
+    if (calculateYearlyData) {
+      return calculateYearlyData.achieved - calculateYearlyData.advance;
+    }
+    
+    // Otherwise use all-time data
     const achieved = performanceData.achieved || 0;
     const advance = performanceData.advance || 0;
     return achieved - advance;
-  }, [performanceData]);
+  }, [performanceData, calculateYearlyData]);
+
+  // ========================================
+  // Get the current performance percentage based on year filter
+  // ========================================
+  const getCurrentPerformancePercentage = () => {
+    if (!performanceData) return 0;
+    
+    // Use calculated yearly data
+    if (calculateYearlyData) {
+      return calculateYearlyData.achievedPercentage || 0;
+    }
+    
+    // Otherwise use all-time percentage
+    return performanceData.achievedPercentage || 0;
+  };
+
+  // ========================================
+  // Get the target amount based on year filter
+  // ========================================
+  const getTargetAmount = () => {
+    if (!performanceData) return 0;
+    
+    // Use calculated yearly data
+    if (calculateYearlyData) {
+      return calculateYearlyData.target || 0;
+    }
+    
+    // Otherwise use all-time target
+    return performanceData.target || 0;
+  };
+
+  // ========================================
+  // Get the achieved amount based on year filter
+  // ========================================
+  const getAchievedAmount = () => {
+    if (!performanceData) return 0;
+    
+    // Use calculated yearly data
+    if (calculateYearlyData) {
+      return calculateYearlyData.achieved || 0;
+    }
+    
+    // Otherwise use all-time achieved
+    return performanceData.achieved || 0;
+  };
+
+  // ========================================
+  // Get the advance amount based on year filter
+  // ========================================
+  const getAdvanceAmount = () => {
+    if (!performanceData) return 0;
+    
+    // Use calculated yearly data
+    if (calculateYearlyData) {
+      return calculateYearlyData.advance || 0;
+    }
+    
+    // Otherwise use all-time advance
+    return performanceData.advance || 0;
+  };
+
+  // ========================================
+  // Get total orders based on year filter
+  // ========================================
+  const getTotalOrders = () => {
+    if (!performanceData) return 0;
+    
+    // Use calculated yearly data
+    if (calculateYearlyData) {
+      return calculateYearlyData.totalOrders || 0;
+    }
+    
+    // Otherwise use all-time total orders
+    return performanceData.totalOrders || 0;
+  };
 
   // Calculate balance for monthly performance
   const calculateMonthlyBalance = (monthData) => {
@@ -206,7 +345,9 @@ const PerformanceView = () => {
     };
   }, [manuallyEligibleMonths, performanceData]);
 
+  // ========================================
   // Extract the performance data fetching logic into a separate function
+  // ========================================
   const fetchPerformanceData = async (executiveValue) => {
     if (!executiveValue) return;
 
@@ -214,6 +355,7 @@ const PerformanceView = () => {
     try {
       const [prefix, executiveId] = executiveValue.split('_');
       
+      // Build parameters - DON'T pass year filter to API
       const params = { 
         executiveId,
         executiveType: prefix,
@@ -243,29 +385,98 @@ const PerformanceView = () => {
         setSelectedExecutive(foundExecutive.value);
         setSearchTerm(foundExecutive.name);
         
-        // Auto-fetch performance data
+        // Auto-fetch performance data WITHOUT year filter
         fetchPerformanceData(foundExecutive.value);
       }
     }
   }, [employeeNameFromUrl, allExecutives]);
 
-// NEW: Fetch overall performance data with month and year filters
-const fetchOverallPerformance = async (month = null, year = null) => {
-  setChartLoading(true);
+  // ========================================
+  // NEW: Fetch overall performance data with month and year filters
+  // ========================================
+  const fetchOverallPerformance = async (month = null, year = null) => {
+    setChartLoading(true);
+    try {
+      const params = {};
+      // Only send month/year if they have values (not empty strings)
+      if (month !== '' && month !== null) params.month = month;
+      if (year !== '' && year !== null) params.year = year;
+      
+      console.log('Fetching overall performance with params:', params);
+      
+      const res = await axios.get('/api/performance/overall', { params });
+      setOverallPerformance(res.data);
+    } catch (error) {
+      console.error('Error fetching overall performance:', error);
+    } finally {
+      setChartLoading(false);
+    }
+  };
+
+ const fetchAllExecutives = async () => {
+  setLoadingExecutives(true);
   try {
-    const params = {};
-    // Only send month/year if they have values (not empty strings)
-    if (month !== '' && month !== null) params.month = month;
-    if (year !== '' && year !== null) params.year = year;
+    // Fetch all executive types in parallel
+    const [execRes, serviceExecRes, accountsRes, fieldExecRes] = await Promise.all([
+      axios.get('/api/performance/executives'), // This now includes field executives
+      axios.get('/api/service-executives'),
+      axios.get('/api/accounts'),
+      // Keep the separate field executive fetch as backup
+      axios.get('/api/field-executive/admin/executives').catch(() => ({ data: [] })) // Fetch as backup
+    ]);
     
-    console.log('Fetching overall performance with params:', params);
+    // Filter out Sangeetha, Shivakumari, Malleshwari, Rajitha, and Malli from sales executives
+    const filteredSalesExecs = execRes.data.filter(exec => 
+      exec.type !== 'executive' || ( // Only filter sales executives
+        exec.name.toLowerCase() !== 'sangeetha' && 
+        exec.name.toLowerCase() !== 'shivakumari' &&
+        exec.name.toLowerCase() !== 'malleshwari' &&
+        exec.name.toLowerCase() !== 'rajitha' &&
+        exec.name.toLowerCase() !== 'malli'
+      )
+    );
     
-    const res = await axios.get('/api/performance/overall', { params });
-    setOverallPerformance(res.data);
+    // Separate executives by type from the performance/executives endpoint
+    const salesExecs = filteredSalesExecs.filter(exec => exec.type === 'executive');
+    const serviceExecs = filteredSalesExecs.filter(exec => exec.type === 'service');
+    const accountExecs = filteredSalesExecs.filter(exec => exec.type === 'account');
+    const fieldExecs = filteredSalesExecs.filter(exec => exec.type === 'field');
+    
+    // If no field executives from performance endpoint, use backup
+    let finalFieldExecs = fieldExecs;
+    if (fieldExecs.length === 0 && fieldExecRes.data && Array.isArray(fieldExecRes.data)) {
+      // Process backup field executives
+      if (fieldExecRes.data.length > 0 && typeof fieldExecRes.data[0] === 'string') {
+        finalFieldExecs = fieldExecRes.data.map(name => ({
+          name: name,
+          _id: name,
+          type: 'field',
+          dateOfJoining: new Date('2024-01-01')
+        }));
+      } else {
+        finalFieldExecs = fieldExecRes.data.map(exec => ({
+          name: exec.name || exec._id,
+          _id: exec._id || exec.name,
+          type: 'field',
+          dateOfJoining: exec.joiningDate || exec.dateOfJoining || new Date('2024-01-01')
+        }));
+      }
+    }
+    
+    setExecutives(salesExecs);
+    setServiceExecutives(serviceExecs);
+    setAccounts(accountExecs);
+    setFieldExecutives(finalFieldExecs);
+    
   } catch (error) {
-    console.error('Error fetching overall performance:', error);
+    console.error('Error fetching executives data:', error);
+    // Set empty arrays if API fails
+    setExecutives([]);
+    setServiceExecutives([]);
+    setAccounts([]);
+    setFieldExecutives([]);
   } finally {
-    setChartLoading(false);
+    setLoadingExecutives(false);
   }
 };
 
@@ -274,34 +485,9 @@ const fetchOverallPerformance = async (month = null, year = null) => {
     fetchOverallPerformance(chartFilters.month, chartFilters.year);
   }, [chartFilters.month, chartFilters.year]);
 
-  // Fetch executives data
+  // Fetch executives data on component mount
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [execRes, serviceExecRes, accountsRes] = await Promise.all([
-          axios.get('/api/performance/executives'),
-          axios.get('/api/service-executives'),
-          axios.get('/api/accounts')
-        ]);
-        
-        // Filter out Sangeetha, Shivakumari, Malleshwari, Rajitha, and Malli from sales executives
-        const filteredSalesExecs = execRes.data.filter(exec => 
-          exec.name.toLowerCase() !== 'sangeetha' && 
-          exec.name.toLowerCase() !== 'shivakumari' &&
-          exec.name.toLowerCase() !== 'malleshwari' &&
-          exec.name.toLowerCase() !== 'rajitha' &&
-          exec.name.toLowerCase() !== 'malli'
-        );
-        
-        setExecutives(filteredSalesExecs);
-        setServiceExecutives(serviceExecRes.data);
-        setAccounts(accountsRes.data);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      }
-    };
-    
-    fetchData();
+    fetchAllExecutives();
   }, []);
 
   // NEW: Handle chart filter changes
@@ -311,6 +497,19 @@ const fetchOverallPerformance = async (month = null, year = null) => {
       ...prev,
       [name]: value ? parseInt(value) : ''
     }));
+  };
+
+  // NEW: Handle yearly filter changes for all sections
+  const handleYearlyFilterChange = (e) => {
+    const { name, value } = e.target;
+    const newYear = value ? parseInt(value) : '';
+    setYearlyFilter(prev => ({
+      ...prev,
+      [name]: newYear
+    }));
+    
+    // DON'T refetch data - we calculate yearly data from the existing monthly breakdown
+    // The calculateYearlyData memo will automatically update
   };
 
   // NEW: Generate month options
@@ -729,6 +928,63 @@ const fetchOverallPerformance = async (month = null, year = null) => {
     },
     chartFilterGroup: {
       minWidth: '200px'
+    },
+    // NEW: Yearly filter styles for all sections
+    yearlyFilterContainer: {
+      display: 'flex',
+      gap: '20px',
+      marginBottom: '20px',
+      flexWrap: 'wrap'
+    },
+    yearlyFilterGroup: {
+      minWidth: '200px'
+    },
+    // NEW: Results header with year filter
+    resultsHeader: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '20px',
+      flexWrap: 'wrap',
+      gap: '15px'
+    },
+    yearFilterDisplay: {
+      backgroundColor: '#e3f2fd',
+      padding: '8px 15px',
+      borderRadius: '6px',
+      border: '1px solid #1976d2',
+      color: '#1976d2',
+      fontWeight: '600',
+      fontSize: '14px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px'
+    },
+    yearFilterLabel: {
+      color: '#1976d2',
+      fontSize: '14px',
+      fontWeight: '600'
+    },
+    // NEW: Year filter badge in Overall Performance card
+    yearBadge: {
+      backgroundColor: '#1976d2',
+      color: 'white',
+      padding: '4px 10px',
+      borderRadius: '12px',
+      fontSize: '12px',
+      fontWeight: '600',
+      marginLeft: '10px'
+    },
+    // NEW: Loading spinner for executives dropdown
+    loadingSpinner: {
+      border: '3px solid #f3f3f3',
+      borderTop: '3px solid #3498db',
+      borderRadius: '50%',
+      width: '20px',
+      height: '20px',
+      animation: 'spin 1s linear infinite',
+      marginRight: '10px',
+      display: 'inline-block'
     }
   };
 
@@ -739,6 +995,7 @@ const fetchOverallPerformance = async (month = null, year = null) => {
       return;
     }
 
+    // Fetch data WITHOUT year filter - we'll calculate yearly data on frontend
     await fetchPerformanceData(selectedExecutive);
   };
 
@@ -920,6 +1177,11 @@ const fetchOverallPerformance = async (month = null, year = null) => {
             color: '#2c3e50'
           }}>
             Current Performance: 0%
+            {yearlyFilter.year && (
+              <span style={styles.yearBadge}>
+                {yearlyFilter.year}
+              </span>
+            )}
           </div>
         </div>
       );
@@ -972,6 +1234,11 @@ const fetchOverallPerformance = async (month = null, year = null) => {
           color: '#2c3e50'
         }}>
           Current Performance: {percentage.toFixed(1)}%
+          {yearlyFilter.year && (
+            <span style={styles.yearBadge}>
+              {yearlyFilter.year}
+            </span>
+          )}
         </div>
       </div>
     );
@@ -1156,6 +1423,29 @@ const fetchOverallPerformance = async (month = null, year = null) => {
     );
   };
 
+  // NEW: Render yearly filter for all sections
+  const renderYearlyFilter = () => {
+    return (
+      <div style={styles.yearlyFilterContainer}>
+        <div style={styles.yearlyFilterGroup}>
+          <label htmlFor="year" style={styles.label}>Filter Data by Year</label>
+          <select
+            name="year"
+            value={yearlyFilter.year}
+            onChange={handleYearlyFilterChange}
+            style={styles.select}
+          >
+            {yearOptions.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    );
+  };
+
   // PERSISTENT: Render incentive information (only when there are eligible months)
   const renderIncentiveInfo = () => {
     if (incentiveSummary.totalEligibleMonths === 0) return null;
@@ -1187,7 +1477,31 @@ const fetchOverallPerformance = async (month = null, year = null) => {
     return bDate - aDate;
   });
 
-  return sortedMonths.map((monthData, index) => {
+  // Filter months by selected year
+  const filteredMonths = sortedMonths.filter(monthData => {
+    if (!yearlyFilter.year) return true; // Show all if no year selected
+    
+    const [_, yearStr] = monthData.month.split(' ');
+    const year = parseInt(yearStr);
+    return year === yearlyFilter.year;
+  });
+
+  if (filteredMonths.length === 0) {
+    return (
+      <div style={{
+        gridColumn: '1 / -1',
+        textAlign: 'center',
+        padding: '40px',
+        color: '#95a5a6',
+        fontSize: '16px',
+        fontStyle: 'italic'
+      }}>
+        No monthly data available for {yearlyFilter.year || 'the selected period'}
+      </div>
+    );
+  }
+
+  return filteredMonths.map((monthData, index) => {
     const percentage = monthData.percentage || 0;
     const balance = calculateMonthlyBalance(monthData);
     const monthKey = monthData.month;
@@ -1321,13 +1635,18 @@ const fetchOverallPerformance = async (month = null, year = null) => {
   });
 };
 
+  // NEW: Generate year filter display text
+  const getYearFilterDisplayText = () => {
+    if (!yearlyFilter.year) return 'All Years';
+    return yearlyFilter.year.toString();
+  };
+
   return (
     <div style={styles.container}>
       <h1 style={styles.heading}>Executive Performance Dashboard</h1>
 
       {/* Overall Performance Chart Section */}
       <div style={styles.chartContainer}>
-        <h2 style={styles.chartTitle}>Overall Performance</h2>
         
         {/* NEW: Chart Filters */}
         {renderChartFilters()}
@@ -1336,59 +1655,79 @@ const fetchOverallPerformance = async (month = null, year = null) => {
       </div>
 
       <div style={styles.formContainer}>
-        <h2 style={styles.formTitle}>Performance Search Criteria</h2>
+        <h2 style={styles.formTitle}>Individual Performance Report</h2>
         <form onSubmit={handleSubmit}>
           <div style={styles.formRow}>
             <div style={styles.formGroup}>
               <label htmlFor="executive" style={styles.label}>Select Executive</label>
               <div style={styles.searchContainer}>
-                <input
-                  type="text"
-                  placeholder="Search executives..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onFocus={() => setShowDropdown(true)}
-                  style={styles.searchInput}
-                />
-                {showDropdown && (
-                  <div style={styles.dropdownList}>
-                    {filteredExecutives.length > 0 ? (
-                      filteredExecutives.map((exec) => (
-                        <div
-                          key={exec.value}
-                          style={{
-                            ...styles.dropdownItem,
-                            ...(selectedExecutive === exec.value ? styles.dropdownItemHover : {})
-                          }}
-                          onClick={() => {
-                            setSelectedExecutive(exec.value);
-                            setSearchTerm('');
-                            setShowDropdown(false);
-                          }}
-                        >
-                          <span>{exec.name}</span>
-                          <span style={{
-                            ...styles.typeBadge,
-                            backgroundColor: 
-                              exec.type === 'Sales' ? '#3498db' : 
-                              exec.type === 'Service' ? '#2ecc71' : 
-                              '#9b59b6'
-                          }}>
-                            {exec.type}
-                          </span>
-                        </div>
-                      ))
-                    ) : (
-                      <div style={styles.dropdownItem}>
-                        No executives found
+                {loadingExecutives ? (
+                  <div style={{ 
+                    padding: '12px', 
+                    textAlign: 'center', 
+                    backgroundColor: '#f8f9fa', 
+                    borderRadius: '6px',
+                    border: '1px solid #ddd'
+                  }}>
+                    <div style={styles.loadingSpinner}></div>
+                    Loading executives...
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="Type executive name..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onFocus={() => setShowDropdown(true)}
+                      style={styles.searchInput}
+                    />
+                    {showDropdown && (
+                      <div style={styles.dropdownList}>
+                        {filteredExecutives.length > 0 ? (
+                          filteredExecutives.map((exec) => {
+                            // Determine badge color based on executive type
+                            let badgeColor = '#3498db'; // Default blue for Sales
+                            if (exec.type === 'Service') badgeColor = '#2ecc71'; // Green
+                            if (exec.type === 'Account') badgeColor = '#9b59b6'; // Purple
+                            if (exec.type === 'Field') badgeColor = '#e74c3c'; // Red for Field executives
+                            
+                            return (
+                              <div
+                                key={exec.value}
+                                style={{
+                                  ...styles.dropdownItem,
+                                  ...(selectedExecutive === exec.value ? styles.dropdownItemHover : {})
+                                }}
+                                onClick={() => {
+                                  setSelectedExecutive(exec.value);
+                                  setSearchTerm('');
+                                  setShowDropdown(false);
+                                }}
+                              >
+                                <span>{exec.name}</span>
+                                <span style={{
+                                  ...styles.typeBadge,
+                                  backgroundColor: badgeColor
+                                }}>
+                                  {exec.type}
+                                </span>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div style={styles.dropdownItem}>
+                            No executives found
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
+                  </>
                 )}
               </div>
-              {selectedExecutive && (
+              {selectedExecutive && selectedExecutiveObj && (
                 <div style={styles.selectedExecutive}>
-                  Selected: {selectedExecutiveObj?.name} ({selectedExecutiveObj?.type})
+                  Selected: {selectedExecutiveObj.name} ({selectedExecutiveObj.type})
                 </div>
               )}
             </div>
@@ -1423,27 +1762,38 @@ const fetchOverallPerformance = async (month = null, year = null) => {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || loadingExecutives}
             style={{
               ...styles.button,
-              ...(loading ? styles.buttonDisabled : {})
+              ...((loading || loadingExecutives) ? styles.buttonDisabled : {})
             }}
           >
-            {loading ? 'Loading...' : 'View Performance Report'}
+            {loading ? 'Loading...' : (loadingExecutives ? 'Loading Executives...' : 'View Performance Report')}
           </button>
         </form>
       </div>
 
       {performanceData && (
         <div style={styles.resultsContainer}>
-          <h2 style={styles.resultsTitle}>
-            Performance Report for {performanceData.executiveName}
-            {dateRange.startDate && dateRange.endDate && (
-              <span style={{ fontSize: '16px', fontWeight: 'normal', color: '#7f8c8d', marginLeft: '15px' }}>
-                ({format(parseISO(dateRange.startDate), 'MMM dd, yyyy')} - {format(parseISO(dateRange.endDate), 'MMM dd, yyyy')})
-              </span>
-            )}
-          </h2>
+          {/* NEW: Results header with year filter */}
+          <div style={styles.resultsHeader}>
+            <h2 style={styles.resultsTitle}>
+              Performance Report for {performanceData.executiveName}
+              {dateRange.startDate && dateRange.endDate && (
+                <span style={{ fontSize: '16px', fontWeight: 'normal', color: '#7f8c8d', marginLeft: '15px' }}>
+                  ({format(parseISO(dateRange.startDate), 'MMM dd, yyyy')} - {format(parseISO(dateRange.endDate), 'MMM dd, yyyy')})
+                </span>
+              )}
+            </h2>
+            
+            <div style={styles.yearFilterDisplay}>
+              <span style={styles.yearFilterLabel}>Year Filter:</span>
+              <span>{getYearFilterDisplayText()}</span>
+            </div>
+          </div>
+
+          {/* NEW: Yearly Filter for all sections */}
+          {renderYearlyFilter()}
 
           {/* UPDATED INCENTIVE SUMMARY CARD */}
           {renderIncentiveInfo()}
@@ -1498,23 +1848,24 @@ const fetchOverallPerformance = async (month = null, year = null) => {
 
             <div style={{ ...styles.card, borderTop: '4px solid #2ecc71' }}>
               <h3 style={styles.cardTitle}>Overall Performance</h3>
-              {renderPerformanceBox(performanceData.achievedPercentage || 0)}
+              {/* UPDATED: Now shows performance percentage based on year filter */}
+              {renderPerformanceBox(getCurrentPerformancePercentage())}
               <div style={styles.cardItem}>
                 <span style={styles.cardLabel}>Total Target:</span>
                 <span style={styles.cardValue}>
-                  ₹{(performanceData.target || 0).toLocaleString('en-IN')}
+                  ₹{getTargetAmount().toLocaleString('en-IN')}
                 </span>
               </div>
               <div style={styles.cardItem}>
                 <span style={styles.cardLabel}>Total Achieved:</span>
                 <span style={styles.cardValue}>
-                  ₹{(performanceData.achieved || 0).toLocaleString('en-IN')}
+                  ₹{getAchievedAmount().toLocaleString('en-IN')}
                 </span>
               </div>
               <div style={styles.cardItem}>
                 <span style={styles.cardLabel}>Total Advance:</span>
                 <span style={styles.cardValue}>
-                  ₹{(performanceData.advance || 0).toLocaleString('en-IN')}
+                  ₹{getAdvanceAmount().toLocaleString('en-IN')}
                 </span>
               </div>
               <div style={styles.cardItem}>
@@ -1535,7 +1886,7 @@ const fetchOverallPerformance = async (month = null, year = null) => {
               >
                 <span style={styles.cardLabel}>Total Orders:</span>
                 <span style={styles.cardValue}>
-                  {performanceData.totalOrders || '0'}
+                  {getTotalOrders() || '0'}
                 </span>
               </div>
             </div>
@@ -1543,12 +1894,20 @@ const fetchOverallPerformance = async (month = null, year = null) => {
 
           <div style={styles.monthlySection}>
             <h3 style={styles.monthlyHeader}>Monthly Performance Breakdown</h3>
+            
             <div style={styles.monthlyGrid}>
               {renderMonthlyTargets()}
             </div>
           </div>
         </div>
       )}
+      
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };
