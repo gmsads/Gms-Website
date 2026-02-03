@@ -86,6 +86,17 @@ function ViewOrders() {
     PERMANENT_DELETE_ORDER: (id) => `${API_BASE_URL}/orders/${id}/permanent` // Permanent delete
   };
 
+  // CSS for responsive sticky columns
+  const responsiveStyles = `
+    @media (max-width: 1024px) {
+      .sticky-column {
+        position: static !important;
+        left: auto !important;
+        z-index: auto !important;
+      }
+    }
+  `;
+
   // Function to check if user should see summary cards
   const shouldShowSummaryCards = () => {
     // Define roles that can see summary cards
@@ -1387,6 +1398,9 @@ function ViewOrders() {
   // Main component render
   return (
     <div style={{ padding: '20px', backgroundColor: '#f9f9f9', minHeight: '100vh' }}>
+      {/* Add responsive CSS styles */}
+      <style>{responsiveStyles}</style>
+      
       {/* Toast container for notifications */}
       <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999 }} />
 
@@ -2120,8 +2134,8 @@ function ViewOrders() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
                   <thead style={{ backgroundColor: '#218c74', color: '#fff', position: 'sticky', top: 0, zIndex: 10 }}>
                     <tr>
-                      {/* Sticky Columns - S.No, Executive, Business */}
-                      <th style={{ 
+                      {/* Sticky Columns - S.No, Executive, Business with responsive class */}
+                      <th className="sticky-column" style={{ 
                         padding: '12px 8px', 
                         fontSize: '14px', 
                         textAlign: 'center', 
@@ -2132,7 +2146,7 @@ function ViewOrders() {
                         minWidth: '50px'
                       }}>S.No</th>
                       
-                      <th style={{ 
+                      <th className="sticky-column" style={{ 
                         padding: '12px 8px', 
                         fontSize: '14px', 
                         textAlign: 'center', 
@@ -2143,7 +2157,7 @@ function ViewOrders() {
                         minWidth: '100px'
                       }}>Executive</th>
                       
-                      <th style={{ 
+                      <th className="sticky-column" style={{ 
                         padding: '12px 8px', 
                         fontSize: '14px', 
                         textAlign: 'center', 
@@ -2198,8 +2212,8 @@ function ViewOrders() {
                               borderBottom: '1px solid #eee'
                             }}
                           >
-                            {/* Sticky Cells - S.No, Executive, Business */}
-                            <td style={{ 
+                            {/* Sticky Cells - S.No, Executive, Business with responsive class */}
+                            <td className="sticky-column" style={{ 
                               padding: '10px 8px', 
                               textAlign: 'center',
                               position: 'sticky',
@@ -2209,7 +2223,7 @@ function ViewOrders() {
                               minWidth: '50px'
                             }}>{orderIndex + 1}</td>
                             
-                            <td style={{ 
+                            <td className="sticky-column" style={{ 
                               padding: '10px 8px',
                               position: 'sticky',
                               left: '50px',
@@ -2218,7 +2232,7 @@ function ViewOrders() {
                               minWidth: '100px'
                             }}>{order.executive}</td>
                             
-                            <td style={{ 
+                            <td className="sticky-column" style={{ 
                               padding: '10px 8px',
                               position: 'sticky',
                               left: '150px',

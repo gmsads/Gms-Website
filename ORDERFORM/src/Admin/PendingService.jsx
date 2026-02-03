@@ -28,6 +28,7 @@ function PendingService() {
   
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const tableContainerRef = useRef(null);
   
   const monthLabels = [
@@ -52,6 +53,18 @@ function PendingService() {
   for (let y = currentYear - 5; y <= currentYear + 5; y++) {
     years.push(y);
   }
+
+  // Check if screen is mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     fetchOrders();
@@ -387,10 +400,11 @@ function PendingService() {
       padding: '4px 8px',
       borderRadius: '4px',
       display: 'inline-block',
-      minWidth: '80px',
+      minWidth: isMobile ? '70px' : '80px',
       textAlign: 'center',
       color: 'white',
-      fontWeight: 'bold'
+      fontWeight: 'bold',
+      fontSize: isMobile ? '12px' : '14px'
     };
 
     if (isCompletedFlag || remark === 'completed') {
@@ -474,22 +488,44 @@ function PendingService() {
     setSelectedMonth(currentDate.getMonth());
   };
 
-  // Column widths for better control
-  const columnWidths = {
-    sno: '60px',
-    executive: '150px',
-    business: '200px',
-    customer: '150px',
-    contact: '150px',
-    requirement: '180px',
-    qty: '80px',
-    rate: '100px',
-    total: '120px',
-    deliveryDate: '130px',
-    assignedTo: '150px',
-    remarks: '200px',
-    lastUpdateTime: '150px'
+  // Responsive column widths
+  const getColumnWidths = () => {
+    if (isMobile) {
+      return {
+        sno: '50px',
+        executive: '100px',
+        business: '120px',
+        customer: '100px',
+        contact: '110px',
+        requirement: '140px',
+        qty: '60px',
+        rate: '80px',
+        total: '90px',
+        deliveryDate: '100px',
+        assignedTo: '120px',
+        remarks: '160px',
+        lastUpdateTime: '120px'
+      };
+    } else {
+      return {
+        sno: '60px',
+        executive: '150px',
+        business: '200px',
+        customer: '150px',
+        contact: '150px',
+        requirement: '180px',
+        qty: '80px',
+        rate: '100px',
+        total: '120px',
+        deliveryDate: '130px',
+        assignedTo: '150px',
+        remarks: '200px',
+        lastUpdateTime: '150px'
+      };
+    }
   };
+
+  const columnWidths = getColumnWidths();
 
   // Calculate left positions for sticky columns
   const getLeftPosition = (columnIndex) => {
@@ -505,6 +541,361 @@ function PendingService() {
       left += widths[i];
     }
     return left;
+  };
+
+  // Responsive styles
+  const styles = {
+    container: {
+      padding: isMobile ? '10px' : '20px',
+      backgroundColor: '#f8f9fa',
+      minHeight: '100vh',
+      fontFamily: 'Arial, sans-serif',
+    },
+    title: {
+      textAlign: 'center',
+      margin: '0 0 20px 0',
+      color: '#2c3e50',
+      fontSize: isMobile ? '20px' : '24px',
+      fontWeight: '600',
+    },
+    filterContainer: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: isMobile ? '10px' : '15px',
+      marginBottom: '20px',
+      backgroundColor: '#fff',
+      padding: isMobile ? '12px' : '15px',
+      borderRadius: '8px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    },
+    filterRow: {
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      justifyContent: 'space-between',
+      alignItems: isMobile ? 'flex-start' : 'center',
+      gap: isMobile ? '10px' : '15px',
+    },
+    searchContainer: {
+      display: 'flex',
+      justifyContent: 'center',
+    },
+    searchInput: {
+      padding: isMobile ? '8px 12px' : '10px 15px',
+      width: '100%',
+      maxWidth: '500px',
+      borderRadius: '4px',
+      border: '1px solid #ddd',
+      fontSize: isMobile ? '14px' : '14px',
+      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
+    },
+    yearMonthContainer: {
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      alignItems: isMobile ? 'flex-start' : 'center',
+      gap: isMobile ? '10px' : '15px',
+      width: isMobile ? '100%' : 'auto',
+    },
+    statusFilterContainer: {
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      alignItems: isMobile ? 'flex-start' : 'center',
+      gap: isMobile ? '10px' : '15px',
+      width: isMobile ? '100%' : 'auto',
+    },
+    selectWrapper: {
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      alignItems: isMobile ? 'flex-start' : 'center',
+      gap: isMobile ? '4px' : '8px',
+      width: isMobile ? '100%' : 'auto',
+    },
+    filterLabel: {
+      fontWeight: '600',
+      color: '#2c3e50',
+      fontSize: isMobile ? '14px' : '14px',
+      minWidth: isMobile ? '100%' : 'auto',
+    },
+    filterSelect: {
+      padding: isMobile ? '6px 10px' : '8px 12px',
+      borderRadius: '4px',
+      border: '1px solid #ddd',
+      backgroundColor: '#fff',
+      fontSize: isMobile ? '14px' : '14px',
+      cursor: 'pointer',
+      width: isMobile ? '100%' : 'auto',
+    },
+    clearFilterButton: {
+      padding: isMobile ? '6px 10px' : '8px 12px',
+      backgroundColor: '#e74c3c',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: isMobile ? '14px' : '14px',
+      fontWeight: '600',
+      transition: 'all 0.2s',
+      width: isMobile ? '100%' : 'auto',
+      ':hover': {
+        backgroundColor: '#c0392b',
+      }
+    },
+    currentMonthButton: {
+      padding: isMobile ? '6px 10px' : '8px 12px',
+      backgroundColor: '#3498db',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: isMobile ? '14px' : '14px',
+      fontWeight: '600',
+      transition: 'all 0.2s',
+      width: isMobile ? '100%' : 'auto',
+      ':hover': {
+        backgroundColor: '#2980b9',
+      }
+    },
+    currentFilterInfo: {
+      textAlign: 'center',
+      padding: '8px',
+      backgroundColor: '#e8f4fd',
+      borderRadius: '4px',
+      color: '#2c3e50',
+      fontSize: isMobile ? '13px' : '14px',
+    },
+    loading: {
+      textAlign: 'center',
+      padding: '20px',
+      color: '#7f8c8d',
+      fontSize: isMobile ? '15px' : '16px',
+    },
+    noData: {
+      textAlign: 'center',
+      padding: '20px',
+      color: '#7f8c8d',
+      fontSize: isMobile ? '15px' : '16px',
+    },
+    tableWrapper: {
+      position: 'relative',
+      width: '100%',
+      overflow: 'hidden',
+      borderRadius: '8px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+      marginBottom: '20px',
+      backgroundColor: '#fff',
+    },
+    tableContainer: {
+      width: '100%',
+      overflowX: isMobile ? 'hidden' : 'auto',
+      overflowY: 'auto',
+      maxHeight: isMobile ? 'calc(100vh - 400px)' : 'calc(100vh - 300px)',
+      backgroundColor: '#fff',
+      position: 'relative',
+      border: '1px solid #ddd',
+      WebkitOverflowScrolling: 'touch',
+    },
+    table: {
+      width: '100%',
+      borderCollapse: 'collapse',
+      fontSize: isMobile ? '13px' : '14px',
+      minWidth: isMobile ? '100%' : '1600px',
+    },
+    tableHeader: {
+      backgroundColor: '#3498db',
+      color: '#fff',
+      position: 'sticky',
+      top: 0,
+      zIndex: 100,
+    },
+    stickyHeader: (index, width, left) => ({
+      padding: isMobile ? '8px 4px' : '12px 8px',
+      textAlign: 'left',
+      fontWeight: '600',
+      whiteSpace: 'nowrap',
+      borderRight: '1px solid rgba(255,255,255,0.2)',
+      position: isMobile ? 'relative' : 'sticky',
+      left: isMobile ? '0' : `${left}px`,
+      backgroundColor: '#3498db',
+      zIndex: isMobile ? 10 : 100 + (index + 1) * 10,
+      minWidth: width,
+      width: width,
+      boxShadow: isMobile ? 'none' : '2px 0 3px rgba(0,0,0,0.1)',
+      overflow: 'visible !important',
+    }),
+    regularHeader: (width) => ({
+      padding: isMobile ? '8px 4px' : '12px 8px',
+      textAlign: 'left',
+      fontWeight: '600',
+      whiteSpace: 'nowrap',
+      borderRight: '1px solid rgba(255,255,255,0.2)',
+      minWidth: width,
+      width: width,
+    }),
+    stickyCell: (index, width, left, backgroundColor) => ({
+      padding: isMobile ? '8px 4px' : '12px 8px',
+      borderBottom: '1px solid #eee',
+      borderRight: '1px solid #eee',
+      textAlign: 'left',
+      position: isMobile ? 'relative' : 'sticky',
+      left: isMobile ? '0' : `${left}px`,
+      backgroundColor: backgroundColor,
+      zIndex: isMobile ? 1 : 10 + (index + 1) * 10,
+      minWidth: width,
+      width: width,
+      boxShadow: isMobile ? 'none' : '2px 0 3px rgba(0,0,0,0.1)',
+      verticalAlign: 'top',
+      overflow: 'visible !important',
+      whiteSpace: 'normal',
+      wordWrap: 'break-word',
+      maxWidth: width,
+    }),
+    regularTd: (width) => ({
+      padding: isMobile ? '8px 4px' : '12px 8px',
+      borderBottom: '1px solid #eee',
+      borderRight: '1px solid #eee',
+      textAlign: 'left',
+      verticalAlign: 'top',
+      whiteSpace: 'normal',
+      wordWrap: 'break-word',
+      minWidth: width,
+      width: width,
+      maxWidth: width,
+    }),
+    textCell: {
+      whiteSpace: 'normal',
+      wordWrap: 'break-word',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      maxWidth: '100%',
+      display: '-webkit-box',
+      WebkitLineClamp: 2,
+      WebkitBoxOrient: 'vertical',
+    },
+    completedRow: {
+      borderLeft: '4px solid #28a745',
+    },
+    footerButtons: {
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      justifyContent: 'center',
+      gap: isMobile ? '10px' : '15px',
+      marginTop: '20px',
+    },
+    excelButton: {
+      backgroundColor: '#16a085',
+      color: 'white',
+      border: 'none',
+      padding: isMobile ? '10px 15px' : '10px 20px',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: isMobile ? '14px' : '14px',
+      fontWeight: '600',
+      transition: 'all 0.2s',
+      width: isMobile ? '100%' : 'auto',
+      ':hover': {
+        backgroundColor: '#1abc9c',
+      }
+    },
+    backButton: {
+      backgroundColor: '#7f8c8d',
+      color: 'white',
+      border: 'none',
+      padding: isMobile ? '10px 15px' : '10px 20px',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: isMobile ? '14px' : '14px',
+      fontWeight: '600',
+      transition: 'all 0.2s',
+      width: isMobile ? '100%' : 'auto',
+      ':hover': {
+        backgroundColor: '#95a5a6',
+      }
+    },
+    refreshButton: {
+      backgroundColor: '#3498db',
+      color: 'white',
+      border: 'none',
+      padding: isMobile ? '10px 15px' : '10px 20px',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: isMobile ? '14px' : '14px',
+      fontWeight: '600',
+      transition: 'all 0.2s',
+      width: isMobile ? '100%' : 'auto',
+      ':hover': {
+        backgroundColor: '#2980b9',
+      }
+    },
+    remarkEditor: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+      minWidth: isMobile ? '150px' : '250px',
+    },
+    remarkSelect: {
+      padding: '8px',
+      borderRadius: '4px',
+      border: '1px solid #ddd',
+      fontSize: isMobile ? '13px' : '13px',
+    },
+    assignedInput: {
+      padding: '8px',
+      borderRadius: '4px',
+      border: '1px solid #ddd',
+      fontSize: isMobile ? '13px' : '13px',
+    },
+    updateContainer: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '4px',
+    },
+    updateTextarea: {
+      padding: '8px',
+      borderRadius: '4px',
+      border: '1px solid #ddd',
+      fontSize: isMobile ? '13px' : '13px',
+      resize: 'vertical',
+      minHeight: '60px',
+      fontFamily: 'Arial, sans-serif',
+    },
+    updateHint: {
+      fontSize: isMobile ? '11px' : '11px',
+      color: '#666',
+      fontStyle: 'italic',
+    },
+    remarkButtons: {
+      display: 'flex',
+      gap: '8px',
+    },
+    saveButton: {
+      flex: 1,
+      backgroundColor: '#28a745',
+      color: 'white',
+      border: 'none',
+      padding: '8px',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: isMobile ? '13px' : '13px',
+      fontWeight: 'bold',
+      transition: 'all 0.2s',
+      ':hover': {
+        backgroundColor: '#218838',
+      }
+    },
+    cancelButton: {
+      flex: 1,
+      backgroundColor: '#dc3545',
+      color: 'white',
+      border: 'none',
+      padding: '8px',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: isMobile ? '13px' : '13px',
+      fontWeight: 'bold',
+      transition: 'all 0.2s',
+      ':hover': {
+        backgroundColor: '#c82333',
+      }
+    },
   };
 
   return (
@@ -618,7 +1009,7 @@ function PendingService() {
             <table style={styles.table}>
               <thead style={styles.tableHeader}>
                 <tr>
-                  {/* Sticky columns */}
+                  {/* Sticky columns - only sticky on desktop */}
                   <th style={styles.stickyHeader(0, columnWidths.sno, getLeftPosition(0))}>S.No</th>
                   <th style={styles.stickyHeader(1, columnWidths.executive, getLeftPosition(1))}>Executive</th>
                   <th style={styles.stickyHeader(2, columnWidths.business, getLeftPosition(2))}>Business</th>
@@ -663,7 +1054,7 @@ function PendingService() {
                             }
                           }}
                         >
-                          {/* Sticky columns */}
+                          {/* Sticky columns - only sticky on desktop */}
                           <td style={styles.stickyCell(0, columnWidths.sno, getLeftPosition(0), backgroundColor)}>
                             {orderIndex + 1}
                           </td>
@@ -725,14 +1116,16 @@ function PendingService() {
                                 fontWeight: 'bold',
                                 display: 'inline-block',
                                 whiteSpace: 'normal',
-                                wordBreak: 'break-word'
+                                wordBreak: 'break-word',
+                                fontSize: isMobile ? '12px' : '14px'
                               }}>
                                 {row.assignedExecutive}
                               </span>
                             ) : (
                               <span style={{
                                 color: '#666',
-                                fontStyle: 'italic'
+                                fontStyle: 'italic',
+                                fontSize: isMobile ? '12px' : '14px'
                               }}>
                                 Not Assigned
                               </span>
@@ -845,348 +1238,5 @@ function PendingService() {
     </div>
   );
 }
-
-const styles = {
-  container: {
-    padding: '20px',
-    backgroundColor: '#f8f9fa',
-    minHeight: '100vh',
-    fontFamily: 'Arial, sans-serif',
-  },
-  title: {
-    textAlign: 'center',
-    margin: '0 0 20px 0',
-    color: '#2c3e50',
-    fontSize: '24px',
-    fontWeight: '600',
-  },
-  filterContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '15px',
-    marginBottom: '20px',
-    backgroundColor: '#fff',
-    padding: '15px',
-    borderRadius: '8px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-  },
-  filterRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: '15px',
-  },
-  searchContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-  },
-  searchInput: {
-    padding: '10px 15px',
-    width: '100%',
-    maxWidth: '500px',
-    borderRadius: '4px',
-    border: '1px solid #ddd',
-    fontSize: '14px',
-    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
-  },
-  yearMonthContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '15px',
-    flexWrap: 'wrap',
-  },
-  statusFilterContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '15px',
-    flexWrap: 'wrap',
-  },
-  selectWrapper: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  filterLabel: {
-    fontWeight: '600',
-    color: '#2c3e50',
-    fontSize: '14px',
-  },
-  filterSelect: {
-    padding: '8px 12px',
-    borderRadius: '4px',
-    border: '1px solid #ddd',
-    backgroundColor: '#fff',
-    fontSize: '14px',
-    cursor: 'pointer',
-  },
-  clearFilterButton: {
-    padding: '8px 12px',
-    backgroundColor: '#e74c3c',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    transition: 'all 0.2s',
-    ':hover': {
-      backgroundColor: '#c0392b',
-    }
-  },
-  currentMonthButton: {
-    padding: '8px 12px',
-    backgroundColor: '#3498db',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    transition: 'all 0.2s',
-    ':hover': {
-      backgroundColor: '#2980b9',
-    }
-  },
-  currentFilterInfo: {
-    textAlign: 'center',
-    padding: '8px',
-    backgroundColor: '#e8f4fd',
-    borderRadius: '4px',
-    color: '#2c3e50',
-    fontSize: '14px',
-  },
-  loading: {
-    textAlign: 'center',
-    padding: '20px',
-    color: '#7f8c8d',
-    fontSize: '16px',
-  },
-  noData: {
-    textAlign: 'center',
-    padding: '20px',
-    color: '#7f8c8d',
-    fontSize: '16px',
-  },
-  tableWrapper: {
-    position: 'relative',
-    width: '100%',
-    overflow: 'hidden',
-    borderRadius: '8px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    marginBottom: '20px',
-    backgroundColor: '#fff',
-  },
-  tableContainer: {
-    width: '100%',
-    overflowX: 'auto',
-    overflowY: 'auto',
-    maxHeight: 'calc(100vh - 300px)',
-    backgroundColor: '#fff',
-    position: 'relative',
-    border: '1px solid #ddd',
-    WebkitOverflowScrolling: 'touch',
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    fontSize: '14px',
-    minWidth: '1600px',
-  },
-  tableHeader: {
-    backgroundColor: '#3498db',
-    color: '#fff',
-    position: 'sticky',
-    top: 0,
-    zIndex: 100,
-  },
-  stickyHeader: (index, width, left) => ({
-    padding: '12px 8px',
-    textAlign: 'left',
-    fontWeight: '600',
-    whiteSpace: 'nowrap',
-    borderRight: '1px solid rgba(255,255,255,0.2)',
-    position: 'sticky',
-    left: `${left}px`,
-    backgroundColor: '#3498db',
-    zIndex: 100 + (index + 1) * 10,
-    minWidth: width,
-    width: width,
-    boxShadow: '2px 0 3px rgba(0,0,0,0.1)',
-    overflow: 'visible !important',
-  }),
-  regularHeader: (width) => ({
-    padding: '12px 8px',
-    textAlign: 'left',
-    fontWeight: '600',
-    whiteSpace: 'nowrap',
-    borderRight: '1px solid rgba(255,255,255,0.2)',
-    minWidth: width,
-    width: width,
-  }),
-  stickyCell: (index, width, left, backgroundColor) => ({
-    padding: '12px 8px',
-    borderBottom: '1px solid #eee',
-    borderRight: '1px solid #eee',
-    textAlign: 'left',
-    position: 'sticky',
-    left: `${left}px`,
-    backgroundColor: backgroundColor,
-    zIndex: 10 + (index + 1) * 10,
-    minWidth: width,
-    width: width,
-    boxShadow: '2px 0 3px rgba(0,0,0,0.1)',
-    verticalAlign: 'top',
-    overflow: 'visible !important',
-    whiteSpace: 'normal',
-    wordWrap: 'break-word',
-    maxWidth: width,
-  }),
-  regularTd: (width) => ({
-    padding: '12px 8px',
-    borderBottom: '1px solid #eee',
-    borderRight: '1px solid #eee',
-    textAlign: 'left',
-    verticalAlign: 'top',
-    whiteSpace: 'normal',
-    wordWrap: 'break-word',
-    minWidth: width,
-    width: width,
-    maxWidth: width,
-  }),
-  textCell: {
-    whiteSpace: 'normal',
-    wordWrap: 'break-word',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    maxWidth: '100%',
-    display: '-webkit-box',
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: 'vertical',
-  },
-  completedRow: {
-    borderLeft: '4px solid #28a745',
-  },
-  footerButtons: {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: '15px',
-    marginTop: '20px',
-    flexWrap: 'wrap',
-  },
-  excelButton: {
-    backgroundColor: '#16a085',
-    color: 'white',
-    border: 'none',
-    padding: '10px 20px',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    transition: 'all 0.2s',
-    ':hover': {
-      backgroundColor: '#1abc9c',
-    }
-  },
-  backButton: {
-    backgroundColor: '#7f8c8d',
-    color: 'white',
-    border: 'none',
-    padding: '10px 20px',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    transition: 'all 0.2s',
-    ':hover': {
-      backgroundColor: '#95a5a6',
-    }
-  },
-  refreshButton: {
-    backgroundColor: '#3498db',
-    color: 'white',
-    border: 'none',
-    padding: '10px 20px',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    transition: 'all 0.2s',
-    ':hover': {
-      backgroundColor: '#2980b9',
-    }
-  },
-  remarkEditor: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-    minWidth: '250px',
-  },
-  remarkSelect: {
-    padding: '8px',
-    borderRadius: '4px',
-    border: '1px solid #ddd',
-    fontSize: '13px',
-  },
-  assignedInput: {
-    padding: '8px',
-    borderRadius: '4px',
-    border: '1px solid #ddd',
-    fontSize: '13px',
-  },
-  updateContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  updateTextarea: {
-    padding: '8px',
-    borderRadius: '4px',
-    border: '1px solid #ddd',
-    fontSize: '13px',
-    resize: 'vertical',
-    minHeight: '60px',
-    fontFamily: 'Arial, sans-serif',
-  },
-  updateHint: {
-    fontSize: '11px',
-    color: '#666',
-    fontStyle: 'italic',
-  },
-  remarkButtons: {
-    display: 'flex',
-    gap: '8px',
-  },
-  saveButton: {
-    flex: 1,
-    backgroundColor: '#28a745',
-    color: 'white',
-    border: 'none',
-    padding: '8px',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: 'bold',
-    transition: 'all 0.2s',
-    ':hover': {
-      backgroundColor: '#218838',
-    }
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: '#dc3545',
-    color: 'white',
-    border: 'none',
-    padding: '8px',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: 'bold',
-    transition: 'all 0.2s',
-    ':hover': {
-      backgroundColor: '#c82333',
-    }
-  },
-};
 
 export default PendingService;
