@@ -15,8 +15,10 @@ import AutoLogout from "../mainpage/AutoLogout";
 import PendingPayment from "../Admin/PendingPayment";
 import "../Executive/order.css";
 import TeleCRM from "./TeleCRM";
+import WhatsAppDashboard from "../Admin/WhatsApp"; // Import WhatsApp dashboard component
+import { FaWhatsapp } from "react-icons/fa"; // Import WhatsApp icon
+
 function Admin() {
- 
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [activeTab, setActiveTab] = useState("executive-dashboard");
   const [selectedExecutive] = useState(
@@ -41,6 +43,11 @@ function Admin() {
   const [activeDuration, setActiveDuration] = useState("00:00:00");
   const [isSessionActive, setIsSessionActive] = useState(true);
   const timerRef = useRef(null);
+  
+  // WhatsApp dashboard state
+  const [showWhatsAppDashboard, setShowWhatsAppDashboard] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  
   const [pendingPaymentData, setPendingPaymentData] = useState({
     count: 0,
     amount: 0,
@@ -49,6 +56,7 @@ function Admin() {
 
   const userRole = localStorage.getItem("userRole") || "executive";
   const logoutRef = useRef(null);
+  
   useEffect(() => {
     if (!localStorage.getItem('loginTime')) {
       localStorage.setItem('loginTime', new Date().toISOString());
@@ -61,6 +69,23 @@ function Admin() {
         clearInterval(timerRef.current);
       }
     };
+  }, []);
+
+  // Fetch unread WhatsApp messages count
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const response = await axios.get('/api/whatsapp/unread-count');
+        setUnreadCount(response.data.count || 0);
+      } catch (error) {
+        console.error('Error fetching unread count:', error);
+      }
+    };
+
+    fetchUnreadCount();
+    // Poll for new messages every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchPendingPayments = async () => {
@@ -96,11 +121,9 @@ function Admin() {
       const interval = setInterval(fetchPendingPayments, 30000);
       return () => clearInterval(interval);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedExecutive]);
 
   useEffect(() => {
-   
     const saleClosedData = localStorage.getItem('saleClosedAppointmentData');
     if (saleClosedData) {
       try {
@@ -108,7 +131,6 @@ function Admin() {
         setExistingOrderData(appointmentData);
         setShowOrderForm(true);
         setActiveTab('order');
-        
         
         if (appointmentData.phoneNumber) {
           setOrderNumber(appointmentData.phoneNumber);
@@ -119,20 +141,7 @@ function Admin() {
         console.error('Error parsing appointment data:', error);
       }
     }
-   
-    if (location.state?.activeTab) {
-      setActiveTab(location.state.activeTab);
-      if (location.state.activeTab === 'order' && location.state.appointmentData) {
-        setExistingOrderData(location.state.appointmentData);
-        setShowOrderForm(true);
-        if (location.state.appointmentData.phoneNumber) {
-          setOrderNumber(location.state.appointmentData.phoneNumber);
-        }
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location]);
-
+  }, []);
 
   const updateDuration = () => {
     const storedTime = localStorage.getItem('loginTime');
@@ -148,7 +157,6 @@ function Admin() {
     
     setActiveDuration(`${hours}:${minutes}:${seconds}`);
   };
-
 
   const resetTimer = () => {
     if (timerRef.current) {
@@ -357,6 +365,47 @@ function Admin() {
     setActiveTab("pending-payments");
   };
 
+  // Add styles for WhatsApp button
+  const styles = {
+    whatsappButton: {
+      position: 'fixed',
+      bottom: '30px',
+      right: '30px',
+      width: '60px',
+      height: '60px',
+      backgroundColor: '#25D366',
+      borderRadius: '50%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: 'pointer',
+      boxShadow: '0 4px 12px rgba(37, 211, 102, 0.4)',
+      zIndex: 1000,
+      transition: 'all 0.3s ease',
+      border: 'none',
+    },
+    whatsappIcon: {
+      fontSize: '32px',
+      color: 'white',
+    },
+    unreadBadge: {
+      position: 'absolute',
+      top: '-5px',
+      right: '-5px',
+      backgroundColor: '#FF3B30',
+      color: 'white',
+      borderRadius: '50%',
+      width: '24px',
+      height: '24px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '12px',
+      fontWeight: 'bold',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+    },
+  };
+
   return (
     <div className="app-container">
       {isSessionActive && <AutoLogout />}
@@ -515,7 +564,7 @@ function Admin() {
               { key: "viewProspects", icon: "👁️", text: "View Prospects" },
               { key: "price-list", icon: "💰", text: "Price List" },
               { key: "pending-payments", icon: "💰", text: "Pending Payments" },
-               { key: "tele", icon: "📞", text: "Tele-CRM" },
+              { key: "tele", icon: "📞", text: "Tele-CRM" },
             ].map(({ key, icon, text }) => (
               <div
                 key={key}
@@ -657,6 +706,36 @@ function Admin() {
             )}
         </div>
       </div>
+
+      {/* WhatsApp Floating Button */}
+      <button
+        style={styles.whatsappButton}
+        onClick={() => setShowWhatsAppDashboard(true)}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.1)';
+          e.currentTarget.style.boxShadow = '0 6px 16px rgba(37, 211, 102, 0.5)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 211, 102, 0.4)';
+        }}
+      >
+        <FaWhatsapp style={styles.whatsappIcon} />
+        {unreadCount > 0 && (
+          <div style={styles.unreadBadge}>
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </div>
+        )}
+      </button>
+
+      {/* WhatsApp Dashboard Modal */}
+      {showWhatsAppDashboard && (
+        <WhatsAppDashboard
+          onClose={() => setShowWhatsAppDashboard(false)}
+          unreadCount={unreadCount}
+          onMarkAsRead={() => setUnreadCount(0)}
+        />
+      )}
     </div>
   );
 }

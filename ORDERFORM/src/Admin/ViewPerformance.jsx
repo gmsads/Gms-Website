@@ -22,7 +22,7 @@ const PerformanceView = () => {
   const [executives, setExecutives] = useState([]);
   const [serviceExecutives, setServiceExecutives] = useState([]);
   const [accounts, setAccounts] = useState([]);
-  const [fieldExecutives, setFieldExecutives] = useState([]); // NEW: Field executives state
+  const [fieldExecutives, setFieldExecutives] = useState([]);
   const [selectedExecutive, setSelectedExecutive] = useState('');
   const [performanceData, setPerformanceData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -34,20 +34,17 @@ const PerformanceView = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [overallPerformance, setOverallPerformance] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
-  const [loadingExecutives, setLoadingExecutives] = useState(false); // NEW: Loading state
+  const [loadingExecutives, setLoadingExecutives] = useState(false);
   
-  // NEW: Month and Year filter state for overall performance chart
   const [chartFilters, setChartFilters] = useState({
-    month: new Date().getMonth() + 1, // Current month (1-12)
-    year: new Date().getFullYear() // Current year
+    month: new Date().getMonth() + 1,
+    year: new Date().getFullYear()
   });
 
-  // NEW: Year filter for individual executive performance data
   const [yearlyFilter, setYearlyFilter] = useState({
-    year: new Date().getFullYear() // Start with current year
+    year: new Date().getFullYear()
   });
   
-  // PERSISTENT: Load from localStorage on component mount
   const [manuallyEligibleMonths, setManuallyEligibleMonths] = useState(() => {
     try {
       const saved = localStorage.getItem('executiveIncentiveEligibility');
@@ -58,7 +55,6 @@ const PerformanceView = () => {
     }
   });
 
-  // PERSISTENT: Save to localStorage whenever manuallyEligibleMonths changes
   useEffect(() => {
     try {
       localStorage.setItem('executiveIncentiveEligibility', JSON.stringify(manuallyEligibleMonths));
@@ -67,7 +63,6 @@ const PerformanceView = () => {
     }
   }, [manuallyEligibleMonths]);
 
-  // Combine all executive types into one array with type information
   const allExecutives = useMemo(() => {
     const execs = executives.map(exec => ({
       ...exec,
@@ -90,18 +85,16 @@ const PerformanceView = () => {
       value: `account_${account._id}`
     }));
     
-    // NEW: Add field executives
     const fieldExecs = fieldExecutives.map(exec => ({
       ...exec,
       type: 'Field',
       displayName: `${exec.name} (Field)`,
-      value: `field_${exec._id || exec.name}` // Use name as ID if _id doesn't exist
+      value: `field_${exec._id || exec.name}`
     }));
     
     return [...execs, ...serviceExecs, ...accountExecs, ...fieldExecs];
   }, [executives, serviceExecutives, accounts, fieldExecutives]);
 
-  // Filter executives based on search term
   const filteredExecutives = useMemo(() => {
     if (!searchTerm) return allExecutives;
     
@@ -111,14 +104,10 @@ const PerformanceView = () => {
     );
   }, [allExecutives, searchTerm]);
 
-  // Find the selected executive object
   const selectedExecutiveObj = useMemo(() => {
     return allExecutives.find(exec => exec.value === selectedExecutive);
   }, [allExecutives, selectedExecutive]);
 
-  // ========================================
-  // NEW: Calculate yearly performance data from monthly breakdown
-  // ========================================
   const calculateYearlyData = useMemo(() => {
     if (!performanceData || !performanceData.detailedData?.byMonth) {
       return null;
@@ -126,14 +115,12 @@ const PerformanceView = () => {
     
     const monthlyData = performanceData.detailedData.byMonth;
     
-    // Filter months by selected year
     const filteredMonths = monthlyData.filter(monthData => {
       const [_, yearStr] = monthData.month.split(' ');
       const year = parseInt(yearStr);
       return yearlyFilter.year ? year === yearlyFilter.year : true;
     });
     
-    // Calculate totals for filtered months
     const totals = filteredMonths.reduce((acc, month) => ({
       target: acc.target + (month.target || 0),
       achieved: acc.achieved + (month.achieved || 0),
@@ -142,7 +129,6 @@ const PerformanceView = () => {
       prospects: acc.prospects + (month.prospects || 0)
     }), { target: 0, achieved: 0, advance: 0, orders: 0, prospects: 0 });
     
-    // Calculate percentage
     const percentage = totals.target > 0 
       ? (totals.achieved / totals.target) * 100 
       : totals.achieved > 0 ? 100 : 0;
@@ -157,114 +143,81 @@ const PerformanceView = () => {
     };
   }, [performanceData, yearlyFilter.year]);
 
-  // ========================================
-  // Calculate balance for overall performance - NOW RESPECTS YEAR FILTER
-  // ========================================
   const overallBalance = useMemo(() => {
     if (!performanceData) return 0;
     
-    // Use calculated yearly data
     if (calculateYearlyData) {
       return calculateYearlyData.achieved - calculateYearlyData.advance;
     }
     
-    // Otherwise use all-time data
     const achieved = performanceData.achieved || 0;
     const advance = performanceData.advance || 0;
     return achieved - advance;
   }, [performanceData, calculateYearlyData]);
 
-  // ========================================
-  // Get the current performance percentage based on year filter
-  // ========================================
   const getCurrentPerformancePercentage = () => {
     if (!performanceData) return 0;
     
-    // Use calculated yearly data
     if (calculateYearlyData) {
       return calculateYearlyData.achievedPercentage || 0;
     }
     
-    // Otherwise use all-time percentage
     return performanceData.achievedPercentage || 0;
   };
 
-  // ========================================
-  // Get the target amount based on year filter
-  // ========================================
   const getTargetAmount = () => {
     if (!performanceData) return 0;
     
-    // Use calculated yearly data
     if (calculateYearlyData) {
       return calculateYearlyData.target || 0;
     }
     
-    // Otherwise use all-time target
     return performanceData.target || 0;
   };
 
-  // ========================================
-  // Get the achieved amount based on year filter
-  // ========================================
   const getAchievedAmount = () => {
     if (!performanceData) return 0;
     
-    // Use calculated yearly data
     if (calculateYearlyData) {
       return calculateYearlyData.achieved || 0;
     }
     
-    // Otherwise use all-time achieved
     return performanceData.achieved || 0;
   };
 
-  // ========================================
-  // Get the advance amount based on year filter
-  // ========================================
   const getAdvanceAmount = () => {
     if (!performanceData) return 0;
     
-    // Use calculated yearly data
     if (calculateYearlyData) {
       return calculateYearlyData.advance || 0;
     }
     
-    // Otherwise use all-time advance
     return performanceData.advance || 0;
   };
 
-  // ========================================
-  // Get total orders based on year filter
-  // ========================================
   const getTotalOrders = () => {
     if (!performanceData) return 0;
     
-    // Use calculated yearly data
     if (calculateYearlyData) {
       return calculateYearlyData.totalOrders || 0;
     }
     
-    // Otherwise use all-time total orders
     return performanceData.totalOrders || 0;
   };
 
-  // Calculate balance for monthly performance
   const calculateMonthlyBalance = (monthData) => {
     const achieved = monthData.achieved || 0;
     const advance = monthData.advance || 0;
     return achieved - advance;
   };
 
-  // NEW CRITERIA: Check if month meets incentive criteria (target achieved OR minimum orders)
   const meetsIncentiveCriteria = (monthData) => {
-    const targetAchieved = monthData.percentage >= 100; // 100% target achievement
-    const minimumOrders = (monthData.orders || 0) >= 10; // At least 10 orders
+    const targetAchieved = monthData.percentage >= 100;
+    const minimumOrders = (monthData.orders || 0) >= 10;
     
     return targetAchieved || minimumOrders;
   };
 
-  // NEW: Calculate what's needed for eligibility
   const calculateEligibilityGap = (monthData) => {
     const currentPercentage = monthData.percentage || 0;
     const currentOrders = monthData.orders || 0;
@@ -280,20 +233,16 @@ const PerformanceView = () => {
     };
   };
 
-  // PERSISTENT: Handle manual eligibility toggle with executive-specific storage
   const handleToggleEligibility = (monthKey, monthData) => {
     setManuallyEligibleMonths(prev => {
       const newState = { ...prev };
       
-      // Create unique key with executive name and month
       const executiveName = performanceData?.executiveName || 'unknown';
       const uniqueKey = `${executiveName}_${monthKey}`;
       
-      // Only allow adding eligibility, not removing
       if (!newState[uniqueKey]) {
         const gap = calculateEligibilityGap(monthData);
         
-        // Add eligibility with criteria met information
         newState[uniqueKey] = {
           eligible: true,
           executiveName: executiveName,
@@ -309,13 +258,11 @@ const PerformanceView = () => {
           }
         };
       }
-      // No else condition - once eligible, cannot be removed
       
       return newState;
     });
   };
 
-  // PERSISTENT: Check if month is eligible for current executive
   const isMonthEligible = (monthKey) => {
     if (!performanceData?.executiveName) return false;
     const executiveName = performanceData.executiveName;
@@ -323,7 +270,6 @@ const PerformanceView = () => {
     return !!manuallyEligibleMonths[uniqueKey];
   };
 
-  // PERSISTENT: Calculate incentive summary for current executive only
   const incentiveSummary = useMemo(() => {
     if (!performanceData?.executiveName) {
       return {
@@ -345,9 +291,6 @@ const PerformanceView = () => {
     };
   }, [manuallyEligibleMonths, performanceData]);
 
-  // ========================================
-  // Extract the performance data fetching logic into a separate function
-  // ========================================
   const fetchPerformanceData = async (executiveValue) => {
     if (!executiveValue) return;
 
@@ -355,7 +298,6 @@ const PerformanceView = () => {
     try {
       const [prefix, executiveId] = executiveValue.split('_');
       
-      // Build parameters - DON'T pass year filter to API
       const params = { 
         executiveId,
         executiveType: prefix,
@@ -365,7 +307,6 @@ const PerformanceView = () => {
       
       const res = await axios.get('/api/performance', { params });
       setPerformanceData(res.data);
-      // Don't reset manuallyEligibleMonths - keep the persisted data
     } catch (error) {
       console.error('Error fetching performance data:', error);
       alert('Failed to fetch performance data');
@@ -374,7 +315,6 @@ const PerformanceView = () => {
     }
   };
 
-  // Auto-select executive when component mounts or URL parameter changes
   useEffect(() => {
     if (employeeNameFromUrl && allExecutives.length > 0) {
       const foundExecutive = allExecutives.find(exec => 
@@ -384,25 +324,17 @@ const PerformanceView = () => {
       if (foundExecutive) {
         setSelectedExecutive(foundExecutive.value);
         setSearchTerm(foundExecutive.name);
-        
-        // Auto-fetch performance data WITHOUT year filter
         fetchPerformanceData(foundExecutive.value);
       }
     }
   }, [employeeNameFromUrl, allExecutives]);
 
-  // ========================================
-  // NEW: Fetch overall performance data with month and year filters
-  // ========================================
   const fetchOverallPerformance = async (month = null, year = null) => {
     setChartLoading(true);
     try {
       const params = {};
-      // Only send month/year if they have values (not empty strings)
       if (month !== '' && month !== null) params.month = month;
       if (year !== '' && year !== null) params.year = year;
-      
-      console.log('Fetching overall performance with params:', params);
       
       const res = await axios.get('/api/performance/overall', { params });
       setOverallPerformance(res.data);
@@ -413,84 +345,74 @@ const PerformanceView = () => {
     }
   };
 
- const fetchAllExecutives = async () => {
-  setLoadingExecutives(true);
-  try {
-    // Fetch all executive types in parallel
-    const [execRes, serviceExecRes, accountsRes, fieldExecRes] = await Promise.all([
-      axios.get('/api/performance/executives'), // This now includes field executives
-      axios.get('/api/service-executives'),
-      axios.get('/api/accounts'),
-      // Keep the separate field executive fetch as backup
-      axios.get('/api/field-executive/admin/executives').catch(() => ({ data: [] })) // Fetch as backup
-    ]);
-    
-    // Filter out Sangeetha, Shivakumari, Malleshwari, Rajitha, and Malli from sales executives
-    const filteredSalesExecs = execRes.data.filter(exec => 
-      exec.type !== 'executive' || ( // Only filter sales executives
-        exec.name.toLowerCase() !== 'sangeetha' && 
-        exec.name.toLowerCase() !== 'shivakumari' &&
-        exec.name.toLowerCase() !== 'malleshwari' &&
-        exec.name.toLowerCase() !== 'rajitha' &&
-        exec.name.toLowerCase() !== 'malli'
-      )
-    );
-    
-    // Separate executives by type from the performance/executives endpoint
-    const salesExecs = filteredSalesExecs.filter(exec => exec.type === 'executive');
-    const serviceExecs = filteredSalesExecs.filter(exec => exec.type === 'service');
-    const accountExecs = filteredSalesExecs.filter(exec => exec.type === 'account');
-    const fieldExecs = filteredSalesExecs.filter(exec => exec.type === 'field');
-    
-    // If no field executives from performance endpoint, use backup
-    let finalFieldExecs = fieldExecs;
-    if (fieldExecs.length === 0 && fieldExecRes.data && Array.isArray(fieldExecRes.data)) {
-      // Process backup field executives
-      if (fieldExecRes.data.length > 0 && typeof fieldExecRes.data[0] === 'string') {
-        finalFieldExecs = fieldExecRes.data.map(name => ({
-          name: name,
-          _id: name,
-          type: 'field',
-          dateOfJoining: new Date('2024-01-01')
-        }));
-      } else {
-        finalFieldExecs = fieldExecRes.data.map(exec => ({
-          name: exec.name || exec._id,
-          _id: exec._id || exec.name,
-          type: 'field',
-          dateOfJoining: exec.joiningDate || exec.dateOfJoining || new Date('2024-01-01')
-        }));
+  const fetchAllExecutives = async () => {
+    setLoadingExecutives(true);
+    try {
+      const [execRes, serviceExecRes, accountsRes, fieldExecRes] = await Promise.all([
+        axios.get('/api/performance/executives'),
+        axios.get('/api/service-executives'),
+        axios.get('/api/accounts'),
+        axios.get('/api/field-executive/admin/executives').catch(() => ({ data: [] }))
+      ]);
+      
+      const filteredSalesExecs = execRes.data.filter(exec => 
+        exec.type !== 'executive' || (
+          exec.name.toLowerCase() !== 'sangeetha' && 
+          exec.name.toLowerCase() !== 'shivakumari' &&
+          exec.name.toLowerCase() !== 'malleshwari' &&
+          exec.name.toLowerCase() !== 'rajitha' &&
+          exec.name.toLowerCase() !== 'malli'
+        )
+      );
+      
+      const salesExecs = filteredSalesExecs.filter(exec => exec.type === 'executive');
+      const serviceExecs = filteredSalesExecs.filter(exec => exec.type === 'service');
+      const accountExecs = filteredSalesExecs.filter(exec => exec.type === 'account');
+      const fieldExecs = filteredSalesExecs.filter(exec => exec.type === 'field');
+      
+      let finalFieldExecs = fieldExecs;
+      if (fieldExecs.length === 0 && fieldExecRes.data && Array.isArray(fieldExecRes.data)) {
+        if (fieldExecRes.data.length > 0 && typeof fieldExecRes.data[0] === 'string') {
+          finalFieldExecs = fieldExecRes.data.map(name => ({
+            name: name,
+            _id: name,
+            type: 'field',
+            dateOfJoining: new Date('2024-01-01')
+          }));
+        } else {
+          finalFieldExecs = fieldExecRes.data.map(exec => ({
+            name: exec.name || exec._id,
+            _id: exec._id || exec.name,
+            type: 'field',
+            dateOfJoining: exec.joiningDate || exec.dateOfJoining || new Date('2024-01-01')
+          }));
+        }
       }
+      
+      setExecutives(salesExecs);
+      setServiceExecutives(serviceExecs);
+      setAccounts(accountExecs);
+      setFieldExecutives(finalFieldExecs);
+      
+    } catch (error) {
+      console.error('Error fetching executives data:', error);
+      setExecutives([]);
+      setServiceExecutives([]);
+      setAccounts([]);
+      setFieldExecutives([]);
+    } finally {
+      setLoadingExecutives(false);
     }
-    
-    setExecutives(salesExecs);
-    setServiceExecutives(serviceExecs);
-    setAccounts(accountExecs);
-    setFieldExecutives(finalFieldExecs);
-    
-  } catch (error) {
-    console.error('Error fetching executives data:', error);
-    // Set empty arrays if API fails
-    setExecutives([]);
-    setServiceExecutives([]);
-    setAccounts([]);
-    setFieldExecutives([]);
-  } finally {
-    setLoadingExecutives(false);
-  }
-};
+  };
 
-  // Fetch overall performance data on component mount and when filters change
   useEffect(() => {
     fetchOverallPerformance(chartFilters.month, chartFilters.year);
   }, [chartFilters.month, chartFilters.year]);
 
-  // Fetch executives data on component mount
   useEffect(() => {
     fetchAllExecutives();
   }, []);
 
-  // NEW: Handle chart filter changes
   const handleChartFilterChange = (e) => {
     const { name, value } = e.target;
     setChartFilters(prev => ({
@@ -499,7 +421,6 @@ const PerformanceView = () => {
     }));
   };
 
-  // NEW: Handle yearly filter changes for all sections
   const handleYearlyFilterChange = (e) => {
     const { name, value } = e.target;
     const newYear = value ? parseInt(value) : '';
@@ -507,12 +428,8 @@ const PerformanceView = () => {
       ...prev,
       [name]: newYear
     }));
-    
-    // DON'T refetch data - we calculate yearly data from the existing monthly breakdown
-    // The calculateYearlyData memo will automatically update
   };
 
-  // NEW: Generate month options
   const monthOptions = [
     { value: '', label: 'All Months' },
     { value: 1, label: 'January' },
@@ -529,7 +446,6 @@ const PerformanceView = () => {
     { value: 12, label: 'December' }
   ];
 
-  // NEW: Generate year options (last 5 years and next 1 year)
   const currentYear = new Date().getFullYear();
   const yearOptions = [
     { value: '', label: 'All Years' },
@@ -543,7 +459,7 @@ const PerformanceView = () => {
     container: {
       maxWidth: '1200px',
       margin: '0 auto',
-      padding: '30px',
+      padding: '20px',
       fontFamily: 'Arial, sans-serif',
       backgroundColor: '#f8f9fa',
       borderRadius: '10px',
@@ -552,16 +468,16 @@ const PerformanceView = () => {
     heading: {
       color: '#2c3e50',
       textAlign: 'center',
-      marginBottom: '30px',
+      marginBottom: '25px',
       fontSize: '28px',
       fontWeight: '600'
     },
     formContainer: {
       backgroundColor: 'white',
-      padding: '25px',
+      padding: '20px',
       borderRadius: '8px',
       boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-      marginBottom: '30px'
+      marginBottom: '25px'
     },
     formTitle: {
       fontSize: '20px',
@@ -620,7 +536,8 @@ const PerformanceView = () => {
       fontSize: '16px',
       fontWeight: '600',
       transition: 'background-color 0.3s',
-      marginTop: '10px'
+      marginTop: '10px',
+      width: '100%'
     },
     buttonDisabled: {
       backgroundColor: '#bdc3c7',
@@ -628,14 +545,14 @@ const PerformanceView = () => {
     },
     resultsContainer: {
       backgroundColor: 'white',
-      padding: '25px',
+      padding: '20px',
       borderRadius: '8px',
       boxShadow: '0 2px 10px rgba(0,0,0,0.05)'
     },
     resultsTitle: {
       fontSize: '22px',
       marginTop: '0',
-      marginBottom: '20px',
+      marginBottom: '15px',
       color: '#2c3e50',
       borderBottom: '1px solid #eee',
       paddingBottom: '10px'
@@ -652,48 +569,64 @@ const PerformanceView = () => {
       padding: '20px',
       boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
       borderTop: '4px solid #3498db',
-      transition: 'transform 0.2s, box-shadow 0.2s'
+      transition: 'transform 0.2s, box-shadow 0.2s',
+      minWidth: '0',
+      overflow: 'hidden'
     },
     cardTitle: {
       marginTop: '0',
       marginBottom: '15px',
       color: '#34495e',
       fontSize: '18px',
-      fontWeight: '600'
+      fontWeight: '600',
+      wordWrap: 'break-word'
     },
     cardItem: {
       display: 'flex',
       justifyContent: 'space-between',
+      alignItems: 'center',
       marginBottom: '12px',
       paddingBottom: '12px',
-      borderBottom: '1px solid #f1f1f1'
+      borderBottom: '1px solid #f1f1f1',
+      flexWrap: 'wrap',
+      gap: '8px'
     },
     clickableCardItem: {
       display: 'flex',
       justifyContent: 'space-between',
+      alignItems: 'center',
       marginBottom: '12px',
       paddingBottom: '12px',
       borderBottom: '1px solid #f1f1f1',
       cursor: 'pointer',
-      transition: 'background-color 0.2s'
+      transition: 'background-color 0.2s',
+      flexWrap: 'wrap',
+      gap: '8px'
     },
     cardLabel: {
       color: '#7f8c8d',
-      fontWeight: '500'
+      fontWeight: '500',
+      fontSize: '14px',
+      flexShrink: 0
     },
     cardValue: {
       fontWeight: '600',
-      color: '#2c3e50'
+      color: '#2c3e50',
+      textAlign: 'right',
+      fontSize: '14px',
+      wordBreak: 'break-word',
+      maxWidth: '60%'
     },
     balanceValue: {
       fontWeight: '600',
-      color: overallBalance >= 0 ? '#27ae60' : '#e74c3c'
+      color: overallBalance >= 0 ? '#27ae60' : '#e74c3c',
+      textAlign: 'right'
     },
     progressContainer: {
       width: '100%',
       backgroundColor: '#ecf0f1',
       borderRadius: '6px',
-      margin: '20px 0',
+      margin: '15px 0',
       height: '30px',
       overflow: 'hidden',
       position: 'relative'
@@ -708,11 +641,11 @@ const PerformanceView = () => {
       transition: 'width 0.5s ease'
     },
     monthlySection: {
-      marginTop: '30px'
+      marginTop: '25px'
     },
     monthlyHeader: {
       fontSize: '20px',
-      marginBottom: '20px',
+      marginBottom: '15px',
       color: '#2c3e50',
       borderBottom: '1px solid #eee',
       paddingBottom: '10px'
@@ -728,7 +661,9 @@ const PerformanceView = () => {
       padding: '20px',
       boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
       borderTop: '4px solid #2ecc71',
-      position: 'relative'
+      position: 'relative',
+      minWidth: '0',
+      overflow: 'hidden'
     },
     performanceBox: {
       width: '100%',
@@ -737,7 +672,7 @@ const PerformanceView = () => {
       borderRadius: '8px',
       overflow: 'hidden',
       position: 'relative',
-      margin: '20px 0',
+      margin: '15px 0',
       border: '1px solid #ddd',
       display: 'flex'
     },
@@ -749,7 +684,8 @@ const PerformanceView = () => {
       fontWeight: '600',
       color: 'white',
       transition: 'width 0.5s ease',
-      position: 'relative'
+      position: 'relative',
+      fontSize: '12px'
     },
     searchContainer: {
       position: 'relative',
@@ -794,31 +730,33 @@ const PerformanceView = () => {
       padding: '4px 8px',
       borderRadius: '4px',
       fontSize: '12px',
-      fontWeight: '600'
+      fontWeight: '600',
+      minWidth: '60px',
+      textAlign: 'center'
     },
     selectedExecutive: {
       marginTop: '10px',
       padding: '10px',
       backgroundColor: '#f8f9fa',
       borderRadius: '6px',
-      border: '1px solid #ddd'
+      border: '1px solid #ddd',
+      fontSize: '14px'
     },
     clickableCardItemHover: {
       backgroundColor: '#f8f9fa'
     },
-    // UPDATED INCENTIVE STYLES
     incentiveCard: {
       backgroundColor: '#fff3cd',
       border: '2px solid #ffc107',
       borderRadius: '8px',
-      padding: '20px',
-      marginBottom: '20px'
+      padding: '15px',
+      marginBottom: '15px'
     },
     incentiveHeader: {
       display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '15px'
+      flexDirection: 'column',
+      gap: '10px',
+      marginBottom: '12px'
     },
     incentiveTitle: {
       fontSize: '20px',
@@ -829,7 +767,8 @@ const PerformanceView = () => {
     incentiveAmount: {
       fontSize: '24px',
       fontWeight: 'bold',
-      color: '#28a745'
+      color: '#28a745',
+      textAlign: 'center'
     },
     makeEligibleButton: {
       backgroundColor: '#28a745',
@@ -851,12 +790,12 @@ const PerformanceView = () => {
       fontSize: '12px',
       fontWeight: '600',
       position: 'absolute',
-      top: '15px',
-      right: '15px'
+      top: '10px',
+      right: '10px'
     },
     incentiveEligibilitySection: {
       marginTop: '15px',
-      padding: '15px',
+      padding: '12px',
       backgroundColor: '#f8f9fa',
       borderRadius: '6px',
       border: '1px solid #dee2e6'
@@ -864,36 +803,35 @@ const PerformanceView = () => {
     incentiveInfo: {
       fontSize: '14px',
       color: '#495057',
-      marginBottom: '10px',
+      marginBottom: '8px',
       textAlign: 'center'
     },
     gapInfo: {
       fontSize: '13px',
       color: '#dc3545',
-      marginBottom: '8px',
+      marginBottom: '6px',
       textAlign: 'center',
       fontWeight: '600'
     },
     criteriaMetInfo: {
       fontSize: '14px',
       color: '#28a745',
-      marginBottom: '8px',
+      marginBottom: '6px',
       textAlign: 'center',
       fontWeight: '600'
     },
-    // CHART STYLES
     chartContainer: {
       backgroundColor: 'white',
-      padding: '25px',
+      padding: '20px',
       borderRadius: '8px',
       boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-      marginBottom: '30px',
-      marginTop: '30px'
+      marginBottom: '25px',
+      marginTop: '25px'
     },
     chartTitle: {
       fontSize: '22px',
       marginTop: '0',
-      marginBottom: '20px',
+      marginBottom: '15px',
       color: '#2c3e50',
       borderBottom: '1px solid #eee',
       paddingBottom: '10px',
@@ -902,51 +840,48 @@ const PerformanceView = () => {
     chartSubtitle: {
       textAlign: 'center',
       color: '#7f8c8d',
-      marginBottom: '30px',
+      marginBottom: '20px',
       fontSize: '16px'
     },
     loadingText: {
       textAlign: 'center',
-      padding: '40px',
+      padding: '30px',
       color: '#7f8c8d',
       fontSize: '16px'
     },
     noDataText: {
       textAlign: 'center',
-      padding: '40px',
+      padding: '30px',
       color: '#95a5a6',
       fontSize: '16px',
       fontStyle: 'italic'
     },
-    // NEW: Chart filter styles
     chartFilterContainer: {
       display: 'flex',
-      gap: '20px',
-      marginBottom: '20px',
       flexWrap: 'wrap',
+      gap: '15px',
+      marginBottom: '20px',
       justifyContent: 'center'
     },
     chartFilterGroup: {
-      minWidth: '200px'
+      minWidth: '200px',
+      flex: '1'
     },
-    // NEW: Yearly filter styles for all sections
     yearlyFilterContainer: {
       display: 'flex',
-      gap: '20px',
-      marginBottom: '20px',
-      flexWrap: 'wrap'
+      flexWrap: 'wrap',
+      gap: '15px',
+      marginBottom: '20px'
     },
     yearlyFilterGroup: {
-      minWidth: '200px'
+      minWidth: '200px',
+      flex: '1'
     },
-    // NEW: Results header with year filter
     resultsHeader: {
       display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '20px',
-      flexWrap: 'wrap',
-      gap: '15px'
+      flexDirection: 'column',
+      gap: '15px',
+      marginBottom: '20px'
     },
     yearFilterDisplay: {
       backgroundColor: '#e3f2fd',
@@ -958,14 +893,14 @@ const PerformanceView = () => {
       fontSize: '14px',
       display: 'flex',
       alignItems: 'center',
-      gap: '10px'
+      gap: '10px',
+      justifyContent: 'center'
     },
     yearFilterLabel: {
       color: '#1976d2',
       fontSize: '14px',
       fontWeight: '600'
     },
-    // NEW: Year filter badge in Overall Performance card
     yearBadge: {
       backgroundColor: '#1976d2',
       color: 'white',
@@ -973,9 +908,9 @@ const PerformanceView = () => {
       borderRadius: '12px',
       fontSize: '12px',
       fontWeight: '600',
-      marginLeft: '10px'
+      marginLeft: '8px',
+      display: 'inline-block'
     },
-    // NEW: Loading spinner for executives dropdown
     loadingSpinner: {
       border: '3px solid #f3f3f3',
       borderTop: '3px solid #3498db',
@@ -985,6 +920,14 @@ const PerformanceView = () => {
       animation: 'spin 1s linear infinite',
       marginRight: '10px',
       display: 'inline-block'
+    },
+    dateRangeContainer: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '10px'
+    },
+    dateInputContainer: {
+      flex: '1'
     }
   };
 
@@ -994,8 +937,6 @@ const PerformanceView = () => {
       alert('Please select an executive');
       return;
     }
-
-    // Fetch data WITHOUT year filter - we'll calculate yearly data on frontend
     await fetchPerformanceData(selectedExecutive);
   };
 
@@ -1047,46 +988,37 @@ const PerformanceView = () => {
     }
   };
 
-  // Function to get color based on performance percentage
   const getPerformanceColor = (percentage) => {
-    if (percentage >= 150) return '#ff69b4'; // Pink for 150%+
-    if (percentage >= 100) return '#9b59b6'; // Purple for 100-150%
-    if (percentage >= 75) return '#2ecc71';  // Green for 75-100%
-    if (percentage >= 50) return '#f39c12';  // Orange for 50-75%
-    if (percentage >= 35) return '#f1c40f';  // Yellow for 35-50%
-    return '#e74c3c'; // Red for 0-35%
+    if (percentage >= 150) return '#ff69b4';
+    if (percentage >= 100) return '#9b59b6';
+    if (percentage >= 75) return '#2ecc71';
+    if (percentage >= 50) return '#f39c12';
+    if (percentage >= 35) return '#f1c40f';
+    return '#e74c3c';
   };
 
-  // Smart Y-axis tick formatter that adapts to data range
   const getYTickFormatter = (data) => {
     if (!data || data.length === 0) return (value) => `₹${value}`;
     
-    // Find the maximum value in the data
     const maxValue = Math.max(
       ...data.map(item => Math.max(item.target || 0, item.achieved || 0))
     );
     
-    // Determine appropriate scaling based on max value
     if (maxValue >= 1000000) {
-      // For values in lakhs/crores
       return (value) => {
         if (value >= 10000000) return `₹${(value/10000000).toFixed(1)}Cr`;
         if (value >= 100000) return `₹${(value/100000).toFixed(1)}L`;
         return `₹${(value/1000).toFixed(0)}k`;
       };
     } else if (maxValue >= 100000) {
-      // For values in lakhs
       return (value) => `₹${(value/100000).toFixed(1)}L`;
     } else if (maxValue >= 10000) {
-      // For values in thousands
       return (value) => `₹${(value/1000).toFixed(0)}k`;
     } else {
-      // For smaller values, show actual amount with proper formatting
       return (value) => `₹${value.toLocaleString('en-IN')}`;
     }
   };
 
-  // Smart Y-axis domain and ticks calculation
   const getYAxisProps = (data) => {
     if (!data || data.length === 0) return { domain: [0, 100000], tickCount: 6 };
     
@@ -1094,7 +1026,6 @@ const PerformanceView = () => {
       ...data.map(item => Math.max(item.target || 0, item.achieved || 0))
     );
     
-    // Calculate nice upper bound
     const niceMax = Math.ceil(maxValue / 50000) * 50000;
     const tickCount = Math.min(6, Math.max(3, Math.ceil(niceMax / 50000)));
     
@@ -1104,7 +1035,6 @@ const PerformanceView = () => {
     };
   };
 
-  // Custom tooltip for the chart
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       const target = payload[0]?.value || 0;
@@ -1117,7 +1047,9 @@ const PerformanceView = () => {
           padding: '10px',
           border: '1px solid #ddd',
           borderRadius: '6px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          maxWidth: '250px',
+          fontSize: '13px'
         }}>
           <p style={{ margin: '0 0 5px 0', fontWeight: '600', color: '#2c3e50' }}>
             {label}
@@ -1140,7 +1072,6 @@ const PerformanceView = () => {
     return null;
   };
 
-  // NEW: Generate chart subtitle based on filters
   const getChartSubtitle = () => {
     const monthName = chartFilters.month ? monthOptions.find(m => m.value === chartFilters.month)?.label : 'All Months';
     const yearText = chartFilters.year ? chartFilters.year.toString() : 'All Years';
@@ -1171,10 +1102,11 @@ const PerformanceView = () => {
           </div>
           <div style={{ 
             textAlign: 'center', 
-            marginTop: '15px', 
+            marginTop: '12px', 
             fontWeight: '600',
             fontSize: '16px',
-            color: '#2c3e50'
+            color: '#2c3e50',
+            wordBreak: 'break-word'
           }}>
             Current Performance: 0%
             {yearlyFilter.year && (
@@ -1228,10 +1160,11 @@ const PerformanceView = () => {
         </div>
         <div style={{ 
           textAlign: 'center', 
-          marginTop: '15px', 
+          marginTop: '12px', 
           fontWeight: '600',
           fontSize: '16px',
-          color: '#2c3e50'
+          color: '#2c3e50',
+          wordBreak: 'break-word'
         }}>
           Current Performance: {percentage.toFixed(1)}%
           {yearlyFilter.year && (
@@ -1244,7 +1177,6 @@ const PerformanceView = () => {
     );
   };
 
-  // Render the overall performance chart
   const renderOverallPerformanceChart = () => {
     if (chartLoading) {
       return <div style={styles.loadingText}>Loading performance chart...</div>;
@@ -1254,7 +1186,6 @@ const PerformanceView = () => {
       return <div style={styles.noDataText}>No performance data available for the selected period</div>;
     }
 
-    // Sort by performance percentage (descending) and take top 10
     const topPerformers = [...overallPerformance]
       .sort((a, b) => b.performancePercentage - a.performancePercentage)
       .slice(0, 10);
@@ -1280,7 +1211,7 @@ const PerformanceView = () => {
         <ResponsiveContainer width="100%" height={400}>
           <BarChart
             data={chartData}
-            margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+            margin={{ top: 20, right: 10, left: 10, bottom: 60 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis 
@@ -1297,7 +1228,7 @@ const PerformanceView = () => {
               tickCount={yAxisProps.tickCount}
             />
             <Tooltip content={<CustomTooltip />} />
-            <Legend />
+            <Legend wrapperStyle={{ paddingTop: '10px' }} />
             <Bar 
               dataKey="target" 
               name="Target Amount" 
@@ -1317,74 +1248,71 @@ const PerformanceView = () => {
           </BarChart>
         </ResponsiveContainer>
         
-        {/* Performance Legend */}
         <div style={{ 
           display: 'flex', 
-          justifyContent: 'center', 
-          marginTop: '20px',
           flexWrap: 'wrap',
-          gap: '10px'
+          justifyContent: 'center', 
+          marginTop: '15px',
+          gap: '8px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 10px' }}>
-            <div style={{ width: '15px', height: '15px', backgroundColor: '#e74c3c', marginRight: '5px' }}></div>
-            <span style={{ fontSize: '12px' }}>0-35%</span>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
+            <div style={{ width: '12px', height: '12px', backgroundColor: '#e74c3c', marginRight: '4px' }}></div>
+            <span style={{ fontSize: '11px' }}>0-35%</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 10px' }}>
-            <div style={{ width: '15px', height: '15px', backgroundColor: '#f1c40f', marginRight: '5px' }}></div>
-            <span style={{ fontSize: '12px' }}>35-50%</span>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
+            <div style={{ width: '12px', height: '12px', backgroundColor: '#f1c40f', marginRight: '4px' }}></div>
+            <span style={{ fontSize: '11px' }}>35-50%</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 10px' }}>
-            <div style={{ width: '15px', height: '15px', backgroundColor: '#f39c12', marginRight: '5px' }}></div>
-            <span style={{ fontSize: '12px' }}>50-75%</span>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
+            <div style={{ width: '12px', height: '12px', backgroundColor: '#f39c12', marginRight: '4px' }}></div>
+            <span style={{ fontSize: '11px' }}>50-75%</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 10px' }}>
-            <div style={{ width: '15px', height: '15px', backgroundColor: '#2ecc71', marginRight: '5px' }}></div>
-            <span style={{ fontSize: '12px' }}>75-100%</span>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
+            <div style={{ width: '12px', height: '12px', backgroundColor: '#2ecc71', marginRight: '4px' }}></div>
+            <span style={{ fontSize: '11px' }}>75-100%</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 10px' }}>
-            <div style={{ width: '15px', height: '15px', backgroundColor: '#9b59b6', marginRight: '5px' }}></div>
-            <span style={{ fontSize: '12px' }}>100-150%</span>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
+            <div style={{ width: '12px', height: '12px', backgroundColor: '#9b59b6', marginRight: '4px' }}></div>
+            <span style={{ fontSize: '11px' }}>100-150%</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 10px' }}>
-            <div style={{ width: '15px', height: '15px', backgroundColor: '#ff69b4', marginRight: '5px' }}></div>
-            <span style={{ fontSize: '12px' }}>150%+</span>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
+            <div style={{ width: '12px', height: '12px', backgroundColor: '#ff69b4', marginRight: '4px' }}></div>
+            <span style={{ fontSize: '11px' }}>150%+</span>
           </div>
         </div>
 
-        {/* Executive Type Legend */}
         <div style={{ 
           display: 'flex', 
-          justifyContent: 'center', 
-          marginTop: '15px',
           flexWrap: 'wrap',
-          gap: '15px'
+          justifyContent: 'center', 
+          marginTop: '12px',
+          gap: '12px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <div style={{ 
-              width: '12px', 
-              height: '12px', 
+              width: '10px', 
+              height: '10px', 
               backgroundColor: '#3498db', 
-              marginRight: '5px',
+              marginRight: '4px',
               borderRadius: '2px'
             }}></div>
-            <span style={{ fontSize: '12px', color: '#7f8c8d' }}>Target</span>
+            <span style={{ fontSize: '11px', color: '#7f8c8d' }}>Target</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <div style={{ 
-              width: '12px', 
-              height: '12px', 
+              width: '10px', 
+              height: '10px', 
               backgroundColor: '#2ecc71', 
-              marginRight: '5px',
+              marginRight: '4px',
               borderRadius: '2px'
             }}></div>
-            <span style={{ fontSize: '12px', color: '#7f8c8d' }}>Achieved (Colored by Performance %)</span>
+            <span style={{ fontSize: '11px', color: '#7f8c8d' }}>Achieved</span>
           </div>
         </div>
       </div>
     );
   };
 
-  // NEW: Render chart filters
   const renderChartFilters = () => {
     return (
       <div style={styles.chartFilterContainer}>
@@ -1423,7 +1351,6 @@ const PerformanceView = () => {
     );
   };
 
-  // NEW: Render yearly filter for all sections
   const renderYearlyFilter = () => {
     return (
       <div style={styles.yearlyFilterContainer}>
@@ -1446,7 +1373,6 @@ const PerformanceView = () => {
     );
   };
 
-  // PERSISTENT: Render incentive information (only when there are eligible months)
   const renderIncentiveInfo = () => {
     if (incentiveSummary.totalEligibleMonths === 0) return null;
 
@@ -1459,183 +1385,178 @@ const PerformanceView = () => {
           </div>
         </div>
         
-        <div style={{ textAlign: 'center', color: '#856404' }}>
+        <div style={{ textAlign: 'center', color: '#856404', fontSize: '14px' }}>
           {incentiveSummary.totalEligibleMonths} month(s) marked eligible for incentive processing
         </div>
       </div>
     );
   };
 
- const renderMonthlyTargets = () => {
-  if (!performanceData?.detailedData?.byMonth) return null;
+  const renderMonthlyTargets = () => {
+    if (!performanceData?.detailedData?.byMonth) return null;
 
-  const sortedMonths = [...performanceData.detailedData.byMonth].sort((a, b) => {
-    const [aMonth, aYear] = a.month.split(' ');
-    const [bMonth, bYear] = b.month.split(' ');
-    const aDate = new Date(`${aMonth} 1, ${aYear}`);
-    const bDate = new Date(`${bMonth} 1, ${bYear}`);
-    return bDate - aDate;
-  });
+    const sortedMonths = [...performanceData.detailedData.byMonth].sort((a, b) => {
+      const [aMonth, aYear] = a.month.split(' ');
+      const [bMonth, bYear] = b.month.split(' ');
+      const aDate = new Date(`${aMonth} 1, ${aYear}`);
+      const bDate = new Date(`${bMonth} 1, ${bYear}`);
+      return bDate - aDate;
+    });
 
-  // Filter months by selected year
-  const filteredMonths = sortedMonths.filter(monthData => {
-    if (!yearlyFilter.year) return true; // Show all if no year selected
-    
-    const [_, yearStr] = monthData.month.split(' ');
-    const year = parseInt(yearStr);
-    return year === yearlyFilter.year;
-  });
+    const filteredMonths = sortedMonths.filter(monthData => {
+      if (!yearlyFilter.year) return true;
+      
+      const [_, yearStr] = monthData.month.split(' ');
+      const year = parseInt(yearStr);
+      return year === yearlyFilter.year;
+    });
 
-  if (filteredMonths.length === 0) {
-    return (
-      <div style={{
-        gridColumn: '1 / -1',
-        textAlign: 'center',
-        padding: '40px',
-        color: '#95a5a6',
-        fontSize: '16px',
-        fontStyle: 'italic'
-      }}>
-        No monthly data available for {yearlyFilter.year || 'the selected period'}
-      </div>
-    );
-  }
+    if (filteredMonths.length === 0) {
+      return (
+        <div style={{
+          gridColumn: '1 / -1',
+          textAlign: 'center',
+          padding: '30px',
+          color: '#95a5a6',
+          fontSize: '16px',
+          fontStyle: 'italic'
+        }}>
+          No monthly data available for {yearlyFilter.year || 'the selected period'}
+        </div>
+      );
+    }
 
-  return filteredMonths.map((monthData, index) => {
-    const percentage = monthData.percentage || 0;
-    const balance = calculateMonthlyBalance(monthData);
-    const monthKey = monthData.month;
-    const isManuallyEligible = isMonthEligible(monthKey); // PERSISTENT: Use the new function
-    const meetsCriteria = meetsIncentiveCriteria(monthData);
-    const gap = calculateEligibilityGap(monthData);
+    return filteredMonths.map((monthData, index) => {
+      const percentage = monthData.percentage || 0;
+      const balance = calculateMonthlyBalance(monthData);
+      const monthKey = monthData.month;
+      const isManuallyEligible = isMonthEligible(monthKey);
+      const meetsCriteria = meetsIncentiveCriteria(monthData);
+      const gap = calculateEligibilityGap(monthData);
 
-    return (
-      <div key={index} style={styles.monthlyCard}>
-        {isManuallyEligible && (
-          <span style={styles.eligibleBadge}>✅ Eligible</span>
-        )}
-        
-        <h3 style={styles.cardTitle}>{monthData.month}</h3>
-        
-        {renderPerformanceBox(percentage)}
-        
-        <div style={styles.cardItem}>
-          <span style={styles.cardLabel}>Target Amount:</span>
-          <span style={styles.cardValue}>
-            ₹{monthData.target?.toLocaleString('en-IN') || '0'}
-          </span>
-        </div>
-        <div style={styles.cardItem}>
-          <span style={styles.cardLabel}>Achieved Amount:</span>
-          <span style={styles.cardValue}>
-            ₹{monthData.achieved?.toLocaleString('en-IN') || '0'}
-          </span>
-        </div>
-        <div style={styles.cardItem}>
-          <span style={styles.cardLabel}>Advance Amount:</span>
-          <span style={styles.cardValue}>
-            ₹{monthData.advance?.toLocaleString('en-IN') || '0'}
-          </span>
-        </div>
-        <div style={styles.cardItem}>
-          <span style={styles.cardLabel}>Balance Amount:</span>
-          <span style={{
-            ...styles.cardValue,
-            color: balance >= 0 ? '#27ae60' : '#e74c3c'
-          }}>
-            ₹{balance.toLocaleString('en-IN')}
-          </span>
-        </div>
-        <div 
-          style={styles.clickableCardItem}
-          onClick={() => handleMonthClick(monthData)}
-          onMouseEnter={(e) => {
-            e.target.style.backgroundColor = '#f8f9fa';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.backgroundColor = 'transparent';
-          }}
-        >
-          <span style={styles.cardLabel}>Total Orders:</span>
-          <span style={styles.cardValue}>
-            {monthData.orders || '0'}
-          </span>
-        </div>
-        <div 
-          style={styles.clickableCardItem}
-          onClick={() => handleMonthlyProspectsClick(monthData)}
-          onMouseEnter={(e) => {
-            e.target.style.backgroundColor = '#f8f9fa';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.backgroundColor = 'transparent';
-          }}
-        >
-          <span style={styles.cardLabel}>Monthly Prospects:</span>
-          <span style={styles.cardValue}>
-            {monthData.prospects || '0'}
-          </span>
-        </div>
-        
-        {/* UPDATED INCENTIVE ELIGIBILITY SECTION */}
-        <div style={styles.incentiveEligibilitySection}>
-          {isManuallyEligible ? (
-            <div style={{ textAlign: 'center', color: '#28a745', fontWeight: '600' }}>
-              ✅ Already Marked Eligible for Incentive
-            </div>
-          ) : (
-            <>
-              {/* Show criteria status */}
-              {gap.meetsTargetCriteria && (
-                <div style={styles.criteriaMetInfo}>
-                  ✅ Target Achieved: {percentage}% (Required: 100%)
-                </div>
-              )}
-              {gap.meetsOrderCriteria && (
-                <div style={styles.criteriaMetInfo}>
-                  ✅ Orders Completed: {monthData.orders || 0} (Required: 10)
-                </div>
-              )}
-              
-              {/* Show what's needed if criteria not met */}
-              {!meetsCriteria && (
-                <>
-                  {!gap.meetsTargetCriteria && (
-                    <div style={styles.gapInfo}>
-                      📊 Need {gap.targetNeeded}% more to reach target
-                    </div>
-                  )}
-                  {!gap.meetsOrderCriteria && (
-                    <div style={styles.gapInfo}>
-                      📦 Need {gap.ordersNeeded} more orders to reach minimum
-                    </div>
-                  )}
-                </>
-              )}
-              
-              <button
-                onClick={() => handleToggleEligibility(monthKey, monthData)}
-                disabled={!meetsCriteria}
-                style={{
-                  ...styles.makeEligibleButton,
-                  ...(!meetsCriteria ? { backgroundColor: '#6c757d', cursor: 'not-allowed' } : {})
-                }}
-              >
-                {meetsCriteria ? 'Make Eligible for Incentive' : 'Criteria Not Met'}
-              </button>
-              
-              <div style={{ fontSize: '12px', color: '#6c757d', textAlign: 'center', marginTop: '8px' }}>
-                Eligibility requires: 100% Target OR 10+ Orders
-              </div>
-            </>
+      return (
+        <div key={index} style={styles.monthlyCard}>
+          {isManuallyEligible && (
+            <span style={styles.eligibleBadge}>✅ Eligible</span>
           )}
+          
+          <h3 style={styles.cardTitle}>{monthData.month}</h3>
+          
+          {renderPerformanceBox(percentage)}
+          
+          <div style={styles.cardItem}>
+            <span style={styles.cardLabel}>Target Amount:</span>
+            <span style={styles.cardValue}>
+              ₹{monthData.target?.toLocaleString('en-IN') || '0'}
+            </span>
+          </div>
+          <div style={styles.cardItem}>
+            <span style={styles.cardLabel}>Achieved Amount:</span>
+            <span style={styles.cardValue}>
+              ₹{monthData.achieved?.toLocaleString('en-IN') || '0'}
+            </span>
+          </div>
+          <div style={styles.cardItem}>
+            <span style={styles.cardLabel}>Advance Amount:</span>
+            <span style={styles.cardValue}>
+              ₹{monthData.advance?.toLocaleString('en-IN') || '0'}
+            </span>
+          </div>
+          <div style={styles.cardItem}>
+            <span style={styles.cardLabel}>Balance Amount:</span>
+            <span style={{
+              ...styles.cardValue,
+              color: balance >= 0 ? '#27ae60' : '#e74c3c'
+            }}>
+              ₹{balance.toLocaleString('en-IN')}
+            </span>
+          </div>
+          <div 
+            style={styles.clickableCardItem}
+            onClick={() => handleMonthClick(monthData)}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#f8f9fa';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'transparent';
+            }}
+          >
+            <span style={styles.cardLabel}>Total Orders:</span>
+            <span style={styles.cardValue}>
+              {monthData.orders || '0'}
+            </span>
+          </div>
+          <div 
+            style={styles.clickableCardItem}
+            onClick={() => handleMonthlyProspectsClick(monthData)}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#f8f9fa';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'transparent';
+            }}
+          >
+            <span style={styles.cardLabel}>Monthly Prospects:</span>
+            <span style={styles.cardValue}>
+              {monthData.prospects || '0'}
+            </span>
+          </div>
+          
+          <div style={styles.incentiveEligibilitySection}>
+            {isManuallyEligible ? (
+              <div style={{ textAlign: 'center', color: '#28a745', fontWeight: '600', fontSize: '14px' }}>
+                ✅ Already Marked Eligible for Incentive
+              </div>
+            ) : (
+              <>
+                {gap.meetsTargetCriteria && (
+                  <div style={styles.criteriaMetInfo}>
+                    ✅ Target Achieved: {percentage}% (Required: 100%)
+                  </div>
+                )}
+                {gap.meetsOrderCriteria && (
+                  <div style={styles.criteriaMetInfo}>
+                    ✅ Orders Completed: {monthData.orders || 0} (Required: 10)
+                  </div>
+                )}
+                
+                {!meetsCriteria && (
+                  <>
+                    {!gap.meetsTargetCriteria && (
+                      <div style={styles.gapInfo}>
+                        📊 Need {gap.targetNeeded}% more to reach target
+                      </div>
+                    )}
+                    {!gap.meetsOrderCriteria && (
+                      <div style={styles.gapInfo}>
+                        📦 Need {gap.ordersNeeded} more orders to reach minimum
+                      </div>
+                    )}
+                  </>
+                )}
+                
+                <button
+                  onClick={() => handleToggleEligibility(monthKey, monthData)}
+                  disabled={!meetsCriteria}
+                  style={{
+                    ...styles.makeEligibleButton,
+                    ...(!meetsCriteria ? { backgroundColor: '#6c757d', cursor: 'not-allowed' } : {})
+                  }}
+                >
+                  {meetsCriteria ? 'Make Eligible for Incentive' : 'Criteria Not Met'}
+                </button>
+                
+                <div style={{ fontSize: '12px', color: '#6c757d', textAlign: 'center', marginTop: '8px' }}>
+                  Eligibility requires: 100% Target OR 10+ Orders
+                </div>
+              </>
+            )}
+          </div>
         </div>
-      </div>
-    );
-  });
-};
+      );
+    });
+  };
 
-  // NEW: Generate year filter display text
   const getYearFilterDisplayText = () => {
     if (!yearlyFilter.year) return 'All Years';
     return yearlyFilter.year.toString();
@@ -1645,12 +1566,8 @@ const PerformanceView = () => {
     <div style={styles.container}>
       <h1 style={styles.heading}>Executive Performance Dashboard</h1>
 
-      {/* Overall Performance Chart Section */}
       <div style={styles.chartContainer}>
-        
-        {/* NEW: Chart Filters */}
         {renderChartFilters()}
-        
         {renderOverallPerformanceChart()}
       </div>
 
@@ -1667,7 +1584,8 @@ const PerformanceView = () => {
                     textAlign: 'center', 
                     backgroundColor: '#f8f9fa', 
                     borderRadius: '6px',
-                    border: '1px solid #ddd'
+                    border: '1px solid #ddd',
+                    fontSize: '14px'
                   }}>
                     <div style={styles.loadingSpinner}></div>
                     Loading executives...
@@ -1682,44 +1600,37 @@ const PerformanceView = () => {
                       onFocus={() => setShowDropdown(true)}
                       style={styles.searchInput}
                     />
-                    {showDropdown && (
+                    {showDropdown && filteredExecutives.length > 0 && (
                       <div style={styles.dropdownList}>
-                        {filteredExecutives.length > 0 ? (
-                          filteredExecutives.map((exec) => {
-                            // Determine badge color based on executive type
-                            let badgeColor = '#3498db'; // Default blue for Sales
-                            if (exec.type === 'Service') badgeColor = '#2ecc71'; // Green
-                            if (exec.type === 'Account') badgeColor = '#9b59b6'; // Purple
-                            if (exec.type === 'Field') badgeColor = '#e74c3c'; // Red for Field executives
-                            
-                            return (
-                              <div
-                                key={exec.value}
-                                style={{
-                                  ...styles.dropdownItem,
-                                  ...(selectedExecutive === exec.value ? styles.dropdownItemHover : {})
-                                }}
-                                onClick={() => {
-                                  setSelectedExecutive(exec.value);
-                                  setSearchTerm('');
-                                  setShowDropdown(false);
-                                }}
-                              >
-                                <span>{exec.name}</span>
-                                <span style={{
-                                  ...styles.typeBadge,
-                                  backgroundColor: badgeColor
-                                }}>
-                                  {exec.type}
-                                </span>
-                              </div>
-                            );
-                          })
-                        ) : (
-                          <div style={styles.dropdownItem}>
-                            No executives found
-                          </div>
-                        )}
+                        {filteredExecutives.map((exec) => {
+                          let badgeColor = '#3498db';
+                          if (exec.type === 'Service') badgeColor = '#2ecc71';
+                          if (exec.type === 'Account') badgeColor = '#9b59b6';
+                          if (exec.type === 'Field') badgeColor = '#e74c3c';
+                          
+                          return (
+                            <div
+                              key={exec.value}
+                              style={{
+                                ...styles.dropdownItem,
+                                ...(selectedExecutive === exec.value ? styles.dropdownItemHover : {})
+                              }}
+                              onClick={() => {
+                                setSelectedExecutive(exec.value);
+                                setSearchTerm(exec.name);
+                                setShowDropdown(false);
+                              }}
+                            >
+                              <span style={{ flex: 1, marginRight: '10px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{exec.name}</span>
+                              <span style={{
+                                ...styles.typeBadge,
+                                backgroundColor: badgeColor
+                              }}>
+                                {exec.type}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </>
@@ -1734,8 +1645,8 @@ const PerformanceView = () => {
 
             <div style={styles.formGroup}>
               <label style={styles.label}>Date Range</label>
-              <div style={{ display: 'flex', gap: '15px' }}>
-                <div style={{ flex: 1 }}>
+              <div style={styles.dateRangeContainer}>
+                <div style={styles.dateInputContainer}>
                   <input
                     type="date"
                     name="startDate"
@@ -1745,7 +1656,7 @@ const PerformanceView = () => {
                     max={dateRange.endDate || format(new Date(), 'yyyy-MM-dd')}
                   />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={styles.dateInputContainer}>
                   <input
                     type="date"
                     name="endDate"
@@ -1775,12 +1686,17 @@ const PerformanceView = () => {
 
       {performanceData && (
         <div style={styles.resultsContainer}>
-          {/* NEW: Results header with year filter */}
           <div style={styles.resultsHeader}>
             <h2 style={styles.resultsTitle}>
               Performance Report for {performanceData.executiveName}
               {dateRange.startDate && dateRange.endDate && (
-                <span style={{ fontSize: '16px', fontWeight: 'normal', color: '#7f8c8d', marginLeft: '15px' }}>
+                <span style={{ 
+                  fontSize: '14px', 
+                  fontWeight: 'normal', 
+                  color: '#7f8c8d', 
+                  display: 'block',
+                  marginTop: '5px'
+                }}>
                   ({format(parseISO(dateRange.startDate), 'MMM dd, yyyy')} - {format(parseISO(dateRange.endDate), 'MMM dd, yyyy')})
                 </span>
               )}
@@ -1792,10 +1708,7 @@ const PerformanceView = () => {
             </div>
           </div>
 
-          {/* NEW: Yearly Filter for all sections */}
           {renderYearlyFilter()}
-
-          {/* UPDATED INCENTIVE SUMMARY CARD */}
           {renderIncentiveInfo()}
 
           <div style={styles.cardGrid}>
@@ -1848,7 +1761,6 @@ const PerformanceView = () => {
 
             <div style={{ ...styles.card, borderTop: '4px solid #2ecc71' }}>
               <h3 style={styles.cardTitle}>Overall Performance</h3>
-              {/* UPDATED: Now shows performance percentage based on year filter */}
               {renderPerformanceBox(getCurrentPerformancePercentage())}
               <div style={styles.cardItem}>
                 <span style={styles.cardLabel}>Total Target:</span>
@@ -1894,7 +1806,6 @@ const PerformanceView = () => {
 
           <div style={styles.monthlySection}>
             <h3 style={styles.monthlyHeader}>Monthly Performance Breakdown</h3>
-            
             <div style={styles.monthlyGrid}>
               {renderMonthlyTargets()}
             </div>
@@ -1906,6 +1817,156 @@ const PerformanceView = () => {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+          .recharts-wrapper {
+            overflow-x: auto;
+          }
+          .recharts-surface {
+            min-width: 500px;
+          }
+          
+          div[style*="max-width: 1200px"] {
+            padding: 15px !important;
+          }
+          
+          div[style*="padding: 20px"] {
+            padding: 15px !important;
+          }
+          
+          h1[style*="font-size: 28px"] {
+            font-size: 24px !important;
+            margin-bottom: 20px !important;
+          }
+          
+          h2[style*="font-size: 22px"] {
+            font-size: 20px !important;
+          }
+          
+          h3[style*="font-size: 20px"] {
+            font-size: 18px !important;
+          }
+          
+          div[style*="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))"] {
+            grid-template-columns: 1fr !important;
+            gap: 15px !important;
+          }
+          
+          div[style*="grid-template-columns: repeat(auto-fill, minmax(350px, 1fr))"] {
+            grid-template-columns: 1fr !important;
+            gap: 15px !important;
+          }
+          
+          div[style*="padding: 20px"][style*="borderTop: 4px solid"] {
+            padding: 15px !important;
+          }
+          
+          div[style*="display: flex"][style*="flexWrap: wrap"] {
+            flex-direction: column !important;
+          }
+          
+          div[style*="minWidth: 250px"] {
+            min-width: 100% !important;
+          }
+          
+          div[style*="minWidth: 200px"] {
+            min-width: 100% !important;
+          }
+          
+          div[style*="height: 50px"] {
+            height: 40px !important;
+          }
+          
+          span[style*="font-size: 16px"] {
+            font-size: 14px !important;
+          }
+          
+          div[style*="font-size: 14px"] {
+            font-size: 13px !important;
+          }
+          
+          button[style*="padding: 12px 25px"] {
+            padding: 10px 20px !important;
+            font-size: 15px !important;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .recharts-surface {
+            min-width: 400px;
+          }
+          
+          div[style*="max-width: 1200px"] {
+            padding: 10px !important;
+          }
+          
+          div[style*="padding: 20px"], 
+          div[style*="padding: 15px"] {
+            padding: 12px !important;
+          }
+          
+          h1[style*="font-size: 28px"] {
+            font-size: 22px !important;
+            margin-bottom: 15px !important;
+          }
+          
+          h2[style*="font-size: 22px"] {
+            font-size: 18px !important;
+          }
+          
+          h3[style*="font-size: 20px"] {
+            font-size: 16px !important;
+          }
+          
+          h3[style*="font-size: 18px"] {
+            font-size: 16px !important;
+          }
+          
+          div[style*="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))"] {
+            gap: 12px !important;
+          }
+          
+          div[style*="grid-template-columns: repeat(auto-fill, minmax(350px, 1fr))"] {
+            gap: 12px !important;
+          }
+          
+          div[style*="padding: 20px"][style*="borderTop: 4px solid"],
+          div[style*="padding: 15px"][style*="borderTop: 4px solid"] {
+            padding: 12px !important;
+          }
+          
+          div[style*="height: 50px"], 
+          div[style*="height: 40px"] {
+            height: 35px !important;
+          }
+          
+          span[style*="font-size: 16px"],
+          span[style*="font-size: 14px"] {
+            font-size: 13px !important;
+          }
+          
+          div[style*="font-size: 14px"],
+          div[style*="font-size: 13px"] {
+            font-size: 12px !important;
+          }
+          
+          button[style*="padding: 12px 25px"],
+          button[style*="padding: 10px 20px"] {
+            padding: 8px 16px !important;
+            font-size: 14px !important;
+          }
+          
+          input[style*="padding: 12px"],
+          select[style*="padding: 12px"] {
+            padding: 8px !important;
+            font-size: 14px !important;
+          }
+          
+          div[style*="padding: 12px"] {
+            padding: 8px !important;
+          }
         }
       `}</style>
     </div>

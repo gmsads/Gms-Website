@@ -5,8 +5,10 @@ import OrderForm from '../Executive/OrderForm';
 import DigitalMarketingOrderForm from '../Executive/Digitalform';
 import axios from 'axios';
 import GMSLogo from '../assets/GMS_LOGO_.png'
+import WhatsAppDashboard from './WhatsApp'; // Import WhatsApp dashboard component
 import { Chart as ChartJS, Title, Tooltip, LineElement, PointElement, Legend, ArcElement, BarElement, CategoryScale, LinearScale, RadialLinearScale, Filler } from 'chart.js';
 import { Bar, Doughnut, PolarArea, Line } from 'react-chartjs-2';
+import { FaWhatsapp } from 'react-icons/fa'; // Import WhatsApp icon
 
 // Register ChartJS components - ADDED Filler PLUGIN
 ChartJS.register(
@@ -44,6 +46,10 @@ function AdminDashboard() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(null);
 
+  // WhatsApp dashboard state
+  const [showWhatsAppDashboard, setShowWhatsAppDashboard] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
   // Order search states
   const [orderNumber, setOrderNumber] = useState('');
   const [showOrderForm, setShowOrderForm] = useState(false);
@@ -51,6 +57,7 @@ function AdminDashboard() {
   const [searchError, setSearchError] = useState('');
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [selectedFormType, setSelectedFormType] = useState('order');
+  
   // Month labels
   const monthLabels = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -165,6 +172,23 @@ function AdminDashboard() {
     fetchDashboardData();
   }, [year, selectedMonth]);
 
+  // Fetch unread WhatsApp messages count
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const response = await axios.get('/api/whatsapp/unread-count');
+        setUnreadCount(response.data.count || 0);
+      } catch (error) {
+        console.error('Error fetching unread count:', error);
+      }
+    };
+
+    fetchUnreadCount();
+    // Poll for new messages every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Handle order search
   const handleSearch = async () => {
     if (orderNumber.length !== 10) {
@@ -221,6 +245,7 @@ function AdminDashboard() {
       return safeArray(chartData.amountByMonth).reduce((sum, amount) => sum + amount, 0);
     }
   };
+
   // Generate year options
   const years = [];
   const currentYear = new Date().getFullYear();
@@ -228,29 +253,29 @@ function AdminDashboard() {
     years.push(y);
   }
 
- // Handle chart clicks - UPDATED FUNCTION
-const handleChartClick = (chartType) => {
-  if (chartType === 'pending-payment') {
-    // Prepare query parameters for month/year filtering
-    const queryParams = new URLSearchParams();
-    
-    if (year) {
-      queryParams.append('year', year);
+  // Handle chart clicks
+  const handleChartClick = (chartType) => {
+    if (chartType === 'pending-payment') {
+      // Prepare query parameters for month/year filtering
+      const queryParams = new URLSearchParams();
+      
+      if (year) {
+        queryParams.append('year', year);
+      }
+      
+      if (selectedMonth !== null) {
+        queryParams.append('month', selectedMonth + 1);
+      }
+      
+      navigate(`/admin-dashboard/pending-payment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
+    } else if (chartType === 'pending-service') {
+      navigate('/admin-dashboard/pending-service');
+    } else if (chartType === 'revenue') {
+      navigate('/admin-dashboard/view-orders');
+    } else if (chartType === 'daily-report') {
+      navigate('/admin-dashboard/daily-report');
     }
-    
-    if (selectedMonth !== null) {
-      queryParams.append('month', selectedMonth + 1);
-    }
-    
-    navigate(`/admin-dashboard/pending-payment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
-  } else if (chartType === 'pending-service') {
-    navigate('/admin-dashboard/pending-service');
-  } else if (chartType === 'revenue') {
-    navigate('/admin-dashboard/view-orders');
-  } else if (chartType === 'daily-report') {
-    navigate('/admin-dashboard/daily-report');
-  }
-};
+  };
 
   const handleCreateOrderClick = (e) => {
     e.preventDefault();
@@ -268,7 +293,7 @@ const handleChartClick = (chartType) => {
     return `Year ${year}`;
   };
 
-  // Styles - FIXED STYLE PROPERTIES TO AVOID CONFLICTS
+  // Styles - Added WhatsApp button styles
   const styles = {
     container: {
       display: 'flex',
@@ -300,6 +325,45 @@ const handleChartClick = (chartType) => {
       backgroundImage: 'linear-gradient(to bottom right, #f0f2f5, #e6e9ed)',
       height: '100vh',
       position: 'relative',
+    },
+    
+    // WhatsApp Floating Button
+    whatsappButton: {
+      position: 'fixed',
+      bottom: '30px',
+      right: '30px',
+      width: '60px',
+      height: '60px',
+      backgroundColor: '#25D366',
+      borderRadius: '50%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: 'pointer',
+      boxShadow: '0 4px 12px rgba(37, 211, 102, 0.4)',
+      zIndex: 1000,
+      transition: 'all 0.3s ease',
+      border: 'none',
+    },
+    whatsappIcon: {
+      fontSize: '32px',
+      color: 'white',
+    },
+    unreadBadge: {
+      position: 'absolute',
+      top: '-5px',
+      right: '-5px',
+      backgroundColor: '#FF3B30',
+      color: 'white',
+      borderRadius: '50%',
+      width: '24px',
+      height: '24px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '12px',
+      fontWeight: 'bold',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
     },
     
     dashboardCards: {
@@ -2184,6 +2248,36 @@ const handleChartClick = (chartType) => {
           </>
         )}
       </div>
+
+      {/* WhatsApp Floating Button */}
+      <button
+        style={styles.whatsappButton}
+        onClick={() => setShowWhatsAppDashboard(true)}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.1)';
+          e.currentTarget.style.boxShadow = '0 6px 16px rgba(37, 211, 102, 0.5)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 211, 102, 0.4)';
+        }}
+      >
+        <FaWhatsapp style={styles.whatsappIcon} />
+        {unreadCount > 0 && (
+          <div style={styles.unreadBadge}>
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </div>
+        )}
+      </button>
+
+      {/* WhatsApp Dashboard Modal */}
+      {showWhatsAppDashboard && (
+        <WhatsAppDashboard
+          onClose={() => setShowWhatsAppDashboard(false)}
+          unreadCount={unreadCount}
+          onMarkAsRead={() => setUnreadCount(0)}
+        />
+      )}
     </div>
   );
 }
