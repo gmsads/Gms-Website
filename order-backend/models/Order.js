@@ -16,7 +16,20 @@ const orderSchema = new mongoose.Schema({
   // Basic Info
   orderNo: { type: String, unique: true, required: true },
   orderDate: { type: Date, required: true },
-  
+    // Add these new fields for follow-up tracking
+  followUpStatus: {
+    type: String,
+    enum: ['pending', 'contacted'],
+    default: 'pending'
+  },
+  whatsappContactedDate: {
+    type: Date,
+    default: null
+  },
+  lastFollowUpDate: {
+    type: Date,
+    default: null
+  },
   // Client Info
   executive: { type: String, required: true },
   business: { type: String, required: true },

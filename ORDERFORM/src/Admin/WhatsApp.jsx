@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FaWhatsapp, FaArrowLeft, FaTimes, FaSearch, FaSync, FaCalendarAlt, FaRupeeSign } from "react-icons/fa";
+import { FaWhatsapp, FaArrowLeft, FaTimes, FaSearch, FaSync, FaCalendarAlt, FaRupeeSign, FaCheckCircle, FaUser, FaCrown } from "react-icons/fa";
 import axios from "axios";
 
 const WhatsAppFollowUp = ({ onClose }) => {
@@ -12,27 +12,208 @@ const WhatsAppFollowUp = ({ onClose }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState("pending"); // "pending" or "completed"
+  
+  // NEW: User role and info state
+  const [userRole, setUserRole] = useState('');
+  const [executiveName, setExecutiveName] = useState('');
 
   // Month and year options
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const years = Array.from({ length: 11 }, (_, i) => 2020 + i); // 2020 to 2030
 
-  // Calculate total amount from order rows
+  // NEW: Get user info from localStorage
+  const getUserInfo = () => {
+    try {
+      const role = localStorage.getItem('role') || '';
+      const name = localStorage.getItem('name') || localStorage.getItem('userName') || '';
+      
+      console.log('WhatsApp FollowUp - User info:', { role, name });
+      
+      setUserRole(role);
+      setExecutiveName(name);
+      
+      return { role, name };
+    } catch (error) {
+      console.error('Error getting user info:', error);
+      return { role: '', name: '' };
+    }
+  };
+
+  // NEW: Check if user should see all orders
+  const shouldSeeAllOrders = () => {
+    const rolesThatCanSeeAll = ['Admin', 'Account', 'Service Executive'];
+    return rolesThatCanSeeAll.includes(userRole);
+  };
+
+  // Fetch orders for selected month/year with role-based filtering
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Get user info
+      const { role, name } = getUserInfo();
+      
+      console.log(`Fetching retail orders for ${monthNames[selectedMonth-1]} ${selectedYear}...`);
+      console.log(`User role: ${role}, name: ${name}, see all: ${shouldSeeAllOrders()}`);
+      
+      // Build API URL with query parameters
+      let apiUrl = `/api/followup/retail-orders?year=${selectedYear}&month=${selectedMonth}`;
+      
+      // Add executive filter for regular executives
+      if (role && !shouldSeeAllOrders() && name) {
+        apiUrl += `&executive=${encodeURIComponent(name)}`;
+        console.log(`Adding executive filter for: ${name}`);
+      }
+      
+      console.log(`API URL: ${apiUrl}`);
+      
+      const response = await axios.get(apiUrl);
+      
+      console.log(`API Response:`, response.data);
+      
+      if (response.data.success && Array.isArray(response.data.data)) {
+        let ordersData = response.data.data;
+        
+        // Additional filtering on client side (as backup)
+        if (!shouldSeeAllOrders() && name) {
+          const originalCount = ordersData.length;
+          ordersData = ordersData.filter(order => {
+            // Try to match executive by various field names
+            const orderExecutive = order.executive || order.createdBy || order.salesExecutive || '';
+            return orderExecutive === name;
+          });
+          console.log(`Filtered from ${originalCount} to ${ordersData.length} orders for executive: ${name}`);
+        }
+        
+        console.log(`Found ${ordersData.length} retail orders after filtering`);
+        
+        // Process orders
+        const processedOrders = ordersData.map((order, index) => {
+          // Extract name from various possible fields
+          let clientName = 'Unknown Client';
+          if (order.clientName) clientName = order.clientName;
+          else if (order.customerName) clientName = order.customerName;
+          else if (order.contactPerson) clientName = order.contactPerson;
+          else if (order.name) clientName = order.name;
+          
+          // Extract phone from various possible fields
+          let phone = 'Not provided';
+          if (order.phone) phone = order.phone;
+          else if (order.mobile) phone = order.mobile;
+          else if (order.contactNumber) phone = order.contactNumber;
+          
+          // Extract business from various possible fields
+          let business = 'Retail Business';
+          if (order.business) business = order.business;
+          else if (order.company) business = order.company;
+          else if (order.businessName) business = order.businessName;
+          
+          // Extract executive from various possible fields
+          let executive = 'Unknown';
+          if (order.executive) executive = order.executive;
+          else if (order.createdBy) executive = order.createdBy;
+          else if (order.salesExecutive) executive = order.salesExecutive;
+          
+          // Use calculated totals from backend or calculate locally
+          const totalAmount = order.calculatedTotal || calculateTotalAmount(order);
+          const balance = order.calculatedBalance || calculateBalance(order, totalAmount);
+          
+          // Format dates
+          let orderDate = 'N/A';
+          let rawDate = null;
+          if (order.orderDate) {
+            rawDate = new Date(order.orderDate);
+            orderDate = rawDate.toLocaleDateString('en-IN');
+          } else if (order.createdAt) {
+            rawDate = new Date(order.createdAt);
+            orderDate = rawDate.toLocaleDateString('en-IN');
+          }
+          
+          let whatsappContactedDate = null;
+          if (order.whatsappContactedDate) {
+            whatsappContactedDate = new Date(order.whatsappContactedDate).toLocaleDateString('en-IN');
+          }
+          
+          let lastFollowUp = 'Not contacted';
+          if (order.lastFollowUpDate) {
+            lastFollowUp = new Date(order.lastFollowUpDate).toLocaleDateString('en-IN');
+          }
+          
+          return {
+            id: order._id,
+            orderNumber: order.orderNo || `ORD-${String(index + 1).padStart(3, '0')}`,
+            clientName: clientName.trim(),
+            phone: phone,
+            business: business,
+            orderDate: orderDate,
+            rawOrderDate: rawDate,
+            requirement: order.requirement || order.serviceDetails || order.description || 'No requirement specified',
+            followUpStatus: order.followUpStatus || 'pending',
+            lastFollowUp: lastFollowUp,
+            whatsappContactedDate: whatsappContactedDate,
+            amount: totalAmount,
+            balance: balance,
+            clientType: order.clientType || 'Retail',
+            status: order.status || 'active',
+            leadSource: order.leadSource || 'Unknown',
+            executive: executive,
+            rowsCount: order.rows ? order.rows.length : 0,
+            // Add createdBy for filtering
+            createdBy: order.createdBy || executive
+          };
+        });
+        
+        console.log(`Processed ${processedOrders.length} retail orders`);
+        
+        // Sort by date (newest first)
+        processedOrders.sort((a, b) => {
+          if (!a.rawOrderDate || !b.rawOrderDate) return 0;
+          return b.rawOrderDate - a.rawOrderDate;
+        });
+        
+        setOrders(processedOrders);
+        
+        // Filter pending orders for the default tab
+        const pendingOrders = processedOrders.filter(order => order.followUpStatus === 'pending');
+        setFilteredOrders(pendingOrders);
+        
+        if (processedOrders.length === 0) {
+          setError(`No retail orders found for ${monthNames[selectedMonth-1]} ${selectedYear}`);
+        } else {
+          setError(null);
+        }
+        
+      } else {
+        setError(response.data?.message || 'Invalid response from server');
+        setOrders([]);
+        setFilteredOrders([]);
+      }
+      
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+      setError(`Failed to load orders: ${err.response?.data?.message || err.message}`);
+      setOrders([]);
+      setFilteredOrders([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Helper functions for local calculation (fallback)
   const calculateTotalAmount = (order) => {
     let totalAmount = 0;
     
-    // Check if order has rows array
     if (order.rows && Array.isArray(order.rows) && order.rows.length > 0) {
-      // Sum up all row totals
       totalAmount = order.rows.reduce((sum, row) => {
         const rowAmount = row.total || row.amount || row.price || 0;
         return sum + (parseFloat(rowAmount) || 0);
       }, 0);
     }
     
-    // If no rows or rows total is 0, check direct amount fields
     if (totalAmount === 0) {
-      // Check multiple possible amount fields
       if (order.totalAmount !== undefined && order.totalAmount !== null) {
         totalAmount = parseFloat(order.totalAmount) || 0;
       } else if (order.amount !== undefined && order.amount !== null) {
@@ -49,22 +230,18 @@ const WhatsAppFollowUp = ({ onClose }) => {
     return totalAmount;
   };
 
-  // Calculate balance amount
   const calculateBalance = (order, totalAmount) => {
     let balance = 0;
     
-    // First try the balance field
     if (order.balance !== undefined && order.balance !== null) {
       balance = parseFloat(order.balance) || 0;
     }
-    // If balance is 0 but we have totalAmount, check payment history
     else if (totalAmount > 0 && order.paymentHistory && Array.isArray(order.paymentHistory)) {
       const totalPaid = order.paymentHistory.reduce((sum, payment) => {
         return sum + (parseFloat(payment.amount) || 0);
       }, 0);
       balance = totalAmount - totalPaid;
     }
-    // Otherwise calculate from advance amount if available
     else if (order.advanceAmount !== undefined && order.advanceAmount !== null) {
       const advance = parseFloat(order.advanceAmount) || 0;
       balance = totalAmount - advance;
@@ -73,159 +250,25 @@ const WhatsAppFollowUp = ({ onClose }) => {
     return balance;
   };
 
-  // Fetch orders for selected month/year
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const params = new URLSearchParams();
-      params.append('year', selectedYear);
-      params.append('month', selectedMonth);
-      
-      console.log(`Fetching orders for ${monthNames[selectedMonth-1]} ${selectedYear}...`);
-      const response = await axios.get(`/api/orders?${params.toString()}`);
-      
-      console.log(`Found ${response.data?.length || 0} total orders`);
-      
-      // Debug: Check first order structure
-      if (response.data && response.data.length > 0) {
-        console.log('First order structure:', {
-          keys: Object.keys(response.data[0]),
-          amountFields: Object.keys(response.data[0]).filter(key => 
-            key.toLowerCase().includes('amount') || 
-            key.toLowerCase().includes('total') || 
-            key.toLowerCase().includes('balance')
-          ),
-          hasRows: response.data[0].rows ? `Rows: ${response.data[0].rows.length}` : 'No rows',
-          rowsStructure: response.data[0].rows ? response.data[0].rows[0] : null
-        });
-      }
-      
-      if (response.data && Array.isArray(response.data)) {
-        // Process orders
-        const processedOrders = response.data
-          .filter(order => {
-            // Filter for Retail orders
-            const clientType = (order.clientType || '').toLowerCase();
-            return clientType === 'retail' || 
-                   !['agent', 'renewal', 'renewal-agent'].includes(clientType) ||
-                   !order.clientType; // If no clientType, assume retail
-          })
-          .map((order, index) => {
-            // Extract name from various possible fields
-            let clientName = 'Unknown Client';
-            if (order.clientName) clientName = order.clientName;
-            else if (order.customerName) clientName = order.customerName;
-            else if (order.contactPerson) clientName = order.contactPerson;
-            else if (order.name) clientName = order.name;
-            
-            // Extract phone from various possible fields
-            let phone = 'Not provided';
-            if (order.phone) phone = order.phone;
-            else if (order.mobile) phone = order.mobile;
-            else if (order.contactNumber) phone = order.contactNumber;
-            
-            // Extract business from various possible fields
-            let business = 'Retail Business';
-            if (order.business) business = order.business;
-            else if (order.company) business = order.company;
-            else if (order.businessName) business = order.businessName;
-            
-            // Calculate total amount
-            const totalAmount = calculateTotalAmount(order);
-            
-            // Calculate balance
-            const balance = calculateBalance(order, totalAmount);
-            
-            // Format date
-            let orderDate = 'N/A';
-            let rawDate = null;
-            if (order.orderDate) {
-              rawDate = new Date(order.orderDate);
-              orderDate = rawDate.toLocaleDateString('en-IN');
-            } else if (order.createdAt) {
-              rawDate = new Date(order.createdAt);
-              orderDate = rawDate.toLocaleDateString('en-IN');
-            }
-            
-            return {
-              id: order._id || `temp-${index}`,
-              orderNumber: order.orderNo || `ORD-${String(index + 1).padStart(3, '0')}`,
-              clientName: clientName.trim(),
-              phone: phone,
-              business: business,
-              orderDate: orderDate,
-              rawOrderDate: rawDate,
-              requirement: order.requirement || order.serviceDetails || order.description || 'No requirement specified',
-              followUpStatus: order.followUpStatus || 'pending',
-              lastFollowUp: order.lastFollowUpDate ? new Date(order.lastFollowUpDate).toLocaleDateString('en-IN') : 'Not contacted',
-              amount: totalAmount,
-              balance: balance,
-              clientType: order.clientType || 'Retail',
-              status: order.status || 'active',
-              leadSource: order.leadSource || 'Unknown',
-              executive: order.executive || 'Unknown',
-              rowsCount: order.rows ? order.rows.length : 0,
-              debugInfo: {
-                totalCalculated: totalAmount,
-                balanceCalculated: balance,
-                originalTotalAmount: order.totalAmount,
-                originalAmount: order.amount,
-                originalBalance: order.balance,
-                hasRows: !!order.rows,
-                rowsLength: order.rows ? order.rows.length : 0
-              }
-            };
-          });
-        
-        console.log(`Processed ${processedOrders.length} retail orders`);
-        console.log('Sample processed order:', processedOrders[0]);
-        
-        // Sort by date (newest first)
-        processedOrders.sort((a, b) => {
-          if (!a.rawOrderDate || !b.rawOrderDate) return 0;
-          return b.rawOrderDate - a.rawOrderDate;
-        });
-        
-        setOrders(processedOrders);
-        setFilteredOrders(processedOrders);
-        
-        if (processedOrders.length === 0) {
-          setError(`No retail orders found for ${monthNames[selectedMonth-1]} ${selectedYear}`);
-        } else {
-          setError(null);
-        }
-      } else {
-        setError('Invalid response from server');
-        setOrders([]);
-        setFilteredOrders([]);
-      }
-      
-    } catch (err) {
-      console.error('Error fetching orders:', err);
-      setError(`Failed to load orders: ${err.message}`);
-      setOrders([]);
-      setFilteredOrders([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
   useEffect(() => {
+    // Get user info on component mount
+    getUserInfo();
     fetchOrders();
   }, [selectedMonth, selectedYear]);
 
-  // Apply search filter
+  // Apply search filter based on active tab
   useEffect(() => {
+    const ordersToFilter = activeTab === "pending" 
+      ? orders.filter(o => o.followUpStatus === 'pending') 
+      : orders.filter(o => o.followUpStatus === 'contacted');
+    
     if (!searchTerm.trim()) {
-      setFilteredOrders(orders);
+      setFilteredOrders(ordersToFilter);
       return;
     }
 
     const searchLower = searchTerm.toLowerCase();
-    const filtered = orders.filter(order =>
+    const filtered = ordersToFilter.filter(order =>
       order.clientName.toLowerCase().includes(searchLower) ||
       order.business.toLowerCase().includes(searchLower) ||
       order.orderNumber.toLowerCase().includes(searchLower) ||
@@ -236,9 +279,9 @@ const WhatsAppFollowUp = ({ onClose }) => {
     );
     
     setFilteredOrders(filtered);
-  }, [searchTerm, orders]);
+  }, [searchTerm, orders, activeTab]);
 
-  const sendWhatsApp = (order) => {
+  const sendWhatsApp = async (order) => {
     try {
       const firstName = order.clientName.split(" ")[0];
       const businessName = order.business || 'business';
@@ -252,14 +295,54 @@ const WhatsAppFollowUp = ({ onClose }) => {
         return;
       }
       
-      // Update follow-up status locally
+      // Update order status in backend using the new API endpoint
+      try {
+        const updateResponse = await axios.put(`/api/followup/${order.id}/followup`, {
+          followUpStatus: 'contacted',
+          whatsappContactedDate: new Date().toISOString(),
+          lastFollowUpDate: new Date().toISOString()
+        });
+        
+        console.log('Order status updated:', updateResponse.data);
+        
+        if (!updateResponse.data.success) {
+          throw new Error(updateResponse.data.message || 'Failed to update order status');
+        }
+        
+      } catch (updateError) {
+        console.error('Failed to update order status:', updateError);
+        alert('Failed to save follow-up status. Please try again.');
+        return;
+      }
+      
+      // Update orders locally
       const updatedOrders = orders.map(o => 
         o.id === order.id 
-          ? { ...o, followUpStatus: 'contacted', lastFollowUp: new Date().toLocaleDateString('en-IN') }
+          ? { 
+              ...o, 
+              followUpStatus: 'contacted', 
+              lastFollowUp: new Date().toLocaleDateString('en-IN'),
+              whatsappContactedDate: new Date().toLocaleDateString('en-IN')
+            }
           : o
       );
       
       setOrders(updatedOrders);
+      
+      // Update filtered orders based on current tab
+      const ordersForCurrentTab = activeTab === "pending" 
+        ? updatedOrders.filter(o => o.followUpStatus === 'pending')
+        : updatedOrders.filter(o => o.followUpStatus === 'contacted');
+      
+      const filteredForCurrentTab = searchTerm.trim() 
+        ? ordersForCurrentTab.filter(order =>
+            order.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            order.business.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase())
+          )
+        : ordersForCurrentTab;
+      
+      setFilteredOrders(filteredForCurrentTab);
       
       // Open WhatsApp
       const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
@@ -267,7 +350,7 @@ const WhatsAppFollowUp = ({ onClose }) => {
       
     } catch (err) {
       console.error('Error sending WhatsApp:', err);
-      alert('Error opening WhatsApp');
+      alert(`Error: ${err.message}`);
     }
   };
 
@@ -312,6 +395,51 @@ const WhatsAppFollowUp = ({ onClose }) => {
 
   const stats = getStats();
 
+  // Tab badge style function
+  const getTabBadgeStyle = (tabType) => ({
+    position: "absolute",
+    top: "5px",
+    right: "5px",
+    background: tabType === "pending" ? "#ff6b6b" : "#28a745",
+    color: "white",
+    fontSize: "10px",
+    padding: "1px 5px",
+    borderRadius: "10px",
+    minWidth: "16px",
+  });
+
+  // Handle tab change
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setSearchTerm(""); // Clear search when changing tabs
+    
+    // Filter orders based on the selected tab
+    const ordersForTab = tab === "pending" 
+      ? orders.filter(o => o.followUpStatus === 'pending')
+      : orders.filter(o => o.followUpStatus === 'contacted');
+    
+    setFilteredOrders(ordersForTab);
+  };
+
+  // NEW: User info display
+  const getUserDisplayInfo = () => {
+    if (shouldSeeAllOrders()) {
+      return {
+        text: "👑 Viewing All Retail Orders",
+        icon: <FaCrown style={{ marginLeft: '5px', color: '#FFD700' }} />,
+        color: '#9c27b0'
+      };
+    } else {
+      return {
+        text: `👤 Viewing Your Orders - ${executiveName || 'Executive'}`,
+        icon: <FaUser style={{ marginLeft: '5px' }} />,
+        color: '#2196f3'
+      };
+    }
+  };
+
+  const userInfo = getUserDisplayInfo();
+
   return (
     <div style={styles.overlay}>
       <div style={styles.container}>
@@ -335,6 +463,14 @@ const WhatsAppFollowUp = ({ onClose }) => {
             <span style={styles.headerSubtitle}>
               {monthNames[selectedMonth-1]} {selectedYear}
               {refreshing && ' • Refreshing...'}
+            </span>
+            {/* NEW: User Role Info */}
+            <span style={{
+              ...styles.userRoleBadge,
+              backgroundColor: userInfo.color
+            }}>
+              {userInfo.text}
+              {userInfo.icon}
             </span>
           </span>
           <div style={styles.headerActions}>
@@ -394,20 +530,51 @@ const WhatsAppFollowUp = ({ onClose }) => {
           <div style={styles.statsBar}>
             <div style={styles.statItem}>
               <div style={styles.statValue}>{stats.total}</div>
-              <div style={styles.statLabel}>Orders</div>
+              <div style={styles.statLabel}>Total</div>
             </div>
             <div style={styles.statItem}>
               <div style={{...styles.statValue, color: '#ff6b6b'}}>{stats.pending}</div>
               <div style={styles.statLabel}>Pending</div>
             </div>
             <div style={styles.statItem}>
-              <div style={{...styles.statValue, color: '#28a745'}}>{formatAmount(stats.totalAmount)}</div>
-              <div style={styles.statLabel}>Total Amount</div>
+              <div style={{...styles.statValue, color: '#28a745'}}>{stats.contacted}</div>
+              <div style={styles.statLabel}>Completed</div>
             </div>
             <div style={styles.statItem}>
-              <div style={{...styles.statValue, color: '#ff6b6b'}}>{formatAmount(stats.totalBalance)}</div>
-              <div style={styles.statLabel}>Pending Amount</div>
+              <div style={{...styles.statValue, color: '#28a745'}}>{formatAmount(stats.totalAmount)}</div>
+              <div style={styles.statLabel}>Total Value</div>
             </div>
+          </div>
+        )}
+
+        {/* TAB SWITCHER */}
+        {!selectedOrder && orders.length > 0 && (
+          <div style={styles.tabContainer}>
+            <button
+              style={{
+                ...styles.tabButton,
+                ...(activeTab === "pending" ? styles.activeTab : {})
+              }}
+              onClick={() => handleTabChange("pending")}
+            >
+              Pending Follow-up
+              {stats.pending > 0 && (
+                <span style={getTabBadgeStyle("pending")}>{stats.pending}</span>
+              )}
+            </button>
+            <button
+              style={{
+                ...styles.tabButton,
+                ...(activeTab === "completed" ? styles.activeTab : {})
+              }}
+              onClick={() => handleTabChange("completed")}
+            >
+              <FaCheckCircle style={{marginRight: '5px', fontSize: '12px'}} />
+              Completed
+              {stats.contacted > 0 && (
+                <span style={getTabBadgeStyle("completed")}>{stats.contacted}</span>
+              )}
+            </button>
           </div>
         )}
 
@@ -418,7 +585,7 @@ const WhatsAppFollowUp = ({ onClose }) => {
               <FaSearch style={styles.searchIcon} />
               <input
                 type="text"
-                placeholder="Search retail orders..."
+                placeholder={`Search ${activeTab === "pending" ? "pending" : "completed"} orders...`}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={styles.searchInput}
@@ -453,6 +620,9 @@ const WhatsAppFollowUp = ({ onClose }) => {
           <div style={styles.loadingContainer}>
             <div style={styles.loadingSpinner}></div>
             <p>Loading retail orders for {monthNames[selectedMonth-1]} {selectedYear}...</p>
+            <p style={{ fontSize: '12px', marginTop: '5px', color: '#6c757d' }}>
+              {shouldSeeAllOrders() ? 'Loading all orders...' : `Loading your orders (${executiveName})...`}
+            </p>
           </div>
         )}
 
@@ -461,10 +631,10 @@ const WhatsAppFollowUp = ({ onClose }) => {
           <div style={styles.listWrapper}>
             <div style={styles.listHeader}>
               <span>
-                {filteredOrders.length} orders
+                {activeTab === "pending" ? "Pending" : "Completed"}: {filteredOrders.length} orders
                 {searchTerm && ` matching "${searchTerm}"`}
               </span>
-              {orders.length > 0 && (
+              {filteredOrders.length > 0 && (
                 <span style={styles.dateRange}>
                   {monthNames[selectedMonth-1]} {selectedYear}
                 </span>
@@ -473,15 +643,23 @@ const WhatsAppFollowUp = ({ onClose }) => {
             
             {filteredOrders.length === 0 ? (
               <div style={styles.emptyState}>
-                <p>No retail orders found</p>
+                <p>
+                  {activeTab === "pending" 
+                    ? "No pending follow-up orders" 
+                    : "No completed follow-up orders"}
+                </p>
                 <p style={styles.emptySubtext}>
                   {searchTerm 
                     ? 'No orders match your search'
-                    : 'Try changing month/year or refresh'}
+                    : activeTab === "pending" 
+                      ? 'All orders have been contacted!'
+                      : 'Contact orders to see them here'}
                 </p>
-                <button onClick={handleRefresh} style={styles.resetBtn}>
-                  Refresh
-                </button>
+                {activeTab === "completed" && stats.pending > 0 && (
+                  <button onClick={() => handleTabChange("pending")} style={styles.resetBtn}>
+                    View Pending Orders
+                  </button>
+                )}
               </div>
             ) : (
               <div style={styles.scrollableList}>
@@ -490,7 +668,7 @@ const WhatsAppFollowUp = ({ onClose }) => {
                     key={order.id}
                     style={{
                       ...styles.listItem,
-                      borderLeft: order.followUpStatus === 'pending' 
+                      borderLeft: activeTab === "pending" 
                         ? '4px solid #ff6b6b' 
                         : '4px solid #51cf66',
                     }}
@@ -530,6 +708,25 @@ const WhatsAppFollowUp = ({ onClose }) => {
                       <span style={styles.metaItem}>
                         By: {order.executive}
                       </span>
+                      {!shouldSeeAllOrders() && order.executive === executiveName && (
+                        <span style={{
+                          ...styles.metaItem,
+                          background: '#e3f2fd',
+                          color: '#1976d2',
+                          border: '1px solid #bbdefb'
+                        }}>
+                          Your Order
+                        </span>
+                      )}
+                      {activeTab === "completed" && order.whatsappContactedDate && (
+                        <span style={{
+                          ...styles.metaItem,
+                          background: '#e8f5e9',
+                          color: '#28a745'
+                        }}>
+                          Contacted: {order.whatsappContactedDate}
+                        </span>
+                      )}
                     </div>
                     
                     <div style={styles.orderDetails}>
@@ -540,11 +737,25 @@ const WhatsAppFollowUp = ({ onClose }) => {
                       </span>
                       <span style={{
                         ...styles.statusBadge,
-                        backgroundColor: order.followUpStatus === 'pending' ? '#ff6b6b' : '#51cf66'
+                        backgroundColor: activeTab === "pending" ? '#ff6b6b' : '#51cf66'
                       }}>
-                        {order.followUpStatus === 'pending' ? 'Pending' : 'Contacted'}
+                        {activeTab === "pending" ? 'Pending' : 'Completed'}
                       </span>
                     </div>
+                    
+                    {activeTab === "pending" && order.phone && order.phone !== 'Not provided' && (
+                      <div style={styles.quickAction}>
+                        <button
+                          style={styles.quickWhatsappBtn}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            sendWhatsApp(order);
+                          }}
+                        >
+                          <FaWhatsapp /> Send WhatsApp
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -566,6 +777,18 @@ const WhatsAppFollowUp = ({ onClose }) => {
                     <span style={styles.sourceBadge}>
                       {selectedOrder.leadSource}
                     </span>
+                    {/* NEW: Show "Your Order" badge if it's the executive's own order */}
+                    {!shouldSeeAllOrders() && selectedOrder.executive === executiveName && (
+                      <span style={{
+                        ...styles.sourceBadge,
+                        background: '#e3f2fd',
+                        color: '#1976d2',
+                        borderColor: '#bbdefb'
+                      }}>
+                        <FaUser style={{fontSize: '9px', marginRight: '3px'}} />
+                        Your Order
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div style={styles.orderNumberBadge}>{selectedOrder.orderNumber}</div>
@@ -595,8 +818,32 @@ const WhatsAppFollowUp = ({ onClose }) => {
                 
                 <div style={styles.detailRow}>
                   <span style={styles.detailLabel}>Executive:</span>
-                  <span style={styles.detailValue}>{selectedOrder.executive}</span>
+                  <span style={styles.detailValue}>
+                    {selectedOrder.executive}
+                    {!shouldSeeAllOrders() && selectedOrder.executive === executiveName && (
+                      <span style={{
+                        fontSize: '10px',
+                        background: '#e3f2fd',
+                        color: '#1976d2',
+                        padding: '1px 5px',
+                        borderRadius: '4px',
+                        marginLeft: '8px'
+                      }}>
+                        (You)
+                      </span>
+                    )}
+                  </span>
                 </div>
+                
+                {selectedOrder.whatsappContactedDate && (
+                  <div style={styles.detailRow}>
+                    <span style={styles.detailLabel}>WhatsApp Sent:</span>
+                    <span style={styles.detailValue}>
+                      <FaWhatsapp style={{marginRight: '5px', color: '#25D366'}} />
+                      {selectedOrder.whatsappContactedDate}
+                    </span>
+                  </div>
+                )}
                 
                 <div style={styles.amountSection}>
                   <div style={styles.amountRow}>
@@ -635,7 +882,7 @@ const WhatsAppFollowUp = ({ onClose }) => {
                     borderRadius: '12px',
                     fontSize: '12px'
                   }}>
-                    {selectedOrder.followUpStatus === 'pending' ? 'Pending' : 'Contacted'}
+                    {selectedOrder.followUpStatus === 'pending' ? 'Pending' : 'Completed'}
                   </span>
                 </div>
                 
@@ -656,20 +903,22 @@ const WhatsAppFollowUp = ({ onClose }) => {
             </div>
 
             <div style={styles.actionButtons}>
-              <button
-                style={{
-                  ...styles.whatsappBtn,
-                  opacity: !selectedOrder.phone || selectedOrder.phone === 'Not provided' ? 0.5 : 1,
-                  cursor: !selectedOrder.phone || selectedOrder.phone === 'Not provided' ? 'not-allowed' : 'pointer'
-                }}
-                onClick={() => selectedOrder.phone && selectedOrder.phone !== 'Not provided' && sendWhatsApp(selectedOrder)}
-                disabled={!selectedOrder.phone || selectedOrder.phone === 'Not provided'}
-              >
-                <FaWhatsapp /> 
-                {!selectedOrder.phone || selectedOrder.phone === 'Not provided' 
-                  ? 'No Phone Number' 
-                  : 'Send WhatsApp Follow-up'}
-              </button>
+              {selectedOrder.followUpStatus === 'pending' && (
+                <button
+                  style={{
+                    ...styles.whatsappBtn,
+                    opacity: !selectedOrder.phone || selectedOrder.phone === 'Not provided' ? 0.5 : 1,
+                    cursor: !selectedOrder.phone || selectedOrder.phone === 'Not provided' ? 'not-allowed' : 'pointer'
+                  }}
+                  onClick={() => selectedOrder.phone && selectedOrder.phone !== 'Not provided' && sendWhatsApp(selectedOrder)}
+                  disabled={!selectedOrder.phone || selectedOrder.phone === 'Not provided'}
+                >
+                  <FaWhatsapp /> 
+                  {!selectedOrder.phone || selectedOrder.phone === 'Not provided' 
+                    ? 'No Phone Number' 
+                    : 'Send WhatsApp Follow-up'}
+                </button>
+              )}
               
               <button
                 style={styles.secondaryBtn}
@@ -735,6 +984,19 @@ const styles = {
     fontWeight: "normal",
     marginTop: "2px",
   },
+  // NEW: User role badge style
+  userRoleBadge: {
+    fontSize: "10px",
+    padding: "3px 8px",
+    borderRadius: "12px",
+    marginTop: "4px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    maxWidth: "fit-content",
+    fontWeight: "500",
+  },
   headerActions: {
     display: "flex",
     alignItems: "center",
@@ -743,6 +1005,32 @@ const styles = {
     cursor: "pointer",
     fontSize: "18px",
     transition: "transform 0.2s",
+  },
+  tabContainer: {
+    display: "flex",
+    background: "#f8f9fa",
+    borderBottom: "1px solid #e9ecef",
+    flexShrink: 0,
+  },
+  tabButton: {
+    flex: 1,
+    padding: "12px 10px",
+    border: "none",
+    background: "transparent",
+    fontSize: "13px",
+    fontWeight: "600",
+    color: "#6c757d",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    transition: "all 0.2s",
+  },
+  activeTab: {
+    background: "#fff",
+    color: "#25D366",
+    borderBottom: "2px solid #25D366",
   },
   filterContainer: {
     padding: "15px",
@@ -939,6 +1227,7 @@ const styles = {
     background: "white",
     borderRadius: "8px",
     boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+    position: "relative",
   },
   listItemHeader: {
     display: "flex",
@@ -1041,6 +1330,25 @@ const styles = {
     color: "white",
     whiteSpace: "nowrap",
   },
+  quickAction: {
+    marginTop: "10px",
+    display: "flex",
+    justifyContent: "center",
+  },
+  quickWhatsappBtn: {
+    background: "linear-gradient(135deg, #25D366, #128C7E)",
+    color: "white",
+    border: "none",
+    padding: "8px 12px",
+    borderRadius: "6px",
+    fontSize: "11px",
+    fontWeight: "600",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: "5px",
+    transition: "transform 0.2s",
+  },
   detailWrapper: {
     flex: 1,
     display: "flex",
@@ -1068,6 +1376,7 @@ const styles = {
     display: "flex",
     gap: "8px",
     marginTop: "5px",
+    flexWrap: "wrap",
   },
   clientTypeBadge: {
     fontSize: "11px",
