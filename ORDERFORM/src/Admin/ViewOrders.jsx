@@ -201,99 +201,13 @@ function ViewOrders() {
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
   };
 
-  // Function to group commission-split orders together
-  const groupCommissionSplitOrders = (ordersList) => {
-    const orderGroups = {};
-    const result = [];
-    
-    // First, sort orders by orderDate to maintain chronological order
-    const sortedOrders = [...ordersList].sort((a, b) => {
-      const dateA = new Date(a.orderDate);
-      const dateB = new Date(b.orderDate);
-      return dateA - dateB;
-    });
-    
-    // Group orders by their original order ID or business+contact+date combination
-    sortedOrders.forEach(order => {
-      // Create a unique key for grouping
-      let groupKey;
-      
-      // Check if this is a commission split order
-      if (order.isCommissionSplit) {
-        if (order.originalOrderId) {
-          // Use original order ID for commission split orders
-          groupKey = order.originalOrderId;
-        } else if (order.commissionSplit && order.commissionSplit.executive1 && order.commissionSplit.executive2) {
-          // Use a combination of business details for commission split
-          groupKey = `${order.business}_${order.contactPerson}_${order.orderDate}_SPLIT`;
-        } else {
-          // Not a commission split order, treat as individual
-          groupKey = order._id;
-        }
-      } else {
-        // Not a commission split order, treat as individual
-        groupKey = order._id;
-      }
-      
-      if (!orderGroups[groupKey]) {
-        orderGroups[groupKey] = {
-          isCommissionSplit: order.isCommissionSplit || false,
-          orders: [],
-          groupKey: groupKey
-        };
-      }
-      
-      orderGroups[groupKey].orders.push(order);
-    });
-    
-    // Create a single display row for each group
-    Object.values(orderGroups).forEach(group => {
-      if (group.orders.length > 0) {
-        if (group.isCommissionSplit && group.orders.length > 1) {
-          // For commission split orders with multiple executives
-          const primaryOrder = group.orders[0];
-          const allExecutives = [...new Set(group.orders.map(o => o.executive))].join(' / ');
-          const allSaleClosedBy = [...new Set(group.orders.map(o => o.saleClosedBy))].join(' / ');
-          
-          // Create a combined order for display
-          const combinedOrder = {
-            ...primaryOrder,
-            _id: group.groupKey,
-            executive: allExecutives,
-            saleClosedBy: allSaleClosedBy || allExecutives,
-            isCombined: true,
-            combinedOrders: group.orders,
-            // Combine payment history from all orders in the group
-            paymentHistory: group.orders.flatMap(o => o.paymentHistory || []),
-            // Sum up totals from all orders
-            total: group.orders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0).toFixed(2),
-            advance: group.orders.reduce((sum, o) => sum + (parseFloat(o.advance) || 0), 0).toFixed(2),
-            balance: group.orders.reduce((sum, o) => sum + (parseFloat(o.balance) || 0), 0).toFixed(2),
-            discount: group.orders.reduce((sum, o) => sum + (parseFloat(o.discount) || 0), 0).toFixed(2),
-            discountedTotal: group.orders.reduce((sum, o) => sum + (parseFloat(o.discountedTotal) || 0), 0).toFixed(2)
-          };
-          
-          result.push(combinedOrder);
-        } else {
-          // For single orders or groups with only one order
-          result.push(group.orders[0]);
-        }
-      }
-    });
-    
-    return result;
-  };
-
   // Function to group orders by month for selected year only
-  const groupOrdersByMonth = (ordersList) => {
-    // First group commission split orders
-    const processedOrders = groupCommissionSplitOrders(ordersList);
-    
+  const groupOrdersByMonth = (orders) => {
     // Initialize empty object for grouped orders
     const grouped = {};
 
-    // Iterate through each processed order
-    processedOrders.forEach(order => {
+    // Iterate through each order
+    orders.forEach(order => {
       let date; // Variable to store parsed date
 
       // Parse order date from string
@@ -348,11 +262,8 @@ function ViewOrders() {
         };
       }
 
-      // Calculate order total
-      let orderAmount = order.total ? parseFloat(order.total) : 0;
-      if (!orderAmount && order.rows) {
-        orderAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-      }
+      // Calculate order total from rows
+      let orderAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
       
       // Calculate total received (advance + payment history)
       const orderAdvance = parseFloat(order.advance) || 0;
@@ -383,22 +294,18 @@ function ViewOrders() {
 
   // Function to calculate totals for summary cards
   const calculateTotals = () => {
-    // First group commission split orders to avoid double counting
-    const processedOrders = groupCommissionSplitOrders(orders);
-    
     // Initialize total counters
     let totalAmount = 0;
     let totalReceived = 0;
     let totalBalance = 0;
 
-    // Iterate through all processed orders
-    processedOrders.forEach(order => {
+    // Iterate through all orders
+    orders.forEach(order => {
       const orderDate = new Date(order.orderDate);
       // Only process orders from selected year
       if (orderDate.getFullYear() === yearFilter) {
-        // Calculate order total
-        const orderTotal = order.total ? parseFloat(order.total) : 
-          order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+        // Calculate order total from rows
+        const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
         totalAmount += orderTotal;
         
         // Calculate total received (advance + all payments)
@@ -557,7 +464,6 @@ function ViewOrders() {
       setGroupedOrders(groupOrdersByMonth(sortedOrders));
 
       console.log('✅ Final orders count:', sortedOrders.length);
-      console.log('✅ Grouped orders count after processing:', Object.values(groupOrdersByMonth(sortedOrders)).reduce((sum, group) => sum + group.orders.length, 0));
     } catch (err) {
       // Handle fetch errors
       console.error('❌ Error fetching orders:', err);
@@ -1220,13 +1126,10 @@ function ViewOrders() {
       return orderDate.getFullYear() === yearFilter;
     });
 
-    // Group commission split orders before export
-    const processedOrders = groupCommissionSplitOrders(filteredOrders);
-
     // Flatten orders for Excel export with lead source fields
-    const flattenedOrders = processedOrders.flatMap(order =>
-      order.rows.map((row, rowIndex) => ({
-        'S.No': processedOrders.indexOf(order) + 1,
+    const flattenedOrders = filteredOrders.flatMap(order =>
+      order.rows.map(row => ({
+        'S.No': filteredOrders.indexOf(order) + 1,
         'Executive': order.executive,
         'Business': order.business,
         'Customer': order.contactPerson,
@@ -1258,7 +1161,6 @@ function ViewOrders() {
         'Payment Method': order.paymentMethod,
         'Cheque Number': order.chequeNumber,
         'Created By': order.createdBy || order.executive,
-        'Commission Split': order.isCombined ? 'Yes (Combined)' : 'No',
         'Payments': order.paymentHistory ?
           order.paymentHistory.map(p => `${formatDate(p.date)}: ₹${p.amount} (${p.method})`).join('; ') : ''
       }))
@@ -2318,8 +2220,7 @@ function ViewOrders() {
                               left: 0,
                               backgroundColor: rowBgColor,
                               zIndex: 9,
-                              minWidth: '50px',
-                              fontWeight: order.isCombined ? 'bold' : 'normal'
+                              minWidth: '50px'
                             }}>{orderIndex + 1}</td>
                             
                             <td className="sticky-column" style={{ 
@@ -2329,24 +2230,7 @@ function ViewOrders() {
                               backgroundColor: rowBgColor,
                               zIndex: 9,
                               minWidth: '100px'
-                            }}>
-                              {order.isCombined ? (
-                                <div style={{ 
-                                  backgroundColor: '#e8f5e8',
-                                  padding: '4px 8px',
-                                  borderRadius: '4px',
-                                  fontWeight: 'bold',
-                                  color: '#2e7d32'
-                                }}>
-                                  {order.executive}
-                                  <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
-                                    🔗 Commission Split
-                                  </div>
-                                </div>
-                              ) : (
-                                order.executive
-                              )}
-                            </td>
+                            }}>{order.executive}</td>
                             
                             <td className="sticky-column" style={{ 
                               padding: '10px 8px',
@@ -2369,41 +2253,23 @@ function ViewOrders() {
                                     fontFamily: 'inherit',
                                     borderRadius: '4px',
                                     transition: 'all 0.2s ease',
-                                    fontWeight: order.isCombined ? 'bold' : '500',
-                                    textAlign: 'left',
-                                    backgroundColor: order.isCombined ? '#e8f5e8' : 'transparent'
+                                    fontWeight: '500',
+                                    textAlign: 'left'
                                   }}
                                   onMouseOver={(e) => {
-                                    e.target.style.backgroundColor = order.isCombined ? '#d4edda' : '#e3f2fd';
+                                    e.target.style.backgroundColor = '#e3f2fd';
                                     e.target.style.color = '#003366';
                                   }}
                                   onMouseLeave={(e) => {
-                                    e.target.style.backgroundColor = order.isCombined ? '#e8f5e8' : 'transparent';
+                                    e.target.style.backgroundColor = 'transparent';
                                     e.target.style.color = '#003366';
                                   }}
                                 >
                                   {order.business}
-                                  {order.isCombined && (
-                                    <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
-                                      🔗 Combined Order
-                                    </div>
-                                  )}
                                 </button>
                               ) : (
-                                <span style={{ 
-                                  color: '#003366', 
-                                  fontWeight: order.isCombined ? 'bold' : '500',
-                                  backgroundColor: order.isCombined ? '#e8f5e8' : 'transparent',
-                                  padding: order.isCombined ? '4px 8px' : '0',
-                                  borderRadius: order.isCombined ? '4px' : '0',
-                                  display: order.isCombined ? 'inline-block' : 'inline'
-                                }}>
+                                <span style={{ color: '#003366', fontWeight: '500' }}>
                                   {order.business}
-                                  {order.isCombined && (
-                                    <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
-                                      🔗 Combined Order
-                                    </div>
-                                  )}
                                 </span>
                               )}
                             </td>
@@ -2411,21 +2277,7 @@ function ViewOrders() {
                             {/* Regular Cells */}
                             <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactPerson}</td>
                             <td style={{ padding: '10px 8px', minWidth: '100px' }}>{order.location}</td>
-                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>
-                              {order.isCombined ? (
-                                <div style={{ 
-                                  backgroundColor: '#e3f2fd',
-                                  padding: '4px 8px',
-                                  borderRadius: '4px',
-                                  fontWeight: 'bold',
-                                  color: '#1976d2'
-                                }}>
-                                  {order.saleClosedBy}
-                                </div>
-                              ) : (
-                                order.saleClosedBy
-                              )}
-                            </td>
+                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.saleClosedBy}</td>
                             {/* Lead Source Cell */}
                             <td style={{ padding: '10px 8px', minWidth: '120px' }}>
                               <span style={{
@@ -2536,11 +2388,6 @@ function ViewOrders() {
                               minWidth: '100px'
                             }}>
                               {order.balance}
-                              {order.isCombined && order.combinedOrders && (
-                                <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
-                                  🔗 Combined total
-                                </div>
-                              )}
                             </td>
                             <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.advanceDate)}</td>
                             <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.paymentDate)}</td>
