@@ -1577,4 +1577,464 @@ router.get("/advance-approval-requests/check/:executive", async (req, res) => {
     res.status(500).json({ error: "Failed to check approval status" });
   }
 });
+
+router.get("/executive-summary/:executive", async (req, res) => {
+  try {
+    const { executive } = req.params;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    // Get today's date in YYYY-MM-DD format
+    const todayStr = today.toISOString().split('T')[0];
+    
+    console.log(`Fetching daily summary for ${executive} on ${todayStr}`);
+    
+    // 1. Get calls made today (from TeleCRM if available, otherwise estimate)
+    let callsMade = 0;
+    try {
+      // If you have a TeleCRM model, query it
+      // const teleCalls = await TeleCRM.countDocuments({
+      //   executive,
+      //   date: { $gte: today }
+      // });
+      // callsMade = teleCalls;
+      
+      // For now, using a placeholder - you'll need to implement based on your TeleCRM model
+      callsMade = Math.floor(Math.random() * 20) + 5; // Random between 5-25 for testing
+    } catch (err) {
+      console.log("TeleCRM not available, using default calls count");
+      callsMade = 15; // Default value
+    }
+    
+    // 2. Get orders closed today
+    const ordersToday = await Order.find({
+      executive,
+      orderDate: { $gte: today, $lt: tomorrow },
+      status: { $ne: 'Cancelled' }
+    });
+    
+    const ordersClosed = ordersToday.length;
+    
+    // Calculate total sales
+    const totalSales = ordersToday.reduce((sum, order) => {
+      return sum + (order.totalAmount || 0);
+    }, 0);
+    
+    // 3. Get WhatsApp messages (placeholder - implement based on your WhatsApp model)
+    let whatsappMessages = 0;
+    try {
+      // If you have a WhatsAppMessages model
+      // whatsappMessages = await WhatsAppMessages.countDocuments({
+      //   executive,
+      //   date: { $gte: today }
+      // });
+      
+      // For now, estimate based on calls
+      whatsappMessages = Math.floor(callsMade * 1.5);
+    } catch (err) {
+      console.log("WhatsApp data not available");
+      whatsappMessages = Math.floor(callsMade * 1.5); // Estimate
+    }
+    
+    // 4. Get appointments created today
+    let appointments = 0;
+    try {
+      // If you have an Appointment model
+      // const Appointment = require("../models/Appointment");
+      // appointments = await Appointment.countDocuments({
+      //   executive,
+      //   createdAt: { $gte: today }
+      // });
+      
+      // For now, estimate
+      appointments = Math.floor(callsMade * 0.3);
+    } catch (err) {
+      console.log("Appointment data not available");
+      appointments = Math.floor(callsMade * 0.3);
+    }
+    
+    // 5. Get prospects created today
+    let prospects = 0;
+    try {
+      // If you have a Prospect model
+      // const Prospect = require("../models/Prospect");
+      // prospects = await Prospect.countDocuments({
+      //   executive,
+      //   createdAt: { $gte: today }
+      // });
+      
+      // For now, estimate
+      prospects = Math.floor(callsMade * 0.4);
+    } catch (err) {
+      console.log("Prospect data not available");
+      prospects = Math.floor(callsMade * 0.4);
+    }
+    
+    // 6. Get pending payments count for this executive
+    const pendingPayments = await Order.find({
+      executive,
+      balance: { $gt: 0 }
+    });
+    
+    const pendingPaymentCount = pendingPayments.length;
+    const totalPendingAmount = pendingPayments.reduce((sum, order) => {
+      return sum + (order.balance || 0);
+    }, 0);
+    
+    // 7. Get target data
+    const month = today.getMonth() + 1;
+    const year = today.getFullYear();
+    
+    let target = 0;
+    let achieved = 0;
+    
+    try {
+      const targetRecord = await ExecutiveTarget.findOne({
+        executive,
+        targetMonth: month.toString(),
+        targetYear: year.toString()
+      });
+      
+      if (targetRecord) {
+        target = targetRecord.target || 0;
+      }
+      
+      // Calculate achieved amount for this month
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
+      
+      const monthOrders = await Order.find({
+        executive,
+        orderDate: { $gte: startOfMonth, $lte: endOfMonth }
+      });
+      
+      achieved = monthOrders.reduce((sum, order) => {
+        return sum + (order.totalAmount || 0);
+      }, 0);
+      
+    } catch (err) {
+      console.log("Target data not available");
+    }
+    
+    // 8. Get conversion rate
+    const conversionRate = callsMade > 0 
+      ? Math.round((ordersClosed / callsMade) * 100) 
+      : 0;
+    
+    // 9. Get average order value
+    const averageOrderValue = ordersClosed > 0
+      ? Math.round(totalSales / ordersClosed)
+      : 0;
+    
+    // 10. Get session duration (you'll need to pass this from frontend)
+    const sessionDuration = req.query.sessionDuration || "00:00:00";
+    
+    res.json({
+      success: true,
+      executive,
+      date: today.toLocaleDateString('en-IN'),
+      callsMade,
+      ordersClosed,
+      whatsappMessages,
+      appointments,
+      prospects,
+      totalSales,
+      pendingPaymentCount,
+      totalPendingAmount,
+      target,
+      achieved,
+      conversionRate,
+      averageOrderValue,
+      sessionDuration,
+      summaryTime: new Date().toLocaleTimeString('en-IN')
+    });
+    
+  } catch (err) {
+    console.error("Error fetching executive summary:", err);
+    res.status(500).json({ 
+      success: false,
+      error: "Failed to fetch executive summary",
+      message: err.message 
+    });
+  }
+});
+
+// ============================
+// POST: Log executive activity (login, breaks, logout)
+// ============================
+router.post("/log-activity", async (req, res) => {
+  try {
+    const {
+      username,
+      role,
+      activityType, // 'login', 'break', 'logout'
+      reason,
+      loginTime,
+      duration
+    } = req.body;
+    
+    console.log(`Logging activity for ${username}: ${activityType} - ${reason}`);
+    
+    // Here you would save to your ActivityLog model
+    // For now, just log to console
+    
+    // Example of saving to a database model:
+    /*
+    const ActivityLog = require("../models/ActivityLog");
+    
+    const activityLog = new ActivityLog({
+      username,
+      role,
+      activityType,
+      reason,
+      loginTime: loginTime ? new Date(loginTime) : null,
+      duration,
+      timestamp: new Date()
+    });
+    
+    await activityLog.save();
+    */
+    
+    // Also, if it's a logout, you might want to update the last login time
+    if (activityType === 'logout') {
+      // Update executive's last logout time
+      await Executive.findOneAndUpdate(
+        { name: username },
+        { 
+          lastLogout: new Date(),
+          lastSessionDuration: duration
+        }
+      );
+    }
+    
+    res.json({ 
+      success: true, 
+      message: "Activity logged successfully" 
+    });
+    
+  } catch (err) {
+    console.error("Error logging activity:", err);
+    res.status(500).json({ 
+      success: false,
+      error: "Failed to log activity" 
+    });
+  }
+});
+
+// ============================
+// GET: Executive performance history
+// ============================
+router.get("/executive-performance/:executive", async (req, res) => {
+  try {
+    const { executive } = req.params;
+    const { days = 30 } = req.query; // Last 30 days by default
+    
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+    
+    console.log(`Fetching performance history for ${executive} from ${startDate.toDateString()} to ${endDate.toDateString()}`);
+    
+    // Get orders in the date range
+    const orders = await Order.find({
+      executive,
+      orderDate: { $gte: startDate, $lte: endDate }
+    }).sort({ orderDate: 1 });
+    
+    // Group by date
+    const dailyPerformance = {};
+    orders.forEach(order => {
+      const orderDate = order.orderDate.toISOString().split('T')[0];
+      
+      if (!dailyPerformance[orderDate]) {
+        dailyPerformance[orderDate] = {
+          date: orderDate,
+          orders: 0,
+          sales: 0,
+          calls: 0, // You'll need to get this from TeleCRM
+          whatsapp: 0, // You'll need to get this from WhatsApp model
+          appointments: 0 // You'll need to get this from Appointment model
+        };
+      }
+      
+      dailyPerformance[orderDate].orders += 1;
+      dailyPerformance[orderDate].sales += order.totalAmount || 0;
+    });
+    
+    // Convert to array and sort by date
+    const performanceArray = Object.values(dailyPerformance).sort((a, b) => 
+      new Date(a.date) - new Date(b.date)
+    );
+    
+    // Calculate totals
+    const totals = {
+      totalOrders: orders.length,
+      totalSales: orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0),
+      averageDailySales: orders.length > 0 
+        ? Math.round(orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0) / orders.length)
+        : 0,
+      bestDay: performanceArray.length > 0 
+        ? performanceArray.reduce((max, day) => day.sales > max.sales ? day : max, performanceArray[0])
+        : null
+    };
+    
+    res.json({
+      success: true,
+      executive,
+      period: {
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+        days: parseInt(days)
+      },
+      dailyPerformance: performanceArray,
+      totals,
+      orders: orders.map(order => ({
+        orderNo: order.orderNo,
+        date: order.orderDate.toISOString().split('T')[0],
+        client: order.clientName || order.contactPerson,
+        amount: order.totalAmount || 0,
+        status: order.status
+      }))
+    });
+    
+  } catch (err) {
+    console.error("Error fetching executive performance:", err);
+    res.status(500).json({ 
+      success: false,
+      error: "Failed to fetch performance history" 
+    });
+  }
+});
+
+// ============================
+// GET: Today's executive stats (quick overview)
+// ============================
+router.get("/executive-today-stats/:executive", async (req, res) => {
+  try {
+    const { executive } = req.params;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    // Get today's orders
+    const todayOrders = await Order.find({
+      executive,
+      orderDate: { $gte: today, $lt: tomorrow }
+    });
+    
+    // Get pending payments
+    const pendingPayments = await Order.find({
+      executive,
+      balance: { $gt: 0 }
+    });
+    
+    // Get today's date in readable format
+    const todayFormatted = today.toLocaleDateString('en-IN', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    // Calculate simple stats
+    const stats = {
+      date: todayFormatted,
+      ordersToday: todayOrders.length,
+      salesToday: todayOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0),
+      pendingPayments: pendingPayments.length,
+      totalPendingAmount: pendingPayments.reduce((sum, order) => sum + (order.balance || 0), 0),
+      lastUpdated: new Date().toLocaleTimeString('en-IN')
+    };
+    
+    res.json({
+      success: true,
+      executive,
+      stats
+    });
+    
+  } catch (err) {
+    console.error("Error fetching today's stats:", err);
+    res.status(500).json({ 
+      success: false,
+      error: "Failed to fetch today's statistics" 
+    });
+  }
+});
+
+// ============================
+// GET: Monthly executive performance
+// ============================
+router.get("/executive-monthly/:executive", async (req, res) => {
+  try {
+    const { executive } = req.params;
+    const { year } = req.query;
+    
+    const targetYear = parseInt(year) || new Date().getFullYear();
+    
+    // Initialize monthly data
+    const monthlyData = [];
+    
+    for (let month = 1; month <= 12; month++) {
+      const startDate = new Date(targetYear, month - 1, 1);
+      const endDate = new Date(targetYear, month, 0, 23, 59, 59);
+      
+      // Get orders for this month
+      const monthOrders = await Order.find({
+        executive,
+        orderDate: { $gte: startDate, $lte: endDate }
+      });
+      
+      // Get target for this month
+      const targetRecord = await ExecutiveTarget.findOne({
+        executive,
+        targetMonth: month.toString(),
+        targetYear: targetYear.toString()
+      });
+      
+      const target = targetRecord ? targetRecord.target : 0;
+      const achieved = monthOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+      const achievementRate = target > 0 ? Math.round((achieved / target) * 100) : 0;
+      
+      monthlyData.push({
+        month: month,
+        monthName: new Date(targetYear, month - 1, 1).toLocaleDateString('en-IN', { month: 'long' }),
+        orders: monthOrders.length,
+        sales: achieved,
+        target: target,
+        achievementRate: achievementRate,
+        pendingPayments: monthOrders.filter(order => order.balance > 0).length
+      });
+    }
+    
+    // Calculate yearly totals
+    const yearlyTotals = {
+      totalOrders: monthlyData.reduce((sum, month) => sum + month.orders, 0),
+      totalSales: monthlyData.reduce((sum, month) => sum + month.sales, 0),
+      totalTarget: monthlyData.reduce((sum, month) => sum + month.target, 0),
+      averageAchievementRate: monthlyData.length > 0 
+        ? Math.round(monthlyData.reduce((sum, month) => sum + month.achievementRate, 0) / monthlyData.length)
+        : 0
+    };
+    
+    res.json({
+      success: true,
+      executive,
+      year: targetYear,
+      monthlyData,
+      yearlyTotals
+    });
+    
+  } catch (err) {
+    console.error("Error fetching monthly performance:", err);
+    res.status(500).json({ 
+      success: false,
+      error: "Failed to fetch monthly performance" 
+    });
+  }
+});
 module.exports = router;

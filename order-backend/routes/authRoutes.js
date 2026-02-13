@@ -37,7 +37,7 @@ const Order = require("../models/Order");
 const FieldExecutive = require("../models/FieldExecutive");
 const Unit = require("../models/Unit");
 const Agent = require("../models/Agent");
-
+const HR = require("../models/HR"); // Add this line with other model imports
 // ✅ Login route for Executive, Admin, Designer, Account,Service
 router.post("/login", async (req, res) => {
   const { name, password } = req.body;
@@ -118,7 +118,21 @@ if (agent) {
     name: agent.name,
   });
 }
-
+// Check HR - ADDED
+const hr = await HR.findOne({
+  $or: [
+    { name: new RegExp(`^${name.trim()}$`, "i") },
+    { username: new RegExp(`^${name.trim()}$`, "i") }
+  ],
+  password: password.trim(),
+});
+if (hr) {
+  return res.json({
+    success: true,
+    role: "HR",
+    name: hr.name,
+  });
+}
     // Client service
     const clientService = await ClientService.findOne({
       name: new RegExp(`^${name.trim()}$`, "i"),
@@ -370,7 +384,55 @@ router.post("/add-designer", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+// ✅ Route to add HR - ADDED
+router.post("/add-hr", async (req, res) => {
+  const {
+    username,
+    name,
+    phone,
+    password,
+    email,
+    guardianName,
+    guardianContact,
+    aadhar,
+    joiningDate,
+    experience,
+    active
+  } = req.body;
 
+  try {
+    const existing = await HR.findOne({
+      $or: [{ username }, { name }],
+    });
+    if (existing) {
+      return res.status(400).json({
+        error:
+          existing.username === username
+            ? "Username already exists"
+            : "Name already exists",
+      });
+    }
+
+    const newHR = new HR({
+      username,
+      name,
+      password,
+      phone,
+      email,
+      guardianName,
+      guardianContact,
+      aadhar,
+      joiningDate,
+      experience,
+      active: active !== false
+    });
+    await newHR.save();
+    res.status(201).json({ message: "HR added successfully" });
+  } catch (err) {
+    console.error("Error saving HR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 // ✅ Route to add an Account (with username)
 router.post("/add-account", async (req, res) => {
   const { username, name, password, phone, email,
@@ -707,7 +769,8 @@ router.get("/employees", async (req, res) => {
       clientServices,
       units,
       fieldExecutives,
-      agents
+      agents,
+        hrs // Add this
     ] = await Promise.all([
       Executive.find({}).lean(),
       Admin.find({}).lean(),
@@ -721,7 +784,8 @@ router.get("/employees", async (req, res) => {
       ClientService.find({}).lean(),
       Unit.find({}).lean(),
       FieldExecutive.find({}).lean(),
-       Agent.find({}).lean()// Ensure this is included
+       Agent.find({}).lean(),
+         HR.find({}).lean() // Add this
     ]);
 
     const employeeCategories = {
@@ -738,6 +802,7 @@ router.get("/employees", async (req, res) => {
       Unit: units,
       FieldExecutive: fieldExecutives,
       Agent: agents,
+        HR: hrs // Add this
 
     };
 
@@ -767,6 +832,8 @@ router.get("/user-profile", async (req, res) => {
       { model: Unit, name: "Unit" },
       { model: FieldExecutive, name: "FieldExecutive" },
       { model: Agent, name: "Agent" },
+        { model: HR, name: "HR" } // Add this
+
 
     ];
 
@@ -822,7 +889,8 @@ router.put("/update-profile", async (req, res) => {
       ClientService,
       Unit,
       FieldExecutive,
-      Agent
+      Agent,
+      HR
     };
 
     // Find current user

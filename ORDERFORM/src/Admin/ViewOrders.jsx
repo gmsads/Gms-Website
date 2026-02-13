@@ -576,8 +576,8 @@ function ViewOrders() {
     // Get user info and fetch orders
     const { role, name } = getUserInfo();
     fetchOrders(role, name, month, year, clientType, executive, executiveName, leadSource);
-  }, [location.search, location.state, yearFilter]); // Re-run when search params, location state, or yearFilter changes
-
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search, location.state, yearFilter]);
   // useEffect to handle click outside lead source filter dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -3464,6 +3464,4 @@ function ViewOrders() {
     </div>
   );
 }
-
-// Export the component as default
 export default ViewOrders;

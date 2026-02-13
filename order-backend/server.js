@@ -47,7 +47,7 @@ const serviceRequirementsRoutes = require('./routes/serviceRequirements');
 const purchase = require('./routes/purchase'); // ADD THIS LINE
 const whatsapp =require("./routes/whatsapp")
 const salaryRoutes = require('./routes/salaryRoutes');
-
+const greetingsRoutes = require('./routes/greetings');
 const app = express();
 runReminderCron();
 
@@ -88,7 +88,7 @@ app.use("/api/design-requests", designRoutes);
 app.use('/api/field-executive', fieldExecutiveRoutes);
 app.use('/api/designers', designersRoutes);
 app.use('/api/service-requirements', serviceRequirementsRoutes);
-
+app.use('/api/greetings', greetingsRoutes);
 // AUTH ROUTES (contains add-field-executive)
 app.use("/api", authRoutes);
 

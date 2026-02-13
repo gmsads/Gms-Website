@@ -59,7 +59,8 @@ const handleSubmit = async (e) => {
     'unit': 'add-unit',
     'agent': 'add-agent',
     'FieldExecutive': 'add-field-executive',
-      'vendor': 'add-vendor'
+    'vendor': 'add-vendor',
+    'hr': 'add-hr'  // Added HR role endpoint
   };
 
   const endpoint = roleEndpointMap[formData.role];
@@ -78,8 +79,8 @@ const handleSubmit = async (e) => {
     phone: formData.phone,
     password: formData.password,
     email: formData.email || '',
-    guardianName: formData.gardianName || '',
-    guardianContact: formData.gardianContact || '',
+    guardianName: formData.guardianName || '',
+    guardianContact: formData.guardianContact || '',
     aadhar: formData.aadhar || '',
     joiningDate: formData.joiningDate || '',
     experience: formData.experience || '',
@@ -484,10 +485,11 @@ const handleSubmit = async (e) => {
                 <option value="IT Team">IT Team</option>
                 <option value="Digital Marketing">Digital Marketing</option>
                 <option value="Client Service">Client Service</option>
-                  <option value="unit">Unit</option>
-                  <option value="agent">Agent</option>
-               <option value="FieldExecutive">Field Executive</option>
-                 <option value="vendor">Vendor</option>
+                <option value="unit">Unit</option>
+                <option value="agent">Agent</option>
+                <option value="FieldExecutive">Field Executive</option>
+                <option value="vendor">Vendor</option>
+                <option value="hr">HR</option>  {/* Added HR role option */}
               </select>
             </div>
           </div>

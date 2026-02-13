@@ -14,15 +14,16 @@ const WhatsAppFollowUp = ({ onClose }) => {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("pending"); // "pending" or "completed"
   
-  // NEW: User role and info state
+  // User role and info state
   const [userRole, setUserRole] = useState('');
   const [executiveName, setExecutiveName] = useState('');
+  const [companyName, setCompanyName] = useState('Global Marketing Solutions'); // Default company name
 
   // Month and year options
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const years = Array.from({ length: 11 }, (_, i) => 2020 + i); // 2020 to 2030
 
-  // NEW: Get user info from localStorage
+  // Get user info from localStorage
   const getUserInfo = () => {
     try {
       const role = localStorage.getItem('role') || '';
@@ -40,10 +41,26 @@ const WhatsAppFollowUp = ({ onClose }) => {
     }
   };
 
-  // NEW: Check if user should see all orders
+  // Check if user should see all orders
   const shouldSeeAllOrders = () => {
     const rolesThatCanSeeAll = ['Admin', 'Account', 'Service Executive'];
     return rolesThatCanSeeAll.includes(userRole);
+  };
+
+  // UPDATED: Generate WhatsApp message based on user role
+  const generateWhatsAppMessage = (order) => {
+    const firstName = order.clientName.split(" ")[0];
+    const businessName = order.business || 'business';
+    
+    // Check if user is admin/account/service (GMS)
+    if (shouldSeeAllOrders()) {
+      // Message from GMS/Company
+      return `Hi ${firstName}, this is GMS. Hope you are doing well! Do you have any new requirements for your ${businessName}? We have exciting offers for our retail clients!`;
+    } else {
+      // Message from specific executive
+      const executiveDisplayName = executiveName || 'Your executive';
+      return `Hi ${firstName}, this is ${executiveDisplayName} from GMS. Hope you are doing well! Do you have any new requirements for your ${businessName}? We have exciting offers for our retail clients!`;
+    }
   };
 
   // Fetch orders for selected month/year with role-based filtering
@@ -281,11 +298,11 @@ const WhatsAppFollowUp = ({ onClose }) => {
     setFilteredOrders(filtered);
   }, [searchTerm, orders, activeTab]);
 
+  // UPDATED: Send WhatsApp with role-based message
   const sendWhatsApp = async (order) => {
     try {
-      const firstName = order.clientName.split(" ")[0];
-      const businessName = order.business || 'business';
-      const message = `Hi ${firstName}, this is GMS. Hope you are doing well! Do you have any new requirements for your ${businessName}? We have exciting offers for our retail clients!`;
+      // Generate message based on user role
+      const message = generateWhatsAppMessage(order);
       
       // Clean phone number
       const phone = order.phone.replace(/\D/g, "");
@@ -343,6 +360,9 @@ const WhatsAppFollowUp = ({ onClose }) => {
         : ordersForCurrentTab;
       
       setFilteredOrders(filteredForCurrentTab);
+      
+      // Log the message being sent
+      console.log(`Sending WhatsApp as ${shouldSeeAllOrders() ? 'GMS' : executiveName}:`, message);
       
       // Open WhatsApp
       const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
@@ -421,19 +441,21 @@ const WhatsAppFollowUp = ({ onClose }) => {
     setFilteredOrders(ordersForTab);
   };
 
-  // NEW: User info display
+  // User info display
   const getUserDisplayInfo = () => {
     if (shouldSeeAllOrders()) {
       return {
-        text: "👑 Viewing All Retail Orders",
+        text: "👑 Viewing All Retail Orders (GMS)",
         icon: <FaCrown style={{ marginLeft: '5px', color: '#FFD700' }} />,
-        color: '#9c27b0'
+        color: '#9c27b0',
+        senderInfo: 'Sending as GMS'
       };
     } else {
       return {
-        text: `👤 Viewing Your Orders - ${executiveName || 'Executive'}`,
+        text: `👤 Your Orders - ${executiveName || 'Executive'}`,
         icon: <FaUser style={{ marginLeft: '5px' }} />,
-        color: '#2196f3'
+        color: '#2196f3',
+        senderInfo: `Sending as ${executiveName || 'Your Executive'}`
       };
     }
   };
@@ -464,13 +486,20 @@ const WhatsAppFollowUp = ({ onClose }) => {
               {monthNames[selectedMonth-1]} {selectedYear}
               {refreshing && ' • Refreshing...'}
             </span>
-            {/* NEW: User Role Info */}
+            {/* User Role Info */}
             <span style={{
               ...styles.userRoleBadge,
               backgroundColor: userInfo.color
             }}>
               {userInfo.text}
               {userInfo.icon}
+            </span>
+            {/* UPDATED: Show sender info */}
+            <span style={{
+              ...styles.senderBadge,
+              backgroundColor: shouldSeeAllOrders() ? '#25D366' : '#128C7E'
+            }}>
+              {userInfo.senderInfo}
             </span>
           </span>
           <div style={styles.headerActions}>
@@ -634,11 +663,9 @@ const WhatsAppFollowUp = ({ onClose }) => {
                 {activeTab === "pending" ? "Pending" : "Completed"}: {filteredOrders.length} orders
                 {searchTerm && ` matching "${searchTerm}"`}
               </span>
-              {filteredOrders.length > 0 && (
-                <span style={styles.dateRange}>
-                  {monthNames[selectedMonth-1]} {selectedYear}
-                </span>
-              )}
+              <span style={styles.dateRange}>
+                {monthNames[selectedMonth-1]} {selectedYear}
+              </span>
             </div>
             
             {filteredOrders.length === 0 ? (
@@ -751,8 +778,10 @@ const WhatsAppFollowUp = ({ onClose }) => {
                             e.stopPropagation();
                             sendWhatsApp(order);
                           }}
+                          title={shouldSeeAllOrders() ? 'Send as GMS' : `Send as ${executiveName}`}
                         >
-                          <FaWhatsapp /> Send WhatsApp
+                          <FaWhatsapp /> 
+                          {shouldSeeAllOrders() ? 'Send as GMS' : `Send as ${executiveName?.split(' ')[0] || 'Executive'}`}
                         </button>
                       </div>
                     )}
@@ -777,7 +806,7 @@ const WhatsAppFollowUp = ({ onClose }) => {
                     <span style={styles.sourceBadge}>
                       {selectedOrder.leadSource}
                     </span>
-                    {/* NEW: Show "Your Order" badge if it's the executive's own order */}
+                    {/* Show "Your Order" badge if it's the executive's own order */}
                     {!shouldSeeAllOrders() && selectedOrder.executive === executiveName && (
                       <span style={{
                         ...styles.sourceBadge,
@@ -912,11 +941,14 @@ const WhatsAppFollowUp = ({ onClose }) => {
                   }}
                   onClick={() => selectedOrder.phone && selectedOrder.phone !== 'Not provided' && sendWhatsApp(selectedOrder)}
                   disabled={!selectedOrder.phone || selectedOrder.phone === 'Not provided'}
+                  title={shouldSeeAllOrders() ? 'Send as GMS' : `Send as ${executiveName}`}
                 >
                   <FaWhatsapp /> 
                   {!selectedOrder.phone || selectedOrder.phone === 'Not provided' 
                     ? 'No Phone Number' 
-                    : 'Send WhatsApp Follow-up'}
+                    : shouldSeeAllOrders() 
+                      ? 'Send WhatsApp as GMS' 
+                      : `Send WhatsApp as ${executiveName?.split(' ')[0] || 'Executive'}`}
                 </button>
               )}
               
@@ -984,7 +1016,7 @@ const styles = {
     fontWeight: "normal",
     marginTop: "2px",
   },
-  // NEW: User role badge style
+  // User role badge style
   userRoleBadge: {
     fontSize: "10px",
     padding: "3px 8px",
@@ -996,6 +1028,20 @@ const styles = {
     alignSelf: "center",
     maxWidth: "fit-content",
     fontWeight: "500",
+  },
+  // NEW: Sender badge style
+  senderBadge: {
+    fontSize: "9px",
+    padding: "2px 6px",
+    borderRadius: "10px",
+    marginTop: "2px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    maxWidth: "fit-content",
+    fontWeight: "500",
+    color: "white",
   },
   headerActions: {
     display: "flex",

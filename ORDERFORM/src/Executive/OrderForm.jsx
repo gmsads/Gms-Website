@@ -31,7 +31,7 @@ function OrderForm({
   const [clientLocation, setClientLocation] = useState(existingData?.location || "");
   const [saleClosedBy, setSaleClosedBy] = useState(existingData?.saleClosedBy || "");
   
-  // NEW: Lead Source states
+  // Lead Source states
   const [leadSources] = useState([
     'India Mart',
     'Just Dial',
@@ -105,11 +105,11 @@ function OrderForm({
       endDate: delivery.toISOString().split("T")[0],
       total: "0.00",
       deliveryDate: delivery.toISOString().split("T")[0],
-      gstIncluded: false,
+      gstIncluded: true, // UPDATED: GST automatically selected by default
     };
   }
 
-  // NEW: Handle lead source change
+  // Handle lead source change
   const handleLeadSourceChange = (value) => {
     setLeadSource(value);
     if (value !== 'Other Specify') {
@@ -265,6 +265,7 @@ Global Marketing Solutions Team`;
     const days = isTimeBasedRequirement(row.requirement) ? parseInt(row.days) || 1 : 1;
 
     let baseAmount = isTimeBasedRequirement(row.requirement) ? qty * rate * days : qty * rate;
+    // UPDATED: GST is applied based on checkbox state (default true)
     return row.gstIncluded ? (baseAmount * 1.18).toFixed(2) : baseAmount.toFixed(2);
   };
 
@@ -400,14 +401,17 @@ Global Marketing Solutions Team`;
     setContactPerson("");
     setClientLocation("");
     setSaleClosedBy("");
-    setLeadSource(""); // NEW: Reset lead source
-    setOtherLeadSource(""); // NEW: Reset other lead source
+    setLeadSource(""); // Reset lead source
+    setOtherLeadSource(""); // Reset other lead source
     setOrderDate(new Date().toISOString().split("T")[0]);
     setAdvanceDate(new Date().toISOString().split("T")[0]);
     setClientType(newClientType); // Set the determined client type
     setTarget("");
     setDiscount(0);
-    setRows([getEmptyRow()]);
+    setRows([{
+      ...getEmptyRow(),
+      gstIncluded: true // UPDATED: Ensure GST is selected by default for new orders
+    }]);
     setTotal(0);
     setDiscountedTotal(0);
     setAdvance("");
@@ -472,7 +476,8 @@ Global Marketing Solutions Team`;
             description: row.description,
             quantity: row.quantity,
             rate: row.rate,
-            total: row.total
+            total: row.total,
+            gstIncluded: row.gstIncluded // UPDATED: Include GST status
           })),
           discount,
           paymentMethods
@@ -563,8 +568,8 @@ Global Marketing Solutions Team`;
       setContactPerson(existingData.contactPerson || "");
       setClientLocation(existingData.location || "");
       setSaleClosedBy(existingData.saleClosedBy || "");
-      setLeadSource(existingData.leadSource || ''); // NEW: Set lead source
-      setOtherLeadSource(existingData.otherLeadSource || ''); // NEW: Set other lead source
+      setLeadSource(existingData.leadSource || ''); // Set lead source
+      setOtherLeadSource(existingData.otherLeadSource || ''); // Set other lead source
       setContactNumber(`${existingData.contactCode || "+91"} ${existingData.phone || ""}`);
       setOrderDate(existingData.orderDate || new Date().toISOString().split("T")[0]);
       setClientType(existingData.clientType || "");
@@ -584,7 +589,7 @@ Global Marketing Solutions Team`;
           endDate: row.endDate || calculateDeliveryDate(row.deliveryDate),
           total: row.total.toString(),
           deliveryDate: row.deliveryDate,
-          gstIncluded: row.gstIncluded || false,
+          gstIncluded: row.gstIncluded !== undefined ? row.gstIncluded : true, // UPDATED: Default to true if not set
         })));
         setTotal(existingData.total || 0);
         setDiscountedTotal(existingData.total - (existingData.discount || 0));
@@ -639,7 +644,7 @@ Global Marketing Solutions Team`;
       return;
     }
 
-    // NEW: Validate lead source if selected
+    // Validate lead source if selected
     if (leadSource === 'Other Specify' && !otherLeadSource.trim()) {
       alert("Please specify the lead source");
       return;
@@ -666,7 +671,7 @@ Global Marketing Solutions Team`;
       const totalNum = parseFloat(total) || 0;
       const advanceNum = parseFloat(advance) || 0;
 
-      // NEW: Determine final lead source value
+      // Determine final lead source value
       const finalLeadSource = leadSource === 'Other Specify' 
         ? otherLeadSource 
         : leadSource;
@@ -713,7 +718,8 @@ Global Marketing Solutions Team`;
             total: rowTotal,
             description: row.description || "",
             days: row.days || "",
-            deliveryDate: row.deliveryDate || ""
+            deliveryDate: row.deliveryDate || "",
+            gstIncluded: row.gstIncluded // UPDATED: Include GST status
           };
         });
 
@@ -732,7 +738,7 @@ Global Marketing Solutions Team`;
         contactPerson,
         location: clientLocation,
         saleClosedBy: saleClosedBy || selectedExecutive,
-        leadSource: finalLeadSource, // NEW: Add lead source to order data
+        leadSource: finalLeadSource, // Add lead source to order data
         contactCode: "+91",
         phone,
         orderDate,
@@ -746,7 +752,7 @@ Global Marketing Solutions Team`;
           total: finalTotal,
           deliveryDate: rows[0]?.deliveryDate || new Date().toISOString().split("T")[0],
           customRequirement: allRequirements,
-          gstIncluded: rows.some(row => row.gstIncluded),
+          gstIncluded: rows.some(row => row.gstIncluded), // UPDATED: Include GST status
           requirementDetails: requirementDetails
         }],
         advanceDate,
@@ -780,7 +786,7 @@ Global Marketing Solutions Team`;
           days: row.days,
           total: row.total,
           deliveryDate: row.deliveryDate,
-          gstIncluded: row.gstIncluded
+          gstIncluded: row.gstIncluded // UPDATED: Include GST status
         }))
       };
 
@@ -892,7 +898,10 @@ Global Marketing Solutions Team`;
     }
   };
 
-  const handleAddRow = () => setRows((prev) => [...prev, getEmptyRow()]);
+  const handleAddRow = () => setRows((prev) => [...prev, {
+    ...getEmptyRow(),
+    gstIncluded: true // UPDATED: Ensure new rows have GST selected by default
+  }]);
 
   const handleRowChange = (index, field, value) => {
     const updatedRows = [...rows];
@@ -908,7 +917,7 @@ Global Marketing Solutions Team`;
       updatedRows[index][field] = value;
       if (isTimeBased) updatedRows[index].endDate = calculateDeliveryDate(value, parseInt(updatedRows[index].days) || 1);
     }
-    else if (field === "gstIncluded") updatedRows[index][field] = value;
+    else if (field === "gstIncluded") updatedRows[index][field] = value; // UPDATED: Handle GST checkbox change
     else updatedRows[index][field] = value;
 
     updatedRows[index].total = calculateRowTotal(updatedRows[index]);
@@ -1233,7 +1242,7 @@ Global Marketing Solutions Team`;
                 {existingData.saleClosedBy || existingData.executive}
               </div>
             </div>
-            {/* NEW: Lead Source display */}
+            {/* Lead Source display */}
             {existingData.leadSource && (
               <div>
                 <div style={{ color: '#666', fontSize: '12px' }}>Lead Source</div>
@@ -1296,54 +1305,67 @@ Global Marketing Solutions Team`;
                   <th style={{ padding: '8px', textAlign: 'right', border: '1px solid #ddd' }}>Rate (₹)</th>
                   <th style={{ padding: '8px', textAlign: 'right', border: '1px solid #ddd' }}>Total (₹)</th>
                   <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #ddd' }}>Delivery</th>
+                  <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #ddd' }}>GST</th>
                 </tr>
               </thead>
               <tbody>
-                {existingData.rows && existingData.rows.map((row, index) => (
-                  <tr key={index} style={{ 
-                    backgroundColor: index % 2 === 0 ? '#f9f9f9' : 'white',
-                    borderBottom: '1px solid #eee'
-                  }}>
-                    <td style={{ padding: '8px', border: '1px solid #ddd', verticalAlign: 'top' }}>
-                      {row.customRequirement || row.requirement}
-                    </td>
-                    <td style={{ padding: '8px', border: '1px solid #ddd', verticalAlign: 'top' }}>
-                      {row.description}
-                    </td>
-                    <td style={{ 
-                      padding: '8px', 
-                      border: '1px solid #ddd', 
-                      textAlign: 'center',
-                      verticalAlign: 'top'
+                {existingData.rows && existingData.rows.map((row, index) => {
+                  const gstIncluded = row.gstIncluded !== undefined ? row.gstIncluded : true;
+                  return (
+                    <tr key={index} style={{ 
+                      backgroundColor: index % 2 === 0 ? '#f9f9f9' : 'white',
+                      borderBottom: '1px solid #eee'
                     }}>
-                      {row.quantity}
-                    </td>
-                    <td style={{ 
-                      padding: '8px', 
-                      border: '1px solid #ddd', 
-                      textAlign: 'right',
-                      verticalAlign: 'top'
-                    }}>
-                      ₹{parseFloat(row.rate).toFixed(2)}
-                    </td>
-                    <td style={{ 
-                      padding: '8px', 
-                      border: '1px solid #ddd', 
-                      textAlign: 'right', 
-                      fontWeight: 'bold',
-                      verticalAlign: 'top'
-                    }}>
-                      ₹{parseFloat(row.total).toFixed(2)}
-                    </td>
-                    <td style={{ 
-                      padding: '8px', 
-                      border: '1px solid #ddd',
-                      verticalAlign: 'top'
-                    }}>
-                      {new Date(row.deliveryDate).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
+                      <td style={{ padding: '8px', border: '1px solid #ddd', verticalAlign: 'top' }}>
+                        {row.customRequirement || row.requirement}
+                      </td>
+                      <td style={{ padding: '8px', border: '1px solid #ddd', verticalAlign: 'top' }}>
+                        {row.description}
+                      </td>
+                      <td style={{ 
+                        padding: '8px', 
+                        border: '1px solid #ddd', 
+                        textAlign: 'center',
+                        verticalAlign: 'top'
+                      }}>
+                        {row.quantity}
+                      </td>
+                      <td style={{ 
+                        padding: '8px', 
+                        border: '1px solid #ddd', 
+                        textAlign: 'right',
+                        verticalAlign: 'top'
+                      }}>
+                        ₹{parseFloat(row.rate).toFixed(2)}
+                      </td>
+                      <td style={{ 
+                        padding: '8px', 
+                        border: '1px solid #ddd', 
+                        textAlign: 'right', 
+                        fontWeight: 'bold',
+                        verticalAlign: 'top'
+                      }}>
+                        ₹{parseFloat(row.total).toFixed(2)}
+                      </td>
+                      <td style={{ 
+                        padding: '8px', 
+                        border: '1px solid #ddd',
+                        verticalAlign: 'top'
+                      }}>
+                        {new Date(row.deliveryDate).toLocaleDateString()}
+                      </td>
+                      <td style={{ 
+                        padding: '8px', 
+                        border: '1px solid #ddd', 
+                        textAlign: 'center',
+                        verticalAlign: 'top',
+                        color: gstIncluded ? '#4CAF50' : '#999'
+                      }}>
+                        {gstIncluded ? '✓' : '✗'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1814,7 +1836,7 @@ Global Marketing Solutions Team`;
                 </select>
               </label>
             </div>
-            {/* NEW: Lead Source Field */}
+            {/* Lead Source Field */}
             <div style={{ flex: 1, minWidth: '200px' }}>
               <label>
                 Lead Source:

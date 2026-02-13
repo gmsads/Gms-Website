@@ -1074,7 +1074,15 @@ function AdminDashboard() {
               >
                 Pending Service
               </NavLink>
-
+<NavLink
+                to="greeting-design"
+                style={linkStyle('greeting-design')}
+                onMouseEnter={() => setHoveredItem('greeting-design')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+             Greeting Design
+              </NavLink>
               <NavLink
                 to="view-design"
                 style={linkStyle('view-design')}

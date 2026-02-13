@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { format, parseISO } from 'date-fns';
@@ -18,6 +19,18 @@ const PerformanceView = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const employeeNameFromUrl = searchParams.get('employee');
+  
+  // Get user role from localStorage
+  const userRole = localStorage.getItem('role') || '';
+  const isAdmin = userRole === 'Admin';
+  const isHR = userRole === 'HR';
+  const isSalesManager = userRole === 'Sales Manager';
+  const isServiceManager = userRole === 'Service Manager';
+  
+  // Check if user has permission to navigate to orders/prospects
+  // HR should NOT have access
+  const canNavigateToOrders = isAdmin || isSalesManager;
+  const canNavigateToProspects = isAdmin || isSalesManager;
   
   const [executives, setExecutives] = useState([]);
   const [serviceExecutives, setServiceExecutives] = useState([]);
@@ -348,7 +361,7 @@ const PerformanceView = () => {
   const fetchAllExecutives = async () => {
     setLoadingExecutives(true);
     try {
-      const [execRes, serviceExecRes, accountsRes, fieldExecRes] = await Promise.all([
+      const [execRes, fieldExecRes] = await Promise.all([
         axios.get('/api/performance/executives'),
         axios.get('/api/service-executives'),
         axios.get('/api/accounts'),
@@ -454,6 +467,16 @@ const PerformanceView = () => {
       label: (currentYear - 4 + i).toString()
     }))
   ];
+
+  // NEW: Format percentage display based on value
+  const formatPercentage = (percentage) => {
+    if (!percentage || percentage <= 0) return '0%';
+    if (percentage >= 100) {
+      // Convert to decimal format (150% -> 1.5%, 400% -> 4.0%)
+      return `${(percentage / 100).toFixed(1)}%`;
+    }
+    return `${percentage.toFixed(1)}%`;
+  };
 
   const styles = {
     container: {
@@ -598,10 +621,11 @@ const PerformanceView = () => {
       marginBottom: '12px',
       paddingBottom: '12px',
       borderBottom: '1px solid #f1f1f1',
-      cursor: 'pointer',
+      cursor: canNavigateToOrders ? 'pointer' : 'not-allowed',
       transition: 'background-color 0.2s',
       flexWrap: 'wrap',
-      gap: '8px'
+      gap: '8px',
+      opacity: canNavigateToOrders ? 1 : 0.7
     },
     cardLabel: {
       color: '#7f8c8d',
@@ -928,6 +952,22 @@ const PerformanceView = () => {
     },
     dateInputContainer: {
       flex: '1'
+    },
+    permissionMessage: {
+      fontSize: '12px',
+      color: '#e74c3c',
+      marginTop: '2px',
+      marginBottom: '8px',
+      fontStyle: 'italic',
+      textAlign: 'right'
+    },
+    permissionTooltip: {
+      position: 'relative',
+      display: 'inline-block'
+    },
+    restrictedItem: {
+      opacity: 0.7,
+      cursor: 'not-allowed'
     }
   };
 
@@ -949,6 +989,11 @@ const PerformanceView = () => {
   };
 
   const handleMonthClick = (monthData) => {
+    if (!canNavigateToOrders) {
+      alert('You do not have permission to view order details');
+      return;
+    }
+    
     const [monthStr, yearStr] = monthData.month.split(' ');
     const monthIndex = new Date(`${monthStr} 1, ${yearStr}`).getMonth();
     const year = parseInt(yearStr);
@@ -958,16 +1003,31 @@ const PerformanceView = () => {
   };
 
   const handleTotalOrdersClick = () => {
+    if (!canNavigateToOrders) {
+      alert('You do not have permission to view order details');
+      return;
+    }
+    
     const [executiveType, executiveId] = selectedExecutive.split('_');
     navigate(`/admin-dashboard/view-orders?executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
   };
 
   const handleTotalProspectsClick = () => {
+    if (!canNavigateToProspects) {
+      alert('You do not have permission to view prospect details');
+      return;
+    }
+    
     const [executiveType, executiveId] = selectedExecutive.split('_');
     navigate(`/admin-dashboard/view-prospective?executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
   };
 
   const handleMonthlyProspectsClick = (monthData) => {
+    if (!canNavigateToProspects) {
+      alert('You do not have permission to view prospect details');
+      return;
+    }
+    
     const [monthStr, yearStr] = monthData.month.split(' ');
     const monthIndex = new Date(`${monthStr} 1, ${yearStr}`).getMonth();
     const year = parseInt(yearStr);
@@ -1035,6 +1095,7 @@ const PerformanceView = () => {
     };
   };
 
+  // UPDATED: Custom tooltip with formatted percentage
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       const target = payload[0]?.value || 0;
@@ -1064,7 +1125,7 @@ const PerformanceView = () => {
             Balance: ₹{(achieved - target)?.toLocaleString('en-IN') || 0}
           </p>
           <p style={{ margin: '5px 0 0 0', fontWeight: '600', color: '#f39c12' }}>
-            Performance: {performance?.toFixed(1)}%
+            Performance: {formatPercentage(performance)}
           </p>
         </div>
       );
@@ -1087,6 +1148,7 @@ const PerformanceView = () => {
     }
   };
 
+  // UPDATED: renderPerformanceBox with formatted percentage
   const renderPerformanceBox = (percentage) => {
     if (!percentage || percentage <= 0) {
       return (
@@ -1152,7 +1214,11 @@ const PerformanceView = () => {
                 }}
               >
                 {isActive && !isPartial && segment.max <= 150 && (
-                  <span>{segment.max}%</span>
+                  <span>
+                    {segment.max === 150 ? '1.5x' : 
+                     segment.max === 100 ? '1.0x' : 
+                     `${segment.max}%`}
+                  </span>
                 )}
               </div>
             );
@@ -1166,7 +1232,7 @@ const PerformanceView = () => {
           color: '#2c3e50',
           wordBreak: 'break-word'
         }}>
-          Current Performance: {percentage.toFixed(1)}%
+          Current Performance: {formatPercentage(percentage)}
           {yearlyFilter.year && (
             <span style={styles.yearBadge}>
               {yearlyFilter.year}
@@ -1177,6 +1243,7 @@ const PerformanceView = () => {
     );
   };
 
+  // UPDATED: renderOverallPerformanceChart with updated legend
   const renderOverallPerformanceChart = () => {
     if (chartLoading) {
       return <div style={styles.loadingText}>Loading performance chart...</div>;
@@ -1273,11 +1340,11 @@ const PerformanceView = () => {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
             <div style={{ width: '12px', height: '12px', backgroundColor: '#9b59b6', marginRight: '4px' }}></div>
-            <span style={{ fontSize: '11px' }}>100-150%</span>
+            <span style={{ fontSize: '11px' }}>100-150% (1.0x-1.5x)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
             <div style={{ width: '12px', height: '12px', backgroundColor: '#ff69b4', marginRight: '4px' }}></div>
-            <span style={{ fontSize: '11px' }}>150%+</span>
+            <span style={{ fontSize: '11px' }}>150%+ (1.5x+)</span>
           </div>
         </div>
 
@@ -1392,6 +1459,7 @@ const PerformanceView = () => {
     );
   };
 
+  // UPDATED: renderMonthlyTargets with formatted percentage
   const renderMonthlyTargets = () => {
     if (!performanceData?.detailedData?.byMonth) return null;
 
@@ -1472,10 +1540,16 @@ const PerformanceView = () => {
             </span>
           </div>
           <div 
-            style={styles.clickableCardItem}
-            onClick={() => handleMonthClick(monthData)}
+            style={{
+              ...styles.clickableCardItem,
+              cursor: canNavigateToOrders ? 'pointer' : 'not-allowed',
+              opacity: canNavigateToOrders ? 1 : 0.7
+            }}
+            onClick={() => canNavigateToOrders ? handleMonthClick(monthData) : null}
             onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#f8f9fa';
+              if (canNavigateToOrders) {
+                e.target.style.backgroundColor = '#f8f9fa';
+              }
             }}
             onMouseLeave={(e) => {
               e.target.style.backgroundColor = 'transparent';
@@ -1486,11 +1560,24 @@ const PerformanceView = () => {
               {monthData.orders || '0'}
             </span>
           </div>
+          {!canNavigateToOrders && (
+            <div style={styles.permissionMessage}>
+           
+           
+            </div>
+          )}
+          
           <div 
-            style={styles.clickableCardItem}
-            onClick={() => handleMonthlyProspectsClick(monthData)}
+            style={{
+              ...styles.clickableCardItem,
+              cursor: canNavigateToProspects ? 'pointer' : 'not-allowed',
+              opacity: canNavigateToProspects ? 1 : 0.7
+            }}
+            onClick={() => canNavigateToProspects ? handleMonthlyProspectsClick(monthData) : null}
             onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#f8f9fa';
+              if (canNavigateToProspects) {
+                e.target.style.backgroundColor = '#f8f9fa';
+              }
             }}
             onMouseLeave={(e) => {
               e.target.style.backgroundColor = 'transparent';
@@ -1501,6 +1588,12 @@ const PerformanceView = () => {
               {monthData.prospects || '0'}
             </span>
           </div>
+          {!canNavigateToProspects && (
+            <div style={styles.permissionMessage}>
+           
+           
+            </div>
+          )}
           
           <div style={styles.incentiveEligibilitySection}>
             {isManuallyEligible ? (
@@ -1511,7 +1604,7 @@ const PerformanceView = () => {
               <>
                 {gap.meetsTargetCriteria && (
                   <div style={styles.criteriaMetInfo}>
-                    ✅ Target Achieved: {percentage}% (Required: 100%)
+                    ✅ Target Achieved: {formatPercentage(percentage)} (Required: 100%)
                   </div>
                 )}
                 {gap.meetsOrderCriteria && (
@@ -1524,7 +1617,7 @@ const PerformanceView = () => {
                   <>
                     {!gap.meetsTargetCriteria && (
                       <div style={styles.gapInfo}>
-                        📊 Need {gap.targetNeeded}% more to reach target
+                        📊 Need {gap.targetNeeded.toFixed(1)}% more to reach target
                       </div>
                     )}
                     {!gap.meetsOrderCriteria && (
@@ -1731,10 +1824,16 @@ const PerformanceView = () => {
             <div style={styles.card}>
               <h3 style={styles.cardTitle}>Activity Metrics</h3>
               <div 
-                style={styles.clickableCardItem}
-                onClick={handleTotalProspectsClick}
+                style={{
+                  ...styles.clickableCardItem,
+                  cursor: canNavigateToProspects ? 'pointer' : 'not-allowed',
+                  opacity: canNavigateToProspects ? 1 : 0.7
+                }}
+                onClick={canNavigateToProspects ? handleTotalProspectsClick : null}
                 onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = '#f8f9fa';
+                  if (canNavigateToProspects) {
+                    e.target.style.backgroundColor = '#f8f9fa';
+                  }
                 }}
                 onMouseLeave={(e) => {
                   e.target.style.backgroundColor = 'transparent';
@@ -1743,6 +1842,13 @@ const PerformanceView = () => {
                 <span style={styles.cardLabel}>Total Prospects:</span>
                 <span style={styles.cardValue}>{performanceData.totalProspects || 0}</span>
               </div>
+              {!canNavigateToProspects && (
+                <div style={styles.permissionMessage}>
+             
+             
+                </div>
+              )}
+              
               <div style={styles.cardItem}>
                 <span style={styles.cardLabel}>Total Calls:</span>
                 <span style={styles.cardValue}>{performanceData.totalCalls || 0}</span>
@@ -1787,10 +1893,16 @@ const PerformanceView = () => {
                 </span>
               </div>
               <div 
-                style={styles.clickableCardItem}
-                onClick={handleTotalOrdersClick}
+                style={{
+                  ...styles.clickableCardItem,
+                  cursor: canNavigateToOrders ? 'pointer' : 'not-allowed',
+                  opacity: canNavigateToOrders ? 1 : 0.7
+                }}
+                onClick={canNavigateToOrders ? handleTotalOrdersClick : null}
                 onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = '#f8f9fa';
+                  if (canNavigateToOrders) {
+                    e.target.style.backgroundColor = '#f8f9fa';
+                  }
                 }}
                 onMouseLeave={(e) => {
                   e.target.style.backgroundColor = 'transparent';
@@ -1801,6 +1913,12 @@ const PerformanceView = () => {
                   {getTotalOrders() || '0'}
                 </span>
               </div>
+              {!canNavigateToOrders && (
+                <div style={styles.permissionMessage}>
+             
+             
+                </div>
+              )}
             </div>
           </div>
 

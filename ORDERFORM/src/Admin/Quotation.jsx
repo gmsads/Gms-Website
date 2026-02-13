@@ -6,6 +6,9 @@ import axios from 'axios';
 import jsPDF from 'jspdf';
 // Import html2canvas for converting HTML content to canvas/images
 import html2canvas from 'html2canvas';
+// Import your logo and signature from assets folder
+import companyLogo from '../assets/logo.png';
+import companySignature from '../assets/sign.png';
 
 // Configure the base URL for API requests
 const API_BASE_URL = '/api';
@@ -57,8 +60,10 @@ const Quotation = () => {
   const [selectedQuotation, setSelectedQuotation] = useState(null);
   // State to control visibility of quotation details modal
   const [showQuotationDetails, setShowQuotationDetails] = useState(false);
-  // State for company logo - using your specific image
-  const [companyLogo] = useState('/images/Logo GMS.png');
+  
+  // State to check if images are loaded
+  const [logoLoaded, setLogoLoaded] = useState(false);
+  const [signatureLoaded, setSignatureLoaded] = useState(false);
 
   // Tax options configuration with rates and labels - Only GST 18%
   const taxOptions = [
@@ -86,89 +91,96 @@ const Quotation = () => {
     autoRoundOff: 0 // Auto round off amount
   });
 
+  // Effect to preload images
+  useEffect(() => {
+    const preloadImages = async () => {
+      try {
+        // Preload logo
+        const logoImg = new Image();
+        logoImg.src = companyLogo;
+        logoImg.onload = () => {
+          console.log('Logo loaded successfully');
+          setLogoLoaded(true);
+        };
+        logoImg.onerror = () => {
+          console.error('Failed to load logo');
+          setLogoLoaded(false);
+        };
+
+        // Preload signature
+        const signatureImg = new Image();
+        signatureImg.src = companySignature;
+        signatureImg.onload = () => {
+          console.log('Signature loaded successfully');
+          setSignatureLoaded(true);
+        };
+        signatureImg.onerror = () => {
+          console.error('Failed to load signature');
+          setSignatureLoaded(false);
+        };
+      } catch (error) {
+        console.error('Error preloading images:', error);
+      }
+    };
+
+    preloadImages();
+  }, []);
+
   // Effect to handle window resize and detect mobile devices
   useEffect(() => {
-    // Function to handle window resize
     const handleResize = () => {
-      // Check if window width is less than 768px (mobile)
       setIsMobile(window.innerWidth < 768);
     };
 
-    // Add event listener for window resize
     window.addEventListener('resize', handleResize);
-    // Cleanup: remove event listener when component unmounts
     return () => window.removeEventListener('resize', handleResize);
-  }, []); // Empty dependency array means this runs only on mount/unmount
+  }, []);
 
   // Effect to calculate validity date based on quotation date and validity period
   useEffect(() => {
-    // Check if both quotation date and validity period are available
     if (quotationHeader.quotationDate && quotationHeader.validFor) {
-      // Create Date object from quotation date
       const quotationDate = new Date(quotationHeader.quotationDate);
-      // Create new Date object for validity date
       const validityDate = new Date(quotationDate);
-      // Add validity period days to the quotation date
       validityDate.setDate(validityDate.getDate() + parseInt(quotationHeader.validFor));
       
-      // Format validity date as YYYY-MM-DD
       const formattedValidityDate = validityDate.toISOString().split('T')[0];
-      // Update quotation header with calculated validity date
       setQuotationHeader(prev => ({ ...prev, validityDate: formattedValidityDate }));
     }
-  }, [quotationHeader.quotationDate, quotationHeader.validFor]); // Run when these values change
+  }, [quotationHeader.quotationDate, quotationHeader.validFor]);
 
   // Effect to initialize quotation dates and fetch next quotation number
   useEffect(() => {
-    // Get current date
     const today = new Date();
-    // Create validity date (10 days from today)
     const validityDate = new Date(today);
     validityDate.setDate(validityDate.getDate() + 10);
     
-    // Set initial quotation header values
     setQuotationHeader(prev => ({
       ...prev,
-      quotationDate: today.toISOString().split('T')[0], // Today's date
-      validityDate: validityDate.toISOString().split('T')[0] // Validity date
+      quotationDate: today.toISOString().split('T')[0],
+      validityDate: validityDate.toISOString().split('T')[0]
     }));
 
-    // Fetch next available quotation number
     fetchNextQuotationNumber();
-  }, []); // Run only once when component mounts
+  }, []);
 
   // Function to fetch next quotation number from API
   const fetchNextQuotationNumber = async () => {
     try {
-      // Make API request to get next quotation number
       const response = await api.get('/quotations/next-number');
-      // Update quotation header with new number
       setQuotationHeader(prev => ({ ...prev, quotationNo: response.data.nextNumber }));
     } catch (error) {
-      // Log error if API call fails
       console.error('Error fetching next quotation number:', error);
-      // Generate fallback quotation number
       const fallbackNumber = `GMS${String(1).padStart(3, '0')}`;
-      // Use fallback number
       setQuotationHeader(prev => ({ ...prev, quotationNo: fallbackNumber }));
     }
   };
 
-  // Effect to fetch parties and requirements when component mounts
-  useEffect(() => {
-    fetchParties(); // Fetch parties list
-    fetchRequirements(); // Fetch requirements/items list
-  }, []); // Run only once when component mounts
-
   // Function to fetch parties from API
   const fetchParties = async () => {
     try {
-      // Make API request to get parties
       const response = await api.get('/parties');
-      // Update parties state with response data
       setParties(response.data);
     } catch (error) {
-      // Log error if API call fails
       console.error('Error fetching parties:', error);
     }
   };
@@ -176,45 +188,38 @@ const Quotation = () => {
   // Function to fetch requirements/items from API
   const fetchRequirements = async () => {
     try {
-      // Make API request to get requirements
       const response = await api.get('/requirements');
-      // Update requirements state with response data (or empty array if null)
       setRequirements(response.data || []);
     } catch (error) {
-      // Log error if API call fails
       console.error('Error fetching requirements:', error);
-      // Set empty array if error occurs
       setRequirements([]);
     }
   };
 
+  // Effect to fetch parties and requirements when component mounts
+  useEffect(() => {
+    fetchParties();
+    fetchRequirements();
+  }, []);
+
   // Function to fetch all quotations from API
   const fetchAllQuotations = async () => {
     try {
-      // Make API request to get all quotations
       const response = await api.get('/quotations');
-      // Update allQuotations state with response data
       setAllQuotations(response.data);
     } catch (error) {
-      // Log error if API call fails
       console.error('Error fetching quotations:', error);
     }
   };
 
   // Function to calculate totals based on items and charges
   const calculateTotals = (itemsList) => {
-    // Calculate subtotal (sum of quantity * price for all items)
     const subtotal = itemsList.reduce((sum, item) => sum + (item.quantity * item.price), 0);
-    // Calculate total discount amount
     const totalDiscount = itemsList.reduce((sum, item) => sum + (item.discountAmount || 0), 0);
-    // Calculate total tax amount
     const totalTax = itemsList.reduce((sum, item) => sum + (item.taxAmount || 0), 0);
-    // Calculate taxable amount (subtotal - discount)
     const taxableAmount = subtotal - totalDiscount;
-    // Calculate total amount (taxable + tax + additional charges)
     const totalAmount = taxableAmount + totalTax + quotationData.additionalCharges;
 
-    // Update quotation data with calculated values
     setQuotationData(prev => ({
       ...prev,
       subtotal,
@@ -227,182 +232,140 @@ const Quotation = () => {
 
   // Function to update item calculations (discount, tax, amount)
   const updateItemCalculations = (item) => {
-    // Get quantity and price (default to 0 if undefined)
     const quantity = item.quantity || 0;
     const price = item.price || 0;
     
-    // Calculate discount amount based on discount type
     const discountAmount = item.discountType === 'percentage' 
-      ? (quantity * price * (item.discount || 0) / 100) // Percentage discount
-      : (item.discount || 0); // Fixed amount discount
+      ? (quantity * price * (item.discount || 0) / 100)
+      : (item.discount || 0);
 
-    // Calculate taxable amount (after discount)
     const taxableAmount = (quantity * price) - discountAmount;
 
-    // Calculate tax amount based on tax type
     let taxAmount = 0;
     if (item.taxType === 'percentage') {
-      taxAmount = taxableAmount * (item.tax || 0) / 100; // Percentage tax
+      taxAmount = taxableAmount * (item.tax || 0) / 100;
     } else {
-      taxAmount = item.tax || 0; // Fixed tax amount
+      taxAmount = item.tax || 0;
     }
 
-    // Calculate final amount (taxable amount + tax)
     const amount = taxableAmount + taxAmount;
 
-    // Update item with calculated values
     item.discountAmount = discountAmount;
     item.taxAmount = taxAmount;
     item.amount = amount;
 
-    // Return updated item
     return item;
   };
 
   // Function to add item to quotation from requirements
   const addItemToQuotation = (requirement) => {
-    // Create new item object
     const newItem = {
-      id: Date.now(), // Unique ID using timestamp
-      name: requirement.itemName || requirement.name || 'Unnamed Item', // Item name
-      description: '', // Initialize empty description
-      quantity: 1, // Default quantity
-      price: requirement.salesPrice || requirement.price || 0, // Item price
-      discount: 0, // Default discount
-      discountType: 'percentage', // Default discount type
-      tax: 18, // Default tax set to 18% GST
-      taxType: 'percentage', // Default tax type
-      discountAmount: 0, // Initialize discount amount
-      taxAmount: 0, // Initialize tax amount
-      amount: requirement.salesPrice || requirement.price || 0, // Initial amount
-      unit: requirement.unit || 'PCS' // Unit of measurement
+      id: Date.now(),
+      name: requirement.itemName || requirement.name || 'Unnamed Item',
+      description: '',
+      quantity: 1,
+      price: requirement.salesPrice || requirement.price || 0,
+      discount: 0,
+      discountType: 'percentage',
+      tax: 18,
+      taxType: 'percentage',
+      discountAmount: 0,
+      taxAmount: 0,
+      amount: requirement.salesPrice || requirement.price || 0,
+      unit: requirement.unit || 'PCS'
     };
 
-    // Calculate item amounts
     updateItemCalculations(newItem);
 
-    // Add new item to quotation items array
     const updatedItems = [...quotationData.items, newItem];
-    // Update quotation data with new items array
     setQuotationData(prev => ({ ...prev, items: updatedItems }));
-    // Recalculate totals with new items
     calculateTotals(updatedItems);
-    // Close add items modal
     setShowAddItems(false);
-    // Clear search term
     setSearchTerm('');
   };
 
   // Function to update item field value
   const updateItem = (index, field, value) => {
-    // Create copy of current items array
     const updatedItems = [...quotationData.items];
-    // Get the item to update
     let item = updatedItems[index];
     
-    // Handle NaN values for numbers
     if (typeof value === 'number' && isNaN(value)) {
-      value = 0; // Set to 0 if NaN
+      value = 0;
     }
     
-    // Update the specific field
     item[field] = value;
-    // Recalculate item amounts
     item = updateItemCalculations(item);
 
-    // Update quotation data with modified items
     setQuotationData(prev => ({ ...prev, items: updatedItems }));
-    // Recalculate totals
     calculateTotals(updatedItems);
   };
 
   // Function to remove item from quotation
   const removeItem = (index) => {
-    // Filter out the item at specified index
     const updatedItems = quotationData.items.filter((_, i) => i !== index);
-    // Update quotation data with filtered items
     setQuotationData(prev => ({ ...prev, items: updatedItems }));
-    // Recalculate totals
     calculateTotals(updatedItems);
   };
 
   // Function to add additional charge row
   const addAdditionalCharge = () => {
-    // Create new charge object
     const newCharge = {
-      id: Date.now(), // Unique ID
-      description: '', // Empty description
-      amount: 0 // Zero amount
+      id: Date.now(),
+      description: '',
+      amount: 0
     };
-    // Add new charge to additional charges array
     setAdditionalCharges(prev => [...prev, newCharge]);
   };
 
   // Function to remove additional charge
   const removeAdditionalCharge = (index) => {
-    // Filter out the charge at specified index
     const updatedCharges = additionalCharges.filter((_, i) => i !== index);
-    // Update additional charges state
     setAdditionalCharges(updatedCharges);
     
-    // Calculate total of remaining additional charges
     const totalAdditionalCharges = updatedCharges.reduce((sum, charge) => sum + parseFloat(charge.amount || 0), 0);
-    // Update quotation data with new additional charges total
     setQuotationData(prev => ({ ...prev, additionalCharges: totalAdditionalCharges }));
-    // Recalculate totals
     calculateTotals(quotationData.items);
   };
 
   // Function to update additional charge field
   const updateAdditionalCharge = (index, field, value) => {
-    // Create copy of current additional charges
     const updatedCharges = [...additionalCharges];
     
-    // Handle invalid amount values
     if (field === 'amount' && (isNaN(value) || value === '')) {
-      value = 0; // Set to 0 if invalid
+      value = 0;
     }
     
-    // Update the specific field
     updatedCharges[index][field] = value;
-    // Update additional charges state
     setAdditionalCharges(updatedCharges);
     
-    // Calculate total of all additional charges
     const totalAdditionalCharges = updatedCharges.reduce((sum, charge) => sum + parseFloat(charge.amount || 0), 0);
-    // Update quotation data with new total
     setQuotationData(prev => ({ ...prev, additionalCharges: totalAdditionalCharges }));
-    // Recalculate totals
     calculateTotals(quotationData.items);
   };
 
   // Function to submit quotation to backend
   const submitQuotation = async () => {
-    // Validate that a party is selected
     if (!selectedParty) {
       alert('Please select a party');
-      return; // Stop execution if no party selected
+      return;
     }
 
-    // Validate that at least one item is added
     if (quotationData.items.length === 0) {
       alert('Please add at least one item to the quotation');
-      return; // Stop execution if no items
+      return;
     }
 
-    // Set submitting state to true (shows loading)
     setIsSubmitting(true);
 
-    // Prepare quotation data for API
     const quotationPayload = {
-      ...quotationHeader, // Spread quotation header fields
-      partyId: selectedParty, // Selected party ID
-      partyDetails: parties.find(party => party._id === selectedParty), // Party details
-      items: quotationData.items, // Quotation items
-      additionalCharges, // Additional charges
-      notes, // Notes
-      terms, // Terms and conditions
-      summary: { // Calculated summary
+      ...quotationHeader,
+      partyId: selectedParty,
+      partyDetails: parties.find(party => party._id === selectedParty),
+      items: quotationData.items,
+      additionalCharges,
+      notes,
+      terms,
+      summary: {
         subtotal: quotationData.subtotal,
         discount: quotationData.discount,
         tax: quotationData.tax,
@@ -411,21 +374,17 @@ const Quotation = () => {
         totalAmount: quotationData.totalAmount,
         autoRoundOff: quotationData.autoRoundOff
       },
-      status: 'draft', // Default status
-      createdAt: new Date().toISOString() // Current timestamp
+      status: 'draft',
+      createdAt: new Date().toISOString()
     };
 
     try {
-      // Make API request to save quotation
       const response = await api.post('/quotations', quotationPayload);
-      // Store saved quotation
       setSavedQuotation(response.data);
-      // Show success modal
       setShowSuccessModal(true);
-      // Log success
       console.log('Quotation saved:', response.data);
       
-      // Reset form after successful submission
+      // Reset form
       setQuotationData({
         items: [],
         subtotal: 0,
@@ -439,29 +398,62 @@ const Quotation = () => {
       setAdditionalCharges([]);
       setSelectedParty('');
       setNotes('');
-      fetchNextQuotationNumber(); // Get next quotation number
+      fetchNextQuotationNumber();
     } catch (error) {
-      // Log error and show alert
       console.error('Error saving quotation:', error);
       alert(`Error saving quotation: ${error.response?.data?.message || error.message}`);
     } finally {
-      // Reset submitting state regardless of success/failure
       setIsSubmitting(false);
+    }
+  };
+
+  // Function to convert imported image to base64 for PDF
+  const convertImageToBase64 = (imgElement) => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = imgElement.naturalWidth;
+      canvas.height = imgElement.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(imgElement, 0, 0);
+      return canvas.toDataURL('image/png');
+    } catch (error) {
+      console.error('Error converting image to base64:', error);
+      return null;
     }
   };
 
   // Function to download current quotation as PDF
   const downloadPDF = async () => {
-    // Validate that items are added and party is selected
     if (quotationData.items.length === 0 || !selectedParty) {
       alert('Please add items and select a party before downloading PDF');
-      return; // Stop execution if validation fails
+      return;
     }
 
     try {
-      // Create a div element for PDF content
+      // Create temporary image elements to get base64 data
+      const logoBase64 = await new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = companyLogo;
+        img.onload = () => {
+          const base64 = convertImageToBase64(img);
+          resolve(base64 || '');
+        };
+        img.onerror = () => resolve('');
+      });
+
+      const signatureBase64 = await new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = companySignature;
+        img.onload = () => {
+          const base64 = convertImageToBase64(img);
+          resolve(base64 || '');
+        };
+        img.onerror = () => resolve('');
+      });
+
       const printContent = document.createElement('div');
-      // Apply styles for PDF printing
       printContent.style.cssText = `
         width: 210mm;
         min-height: 297mm;
@@ -472,17 +464,19 @@ const Quotation = () => {
         box-sizing: border-box;
       `;
 
-      // Find selected party details
       const party = parties.find(p => p._id === selectedParty);
       
-      // Create HTML content for PDF with your specific image as logo
+      // Fallback for missing images
+      const logoFallback = `<div style="height: 80px; width: 80px; background: #2c3e50; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: bold; font-size: 14px;">GMS</div>`;
+      const signatureFallback = `<div style="height: 60px; display: flex; align-items: center; justify-content: center; color: #2c3e50; font-style: italic;">Signature</div>`;
+
       printContent.innerHTML = `
-        <!-- Header section with your logo and title -->
+        <!-- Header section -->
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; border-bottom: 2px solid #3498db; padding-bottom: 15px;">
-          <!-- Logo section with your image -->
+          <!-- Logo section -->
           <div style="flex: 1;">
             <div style="display: flex; align-items: center;">
-              <img src="${companyLogo}" alt="Company Logo" style="height: 80px; width: auto; margin-right: 15px; border-radius: 8px;" />
+              ${logoBase64 ? `<img src="${logoBase64}" alt="Company Logo" style="height: 80px; width: auto; margin-right: 15px; border-radius: 8px; max-width: 150px; object-fit: contain;" />` : logoFallback}
               <div>
                 <h1 style="margin: 0; color: #2c3e50; font-size: 24px; font-weight: bold;">GLOBAL MARKETING SOLUTIONS</h1>
                 <p style="margin: 5px 0 0 0; color: #7f8c8d; font-size: 14px;">One Stop Solution For Your Problem</p>
@@ -500,14 +494,12 @@ const Quotation = () => {
         
         <!-- Quotation details section -->
         <div style="display: flex; justify-content: space-between; margin-bottom: 25px;">
-          <!-- Left side: Quotation information -->
           <div style="flex: 1;">
             <p style="margin: 5px 0; font-size: 14px;"><strong>Quotation No:</strong> ${quotationHeader.quotationNo}</p>
             <p style="margin: 5px 0; font-size: 14px;"><strong>Date:</strong> ${quotationHeader.quotationDate}</p>
             <p style="margin: 5px 0; font-size: 14px;"><strong>Valid Until:</strong> ${quotationHeader.validityDate}</p>
             <p style="margin: 5px 0; font-size: 14px;"><strong>PO No:</strong> ${quotationHeader.poNo || 'N/A'}</p>
           </div>
-          <!-- Right side: Company bank details -->
           <div style="flex: 1; text-align: right;">
             <p style="margin: 5px 0; font-size: 14px;"><strong>GLOBAL MARKETING SOLUTIONS</strong></p>
             <p style="margin: 5px 0; font-size: 14px;">Champagne Branch</p>
@@ -602,45 +594,63 @@ const Quotation = () => {
           </div>
         ` : ''}
         
-        <!-- Footer section -->
-        <div style="margin-top: 40px; text-align: center; color: #7f8c8d; padding-top: 15px; border-top: 2px solid #3498db;">
-          <p style="font-size: 14px; margin-bottom: 8px;">Thank you for your business!</p>
-          <p style="font-size: 12px;"><strong>Authorized Signatory</strong><br>Global Marketing Solutions</p>
-          <div style="margin-top: 15px; font-size: 10px; color: #95a5a6;">
-            <p>GLOBAL MARKETING SOLUTIONS • Champagne Branch</p>
-            <p>Phone: +91 XXXXX XXXXX • Email: info@globalmarketingsolutions.com</p>
+        <!-- Footer section with signature -->
+        <div style="margin-top: 40px; padding-top: 15px; border-top: 2px solid #3498db;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="text-align: center; flex: 1;">
+              <p style="font-size: 14px; margin-bottom: 8px;">Thank you for your business!</p>
+              <p style="font-size: 12px;"><strong>Authorized Signatory</strong><br>Global Marketing Solutions</p>
+            </div>
+            <div style="flex: 1; text-align: center;">
+              ${signatureBase64 ? `<img src="${signatureBase64}" alt="Signature" style="max-height: 60px; max-width: 200px; object-fit: contain;" />` : signatureFallback}
+            </div>
+            <div style="flex: 1; text-align: right;">
+              <div style="font-size: 10px; color: #95a5a6;">
+                <p>GLOBAL MARKETING SOLUTIONS</p>
+                <p>Champagne Branch</p>
+                <p>Phone: +91 XXXXX XXXXX</p>
+                <p>Email: info@globalmarketingsolutions.com</p>
+              </div>
+            </div>
           </div>
         </div>
       `;
 
-      // Add the content to document body temporarily
       document.body.appendChild(printContent);
       
-      // Convert HTML content to canvas
       const canvas = await html2canvas(printContent, {
-        scale: 2, // High resolution for better print quality
-        useCORS: true, // Allow cross-origin images
-        logging: false, // Disable console logging
-        allowTaint: true // Allow tainted images
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
       });
       
-      // Remove temporary element from document
       document.body.removeChild(printContent);
       
-      // Convert canvas to image data URL
       const imgData = canvas.toDataURL('image/png');
-      // Create new PDF document
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 210; // A4 width in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width; // Calculate height to maintain aspect ratio
+      const imgWidth = 210;
+      const pageHeight = 297;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
       
-      // Add image to PDF
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-      // Download PDF with quotation number in filename
+      // Handle multi-page PDF if content is too long
+      let heightLeft = imgHeight;
+      let position = 0;
+      
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      
       pdf.save(`quotation_${quotationHeader.quotationNo}.pdf`);
       
     } catch (error) {
-      // Log error and show alert
       console.error('PDF Generation Error:', error);
       alert('Error creating PDF. Please try again.');
     }
@@ -649,9 +659,30 @@ const Quotation = () => {
   // Function to download specific quotation as PDF
   const downloadQuotationPDF = async (quotation) => {
     try {
-      // Create div element for PDF content
+      // Create temporary image elements to get base64 data
+      const logoBase64 = await new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = companyLogo;
+        img.onload = () => {
+          const base64 = convertImageToBase64(img);
+          resolve(base64 || '');
+        };
+        img.onerror = () => resolve('');
+      });
+
+      const signatureBase64 = await new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = companySignature;
+        img.onload = () => {
+          const base64 = convertImageToBase64(img);
+          resolve(base64 || '');
+        };
+        img.onerror = () => resolve('');
+      });
+
       const printContent = document.createElement('div');
-      // Apply PDF styles
       printContent.style.cssText = `
         width: 210mm;
         min-height: 297mm;
@@ -662,16 +693,17 @@ const Quotation = () => {
         box-sizing: border-box;
       `;
 
-      // Get party details from quotation
       const party = quotation.partyDetails || quotation.partyId;
       
-      // Create HTML content with your specific image as logo
+      // Fallback for missing images
+      const logoFallback = `<div style="height: 80px; width: 80px; background: #2c3e50; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: bold; font-size: 14px;">GMS</div>`;
+      const signatureFallback = `<div style="height: 60px; display: flex; align-items: center; justify-content: center; color: #2c3e50; font-style: italic;">Signature</div>`;
+
       printContent.innerHTML = `
-        <!-- Header with your logo -->
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; border-bottom: 2px solid #3498db; padding-bottom: 15px;">
           <div style="flex: 1;">
             <div style="display: flex; align-items: center;">
-              <img src="${companyLogo}" alt="Company Logo" style="height: 80px; width: auto; margin-right: 15px; border-radius: 8px;" />
+              ${logoBase64 ? `<img src="${logoBase64}" alt="Company Logo" style="height: 80px; width: auto; margin-right: 15px; border-radius: 8px; max-width: 150px; object-fit: contain;" />` : logoFallback}
               <div>
                 <h1 style="margin: 0; color: #2c3e50; font-size: 24px; font-weight: bold;">GLOBAL MARKETING SOLUTIONS</h1>
                 <p style="margin: 5px 0 0 0; color: #7f8c8d; font-size: 14px;">One Stop Solution For Your Problem</p>
@@ -685,7 +717,6 @@ const Quotation = () => {
           </div>
         </div>
         
-        <!-- Quotation details -->
         <div style="display: flex; justify-content: space-between; margin-bottom: 25px;">
           <div style="flex: 1;">
             <p style="margin: 5px 0; font-size: 14px;"><strong>Quotation No:</strong> ${quotation.quotationNo}</p>
@@ -701,7 +732,6 @@ const Quotation = () => {
           </div>
         </div>
         
-        <!-- Party details -->
         ${party ? `
           <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
             <h3 style="color: #2c3e50; margin-bottom: 10px; border-bottom: 1px solid #3498db; padding-bottom: 5px; font-size: 16px;">Bill To:</h3>
@@ -712,7 +742,6 @@ const Quotation = () => {
           </div>
         ` : ''}
         
-        <!-- Items table -->
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px;">
           <thead>
             <tr style="background-color: #2c3e50; color: white;">
@@ -741,7 +770,6 @@ const Quotation = () => {
           </tbody>
         </table>
         
-        <!-- Summary section -->
         <div style="display: flex; justify-content: flex-end; margin-top: 25px;">
           <div style="background: #f8f9fa; padding: 20px; border: 2px solid #3498db; border-radius: 8px; width: 300px;">
             <h3 style="margin-top: 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 8px; font-size: 16px;">SUMMARY</h3>
@@ -771,7 +799,6 @@ const Quotation = () => {
           </div>
         </div>
         
-        <!-- Terms and conditions -->
         ${quotation.terms ? `
           <div style="margin-top: 30px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
             <h3 style="color: #2c3e50; margin-bottom: 10px; border-bottom: 1px solid #3498db; padding-bottom: 5px; font-size: 16px;">Terms & Conditions:</h3>
@@ -779,7 +806,6 @@ const Quotation = () => {
           </div>
         ` : ''}
         
-        <!-- Notes -->
         ${quotation.notes ? `
           <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
             <h3 style="color: #2c3e50; margin-bottom: 8px; font-size: 14px;">Notes:</h3>
@@ -787,25 +813,35 @@ const Quotation = () => {
           </div>
         ` : ''}
         
-        <!-- Footer -->
-        <div style="margin-top: 40px; text-align: center; color: #7f8c8d; padding-top: 15px; border-top: 2px solid #3498db;">
-          <p style="font-size: 14px; margin-bottom: 8px;">Thank you for your business!</p>
-          <p style="font-size: 12px;"><strong>Authorized Signatory</strong><br>Global Marketing Solutions</p>
-          <div style="margin-top: 15px; font-size: 10px; color: #95a5a6;">
-            <p>GLOBAL MARKETING SOLUTIONS • Champagne Branch</p>
-            <p>Phone: +91 XXXXX XXXXX • Email: info@globalmarketingsolutions.com</p>
+        <div style="margin-top: 40px; padding-top: 15px; border-top: 2px solid #3498db;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="text-align: center; flex: 1;">
+              <p style="font-size: 14px; margin-bottom: 8px;">Thank you for your business!</p>
+              <p style="font-size: 12px;"><strong>Authorized Signatory</strong><br>Global Marketing Solutions</p>
+            </div>
+            <div style="flex: 1; text-align: center;">
+              ${signatureBase64 ? `<img src="${signatureBase64}" alt="Signature" style="max-height: 60px; max-width: 200px; object-fit: contain;" />` : signatureFallback}
+            </div>
+            <div style="flex: 1; text-align: right;">
+              <div style="font-size: 10px; color: #95a5a6;">
+                <p>GLOBAL MARKETING SOLUTIONS</p>
+                <p>Champagne Branch</p>
+                <p>Phone: +91 XXXXX XXXXX</p>
+                <p>Email: info@globalmarketingsolutions.com</p>
+              </div>
+            </div>
           </div>
         </div>
       `;
 
-      // Add to document and convert to PDF
       document.body.appendChild(printContent);
       
       const canvas = await html2canvas(printContent, {
         scale: 2,
         useCORS: true,
         logging: false,
-        allowTaint: true
+        allowTaint: true,
+        backgroundColor: '#ffffff'
       });
       
       document.body.removeChild(printContent);
@@ -813,9 +849,22 @@ const Quotation = () => {
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgWidth = 210;
+      const pageHeight = 297;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      let heightLeft = imgHeight;
+      let position = 0;
+      
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      
       pdf.save(`quotation_${quotation.quotationNo}.pdf`);
       
     } catch (error) {
@@ -826,284 +875,305 @@ const Quotation = () => {
 
   // Function to view quotation details
   const viewQuotation = (quotation) => {
-    // Set selected quotation
     setSelectedQuotation(quotation);
-    // Show quotation details modal
     setShowQuotationDetails(true);
   };
 
   // Function to print quotation
   const printQuotation = () => {
-    // Validate that items are added
     if (quotationData.items.length === 0) {
       alert('Please add items to the quotation before printing');
       return;
     }
 
-    // Validate that party is selected
     if (!selectedParty) {
       alert('Please select a party before printing');
       return;
     }
 
-    // Create new window for printing
     const printWindow = window.open('', '_blank');
-    // Find selected party details
     const party = parties.find(p => p._id === selectedParty);
     
-    // Write HTML content to print window with your logo
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Quotation ${quotationHeader.quotationNo}</title>
-        <style>
-          body { 
-            font-family: Arial, sans-serif; 
-            margin: 15px; 
-            color: #333;
-            font-size: 12px;
-          }
-          .header { 
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 2px solid #3498db; 
-            padding-bottom: 15px;
-            margin-bottom: 15px;
-          }
-          .logo-container {
-            flex: 1;
-            display: flex;
-            align-items: center;
-          }
-          .logo {
-            height: 70px;
-            width: auto;
-            margin-right: 12px;
-            border-radius: 6px;
-          }
-          .company-info {
-            flex: 1;
-          }
-          .company-name { 
-            font-size: 20px; 
-            font-weight: bold; 
-            color: #2c3e50;
-            margin: 0;
-          }
-          .company-tagline {
-            font-size: 12px;
-            color: #7f8c8d;
-            margin: 3px 0 0 0;
-          }
-          .title-container {
-            text-align: center;
-            flex: 1;
-          }
-          .quotation-title { 
-            font-size: 24px; 
-            color: #2c3e50;
-            font-weight: bold;
-            margin: 0;
-          }
-          .details-section { 
-            display: flex; 
-            justify-content: space-between; 
-            margin-bottom: 15px;
-          }
-          .party-details, .quotation-details { 
-            width: 48%; 
-          }
-          .party-details {
-            background: #f8f9fa;
-            padding: 12px;
-            border-radius: 6px;
-            border: 1px solid #e9ecef;
-          }
-          table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin: 15px 0;
-            font-size: 11px;
-          }
-          th { 
-            background-color: #2c3e50; 
-            color: white; 
-            padding: 8px; 
-            text-align: left;
-            border: 1px solid #ddd;
-          }
-          td { 
-            padding: 6px; 
-            border: 1px solid #ddd;
-          }
-          .summary { 
-            float: right; 
-            width: 280px; 
-            border: 2px solid #3498db; 
-            padding: 15px; 
-            background-color: #f8f9fa;
-            border-radius: 6px;
-            font-size: 11px;
-          }
-          .total { 
-            font-weight: bold; 
-            font-size: 14px; 
-            border-top: 2px solid #2c3e50; 
-            padding-top: 8px;
-            color: #2c3e50;
-          }
-          .footer { 
-            margin-top: 30px; 
-            text-align: center; 
-            color: #7f8c8d;
-            padding-top: 12px;
-            border-top: 2px solid #3498db;
-            font-size: 10px;
-          }
-          @media print {
-            body { margin: 0; }
-            .no-print { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        <!-- Header with your logo -->
-        <div class="header">
-          <div class="logo-container">
-            <img src="${companyLogo}" alt="Company Logo" class="logo" />
-            <div class="company-info">
-              <h1 class="company-name">GLOBAL MARKETING SOLUTIONS</h1>
-              <p class="company-tagline">One Stop Solution For Your Problem</p>
+    // Convert imported images to data URLs for print
+    const getImageDataUrl = (imgSrc) => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = imgSrc;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve('');
+      });
+    };
+
+    // Generate print content
+    const generatePrintContent = async () => {
+      const logoDataUrl = await getImageDataUrl(companyLogo);
+      const signatureDataUrl = await getImageDataUrl(companySignature);
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Quotation ${quotationHeader.quotationNo}</title>
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 15px; 
+              color: #333;
+              font-size: 12px;
+            }
+            .header { 
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              border-bottom: 2px solid #3498db; 
+              padding-bottom: 15px;
+              margin-bottom: 15px;
+            }
+            .logo-container {
+              flex: 1;
+              display: flex;
+              align-items: center;
+            }
+            .logo {
+              height: 70px;
+              width: auto;
+              margin-right: 12px;
+              border-radius: 6px;
+              max-width: 120px;
+              object-fit: contain;
+            }
+            .company-info {
+              flex: 1;
+            }
+            .company-name { 
+              font-size: 20px; 
+              font-weight: bold; 
+              color: #2c3e50;
+              margin: 0;
+            }
+            .company-tagline {
+              font-size: 12px;
+              color: #7f8c8d;
+              margin: 3px 0 0 0;
+            }
+            .title-container {
+              text-align: center;
+              flex: 1;
+            }
+            .quotation-title { 
+              font-size: 24px; 
+              color: #2c3e50;
+              font-weight: bold;
+              margin: 0;
+            }
+            .details-section { 
+              display: flex; 
+              justify-content: space-between; 
+              margin-bottom: 15px;
+            }
+            .party-details, .quotation-details { 
+              width: 48%; 
+            }
+            .party-details {
+              background: #f8f9fa;
+              padding: 12px;
+              border-radius: 6px;
+              border: 1px solid #e9ecef;
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin: 15px 0;
+              font-size: 11px;
+            }
+            th { 
+              background-color: #2c3e50; 
+              color: white; 
+              padding: 8px; 
+              text-align: left;
+              border: 1px solid #ddd;
+            }
+            td { 
+              padding: 6px; 
+              border: 1px solid #ddd;
+            }
+            .summary { 
+              float: right; 
+              width: 280px; 
+              border: 2px solid #3498db; 
+              padding: 15px; 
+              background-color: #f8f9fa;
+              border-radius: 6px;
+              font-size: 11px;
+            }
+            .total { 
+              font-weight: bold; 
+              font-size: 14px; 
+              border-top: 2px solid #2c3e50; 
+              padding-top: 8px;
+              color: #2c3e50;
+            }
+            .footer { 
+              margin-top: 30px; 
+              text-align: center; 
+              color: #7f8c8d;
+              padding-top: 12px;
+              border-top: 2px solid #3498db;
+              font-size: 10px;
+            }
+            .signature-container {
+              text-align: center;
+              margin-top: 20px;
+            }
+            .signature {
+              max-height: 50px;
+              max-width: 150px;
+              object-fit: contain;
+            }
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo-container">
+              ${logoDataUrl ? `<img src="${logoDataUrl}" alt="Company Logo" class="logo" />` : '<div style="height: 70px; width: 70px; background: #2c3e50; color: white; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-weight: bold; font-size: 12px; margin-right: 12px;">GMS</div>'}
+              <div class="company-info">
+                <h1 class="company-name">GLOBAL MARKETING SOLUTIONS</h1>
+                <p class="company-tagline">One Stop Solution For Your Problem</p>
+              </div>
+            </div>
+            <div class="title-container">
+              <div class="quotation-title">QUOTATION</div>
+            </div>
+            <div style="flex: 1;">
+              <!-- Empty for balance -->
             </div>
           </div>
-          <div class="title-container">
-            <div class="quotation-title">QUOTATION</div>
-          </div>
-          <div style="flex: 1;">
-            <!-- Empty for balance -->
-          </div>
-        </div>
 
-        <!-- Quotation and party details -->
-        <div class="details-section">
-          <div class="quotation-details">
-            <strong>Quotation Details:</strong><br>
-            Quotation No: ${quotationHeader.quotationNo || 'N/A'}<br>
-            Date: ${quotationHeader.quotationDate || 'N/A'}<br>
-            Valid Until: ${quotationHeader.validityDate || 'N/A'}<br>
-            PO No: ${quotationHeader.poNo || 'N/A'}
+          <div class="details-section">
+            <div class="quotation-details">
+              <strong>Quotation Details:</strong><br>
+              Quotation No: ${quotationHeader.quotationNo || 'N/A'}<br>
+              Date: ${quotationHeader.quotationDate || 'N/A'}<br>
+              Valid Until: ${quotationHeader.validityDate || 'N/A'}<br>
+              PO No: ${quotationHeader.poNo || 'N/A'}
+            </div>
+            <div class="party-details">
+              <strong>Bill To:</strong><br>
+              ${party ? `
+                ${party.partyName || ''}<br>
+                ${party.billingAddress || ''}<br>
+                ${party.gstin ? 'GSTIN: ' + party.gstin : ''}<br>
+                ${party.mobileNumber ? 'Mobile: ' + party.mobileNumber : ''}
+              ` : 'No party selected'}
+            </div>
           </div>
-          <div class="party-details">
-            <strong>Bill To:</strong><br>
-            ${party ? `
-              ${party.partyName || ''}<br>
-              ${party.billingAddress || ''}<br>
-              ${party.gstin ? 'GSTIN: ' + party.gstin : ''}<br>
-              ${party.mobileNumber ? 'Mobile: ' + party.mobileNumber : ''}
-            ` : 'No party selected'}
-          </div>
-        </div>
 
-        <!-- Items table -->
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Item Description</th>
-              <th>Qty</th>
-              <th>Unit</th>
-              <th>Rate (₹)</th>
-              <th>Amount (₹)</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${quotationData.items.map((item, index) => `
+          <table>
+            <thead>
               <tr>
-                <td>${index + 1}</td>
-                <td>${item.name}${item.description ? '<br><small style="color: #666;">' + item.description + '</small>' : ''}</td>
-                <td>${item.quantity}</td>
-                <td>${item.unit}</td>
-                <td>${item.price.toFixed(2)}</td>
-                <td>${item.amount.toFixed(2)}</td>
+                <th>#</th>
+                <th>Item Description</th>
+                <th>Qty</th>
+                <th>Unit</th>
+                <th>Rate (₹)</th>
+                <th>Amount (₹)</th>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              ${quotationData.items.map((item, index) => `
+                <tr>
+                  <td>${index + 1}</td>
+                  <td>${item.name}${item.description ? '<br><small style="color: #666;">' + item.description + '</small>' : ''}</td>
+                  <td>${item.quantity}</td>
+                  <td>${item.unit}</td>
+                  <td>${item.price.toFixed(2)}</td>
+                  <td>${item.amount.toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
 
-        <!-- Summary section -->
-        <div class="summary">
-          <strong style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 8px; display: block; margin-bottom: 12px;">SUMMARY</strong>
-          Subtotal: ₹${quotationData.subtotal.toFixed(2)}<br>
-          Discount: -₹${quotationData.discount.toFixed(2)}<br>
-          Tax (18% GST): ₹${quotationData.tax.toFixed(2)}<br>
-          ${additionalCharges.map(charge => 
-            charge.description && charge.amount ? 
-            `${charge.description}: ₹${parseFloat(charge.amount).toFixed(2)}<br>` : ''
-          ).join('')}
-          <div class="total">Total Amount: ₹${quotationData.totalAmount.toFixed(2)}</div>
-        </div>
-
-        <div style="clear: both;"></div>
-
-        <!-- Terms and conditions -->
-        ${terms ? `
-          <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef;">
-            <strong>Terms & Conditions:</strong><br>
-            ${terms.replace(/\n/g, '<br>')}
+          <div class="summary">
+            <strong style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 8px; display: block; margin-bottom: 12px;">SUMMARY</strong>
+            Subtotal: ₹${quotationData.subtotal.toFixed(2)}<br>
+            Discount: -₹${quotationData.discount.toFixed(2)}<br>
+            Tax (18% GST): ₹${quotationData.tax.toFixed(2)}<br>
+            ${additionalCharges.map(charge => 
+              charge.description && charge.amount ? 
+              `${charge.description}: ₹${parseFloat(charge.amount).toFixed(2)}<br>` : ''
+            ).join('')}
+            <div class="total">Total Amount: ₹${quotationData.totalAmount.toFixed(2)}</div>
           </div>
-        ` : ''}
 
-        <!-- Notes -->
-        ${notes ? `
-          <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef;">
-            <strong>Notes:</strong><br>
-            ${notes}
+          <div style="clear: both;"></div>
+
+          ${terms ? `
+            <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef;">
+              <strong>Terms & Conditions:</strong><br>
+              ${terms.replace(/\n/g, '<br>')}
+            </div>
+          ` : ''}
+
+          ${notes ? `
+            <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef;">
+              <strong>Notes:</strong><br>
+              ${notes}
+            </div>
+          ` : ''}
+
+          <div class="footer">
+            <div class="signature-container">
+              ${signatureDataUrl ? `<img src="${signatureDataUrl}" alt="Signature" class="signature" />` : ''}
+            </div>
+            <p>Thank you for your business!</p>
+            <p><strong>Authorized Signatory</strong><br>Global Marketing Solutions</p>
+            <div style="margin-top: 15px;">
+              <p>GLOBAL MARKETING SOLUTIONS • Champagne Branch</p>
+              <p>Phone: +91 XXXXX XXXXX • Email: info@globalmarketingsolutions.com</p>
+            </div>
           </div>
-        ` : ''}
 
-        <!-- Footer -->
-        <div class="footer">
-          <p>Thank you for your business!</p>
-          <p><strong>Authorized Signatory</strong><br>Global Marketing Solutions</p>
-          <div style="margin-top: 15px;">
-            <p>GLOBAL MARKETING SOLUTIONS • Champagne Branch</p>
-            <p>Phone: +91 XXXXX XXXXX • Email: info@globalmarketingsolutions.com</p>
+          <div class="no-print" style="margin-top: 15px; text-align: center;">
+            <button onclick="window.print()" style="padding: 8px 16px; background: #3498db; color: white; border: none; cursor: pointer; font-size: 11px;">
+              Print Quotation
+            </button>
+            <button onclick="window.close()" style="padding: 8px 16px; background: #95a5a6; color: white; border: none; cursor: pointer; margin-left: 8px; font-size: 11px;">
+              Close
+            </button>
           </div>
-        </div>
+        </body>
+        </html>
+      `);
+      
+      printWindow.document.close();
+    };
 
-        <!-- Print buttons (hidden when printing) -->
-        <div class="no-print" style="margin-top: 15px; text-align: center;">
-          <button onclick="window.print()" style="padding: 8px 16px; background: #3498db; color: white; border: none; cursor: pointer; font-size: 11px;">
-            Print Quotation
-          </button>
-          <button onclick="window.close()" style="padding: 8px 16px; background: #95a5a6; color: white; border: none; cursor: pointer; margin-left: 8px; font-size: 11px;">
-            Close
-          </button>
-        </div>
-      </body>
-      </html>
-    `);
-    
-    // Close the document writing
-    printWindow.document.close();
+    generatePrintContent();
   };
 
   // Filter requirements based on search term
   const filteredRequirements = requirements.filter(req => {
-    // Skip if requirement is null/undefined
     if (!req) return false;
     
-    // Convert search term to lowercase for case-insensitive search
     const searchLower = searchTerm.toLowerCase();
-    // Check if search term matches any of these fields
     return (
-      (req.itemName?.toLowerCase().includes(searchLower)) || // Item name
-      (req.name?.toLowerCase().includes(searchLower)) || // Alternative name field
-      (req.itemCode?.toLowerCase().includes(searchLower)) || // Item code
-      (req.code?.toLowerCase().includes(searchLower)) || // Alternative code field
-      (req.description?.toLowerCase().includes(searchLower)) // Description
+      (req.itemName?.toLowerCase().includes(searchLower)) ||
+      (req.name?.toLowerCase().includes(searchLower)) ||
+      (req.itemCode?.toLowerCase().includes(searchLower)) ||
+      (req.code?.toLowerCase().includes(searchLower)) ||
+      (req.description?.toLowerCase().includes(searchLower))
     );
   });
 
@@ -1112,38 +1182,38 @@ const Quotation = () => {
 
   // Mobile responsive styles
   const containerStyle = {
-    maxWidth: '1200px', // Maximum width for large screens
-    margin: '0 auto', // Center the container
-    padding: isMobile ? '10px' : '20px', // Responsive padding
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", // Font stack
-    backgroundColor: '#f8f9fa', // Light background color
-    minHeight: '100vh', // Full viewport height
-    fontSize: isMobile ? '14px' : '16px' // Responsive font size
+    maxWidth: '1200px',
+    margin: '0 auto',
+    padding: isMobile ? '10px' : '20px',
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+    backgroundColor: '#f8f9fa',
+    minHeight: '100vh',
+    fontSize: isMobile ? '14px' : '16px'
   };
 
   // Card style for consistent UI elements
   const cardStyle = {
-    backgroundColor: 'white', // White background
-    borderRadius: isMobile ? '8px' : '12px', // Responsive border radius
-    padding: isMobile ? '16px' : '24px', // Responsive padding
-    marginBottom: isMobile ? '16px' : '24px', // Responsive margin
-    boxShadow: '0 2px 10px rgba(0,0,0,0.08)', // Subtle shadow
-    border: '1px solid #e9ecef' // Light border
+    backgroundColor: 'white',
+    borderRadius: isMobile ? '8px' : '12px',
+    padding: isMobile ? '16px' : '24px',
+    marginBottom: isMobile ? '16px' : '24px',
+    boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
+    border: '1px solid #e9ecef'
   };
 
   // Reusable button style function
-  const buttonStyle = (color, ) => ({
-    backgroundColor: color, // Base color
-    color: 'white', // Text color
-    border: 'none', // No border
-    padding: isMobile ? '10px 16px' : '14px 28px', // Responsive padding
-    borderRadius: isMobile ? '6px' : '8px', // Responsive border radius
-    cursor: 'pointer', // Pointer cursor on hover
-    fontSize: isMobile ? '13px' : '15px', // Responsive font size
-    fontWeight: '600', // Bold text
-    transition: 'all 0.3s ease', // Smooth transitions
-    width: isMobile ? '100%' : 'auto', // Full width on mobile
-    marginBottom: isMobile ? '8px' : '0' // Margin on mobile
+  const buttonStyle = (color) => ({
+    backgroundColor: color,
+    color: 'white',
+    border: 'none',
+    padding: isMobile ? '10px 16px' : '14px 28px',
+    borderRadius: isMobile ? '6px' : '8px',
+    cursor: 'pointer',
+    fontSize: isMobile ? '13px' : '15px',
+    fontWeight: '600',
+    transition: 'all 0.3s ease',
+    width: isMobile ? '100%' : 'auto',
+    marginBottom: isMobile ? '8px' : '0'
   });
 
   // Main component return (JSX)
@@ -1152,7 +1222,7 @@ const Quotation = () => {
       {/* Header section with title and view quotations button */}
       <div style={{
         display: 'flex',
-        flexDirection: isMobile ? 'column' : 'row', // Column on mobile, row on desktop
+        flexDirection: isMobile ? 'column' : 'row',
         justifyContent: 'space-between',
         alignItems: isMobile ? 'stretch' : 'center',
         marginBottom: '20px',
@@ -1172,12 +1242,12 @@ const Quotation = () => {
         {/* View quotations button */}
         <button 
           onClick={() => {
-            setShowViewQuotations(true); // Show quotations modal
-            fetchAllQuotations(); // Fetch quotations data
+            setShowViewQuotations(true);
+            fetchAllQuotations();
           }}
-          style={buttonStyle('#3498db', '#2980b9')} // Blue button
-          onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'} // Hover effect
-          onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'} // Reset on leave
+          style={buttonStyle('#3498db')}
+          onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'}
+          onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'}
         >
           View Quotations
         </button>
@@ -1185,10 +1255,9 @@ const Quotation = () => {
 
       {/* Main quotation form card */}
       <div style={cardStyle}>
-        {/* Header section with Bill To and Quotation Details */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', // Single column on mobile
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
           gap: isMobile ? '20px' : '30px',
           marginBottom: '0'
         }}>
@@ -1203,7 +1272,6 @@ const Quotation = () => {
               paddingBottom: '8px'
             }}>Bill To</h2>
             
-            {/* Party selection dropdown */}
             <select 
               value={selectedParty} 
               onChange={(e) => setSelectedParty(e.target.value)}
@@ -1217,8 +1285,8 @@ const Quotation = () => {
                 transition: 'border-color 0.3s ease',
                 outline: 'none'
               }}
-              onFocus={(e) => e.target.style.borderColor = '#3498db'} // Focus effect
-              onBlur={(e) => e.target.style.borderColor = '#e9ecef'} // Blur effect
+              onFocus={(e) => e.target.style.borderColor = '#3498db'}
+              onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
             >
               <option value="">+ Add Party</option>
               {parties.map(party => (
@@ -1228,7 +1296,6 @@ const Quotation = () => {
               ))}
             </select>
 
-            {/* Display selected party details */}
             {selectedPartyDetails && (
               <div style={{
                 marginTop: '15px',
@@ -1267,13 +1334,11 @@ const Quotation = () => {
               paddingBottom: '8px'
             }}>Quotation Details</h2>
             
-            {/* Quotation details grid */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', // Responsive grid
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
               gap: isMobile ? '12px' : '16px'
             }}>
-              {/* Quotation Number */}
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -1289,7 +1354,7 @@ const Quotation = () => {
                 <input
                   type="text"
                   value={quotationHeader.quotationNo}
-                  readOnly // Read-only as it's auto-generated
+                  readOnly
                   style={{
                     padding: isMobile ? '8px 10px' : '10px 12px',
                     border: '2px solid #e9ecef',
@@ -1304,7 +1369,6 @@ const Quotation = () => {
                 />
               </div>
               
-              {/* Validity Period */}
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -1333,11 +1397,10 @@ const Quotation = () => {
                   }}
                   onFocus={(e) => e.target.style.borderColor = '#3498db'}
                   onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-                  min="1" // Minimum 1 day
+                  min="1"
                 />
               </div>
               
-              {/* PO Number */}
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -1370,7 +1433,6 @@ const Quotation = () => {
                 />
               </div>
               
-              {/* Quotation Date */}
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -1402,7 +1464,6 @@ const Quotation = () => {
                 />
               </div>
               
-              {/* Validity Date (auto-calculated) */}
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -1418,7 +1479,7 @@ const Quotation = () => {
                 <input
                   type="date"
                   value={quotationHeader.validityDate}
-                  readOnly // Read-only as it's auto-calculated
+                  readOnly
                   style={{
                     padding: isMobile ? '8px 10px' : '10px 12px',
                     border: '2px solid #e9ecef',
@@ -1846,7 +1907,7 @@ const Quotation = () => {
           <button 
             onClick={() => setShowAddItems(true)}
             style={{
-              ...buttonStyle('#27ae60', '#219a52'),
+              ...buttonStyle('#27ae60'),
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -1866,7 +1927,7 @@ const Quotation = () => {
       <div style={cardStyle}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '1fr 400px', // Responsive layout
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 400px',
           gap: isMobile ? '20px' : '40px',
           marginTop: '0'
         }}>
@@ -1918,7 +1979,7 @@ const Quotation = () => {
             {/* Add Additional Charges button */}
             <button 
               onClick={addAdditionalCharge}
-              style={buttonStyle('#6c757d', '#5a6268')}
+              style={buttonStyle('#6c757d')}
             >
               + Add Additional Charges
             </button>
@@ -2122,7 +2183,7 @@ const Quotation = () => {
               padding: '16px 0'
             }}>
               <span>Total Amount</span>
-              <span>₹${quotationData.totalAmount.toFixed(2)}</span>
+              <span>₹{quotationData.totalAmount.toFixed(2)}</span>
             </div>
 
             {/* Action Buttons */}
@@ -2139,7 +2200,7 @@ const Quotation = () => {
                 onClick={submitQuotation}
                 disabled={isSubmitting}
                 style={{
-                  ...buttonStyle(isSubmitting ? '#95a5a6' : '#27ae60', '#219a52'),
+                  ...buttonStyle(isSubmitting ? '#95a5a6' : '#27ae60'),
                   opacity: isSubmitting ? 0.7 : 1
                 }}
                 onMouseEnter={(e) => !isSubmitting && (e.target.style.backgroundColor = '#219a52')}
@@ -2151,7 +2212,7 @@ const Quotation = () => {
               {/* Download PDF Button */}
               <button 
                 onClick={downloadPDF}
-                style={buttonStyle('#3498db', '#2980b9')}
+                style={buttonStyle('#3498db')}
                 onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'}
                 onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'}
               >
@@ -2161,7 +2222,7 @@ const Quotation = () => {
               {/* Print Button */}
               <button 
                 onClick={printQuotation}
-                style={buttonStyle('#9b59b6', '#8e44ad')}
+                style={buttonStyle('#9b59b6')}
                 onMouseEnter={(e) => e.target.style.backgroundColor = '#8e44ad'}
                 onMouseLeave={(e) => e.target.style.backgroundColor = '#9b59b6'}
               >
@@ -2297,9 +2358,9 @@ const Quotation = () => {
                           fontSize: '12px',
                           marginBottom: '12px'
                         }}>
-                          <div>Price: ₹${req.salesPrice || req.price || '0.00'}</div>
-                          <div>Stock: ${req.currentStock || '0'}</div>
-                          <div>Unit: ${req.unit || 'PCS'}</div>
+                          <div>Price: ₹{req.salesPrice || req.price || '0.00'}</div>
+                          <div>Stock: {req.currentStock || '0'}</div>
+                          <div>Unit: {req.unit || 'PCS'}</div>
                         </div>
                         <button 
                           onClick={() => addItemToQuotation(req)}
@@ -2416,38 +2477,38 @@ const Quotation = () => {
                             textAlign: 'left',
                             fontSize: '13px'
                           }}>
-                            <strong>${req.itemName || req.name || 'Unnamed Item'}</strong>
+                            <strong>{req.itemName || req.name || 'Unnamed Item'}</strong>
                           </td>
                           <td style={{
                             border: '1px solid #dee2e6',
                             padding: '12px',
                             textAlign: 'left',
                             fontSize: '13px'
-                          }}>${req.itemCode || req.code || '-'}</td>
+                          }}>{req.itemCode || req.code || '-'}</td>
                           <td style={{
                             border: '1px solid #dee2e6',
                             padding: '12px',
                             textAlign: 'left',
                             fontSize: '13px'
-                          }}>${req.description || '-'}</td>
+                          }}>{req.description || '-'}</td>
                           <td style={{
                             border: '1px solid #dee2e6',
                             padding: '12px',
                             textAlign: 'left',
                             fontSize: '13px'
-                          }}>₹${req.salesPrice || req.price || '0.00'}</td>
+                          }}>₹{req.salesPrice || req.price || '0.00'}</td>
                           <td style={{
                             border: '1px solid #dee2e6',
                             padding: '12px',
                             textAlign: 'left',
                             fontSize: '13px'
-                          }}>${req.currentStock || '0'}</td>
+                          }}>{req.currentStock || '0'}</td>
                           <td style={{
                             border: '1px solid #dee2e6',
                             padding: '12px',
                             textAlign: 'left',
                             fontSize: '13px'
-                          }}>${req.unit || 'PCS'}</td>
+                          }}>{req.unit || 'PCS'}</td>
                           <td style={{
                             border: '1px solid #dee2e6',
                             padding: '12px',
@@ -2509,7 +2570,7 @@ const Quotation = () => {
                   setShowAddItems(false);
                   setSearchTerm('');
                 }}
-                style={buttonStyle('#6c757d', '#5a6268')}
+                style={buttonStyle('#6c757d')}
                 onMouseEnter={(e) => e.target.style.backgroundColor = '#5a6268'}
                 onMouseLeave={(e) => e.target.style.backgroundColor = '#6c757d'}
               >
@@ -2520,7 +2581,7 @@ const Quotation = () => {
                   setShowAddItems(false);
                   setSearchTerm('');
                 }}
-                style={buttonStyle('#3498db', '#2980b9')}
+                style={buttonStyle('#3498db')}
                 onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'}
                 onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'}
               >
@@ -2587,7 +2648,7 @@ const Quotation = () => {
               fontSize: isMobile ? '14px' : '16px',
               lineHeight: '1.5'
             }}>
-              Your quotation <strong>${savedQuotation?.quotationNo}</strong> has been saved successfully.
+              Your quotation <strong>{savedQuotation?.quotationNo}</strong> has been saved successfully.
             </p>
             
             {/* Action Buttons */}
@@ -2600,7 +2661,7 @@ const Quotation = () => {
             }}>
               <button 
                 onClick={() => setShowSuccessModal(false)}
-                style={buttonStyle('#3498db', '#2980b9')}
+                style={buttonStyle('#3498db')}
                 onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'}
                 onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'}
               >
@@ -2612,7 +2673,7 @@ const Quotation = () => {
                   setShowSuccessModal(false);
                   downloadPDF();
                 }}
-                style={buttonStyle('#27ae60', '#219a52')}
+                style={buttonStyle('#27ae60')}
                 onMouseEnter={(e) => e.target.style.backgroundColor = '#219a52'}
                 onMouseLeave={(e) => e.target.style.backgroundColor = '#27ae60'}
               >
@@ -2705,9 +2766,9 @@ const Quotation = () => {
                         backgroundColor: index % 2 === 0 ? 'white' : '#f8f9fa'
                       }}>
                         <div style={{ marginBottom: '8px' }}>
-                          <strong style={{ fontSize: '14px' }}>${quotation.quotationNo}</strong>
+                          <strong style={{ fontSize: '14px' }}>{quotation.quotationNo}</strong>
                           <div style={{ fontSize: '12px', color: '#6c757d' }}>
-                            ${quotation.partyDetails?.partyName || quotation.partyId?.partyName || 'N/A'}
+                            {quotation.partyDetails?.partyName || quotation.partyId?.partyName || 'N/A'}
                           </div>
                         </div>
                         <div style={{ 
@@ -2717,8 +2778,8 @@ const Quotation = () => {
                           fontSize: '12px',
                           marginBottom: '12px'
                         }}>
-                          <div>Date: ${new Date(quotation.quotationDate).toLocaleDateString()}</div>
-                          <div>Total: ₹${quotation.summary?.totalAmount?.toFixed(2) || '0.00'}</div>
+                          <div>Date: {new Date(quotation.quotationDate).toLocaleDateString()}</div>
+                          <div>Total: ₹{quotation.summary?.totalAmount?.toFixed(2) || '0.00'}</div>
                           <div>
                             Status: <span style={{
                               padding: '2px 6px',
@@ -2732,7 +2793,7 @@ const Quotation = () => {
                                 quotation.status === 'rejected' ? '#e74c3c' : '#95a5a6',
                               color: 'white'
                             }}>
-                              ${quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1)}
+                              {quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1)}
                             </span>
                           </div>
                         </div>
@@ -2844,7 +2905,7 @@ const Quotation = () => {
                             textAlign: 'left',
                             fontSize: '13px'
                           }}>
-                            <strong>${quotation.quotationNo}</strong>
+                            <strong>{quotation.quotationNo}</strong>
                           </td>
                           <td style={{
                             border: '1px solid #dee2e6',
@@ -2852,7 +2913,7 @@ const Quotation = () => {
                             textAlign: 'left',
                             fontSize: '13px'
                           }}>
-                            ${quotation.partyDetails?.partyName || quotation.partyId?.partyName || 'N/A'}
+                            {quotation.partyDetails?.partyName || quotation.partyId?.partyName || 'N/A'}
                           </td>
                           <td style={{
                             border: '1px solid #dee2e6',
@@ -2860,7 +2921,7 @@ const Quotation = () => {
                             textAlign: 'left',
                             fontSize: '13px'
                           }}>
-                            ${new Date(quotation.quotationDate).toLocaleDateString()}
+                            {new Date(quotation.quotationDate).toLocaleDateString()}
                           </td>
                           <td style={{
                             border: '1px solid #dee2e6',
@@ -2868,7 +2929,7 @@ const Quotation = () => {
                             textAlign: 'left',
                             fontSize: '13px'
                           }}>
-                            ₹${quotation.summary?.totalAmount?.toFixed(2) || '0.00'}
+                            ₹{quotation.summary?.totalAmount?.toFixed(2) || '0.00'}
                           </td>
                           <td style={{
                             border: '1px solid #dee2e6',
@@ -2888,7 +2949,7 @@ const Quotation = () => {
                                 quotation.status === 'rejected' ? '#e74c3c' : '#95a5a6',
                               color: 'white'
                             }}>
-                              ${quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1)}
+                              {quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1)}
                             </span>
                           </td>
                           <td style={{
@@ -2954,7 +3015,7 @@ const Quotation = () => {
             }}>
               <button 
                 onClick={() => setShowViewQuotations(false)}
-                style={buttonStyle('#3498db', '#2980b9')}
+                style={buttonStyle('#3498db')}
                 onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'}
                 onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'}
               >
@@ -3211,7 +3272,7 @@ const Quotation = () => {
             }}>
               <button 
                 onClick={() => setShowQuotationDetails(false)}
-                style={buttonStyle('#6c757d', '#5a6268')}
+                style={buttonStyle('#6c757d')}
                 onMouseEnter={(e) => e.target.style.backgroundColor = '#5a6268'}
                 onMouseLeave={(e) => e.target.style.backgroundColor = '#6c757d'}
               >
@@ -3219,7 +3280,7 @@ const Quotation = () => {
               </button>
               <button 
                 onClick={() => downloadQuotationPDF(selectedQuotation)}
-                style={buttonStyle('#27ae60', '#219a52')}
+                style={buttonStyle('#27ae60')}
                 onMouseEnter={(e) => e.target.style.backgroundColor = '#219a52'}
                 onMouseLeave={(e) => e.target.style.backgroundColor = '#27ae60'}
               >
