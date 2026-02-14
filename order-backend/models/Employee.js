@@ -1,3 +1,4 @@
+// models/Employee.js
 const mongoose = require('mongoose');
 
 const employeeSchema = new mongoose.Schema({
@@ -6,6 +7,7 @@ const employeeSchema = new mongoose.Schema({
   phone: { type: String, required: true },
   email: { type: String },
   guardianName: { type: String },
+  guardianContact: { type: String },  // ✅ Now added
   aadhar: { type: String },
   joiningDate: { type: Date },
   experience: { type: Number },

@@ -5,7 +5,9 @@ const router = express.Router();
 router.get('/', (req, res) => {
   const upiNumbers = [
     '9985330008@Chary',
-    '9985330004@Swathi'
+    '9985330004@Swathi',
+    'globalmarketingsolutions@idbi',
+    '9985403636@Vinay'
   ];
   res.json(upiNumbers);
 });

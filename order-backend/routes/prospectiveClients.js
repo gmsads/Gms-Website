@@ -75,16 +75,40 @@ router.post('/', async (req, res) => {
     }
 });
 
-// SINGLE CORRECTED GET ALL PROSPECTIVE CLIENTS ROUTE
+// In your backend routes file (prospectiveClients.js or similar)
+
+// GET all prospective clients with filtering
 router.get('/', async (req, res) => {
     try {
-        const { userName, role, search, status, executiveName, filterByExecutive } = req.query;
+        const { userName, role, search, status, executiveName, filterByExecutive, month, year } = req.query;
 
         console.log('📥 Backend received query:', {
-            userName, role, executiveName, filterByExecutive, search, status
+            userName, role, executiveName, filterByExecutive, search, status, month, year
         });
 
         let query = {};
+        
+        // Add date filtering based on month and year
+        if (month && year) {
+            const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+            const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
+            
+            query.createdAt = {
+                $gte: startDate,
+                $lte: endDate
+            };
+            
+            console.log('📅 Date filter:', { startDate, endDate });
+        } else if (year) {
+            // If only year is provided, filter by entire year
+            const startDate = new Date(parseInt(year), 0, 1);
+            const endDate = new Date(parseInt(year), 11, 31, 23, 59, 59, 999);
+            
+            query.createdAt = {
+                $gte: startDate,
+                $lte: endDate
+            };
+        }
         
         // CASE 1: If specific executive filtering is requested (from performance view)
         if (filterByExecutive === 'true' && executiveName) {
@@ -112,7 +136,7 @@ router.get('/', async (req, res) => {
             query.$text = { $search: search };
         }
 
-        console.log('🔍 Final MongoDB query:', query);
+        console.log('🔍 Final MongoDB query:', JSON.stringify(query, null, 2));
 
         const clients = await ProspectiveClient.find(query)
             .sort({ followUpDate: 1, createdAt: -1 });
@@ -121,7 +145,8 @@ router.get('/', async (req, res) => {
         console.log('📋 Sample clients:', clients.slice(0, 2).map(c => ({ 
             id: c._id, 
             executive: c.ExcutiveName, 
-            business: c.businessName 
+            business: c.businessName,
+            createdAt: c.createdAt
         })));
         
         res.json(clients);

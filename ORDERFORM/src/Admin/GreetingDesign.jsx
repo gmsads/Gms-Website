@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -20,6 +21,7 @@ const GreetingDesignDashboard = ({ userRole }) => {
   useEffect(() => {
     fetchDesigns();
     // Don't auto-fetch clients - let user click button
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ============ FETCH CLIENTS FROM /api/orders ============
@@ -313,20 +315,6 @@ const GreetingDesignDashboard = ({ userRole }) => {
     setMessageType(type);
     setTimeout(() => setMessage(''), 4000);
   };
-
-  const toggleDesignStatus = async (designId, currentStatus) => {
-    setDesigns(prev => prev.map(d => 
-      d._id === designId ? { ...d, isActive: !currentStatus } : d
-    ));
-    showMessage(`Design ${!currentStatus ? 'activated' : 'deactivated'}`);
-  };
-
-  const deleteDesign = (designId) => {
-    if (!window.confirm('Delete this design?')) return;
-    setDesigns(prev => prev.filter(d => d._id !== designId));
-    showMessage('Design deleted');
-  };
-
   const handleSendDesign = (design) => {
     setSelectedDesign(design);
     setSelectedClients([]);

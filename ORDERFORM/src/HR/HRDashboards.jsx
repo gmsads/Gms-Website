@@ -490,6 +490,12 @@ function HRDashboard() {
               >
                 📝 Attendance
               </button>
+               <button 
+                style={styles.actionButton}
+                onClick={() => navigate('view-leaves')}
+              >
+              View Leave Requests
+              </button>
             </div>
           </div>
         </div>
@@ -611,6 +617,16 @@ function HRDashboard() {
             onClick={handleSidebarItemClick}
           >
             Attendance
+          </NavLink>
+          <NavLink
+            to="/hr-dashboard/view-leaves"
+            end
+            style={linkStyle('view-leaves')}
+            onMouseEnter={() => setHoveredItem('view-leaves')}
+            onMouseLeave={() => setHoveredItem('')}
+            onClick={handleSidebarItemClick}
+          >
+           View Leave Requests
           </NavLink>
         </div>
 

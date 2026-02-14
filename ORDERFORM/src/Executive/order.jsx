@@ -16,7 +16,9 @@ import PendingPayment from "../Admin/PendingPayment";
 import "../Executive/order.css";
 import TeleCRM from "./TeleCRM";
 import WhatsAppDashboard from "../Admin/WhatsApp";
+import MyLeaves from "./LeaveRequest";
 import { FaWhatsapp } from "react-icons/fa";
+import ViewLeaveRequests from './ViewLeaveRequests'
 
 function Admin() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
@@ -24,6 +26,7 @@ function Admin() {
   const [selectedExecutive] = useState(
     localStorage.getItem("userName") || "Executive"
   );
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   const [targetData, setTargetData] = useState({
     target: 0,
@@ -43,6 +46,7 @@ function Admin() {
   const [activeDuration, setActiveDuration] = useState("00:00:00");
   const [isSessionActive, setIsSessionActive] = useState(true);
   const timerRef = useRef(null);
+  const sidebarRef = useRef(null);
   
   // WhatsApp dashboard state
   const [showWhatsAppDashboard, setShowWhatsAppDashboard] = useState(false);
@@ -89,6 +93,33 @@ function Admin() {
     };
   }, []);
 
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobile(mobile);
+      setSidebarOpen(!mobile);
+    };
+    
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Close sidebar when clicking outside on mobile
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isMobile && sidebarOpen && sidebarRef.current && !sidebarRef.current.contains(event.target)) {
+        setSidebarOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isMobile, sidebarOpen]);
+
   // Fetch unread WhatsApp messages count
   useEffect(() => {
     const fetchUnreadCount = async () => {
@@ -101,32 +132,27 @@ function Admin() {
     };
 
     fetchUnreadCount();
-    // Poll for new messages every 30 seconds
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch daily executive summary - FIXED FOR TODAY'S DATA
+  // Fetch daily executive summary
   const fetchDailySummary = async () => {
     try {
       setDailySummary(prev => ({ ...prev, loading: true }));
       
       const today = new Date();
-      // Set to beginning of today in local timezone
       const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
-      
       const tomorrow = new Date(todayStart);
       tomorrow.setDate(tomorrow.getDate() + 1);
       
       const executiveName = selectedExecutive;
       const todayStr = today.toISOString().split('T')[0];
       
-      // 1. Get performance records (calls, WhatsApp) for today
       let callsMade = 0;
       let whatsappMessages = 0;
       
       try {
-        // Fetch today's performance record data using RecordForm API
         const recordResponse = await axios.get('/api/reports', {
           params: {
             executiveName: executiveName,
@@ -135,7 +161,6 @@ function Admin() {
         });
         
         if (recordResponse.data) {
-          // If data is array, find today's record
           if (Array.isArray(recordResponse.data)) {
             const todayRecord = recordResponse.data.find(record => {
               const recordDate = new Date(record.date).toISOString().split('T')[0];
@@ -147,14 +172,12 @@ function Admin() {
               whatsappMessages = parseInt(todayRecord.whatsapp) || 0;
             }
           } else if (recordResponse.data.totalCalls !== undefined) {
-            // If data is object (single record)
             callsMade = parseInt(recordResponse.data.totalCalls) || 0;
             whatsappMessages = parseInt(recordResponse.data.whatsapp) || 0;
           }
         }
       } catch (recordError) {
         console.error('Error fetching performance records:', recordError);
-        // Try alternative endpoint for today's data
         try {
           const altResponse = await axios.get(`/api/reports/today?executive=${executiveName}`);
           if (altResponse.data) {
@@ -166,12 +189,10 @@ function Admin() {
         }
       }
       
-      // 2. Get orders closed today
       let ordersClosed = 0;
       let totalSales = 0;
       
       try {
-        // Use today's date range for orders
         const ordersResponse = await axios.get('/api/orders', {
           params: {
             executive: executiveName,
@@ -183,19 +204,16 @@ function Admin() {
         const ordersToday = Array.isArray(ordersResponse.data) ? ordersResponse.data : [];
         ordersClosed = ordersToday.length;
         
-        // Calculate total sales from orders
         totalSales = ordersToday.reduce((sum, order) => {
           return sum + (order.totalAmount || order.total || 0);
         }, 0);
         
       } catch (orderError) {
         console.error('Error fetching orders:', orderError);
-        // Fallback: Try alternative approach
         try {
           const fallbackResponse = await axios.get(`/api/executive/${executiveName}`);
           const fallbackData = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : [];
           
-          // Filter today's orders using local date comparison
           const todayFormatted = today.toLocaleDateString('en-IN');
           const todayOrders = fallbackData.filter(order => {
             const orderDate = new Date(order.orderDate || order.createdAt);
@@ -212,7 +230,6 @@ function Admin() {
         }
       }
       
-      // 3. Calculate pending payments for today
       let pendingPaymentCount = 0;
       let totalPendingAmount = 0;
       
@@ -220,7 +237,6 @@ function Admin() {
         const pendingResponse = await axios.get('/api/orders/pending-payments');
         const pendingOrders = Array.isArray(pendingResponse.data) ? pendingResponse.data : [];
         
-        // Filter by executive and today's orders
         const executivePending = pendingOrders.filter(order => 
           order?.executive?.toLowerCase() === executiveName.toLowerCase() && 
           order?.balance > 0
@@ -233,7 +249,6 @@ function Admin() {
         console.error('Error fetching pending payments:', pendingError);
       }
       
-      // 4. Get target data
       let target = 0;
       let achieved = 0;
       
@@ -243,19 +258,15 @@ function Admin() {
         
         const targetResponse = await axios.get(`/api/get-target/${executiveName}/${currentMonth}/${currentYear}`);
         target = targetResponse.data?.target || 0;
-        
-        // Calculate achieved amount
         achieved = totalSales;
         
       } catch (targetError) {
         console.error('Error fetching target:', targetError);
       }
       
-      // 5. Get prospects for today
       let prospects = 0;
       
       try {
-        // Use today's date for prospects
         const prospectsResponse = await axios.get('/api/prospects', {
           params: {
             executiveName: executiveName,
@@ -268,23 +279,19 @@ function Admin() {
         }
       } catch (prospectsError) {
         console.error('Error fetching prospects:', prospectsError);
-        // Try alternative endpoint
         try {
           const altProspectsResponse = await axios.get(`/api/prospects/today?executive=${executiveName}`);
           if (Array.isArray(altProspectsResponse.data)) {
             prospects = altProspectsResponse.data.length;
           } else if (altProspectsResponse.data) {
-            prospects = 1; // Single prospect object
+            prospects = 1;
           }
         } catch (altError) {
           console.error('Alternative prospect API failed:', altError);
         }
       }
       
-      // 6. Calculate conversion rate
       const conversionRate = callsMade > 0 ? Math.round((ordersClosed / callsMade) * 100) : 0;
-      
-      // 7. Calculate average order value
       const averageOrderValue = ordersClosed > 0 ? Math.round(totalSales / ordersClosed) : 0;
       
       setDailySummary({
@@ -394,19 +401,15 @@ function Admin() {
     localStorage.removeItem('loginTime');
   };
 
-  // Handle activity selection from dropdown
   const handleActivitySelection = async (activity) => {
     try {
-      // Stop the timer for any selection
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
       
-      // Disable AutoLogout by marking session as inactive
       setIsSessionActive(false);
 
-      // Send activity to server
       const userName = localStorage.getItem("userName");
       const userRole = localStorage.getItem("userRole");
       
@@ -419,37 +422,24 @@ function Admin() {
         duration: activeDuration
       });
 
-      // For logout only, show summary and then logout
       if (activity === "Logout") {
-        // Fetch daily summary before logout
         await fetchDailySummary();
-        // Show summary modal
         setShowSummaryModal(true);
       }
     } catch (error) {
       console.error("Error during activity selection:", error);
       if (activity === "Logout") {
-        // Still show summary even if fetch fails
         setShowSummaryModal(true);
       }
     }
   };
 
-  // Handle final logout after viewing summary
   const handleFinalLogout = () => {
     resetTimer();
     localStorage.clear();
     setShowSummaryModal(false);
     window.location.href = "/";
   };
-
-  // Handle window resize
-  useEffect(() => {
-    const handleResize = () => setSidebarOpen(window.innerWidth > 768);
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
 
   // Close logout dropdown when clicking outside
   useEffect(() => {
@@ -520,14 +510,12 @@ function Admin() {
     }
   }, [selectedExecutive]);
 
-  // Get profile initials
   const getProfileInitials = (name) =>
     name
       .split(" ")
       .map((part) => part[0]?.toUpperCase() || "")
       .join("");
 
-  // Calculate target percentage
   const targetPercentage =
     targetData.target > 0
       ? Math.min(
@@ -536,7 +524,6 @@ function Admin() {
         )
       : 0;
 
-  // Handle search
   const handleSearch = async () => {
     if (orderNumber.length !== 10) {
       setSearchError("Please enter exactly 10 digits");
@@ -582,7 +569,6 @@ function Admin() {
     }
   };
 
-  // Get progress gradient color
   const getProgressGradient = (percentage) => {
     if (percentage <= 30) return "linear-gradient(to right, #ff4e50, #ff0000)";
     if (percentage <= 50) return "linear-gradient(to right, #ffa751, #ff6a00)";
@@ -591,24 +577,33 @@ function Admin() {
     return "linear-gradient(to right, rgb(16, 231, 34), rgb(11, 222, 25))";
   };
 
-  // Get blink class for progress
   const getBlinkClass = (percentage) => {
     return percentage < 100 ? "blink-progress" : "";
   };
 
-  // Handle pending payment click
   const handlePendingPaymentClick = () => {
     setActiveTab("pending-payments");
   };
 
-  // Add styles for WhatsApp button and Summary Modal
+  // Handle menu item click - closes sidebar on mobile
+  const handleMenuItemClick = (key) => {
+    setActiveTab(key);
+    if (key === "order") {
+      setShowOrderForm(false);
+      setOrderNumber("");
+    }
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  };
+
   const styles = {
     whatsappButton: {
       position: 'fixed',
       bottom: '30px',
       right: '30px',
-      width: '60px',
-      height: '60px',
+      width: isMobile ? '50px' : '60px',
+      height: isMobile ? '50px' : '60px',
       backgroundColor: '#25D366',
       borderRadius: '50%',
       display: 'flex',
@@ -621,7 +616,7 @@ function Admin() {
       border: 'none',
     },
     whatsappIcon: {
-      fontSize: '32px',
+      fontSize: isMobile ? '24px' : '32px',
       color: 'white',
     },
     unreadBadge: {
@@ -631,16 +626,15 @@ function Admin() {
       backgroundColor: '#FF3B30',
       color: 'white',
       borderRadius: '50%',
-      width: '24px',
-      height: '24px',
+      width: isMobile ? '20px' : '24px',
+      height: isMobile ? '20px' : '24px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      fontSize: '12px',
+      fontSize: isMobile ? '10px' : '12px',
       fontWeight: 'bold',
       boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
     },
-    // Ultra Compact Summary Modal Styles
     modalOverlay: {
       position: 'fixed',
       top: 0,
@@ -652,12 +646,12 @@ function Admin() {
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 2000,
-      padding: '20px',
+      padding: isMobile ? '10px' : '20px',
     },
     modalContent: {
       backgroundColor: 'white',
       borderRadius: '8px',
-      padding: '20px',
+      padding: isMobile ? '15px' : '20px',
       maxWidth: '400px',
       width: '100%',
       color: '#333',
@@ -670,56 +664,56 @@ function Admin() {
       borderBottom: '1px solid #e0e0e0',
     },
     modalTitle: {
-      fontSize: '16px',
+      fontSize: isMobile ? '14px' : '16px',
       fontWeight: '600',
       marginBottom: '3px',
       color: '#2c3e50',
     },
     modalSubtitle: {
-      fontSize: '11px',
+      fontSize: isMobile ? '10px' : '11px',
       color: '#7f8c8d',
     },
     metricsGrid: {
       display: 'grid',
       gridTemplateColumns: 'repeat(4, 1fr)',
-      gap: '10px',
+      gap: isMobile ? '5px' : '10px',
       marginBottom: '15px',
     },
     metricItem: {
       textAlign: 'center',
     },
     metricIcon: {
-      fontSize: '14px',
+      fontSize: isMobile ? '12px' : '14px',
       marginBottom: '3px',
     },
     metricValue: {
-      fontSize: '16px',
+      fontSize: isMobile ? '14px' : '16px',
       fontWeight: '600',
       color: '#2c3e50',
       lineHeight: '1.2',
     },
     metricLabel: {
-      fontSize: '10px',
+      fontSize: isMobile ? '8px' : '10px',
       color: '#7f8c8d',
       textTransform: 'uppercase',
       letterSpacing: '0.3px',
     },
     salesBox: {
       backgroundColor: '#f8f9fa',
-      padding: '12px',
+      padding: isMobile ? '10px' : '12px',
       borderRadius: '6px',
       marginBottom: '15px',
       textAlign: 'center',
       border: '1px solid #e9ecef',
     },
     salesAmount: {
-      fontSize: '22px',
+      fontSize: isMobile ? '18px' : '22px',
       fontWeight: 'bold',
       color: '#27ae60',
       margin: '3px 0',
     },
     salesLabel: {
-      fontSize: '12px',
+      fontSize: isMobile ? '10px' : '12px',
       color: '#7f8c8d',
       fontWeight: '500',
     },
@@ -727,8 +721,8 @@ function Admin() {
       backgroundColor: '#3498db',
       color: 'white',
       border: 'none',
-      padding: '10px',
-      fontSize: '13px',
+      padding: isMobile ? '8px' : '10px',
+      fontSize: isMobile ? '12px' : '13px',
       borderRadius: '5px',
       cursor: 'pointer',
       width: '100%',
@@ -739,9 +733,36 @@ function Admin() {
       textAlign: 'center',
       padding: '20px',
     },
+    mobileMenuButton: {
+      position: 'fixed',
+      top: '15px',
+      left: '15px',
+      zIndex: 1001,
+      backgroundColor: '#003366',
+      color: 'white',
+      width: '40px',
+      height: '40px',
+      borderRadius: '8px',
+      display: isMobile ? 'flex' : 'none',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '24px',
+      cursor: 'pointer',
+      boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+      border: 'none',
+    },
+    overlay: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      zIndex: 999,
+      display: isMobile && sidebarOpen ? 'block' : 'none',
+    },
   };
 
-  // Add CSS for the modal
   const modalStyles = `
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(-5px); }
@@ -751,16 +772,217 @@ function Admin() {
     .modal-animation {
       animation: fadeIn 0.15s ease-out;
     }
+
+    /* Sidebar scrollable styles */
+    .sidebar {
+      overflow-y: auto !important;
+      scrollbar-width: thin;
+      scrollbar-color: #667eea #001529;
+    }
+
+    .sidebar::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    .sidebar::-webkit-scrollbar-track {
+      background: #001529;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb {
+      background: #667eea;
+      border-radius: 10px;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb:hover {
+      background: #5a67d8;
+    }
+
+    /* Mobile responsive navbar */
+    @media (max-width: 768px) {
+      .navbar {
+        padding: 10px !important;
+        height: auto !important;
+        min-height: 60px !important;
+        flex-wrap: wrap !important;
+      }
+      
+      .navbar-title {
+        font-size: 16px !important;
+        margin-left: 40px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: calc(100% - 80px) !important;
+      }
+      
+      .navbar-right {
+        width: 100% !important;
+        justify-content: space-between !important;
+        margin-top: 10px !important;
+        flex-wrap: wrap !important;
+        gap: 10px !important;
+      }
+      
+      .session-timer-card {
+        padding: 5px 8px !important;
+        min-width: auto !important;
+      }
+      
+      .timer-value {
+        font-size: 12px !important;
+      }
+      
+      .target-display {
+        min-width: auto !important;
+        padding: 5px 8px !important;
+      }
+      
+      .target-text {
+        font-size: 11px !important;
+      }
+      
+      .progress-bar {
+        width: 80px !important;
+      }
+      
+      .profile-icon {
+        width: 30px !important;
+        height: 30px !important;
+      }
+      
+      .logout-btn {
+        padding: 5px 10px !important;
+        font-size: 12px !important;
+      }
+      
+      .pending-payment-notification {
+        width: 100% !important;
+        margin-right: 0 !important;
+        font-size: 12px !important;
+      }
+      
+      .pending-payment-notification small {
+        font-size: 10px !important;
+      }
+      
+      .main-content {
+        padding: 60px 10px 10px 10px !important;
+      }
+      
+      .form-container {
+        padding: 10px !important;
+      }
+      
+      .phone-search-box {
+        padding: 15px !important;
+      }
+      
+      .phone-search-box h3 {
+        font-size: 16px !important;
+      }
+      
+      .form-type-selector {
+        flex-direction: column !important;
+        gap: 8px !important;
+      }
+      
+      .search-button {
+        width: 100% !important;
+      }
+      
+      /* Make sidebar full width on mobile */
+      .sidebar.open {
+        width: 280px !important;
+        z-index: 1000 !important;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .navbar-title {
+        font-size: 14px !important;
+        margin-left: 35px !important;
+      }
+      
+      .timer-label {
+        font-size: 10px !important;
+      }
+      
+      .timer-value {
+        font-size: 11px !important;
+      }
+      
+      .target-icon {
+        font-size: 11px !important;
+      }
+      
+      .target-text {
+        font-size: 10px !important;
+      }
+      
+      .profile-icon {
+        width: 28px !important;
+        height: 28px !important;
+      }
+      
+      .profile-icon-symbol {
+        font-size: 12px !important;
+      }
+      
+      .logout-btn {
+        padding: 4px 8px !important;
+        font-size: 11px !important;
+      }
+      
+      .pending-payment-notification {
+        padding: 6px 8px !important;
+        font-size: 11px !important;
+      }
+      
+      .main-content {
+        padding: 70px 8px 8px 8px !important;
+      }
+      
+      .phone-search-box h3 {
+        font-size: 14px !important;
+      }
+      
+      .phone-search-box input {
+        padding: 8px !important;
+        font-size: 14px !important;
+      }
+      
+      .form-type-selector label {
+        font-size: 13px !important;
+      }
+      
+      /* Make sidebar even smaller on very small screens */
+      .sidebar.open {
+        width: 250px !important;
+      }
+    }
   `;
 
   return (
     <div className="app-container">
       {isSessionActive && <AutoLogout />}
       
-      {/* Add modal styles */}
+      {/* Add modal and responsive styles */}
       <style>{modalStyles}</style>
       
-      {/* Executive Summary Modal - Ultra Compact Version */}
+      {/* Mobile Menu Button */}
+      {isMobile && (
+        <>
+          <button
+            style={styles.mobileMenuButton}
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+          >
+            ☰
+          </button>
+          <div style={styles.overlay} onClick={() => setSidebarOpen(false)} />
+        </>
+      )}
+      
+      {/* Executive Summary Modal */}
       {showSummaryModal && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalContent} className="modal-animation">
@@ -826,13 +1048,15 @@ function Admin() {
       
       {/* Navbar */}
       <div className="navbar">
-        <button
-          className="toggle-btn"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          aria-label="Toggle sidebar"
-        >
-          ☰
-        </button>
+        {!isMobile && (
+          <button
+            className="toggle-btn"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label="Toggle sidebar"
+          >
+            ☰
+          </button>
+        )}
         
         <h1
           className="navbar-title"
@@ -840,6 +1064,7 @@ function Admin() {
             background: "linear-gradient(to right, #4facfe, #00f2fe)",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
+            marginLeft: !isMobile ? '60px' : '0',
           }}
         >
           Welcome {selectedExecutive}
@@ -867,17 +1092,18 @@ function Admin() {
               style={{
                 backgroundColor: '#e74c3c',
                 color: 'white',
-                padding: '8px 12px',
+                padding: isMobile ? '6px 8px' : '8px 12px',
                 borderRadius: '6px',
                 cursor: 'pointer',
-                fontSize: '14px',
+                fontSize: isMobile ? '12px' : '14px',
                 fontWeight: '600',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                marginRight: '15px',
+                gap: isMobile ? '4px' : '8px',
+                marginRight: isMobile ? '0' : '15px',
                 boxShadow: '0 2px 4px rgba(231, 76, 60, 0.3)',
                 transition: 'all 0.2s',
+                width: isMobile ? '100%' : 'auto',
               }}
               onMouseEnter={(e) => {
                 e.target.style.backgroundColor = '#c0392b';
@@ -890,7 +1116,7 @@ function Admin() {
             >
               <span>⚠️</span>
               <span>
-                {selectedExecutive}, you have {pendingPaymentData.count} pending payments
+                {isMobile ? `${pendingPaymentData.count} pending` : `${selectedExecutive}, you have ${pendingPaymentData.count} pending payments`}
                 <br />
                 <small>Total: ₹{pendingPaymentData.amount.toLocaleString()}</small>
               </span>
@@ -908,7 +1134,9 @@ function Admin() {
               <span className="target-text">
                 {loading
                   ? "Loading..."
-                  : `${targetData.formattedAchieved} / ${targetData.formattedTarget}`}
+                  : isMobile 
+                    ? `${targetData.formattedAchieved} / ${targetData.formattedTarget}`
+                    : `${targetData.formattedAchieved} / ${targetData.formattedTarget}`}
               </span>
               <div className="progress-bar">
                 {!loading && (
@@ -962,8 +1190,15 @@ function Admin() {
         </div>
       </div>
 
-      {/* Sidebar */}
-      <div className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
+      {/* Sidebar - Made scrollable */}
+      <div 
+        ref={sidebarRef}
+        className={`sidebar ${sidebarOpen ? "open" : "closed"}`}
+        style={{
+          overflowY: 'auto',
+          maxHeight: '100vh',
+        }}
+      >
         <div className="sidebar-content">
           <div className="nav-menu">
             {[
@@ -976,6 +1211,8 @@ function Admin() {
               { key: "viewAppointments", icon: "📂", text: "View Appointments" },
               { key: "prospective", icon: "🔍", text: "Create Prospects ➕" },
               { key: "viewProspects", icon: "👁️", text: "View Prospects" },
+              { key: "myleaves", icon: "📞", text: "Request-Leaves" },
+              { key: "view-leaves", icon: "📋", text: "My Leaves" },
               { key: "price-list", icon: "💰", text: "Price List" },
               { key: "pending-payments", icon: "💰", text: "Pending Payments" },
               { key: "tele", icon: "📞", text: "Tele-CRM" },
@@ -983,13 +1220,7 @@ function Admin() {
               <div
                 key={key}
                 className={`nav-item ${activeTab === key ? "active" : ""}`}
-                onClick={() => {
-                  setActiveTab(key);
-                  if (key === "order") {
-                    setShowOrderForm(false);
-                    setOrderNumber("");
-                  }
-                }}
+                onClick={() => handleMenuItemClick(key)}
               >
                 <span className="nav-icon">{icon}</span>
                 <span className="nav-text">{text}</span>
@@ -1002,16 +1233,13 @@ function Admin() {
       {/* Main Content */}
       <div className={`main-content ${sidebarOpen ? "" : "expanded"}`}>
         <div className="form-container">
-          {activeTab === "executive-dashboard" && (
-            <>
-              <ExecutiveDashboard />
-            </>
-          )}
-
+          {activeTab === "executive-dashboard" && <ExecutiveDashboard />}
           {activeTab === "record" && <Record />}
           {activeTab === "tele" && <TeleCRM />}
           {activeTab === "appointment" && <Appointment />}
           {activeTab === "viewOrders" && <ViewOrders userRole={userRole} />}
+          {activeTab === "myleaves" && <MyLeaves />}
+          {activeTab === "view-leaves" && <ViewLeaveRequests />}
           {activeTab === "price-list" && <Pricelist />}
           {activeTab === "viewAppointments" && <ViewAppointments />}
           {activeTab === "prospective" && <Prospective />}
@@ -1104,13 +1332,14 @@ function Admin() {
                 <button
                   onClick={() => setShowOrderForm(false)}
                   style={{
-                    padding: "10px 20px",
+                    padding: isMobile ? "8px 16px" : "10px 20px",
                     backgroundColor: "#dc3545",
                     color: "#fff",
                     border: "none",
                     borderRadius: "5px",
                     cursor: "pointer",
                     marginBottom: "20px",
+                    width: isMobile ? "100%" : "auto",
                   }}
                 >
                   Back

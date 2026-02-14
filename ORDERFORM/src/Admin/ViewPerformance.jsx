@@ -28,14 +28,10 @@ const PerformanceView = () => {
   const isServiceManager = userRole === 'Service Manager';
   
   // Check if user has permission to navigate to orders/prospects
-  // HR should NOT have access
   const canNavigateToOrders = isAdmin || isSalesManager;
   const canNavigateToProspects = isAdmin || isSalesManager;
   
   const [executives, setExecutives] = useState([]);
-  const [serviceExecutives, setServiceExecutives] = useState([]);
-  const [accounts, setAccounts] = useState([]);
-  const [fieldExecutives, setFieldExecutives] = useState([]);
   const [selectedExecutive, setSelectedExecutive] = useState('');
   const [performanceData, setPerformanceData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -45,12 +41,12 @@ const PerformanceView = () => {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
-  const [overallPerformance, setOverallPerformance] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [loadingExecutives, setLoadingExecutives] = useState(false);
   
+  // Filters
   const [chartFilters, setChartFilters] = useState({
-    month: new Date().getMonth() + 1,
+    executive: '',
     year: new Date().getFullYear()
   });
 
@@ -76,37 +72,14 @@ const PerformanceView = () => {
     }
   }, [manuallyEligibleMonths]);
 
+  // Format executives for dropdown
   const allExecutives = useMemo(() => {
-    const execs = executives.map(exec => ({
+    return executives.map(exec => ({
       ...exec,
-      type: 'Sales',
-      displayName: `${exec.name} (Sales)`,
-      value: `executive_${exec._id}`
+      displayName: `${exec.name} (${exec.type})`,
+      value: `${exec.type}_${exec._id}`
     }));
-    
-    const serviceExecs = serviceExecutives.map(exec => ({
-      ...exec,
-      type: 'Service',
-      displayName: `${exec.name} (Service)`,
-      value: `service_${exec._id}`
-    }));
-    
-    const accountExecs = accounts.map(account => ({
-      ...account,
-      type: 'Account',
-      displayName: `${account.name} (Account)`,
-      value: `account_${account._id}`
-    }));
-    
-    const fieldExecs = fieldExecutives.map(exec => ({
-      ...exec,
-      type: 'Field',
-      displayName: `${exec.name} (Field)`,
-      value: `field_${exec._id || exec.name}`
-    }));
-    
-    return [...execs, ...serviceExecs, ...accountExecs, ...fieldExecs];
-  }, [executives, serviceExecutives, accounts, fieldExecutives]);
+  }, [executives]);
 
   const filteredExecutives = useMemo(() => {
     if (!searchTerm) return allExecutives;
@@ -120,6 +93,42 @@ const PerformanceView = () => {
   const selectedExecutiveObj = useMemo(() => {
     return allExecutives.find(exec => exec.value === selectedExecutive);
   }, [allExecutives, selectedExecutive]);
+
+  // Get executive monthly data for chart
+  const getExecutiveMonthlyData = useMemo(() => {
+    if (!performanceData?.detailedData?.byMonth || !chartFilters.executive || !chartFilters.year) {
+      return [];
+    }
+    
+    const monthlyData = performanceData.detailedData.byMonth;
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    // Create array of all months for the selected year
+    const allMonthsData = monthNames.map((month, index) => {
+      const monthNum = index + 1;
+      
+      // Find data for this month
+      const monthData = monthlyData.find(m => {
+        const [mName, mYear] = m.month.split(' ');
+        const mMonthIndex = new Date(`${mName} 1, 2000`).getMonth();
+        return mMonthIndex === index && parseInt(mYear) === chartFilters.year;
+      });
+      
+      return {
+        month: month,
+        monthNum: monthNum,
+        target: monthData?.target || 0,
+        achieved: monthData?.achieved || 0,
+        percentage: monthData?.percentage || 0,
+        orders: monthData?.orders || 0,
+        prospects: monthData?.prospects || 0,
+        advance: monthData?.advance || 0,
+        hasData: !!monthData
+      };
+    });
+    
+    return allMonthsData;
+  }, [performanceData, chartFilters.executive, chartFilters.year]);
 
   const calculateYearlyData = useMemo(() => {
     if (!performanceData || !performanceData.detailedData?.byMonth) {
@@ -309,17 +318,24 @@ const PerformanceView = () => {
 
     setLoading(true);
     try {
-      const [prefix, executiveId] = executiveValue.split('_');
+      const [executiveType, executiveId] = executiveValue.split('_');
       
       const params = { 
         executiveId,
-        executiveType: prefix,
+        executiveType,
         ...(dateRange.startDate && { startDate: dateRange.startDate }),
         ...(dateRange.endDate && { endDate: dateRange.endDate })
       };
       
       const res = await axios.get('/api/performance', { params });
       setPerformanceData(res.data);
+      
+      // Update chart filters with selected executive
+      setChartFilters(prev => ({
+        ...prev,
+        executive: executiveValue
+      }));
+      
     } catch (error) {
       console.error('Error fetching performance data:', error);
       alert('Failed to fetch performance data');
@@ -342,85 +358,18 @@ const PerformanceView = () => {
     }
   }, [employeeNameFromUrl, allExecutives]);
 
-  const fetchOverallPerformance = async (month = null, year = null) => {
-    setChartLoading(true);
-    try {
-      const params = {};
-      if (month !== '' && month !== null) params.month = month;
-      if (year !== '' && year !== null) params.year = year;
-      
-      const res = await axios.get('/api/performance/overall', { params });
-      setOverallPerformance(res.data);
-    } catch (error) {
-      console.error('Error fetching overall performance:', error);
-    } finally {
-      setChartLoading(false);
-    }
-  };
-
   const fetchAllExecutives = async () => {
     setLoadingExecutives(true);
     try {
-      const [execRes, fieldExecRes] = await Promise.all([
-        axios.get('/api/performance/executives'),
-        axios.get('/api/service-executives'),
-        axios.get('/api/accounts'),
-        axios.get('/api/field-executive/admin/executives').catch(() => ({ data: [] }))
-      ]);
-      
-      const filteredSalesExecs = execRes.data.filter(exec => 
-        exec.type !== 'executive' || (
-          exec.name.toLowerCase() !== 'sangeetha' && 
-          exec.name.toLowerCase() !== 'shivakumari' &&
-          exec.name.toLowerCase() !== 'malleshwari' &&
-          exec.name.toLowerCase() !== 'rajitha' &&
-          exec.name.toLowerCase() !== 'malli'
-        )
-      );
-      
-      const salesExecs = filteredSalesExecs.filter(exec => exec.type === 'executive');
-      const serviceExecs = filteredSalesExecs.filter(exec => exec.type === 'service');
-      const accountExecs = filteredSalesExecs.filter(exec => exec.type === 'account');
-      const fieldExecs = filteredSalesExecs.filter(exec => exec.type === 'field');
-      
-      let finalFieldExecs = fieldExecs;
-      if (fieldExecs.length === 0 && fieldExecRes.data && Array.isArray(fieldExecRes.data)) {
-        if (fieldExecRes.data.length > 0 && typeof fieldExecRes.data[0] === 'string') {
-          finalFieldExecs = fieldExecRes.data.map(name => ({
-            name: name,
-            _id: name,
-            type: 'field',
-            dateOfJoining: new Date('2024-01-01')
-          }));
-        } else {
-          finalFieldExecs = fieldExecRes.data.map(exec => ({
-            name: exec.name || exec._id,
-            _id: exec._id || exec.name,
-            type: 'field',
-            dateOfJoining: exec.joiningDate || exec.dateOfJoining || new Date('2024-01-01')
-          }));
-        }
-      }
-      
-      setExecutives(salesExecs);
-      setServiceExecutives(serviceExecs);
-      setAccounts(accountExecs);
-      setFieldExecutives(finalFieldExecs);
-      
+      const res = await axios.get('/api/performance/executives');
+      setExecutives(res.data);
     } catch (error) {
-      console.error('Error fetching executives data:', error);
+      console.error('Error fetching executives:', error);
       setExecutives([]);
-      setServiceExecutives([]);
-      setAccounts([]);
-      setFieldExecutives([]);
     } finally {
       setLoadingExecutives(false);
     }
   };
-
-  useEffect(() => {
-    fetchOverallPerformance(chartFilters.month, chartFilters.year);
-  }, [chartFilters.month, chartFilters.year]);
 
   useEffect(() => {
     fetchAllExecutives();
@@ -430,7 +379,7 @@ const PerformanceView = () => {
     const { name, value } = e.target;
     setChartFilters(prev => ({
       ...prev,
-      [name]: value ? parseInt(value) : ''
+      [name]: value
     }));
   };
 
@@ -443,36 +392,18 @@ const PerformanceView = () => {
     }));
   };
 
-  const monthOptions = [
-    { value: '', label: 'All Months' },
-    { value: 1, label: 'January' },
-    { value: 2, label: 'February' },
-    { value: 3, label: 'March' },
-    { value: 4, label: 'April' },
-    { value: 5, label: 'May' },
-    { value: 6, label: 'June' },
-    { value: 7, label: 'July' },
-    { value: 8, label: 'August' },
-    { value: 9, label: 'September' },
-    { value: 10, label: 'October' },
-    { value: 11, label: 'November' },
-    { value: 12, label: 'December' }
-  ];
-
-  const currentYear = new Date().getFullYear();
   const yearOptions = [
     { value: '', label: 'All Years' },
     ...Array.from({ length: 6 }, (_, i) => ({
-      value: currentYear - 4 + i,
-      label: (currentYear - 4 + i).toString()
+      value: new Date().getFullYear() - 4 + i,
+      label: (new Date().getFullYear() - 4 + i).toString()
     }))
   ];
 
-  // NEW: Format percentage display based on value
+  // Format percentage display based on value
   const formatPercentage = (percentage) => {
     if (!percentage || percentage <= 0) return '0%';
     if (percentage >= 100) {
-      // Convert to decimal format (150% -> 1.5%, 400% -> 4.0%)
       return `${(percentage / 100).toFixed(1)}%`;
     }
     return `${percentage.toFixed(1)}%`;
@@ -883,12 +814,13 @@ const PerformanceView = () => {
     chartFilterContainer: {
       display: 'flex',
       flexWrap: 'wrap',
-      gap: '15px',
-      marginBottom: '20px',
-      justifyContent: 'center'
+      gap: '20px',
+      marginBottom: '25px',
+      justifyContent: 'center',
+      alignItems: 'flex-end'
     },
     chartFilterGroup: {
-      minWidth: '200px',
+      minWidth: '280px',
       flex: '1'
     },
     yearlyFilterContainer: {
@@ -898,7 +830,7 @@ const PerformanceView = () => {
       marginBottom: '20px'
     },
     yearlyFilterGroup: {
-      minWidth: '200px',
+      minWidth: '250px',
       flex: '1'
     },
     resultsHeader: {
@@ -961,13 +893,12 @@ const PerformanceView = () => {
       fontStyle: 'italic',
       textAlign: 'right'
     },
-    permissionTooltip: {
-      position: 'relative',
-      display: 'inline-block'
-    },
-    restrictedItem: {
-      opacity: 0.7,
-      cursor: 'not-allowed'
+    executiveSelector: {
+      border: '2px solid #3498db',
+      borderRadius: '8px',
+      padding: '15px',
+      backgroundColor: '#ebf5ff',
+      marginBottom: '15px'
     }
   };
 
@@ -1095,12 +1026,11 @@ const PerformanceView = () => {
     };
   };
 
-  // UPDATED: Custom tooltip with formatted percentage
+  // Custom tooltip with formatted percentage
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       const target = payload[0]?.value || 0;
       const achieved = payload[1]?.value || 0;
-      const performance = payload[2]?.value || 0;
       
       return (
         <div style={{
@@ -1124,9 +1054,6 @@ const PerformanceView = () => {
           <p style={{ margin: '2px 0', color: '#e74c3c' }}>
             Balance: ₹{(achieved - target)?.toLocaleString('en-IN') || 0}
           </p>
-          <p style={{ margin: '5px 0 0 0', fontWeight: '600', color: '#f39c12' }}>
-            Performance: {formatPercentage(performance)}
-          </p>
         </div>
       );
     }
@@ -1134,21 +1061,118 @@ const PerformanceView = () => {
   };
 
   const getChartSubtitle = () => {
-    const monthName = chartFilters.month ? monthOptions.find(m => m.value === chartFilters.month)?.label : 'All Months';
+    const executiveName = selectedExecutiveObj?.name || 'Selected Executive';
     const yearText = chartFilters.year ? chartFilters.year.toString() : 'All Years';
-    
-    if (!chartFilters.month && !chartFilters.year) {
-      return 'All Time Performance Data';
-    } else if (chartFilters.month && chartFilters.year) {
-      return `Performance for ${monthName} ${yearText}`;
-    } else if (chartFilters.month) {
-      return `Performance for ${monthName} (All Years)`;
-    } else {
-      return `Performance for Year ${yearText} (All Months)`;
-    }
+    return `${executiveName} - Monthly Performance for ${yearText}`;
   };
 
-  // UPDATED: renderPerformanceBox with formatted percentage
+  // Render executive monthly performance chart
+  const renderExecutiveMonthlyChart = () => {
+    if (!selectedExecutive) {
+      return (
+        <div style={styles.noDataText}>
+          Please select an executive to view monthly performance
+        </div>
+      );
+    }
+
+    if (getExecutiveMonthlyData.length === 0) {
+      return (
+        <div style={styles.noDataText}>
+          No performance data available for the selected executive and year
+        </div>
+      );
+    }
+
+    const chartData = getExecutiveMonthlyData;
+    const yAxisProps = getYAxisProps(chartData);
+    const yTickFormatter = getYTickFormatter(chartData);
+
+    return (
+      <div>
+        <div style={styles.chartSubtitle}>
+          {getChartSubtitle()}
+        </div>
+        <ResponsiveContainer width="100%" height={400}>
+          <BarChart
+            data={chartData}
+            margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis 
+              dataKey="month" 
+              angle={0}
+              textAnchor="middle"
+              height={50}
+              tick={{ fontSize: 12 }}
+            />
+            <YAxis 
+              tickFormatter={yTickFormatter}
+              tick={{ fontSize: 12 }}
+              domain={yAxisProps.domain}
+              tickCount={yAxisProps.tickCount}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend wrapperStyle={{ paddingTop: '10px' }} />
+            <Bar 
+              dataKey="target" 
+              name="Target Amount" 
+              fill="#3498db"
+              radius={[4, 4, 0, 0]}
+            />
+            <Bar 
+              dataKey="achieved" 
+              name="Achieved Amount" 
+              fill="#2ecc71"
+              radius={[4, 4, 0, 0]}
+            >
+              {chartData.map((entry, index) => (
+                <Cell 
+                  key={`cell-${index}`} 
+                  fill={entry.hasData ? getPerformanceColor(entry.percentage) : '#ecf0f1'} 
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+        
+        <div style={{ 
+          display: 'flex', 
+          flexWrap: 'wrap',
+          justifyContent: 'center', 
+          marginTop: '15px',
+          gap: '8px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
+            <div style={{ width: '12px', height: '12px', backgroundColor: '#e74c3c', marginRight: '4px' }}></div>
+            <span style={{ fontSize: '11px' }}>0-35%</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
+            <div style={{ width: '12px', height: '12px', backgroundColor: '#f1c40f', marginRight: '4px' }}></div>
+            <span style={{ fontSize: '11px' }}>35-50%</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
+            <div style={{ width: '12px', height: '12px', backgroundColor: '#f39c12', marginRight: '4px' }}></div>
+            <span style={{ fontSize: '11px' }}>50-75%</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
+            <div style={{ width: '12px', height: '12px', backgroundColor: '#2ecc71', marginRight: '4px' }}></div>
+            <span style={{ fontSize: '11px' }}>75-100%</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
+            <div style={{ width: '12px', height: '12px', backgroundColor: '#9b59b6', marginRight: '4px' }}></div>
+            <span style={{ fontSize: '11px' }}>100-150% (1.0x-1.5x)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
+            <div style={{ width: '12px', height: '12px', backgroundColor: '#ff69b4', marginRight: '4px' }}></div>
+            <span style={{ fontSize: '11px' }}>150%+ (1.5x+)</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render performance box with formatted percentage
   const renderPerformanceBox = (percentage) => {
     if (!percentage || percentage <= 0) {
       return (
@@ -1243,186 +1267,11 @@ const PerformanceView = () => {
     );
   };
 
-  // UPDATED: renderOverallPerformanceChart with updated legend
-  const renderOverallPerformanceChart = () => {
-    if (chartLoading) {
-      return <div style={styles.loadingText}>Loading performance chart...</div>;
-    }
-
-    if (!overallPerformance || overallPerformance.length === 0) {
-      return <div style={styles.noDataText}>No performance data available for the selected period</div>;
-    }
-
-    const topPerformers = [...overallPerformance]
-      .sort((a, b) => b.performancePercentage - a.performancePercentage)
-      .slice(0, 10);
-
-    const chartData = topPerformers.map(exec => ({
-      name: exec.executiveName.length > 15 ? exec.executiveName.substring(0, 15) + '...' : exec.executiveName,
-      fullName: exec.executiveName,
-      target: exec.totalTarget || 0,
-      achieved: exec.totalAchieved || 0,
-      performance: exec.performancePercentage || 0,
-      type: exec.executiveType,
-      balance: (exec.totalAchieved || 0) - (exec.totalTarget || 0)
-    }));
-
-    const yAxisProps = getYAxisProps(chartData);
-    const yTickFormatter = getYTickFormatter(chartData);
-
-    return (
-      <div>
-        <div style={styles.chartSubtitle}>
-          {getChartSubtitle()}
-        </div>
-        <ResponsiveContainer width="100%" height={400}>
-          <BarChart
-            data={chartData}
-            margin={{ top: 20, right: 10, left: 10, bottom: 60 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis 
-              dataKey="name" 
-              angle={-45}
-              textAnchor="end"
-              height={80}
-              tick={{ fontSize: 12 }}
-            />
-            <YAxis 
-              tickFormatter={yTickFormatter}
-              tick={{ fontSize: 12 }}
-              domain={yAxisProps.domain}
-              tickCount={yAxisProps.tickCount}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend wrapperStyle={{ paddingTop: '10px' }} />
-            <Bar 
-              dataKey="target" 
-              name="Target Amount" 
-              fill="#3498db"
-              radius={[2, 2, 0, 0]}
-            />
-            <Bar 
-              dataKey="achieved" 
-              name="Achieved Amount" 
-              fill="#2ecc71"
-              radius={[2, 2, 0, 0]}
-            >
-              {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={getPerformanceColor(entry.performance)} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-        
-        <div style={{ 
-          display: 'flex', 
-          flexWrap: 'wrap',
-          justifyContent: 'center', 
-          marginTop: '15px',
-          gap: '8px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#e74c3c', marginRight: '4px' }}></div>
-            <span style={{ fontSize: '11px' }}>0-35%</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#f1c40f', marginRight: '4px' }}></div>
-            <span style={{ fontSize: '11px' }}>35-50%</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#f39c12', marginRight: '4px' }}></div>
-            <span style={{ fontSize: '11px' }}>50-75%</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#2ecc71', marginRight: '4px' }}></div>
-            <span style={{ fontSize: '11px' }}>75-100%</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#9b59b6', marginRight: '4px' }}></div>
-            <span style={{ fontSize: '11px' }}>100-150% (1.0x-1.5x)</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#ff69b4', marginRight: '4px' }}></div>
-            <span style={{ fontSize: '11px' }}>150%+ (1.5x+)</span>
-          </div>
-        </div>
-
-        <div style={{ 
-          display: 'flex', 
-          flexWrap: 'wrap',
-          justifyContent: 'center', 
-          marginTop: '12px',
-          gap: '12px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <div style={{ 
-              width: '10px', 
-              height: '10px', 
-              backgroundColor: '#3498db', 
-              marginRight: '4px',
-              borderRadius: '2px'
-            }}></div>
-            <span style={{ fontSize: '11px', color: '#7f8c8d' }}>Target</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <div style={{ 
-              width: '10px', 
-              height: '10px', 
-              backgroundColor: '#2ecc71', 
-              marginRight: '4px',
-              borderRadius: '2px'
-            }}></div>
-            <span style={{ fontSize: '11px', color: '#7f8c8d' }}>Achieved</span>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderChartFilters = () => {
-    return (
-      <div style={styles.chartFilterContainer}>
-        <div style={styles.chartFilterGroup}>
-          <label htmlFor="month" style={styles.label}>Filter by Month</label>
-          <select
-            name="month"
-            value={chartFilters.month}
-            onChange={handleChartFilterChange}
-            style={styles.select}
-          >
-            {monthOptions.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        
-        <div style={styles.chartFilterGroup}>
-          <label htmlFor="year" style={styles.label}>Filter by Year</label>
-          <select
-            name="year"
-            value={chartFilters.year}
-            onChange={handleChartFilterChange}
-            style={styles.select}
-          >
-            {yearOptions.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-    );
-  };
-
   const renderYearlyFilter = () => {
     return (
       <div style={styles.yearlyFilterContainer}>
         <div style={styles.yearlyFilterGroup}>
-          <label htmlFor="year" style={styles.label}>Filter Data by Year</label>
+          <label htmlFor="year" style={styles.label}>Filter Monthly Data by Year</label>
           <select
             name="year"
             value={yearlyFilter.year}
@@ -1459,7 +1308,7 @@ const PerformanceView = () => {
     );
   };
 
-  // UPDATED: renderMonthlyTargets with formatted percentage
+  // Render monthly targets
   const renderMonthlyTargets = () => {
     if (!performanceData?.detailedData?.byMonth) return null;
 
@@ -1562,8 +1411,6 @@ const PerformanceView = () => {
           </div>
           {!canNavigateToOrders && (
             <div style={styles.permissionMessage}>
-           
-           
             </div>
           )}
           
@@ -1590,8 +1437,6 @@ const PerformanceView = () => {
           </div>
           {!canNavigateToProspects && (
             <div style={styles.permissionMessage}>
-           
-           
             </div>
           )}
           
@@ -1659,9 +1504,45 @@ const PerformanceView = () => {
     <div style={styles.container}>
       <h1 style={styles.heading}>Executive Performance Dashboard</h1>
 
+      {/* Chart Filters - Select Executive and Year */}
       <div style={styles.chartContainer}>
-        {renderChartFilters()}
-        {renderOverallPerformanceChart()}
+        <h2 style={styles.chartTitle}>Monthly Performance Chart</h2>
+        <div style={styles.chartFilterContainer}>
+          <div style={styles.chartFilterGroup}>
+            <label htmlFor="executive" style={styles.label}>Select Executive</label>
+            <select
+              name="executive"
+              value={chartFilters.executive}
+              onChange={handleChartFilterChange}
+              style={styles.select}
+            >
+              <option value="">-- Select Executive --</option>
+              {allExecutives.map(exec => (
+                <option key={exec.value} value={exec.value}>
+                  {exec.name} ({exec.type})
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <div style={styles.chartFilterGroup}>
+            <label htmlFor="year" style={styles.label}>Select Year</label>
+            <select
+              name="year"
+              value={chartFilters.year}
+              onChange={handleChartFilterChange}
+              style={styles.select}
+            >
+              {yearOptions.filter(opt => opt.value !== '').map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        
+        {renderExecutiveMonthlyChart()}
       </div>
 
       <div style={styles.formContainer}>
@@ -1669,7 +1550,7 @@ const PerformanceView = () => {
         <form onSubmit={handleSubmit}>
           <div style={styles.formRow}>
             <div style={styles.formGroup}>
-              <label htmlFor="executive" style={styles.label}>Select Executive</label>
+              <label htmlFor="executive" style={styles.label}>Select Executive *</label>
               <div style={styles.searchContainer}>
                 {loadingExecutives ? (
                   <div style={{ 
@@ -1697,9 +1578,9 @@ const PerformanceView = () => {
                       <div style={styles.dropdownList}>
                         {filteredExecutives.map((exec) => {
                           let badgeColor = '#3498db';
-                          if (exec.type === 'Service') badgeColor = '#2ecc71';
-                          if (exec.type === 'Account') badgeColor = '#9b59b6';
-                          if (exec.type === 'Field') badgeColor = '#e74c3c';
+                          if (exec.type === 'service') badgeColor = '#2ecc71';
+                          if (exec.type === 'account') badgeColor = '#9b59b6';
+                          if (exec.type === 'field') badgeColor = '#e74c3c';
                           
                           return (
                             <div
@@ -1712,6 +1593,11 @@ const PerformanceView = () => {
                                 setSelectedExecutive(exec.value);
                                 setSearchTerm(exec.name);
                                 setShowDropdown(false);
+                                // Also update chart filter
+                                setChartFilters(prev => ({
+                                  ...prev,
+                                  executive: exec.value
+                                }));
                               }}
                             >
                               <span style={{ flex: 1, marginRight: '10px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{exec.name}</span>
@@ -1737,7 +1623,7 @@ const PerformanceView = () => {
             </div>
 
             <div style={styles.formGroup}>
-              <label style={styles.label}>Date Range</label>
+              <label style={styles.label}>Date Range (Optional)</label>
               <div style={styles.dateRangeContainer}>
                 <div style={styles.dateInputContainer}>
                   <input
@@ -1766,10 +1652,10 @@ const PerformanceView = () => {
 
           <button
             type="submit"
-            disabled={loading || loadingExecutives}
+            disabled={loading || loadingExecutives || !selectedExecutive}
             style={{
               ...styles.button,
-              ...((loading || loadingExecutives) ? styles.buttonDisabled : {})
+              ...((loading || loadingExecutives || !selectedExecutive) ? styles.buttonDisabled : {})
             }}
           >
             {loading ? 'Loading...' : (loadingExecutives ? 'Loading Executives...' : 'View Performance Report')}
@@ -1844,8 +1730,6 @@ const PerformanceView = () => {
               </div>
               {!canNavigateToProspects && (
                 <div style={styles.permissionMessage}>
-             
-             
                 </div>
               )}
               
@@ -1915,15 +1799,13 @@ const PerformanceView = () => {
               </div>
               {!canNavigateToOrders && (
                 <div style={styles.permissionMessage}>
-             
-             
                 </div>
               )}
             </div>
           </div>
 
           <div style={styles.monthlySection}>
-            <h3 style={styles.monthlyHeader}>Monthly Performance Breakdown</h3>
+            <h3 style={styles.monthlyHeader}>Monthly Performance Breakdown for {yearlyFilter.year || 'All Years'}</h3>
             <div style={styles.monthlyGrid}>
               {renderMonthlyTargets()}
             </div>
@@ -1989,7 +1871,7 @@ const PerformanceView = () => {
             min-width: 100% !important;
           }
           
-          div[style*="minWidth: 200px"] {
+          div[style*="minWidth: 280px"] {
             min-width: 100% !important;
           }
           

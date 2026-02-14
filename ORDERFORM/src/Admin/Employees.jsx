@@ -685,409 +685,483 @@ export default function Employees() {
         <SalaryComponent employees={Object.values(employeeCategories).flat()} />
       )}
 
-      {editModal.isOpen && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h3>Edit Employee Details</h3>
-              <button
-                className="close-button"
-                onClick={() => {
-                  setEditModal({
-                    isOpen: false,
-                    employee: null,
-                    currentCategory: '',
-                    originalCategory: ''
-                  });
-                }}
+    {editModal.isOpen && (
+  <div className="modal-overlay">
+    <div className="modal-content">
+      <div className="modal-header">
+        <h3>Edit Employee Details</h3>
+        <button
+          className="close-button"
+          onClick={() => {
+            setEditModal({
+              isOpen: false,
+              employee: null,
+              currentCategory: '',
+              originalCategory: '',
+              showRejoinDate: false
+            });
+          }}
+        >
+          &times;
+        </button>
+      </div>
+
+      <div className="form-container">
+        {/* Profile Image Section */}
+        <div className="form-section">
+          <div className="form-group">
+            <label>Employee Avatar</label>
+            <div className="initials-display-container">
+              <div
+                className="employee-initials-large"
+                style={{ backgroundColor: getAvatarColor(editModal.employee.name) }}
               >
-                &times;
-              </button>
-            </div>
-
-            <div className="form-container">
-              <div className="form-section">
-                <div className="form-group">
-                  <label>Employee Initials</label>
-                  <div className="initials-display-container">
-                    <div
-                      className="employee-initials-large"
-                      style={{ backgroundColor: getAvatarColor(editModal.employee.name) }}
-                    >
-                      {getInitials(editModal.employee.name)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-section">
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Full Name*</label>
-                    <input
-                      type="text"
-                      value={editModal.employee.name || ''}
-                      onChange={(e) =>
-                        setEditModal(prev => ({
-                          ...prev,
-                          employee: {
-                            ...prev.employee,
-                            name: e.target.value
-                          }
-                        }))
-                      }
-                      placeholder="Enter full name"
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Username*</label>
-                    <input
-                      type="text"
-                      value={editModal.employee.username || ''}
-                      onChange={(e) =>
-                        setEditModal(prev => ({
-                          ...prev,
-                          employee: {
-                            ...prev.employee,
-                            username: e.target.value
-                          }
-                        }))
-                      }
-                      placeholder="Enter username"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Email Address</label>
-                    <input
-                      type="email"
-                      value={editModal.employee.email || ''}
-                      onChange={(e) =>
-                        setEditModal(prev => ({
-                          ...prev,
-                          employee: {
-                            ...prev.employee,
-                            email: e.target.value
-                          }
-                        }))
-                      }
-                      placeholder="employee@gmail.com"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Contact Number*</label>
-                    <input
-                      type="tel"
-                      value={editModal.employee.phone || ''}
-                      onChange={(e) =>
-                        setEditModal(prev => ({
-                          ...prev,
-                          employee: {
-                            ...prev.employee,
-                            phone: e.target.value
-                          }
-                        }))
-                      }
-                      placeholder="+91 9876543210"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-section">
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Role/Department*</label>
-                    <select
-                      value={editModal.currentCategory}
-                      onChange={(e) =>
-                        setEditModal(prev => ({
-                          ...prev,
-                          currentCategory: e.target.value
-                        }))
-                      }
-                      required
-                    >
-                      <option value="">Select Role</option>
-                      {roleOptions.map(role => (
-                        <option key={role} value={role}>{role}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Parent/Guardian Name</label>
-                    <input
-                      type="text"
-                      value={editModal.employee.guardianName || ''}
-                      onChange={(e) =>
-                        setEditModal(prev => ({
-                          ...prev,
-                          employee: {
-                            ...prev.employee,
-                            guardianName: e.target.value
-                          }
-                        }))
-                      }
-                      placeholder="Full name"
-                    />
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Aadhar Card Number</label>
-                    <input
-                      type="text"
-                      value={editModal.employee.aadhar || ''}
-                      onChange={(e) =>
-                        setEditModal(prev => ({
-                          ...prev,
-                          employee: {
-                            ...prev.employee,
-                            aadhar: e.target.value
-                          }
-                        }))
-                      }
-                      placeholder="12-digit Aadhar number"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Date of Joining</label>
-                    <input
-                      type="date"
-                      value={editModal.employee.joiningDate || ''}
-                      onChange={(e) =>
-                        setEditModal(prev => ({
-                          ...prev,
-                          employee: {
-                            ...prev.employee,
-                            joiningDate: e.target.value
-                          }
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Past Experience (years)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="50"
-                      value={editModal.employee.experience || ''}
-                      onChange={(e) =>
-                        setEditModal(prev => ({
-                          ...prev,
-                          employee: {
-                            ...prev.employee,
-                            experience: e.target.value
-                          }
-                        }))
-                      }
-                      placeholder="Years of experience"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="form-group">
-                    <label>Parent/Guardian Contcat Number</label>
-                    <input
-                      type="text"
-                      value={editModal.employee.guardianContact|| ''}
-                      onChange={(e) =>
-                        setEditModal(prev => ({
-                          ...prev,
-                          employee: {
-                            ...prev.employee,
-                            guardianName: e.target.value
-                          }
-                        }))
-                      }
-                      placeholder="Contact Number "
-                    />
-                  </div>
-
-              <div className="form-group">
-                <label>Employment Status</label>
-                <div className="status-toggle">
-                  <button
-                    type="button"
-                    className={`status-option ${editModal.employee.active ? 'active' : ''}`}
-                    data-status="active"
-                    onClick={() => {
-                      const wasInactive = !editModal.employee.active;
-                      
-                      if (wasInactive) {
-                        // If activating an inactive employee, ask for rejoin date
-                        const rejoinDate = prompt('Please enter rejoin date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
-                        if (!rejoinDate) return;
-
-                        const newEmployeeState = {
-                          ...editModal.employee,
-                          active: true,
-                          rejoinDate: rejoinDate,
-                          resignationDate: '',
-                          resignationReason: ''
-                        };
-
-                        setEditModal(prev => ({
-                          ...prev,
-                          employee: newEmployeeState,
-                          showRejoinDate: true
-                        }));
-                      } else {
-                        // If already active, just keep it active
-                        const newEmployeeState = {
-                          ...editModal.employee,
-                          active: true
-                        };
-
-                        setEditModal(prev => ({
-                          ...prev,
-                          employee: newEmployeeState,
-                          showRejoinDate: false
-                        }));
-                      }
-                    }}
-                  >
-                    <span className="status-indicator active"></span>
-                    Active
-                  </button>
-                  <button
-                    type="button"
-                    className={`status-option ${!editModal.employee.active ? 'active' : ''}`}
-                    data-status="inactive"
-                    onClick={() => {
-                      // If deactivating an active employee, ask for resignation details
-                      const resignationDate = prompt('Please enter resignation date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
-                      if (!resignationDate) return;
-                      
-                      const resignationReason = prompt('Please enter reason for resignation:');
-                      if (resignationReason === null) return;
-
-                      const newEmployeeState = {
-                        ...editModal.employee,
-                        active: false,
-                        resignationDate: resignationDate,
-                        resignationReason: resignationReason || 'No reason provided',
-                        rejoinDate: ''
-                      };
-
-                      setEditModal(prev => ({
-                        ...prev,
-                        employee: newEmployeeState,
-                        showRejoinDate: false
-                      }));
-                    }}
-                  >
-                    <span className="status-indicator inactive"></span>
-                    Inactive
-                  </button>
-                </div>
-              </div>
-
-              {editModal.employee.rejoinDate && (
-                <div className="form-group">
-                  <label>Rejoin Date</label>
-                  <input
-                    type="date"
-                    value={editModal.employee.rejoinDate}
-                    readOnly
-                  />
-                </div>
-              )}
-
-              <div className="form-group">
-                <label>Employee ID</label>
-                <div className="employee-id-display">
-                  {editModal.employee.employeeId ||
-                    `EMP-${(editModal.employee.name || 'XXXX').replace(/\s+/g, '').slice(0, 4).toUpperCase()}${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`}
-                </div>
+                {getInitials(editModal.employee.name)}
               </div>
             </div>
-
-            {!editModal.employee.active && (
-              <div className="form-section full-width">
-                <h4 className="section-title">Resignation Details</h4>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Resignation Date</label>
-                    <input
-                      type="date"
-                      value={editModal.employee.resignationDate || ''}
-                      onChange={(e) =>
-                        setEditModal(prev => ({
-                          ...prev,
-                          employee: {
-                            ...prev.employee,
-                            resignationDate: e.target.value
-                          }
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Reason for Resignation</label>
-                    <input
-                      type="text"
-                      value={editModal.employee.resignationReason || ''}
-                      onChange={(e) =>
-                        setEditModal(prev => ({
-                          ...prev,
-                          employee: {
-                            ...prev.employee,
-                            resignationReason: e.target.value
-                          }
-                        }))
-                      }
-                      placeholder="Enter reason for resignation"
-                    />
-                  </div>
-                </div>
-              </div>
+          </div>
+          
+          <div className="form-group">
+            <label>Profile Image</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) =>
+                setEditModal(prev => ({
+                  ...prev,
+                  employee: {
+                    ...prev.employee,
+                    imageFile: e.target.files[0]
+                  }
+                }))
+              }
+            />
+            {editModal.employee.imageUrl && !editModal.employee.imageFile && (
+              <small>Current image: {editModal.employee.imageUrl.split('/').pop()}</small>
             )}
+          </div>
+        </div>
 
-            <div className="modal-footer">
-              <button
-                className="cancel-button"
-                onClick={() => {
-                  setEditModal({
-                    isOpen: false,
-                    employee: null,
-                    currentCategory: '',
-                    originalCategory: ''
-                  });
+        {/* Basic Information Section */}
+        <div className="form-section">
+          <h4 className="section-title">Basic Information</h4>
+          
+          <div className="form-row">
+            <div className="form-group">
+              <label>Full Name*</label>
+              <input
+                type="text"
+                value={editModal.employee.name || ''}
+                onChange={(e) =>
+                  setEditModal(prev => ({
+                    ...prev,
+                    employee: {
+                      ...prev.employee,
+                      name: e.target.value
+                    }
+                  }))
+                }
+                placeholder="Enter full name"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Username*</label>
+              <input
+                type="text"
+                value={editModal.employee.username || ''}
+                onChange={(e) =>
+                  setEditModal(prev => ({
+                    ...prev,
+                    employee: {
+                      ...prev.employee,
+                      username: e.target.value
+                    }
+                  }))
+                }
+                placeholder="Enter username"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Email Address</label>
+              <input
+                type="email"
+                value={editModal.employee.email || ''}
+                onChange={(e) =>
+                  setEditModal(prev => ({
+                    ...prev,
+                    employee: {
+                      ...prev.employee,
+                      email: e.target.value
+                    }
+                  }))
+                }
+                placeholder="employee@company.com"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Phone Number*</label>
+              <input
+                type="tel"
+                value={editModal.employee.phone || ''}
+                onChange={(e) =>
+                  setEditModal(prev => ({
+                    ...prev,
+                    employee: {
+                      ...prev.employee,
+                      phone: e.target.value
+                    }
+                  }))
+                }
+                placeholder="10-digit mobile number"
+                maxLength={10}
+                onKeyPress={(e) => {
+                  if (!/^\d$/.test(e.key)) {
+                    e.preventDefault();
+                  }
                 }}
-              >
-                Discard Changes
-              </button>
-              <button
-                className="download-individual-button"
-                onClick={() => downloadIndividualData(editModal.employee)}
-              >
-                Download Data
-              </button>
-              <button
-                className="save-button"
-                onClick={handleSave}
-              >
-                Save Changes
-              </button>
+                required
+              />
             </div>
           </div>
         </div>
-      )}
+
+        {/* Personal Details Section - PARENT/GUARDIAN INFO */}
+        <div className="form-section">
+          <h4 className="section-title">Personal Details</h4>
+          
+          <div className="form-row">
+            <div className="form-group">
+              <label>Parent/Guardian Name</label>
+              <input
+                type="text"
+                value={editModal.employee.guardianName || ''}
+                onChange={(e) =>
+                  setEditModal(prev => ({
+                    ...prev,
+                    employee: {
+                      ...prev.employee,
+                      guardianName: e.target.value
+                    }
+                  }))
+                }
+                placeholder="Enter parent/guardian full name"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Parent/Guardian Contact Number</label>
+              <input
+                type="text"
+                value={editModal.employee.guardianContact || ''}
+                onChange={(e) =>
+                  setEditModal(prev => ({
+                    ...prev,
+                    employee: {
+                      ...prev.employee,
+                      guardianContact: e.target.value
+                    }
+                  }))
+                }
+                placeholder="10-digit contact number"
+                maxLength={10}
+                onKeyPress={(e) => {
+                  if (!/^\d$/.test(e.key)) {
+                    e.preventDefault();
+                  }
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Aadhar Card Number</label>
+              <input
+                type="text"
+                value={editModal.employee.aadhar || ''}
+                onChange={(e) =>
+                  setEditModal(prev => ({
+                    ...prev,
+                    employee: {
+                      ...prev.employee,
+                      aadhar: e.target.value
+                    }
+                  }))
+                }
+                placeholder="12-digit Aadhar number"
+                maxLength={12}
+                onKeyPress={(e) => {
+                  if (!/^\d$/.test(e.key)) {
+                    e.preventDefault();
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Employment Details Section - JOINING DATE & EXPERIENCE */}
+        <div className="form-section">
+          <h4 className="section-title">Employment Details</h4>
+          
+          <div className="form-row">
+            <div className="form-group">
+              <label>Date of Joining</label>
+              <input
+                type="date"
+                value={editModal.employee.joiningDate ? 
+                  (typeof editModal.employee.joiningDate === 'string' 
+                    ? editModal.employee.joiningDate.split('T')[0] 
+                    : new Date(editModal.employee.joiningDate).toISOString().split('T')[0]
+                  ) : ''
+                }
+                onChange={(e) =>
+                  setEditModal(prev => ({
+                    ...prev,
+                    employee: {
+                      ...prev.employee,
+                      joiningDate: e.target.value
+                    }
+                  }))
+                }
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Past Experience (years)</label>
+              <input
+                type="number"
+                min="0"
+                max="50"
+                step="0.5"
+                value={editModal.employee.experience || ''}
+                onChange={(e) =>
+                  setEditModal(prev => ({
+                    ...prev,
+                    employee: {
+                      ...prev.employee,
+                      experience: e.target.value
+                    }
+                  }))
+                }
+                placeholder="Years of experience"
+              />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Role/Department*</label>
+              <select
+                value={editModal.currentCategory}
+                onChange={(e) =>
+                  setEditModal(prev => ({
+                    ...prev,
+                    currentCategory: e.target.value
+                  }))
+                }
+                required
+              >
+                <option value="">Select Role</option>
+                {roleOptions.map(role => (
+                  <option key={role} value={role}>{role}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Employee ID</label>
+              <div className="employee-id-display">
+                {editModal.employee.employeeId ||
+                  `EMP-${(editModal.employee.name || 'XXXX').replace(/\s+/g, '').slice(0, 4).toUpperCase()}${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Employment Status Section */}
+        <div className="form-section full-width">
+          <h4 className="section-title">Employment Status</h4>
+          
+          <div className="form-group">
+            <div className="status-toggle">
+              <button
+                type="button"
+                className={`status-option ${editModal.employee.active ? 'active' : ''}`}
+                data-status="active"
+                onClick={() => {
+                  const wasInactive = !editModal.employee.active;
+                  
+                  if (wasInactive) {
+                    // If activating an inactive employee, ask for rejoin date
+                    const rejoinDate = prompt('Please enter rejoin date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
+                    if (!rejoinDate) return;
+
+                    setEditModal(prev => ({
+                      ...prev,
+                      employee: {
+                        ...prev.employee,
+                        active: true,
+                        rejoinDate: rejoinDate,
+                        resignationDate: '',
+                        resignationReason: ''
+                      },
+                      showRejoinDate: true
+                    }));
+                  } else {
+                    // If already active, just keep it active
+                    setEditModal(prev => ({
+                      ...prev,
+                      employee: {
+                        ...prev.employee,
+                        active: true
+                      },
+                      showRejoinDate: false
+                    }));
+                  }
+                }}
+              >
+                <span className="status-indicator active"></span>
+                Active
+              </button>
+              
+              <button
+                type="button"
+                className={`status-option ${!editModal.employee.active ? 'active' : ''}`}
+                data-status="inactive"
+                onClick={() => {
+                  // If deactivating an active employee, ask for resignation details
+                  const resignationDate = prompt('Please enter resignation date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
+                  if (!resignationDate) return;
+                  
+                  const resignationReason = prompt('Please enter reason for resignation:');
+                  if (resignationReason === null) return;
+
+                  setEditModal(prev => ({
+                    ...prev,
+                    employee: {
+                      ...prev.employee,
+                      active: false,
+                      resignationDate: resignationDate,
+                      resignationReason: resignationReason || 'No reason provided',
+                      rejoinDate: ''
+                    },
+                    showRejoinDate: false
+                  }));
+                }}
+              >
+                <span className="status-indicator inactive"></span>
+                Inactive
+              </button>
+            </div>
+          </div>
+
+          {editModal.employee.rejoinDate && (
+            <div className="form-group">
+              <label>Rejoin Date</label>
+              <input
+                type="date"
+                value={typeof editModal.employee.rejoinDate === 'string' 
+                  ? editModal.employee.rejoinDate.split('T')[0] 
+                  : new Date(editModal.employee.rejoinDate).toISOString().split('T')[0]
+                }
+                readOnly
+                className="readonly-field"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Resignation Details Section - Only shown for inactive employees */}
+        {!editModal.employee.active && (
+          <div className="form-section full-width">
+            <h4 className="section-title">Resignation Details</h4>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Resignation Date</label>
+                <input
+                  type="date"
+                  value={editModal.employee.resignationDate ? 
+                    (typeof editModal.employee.resignationDate === 'string' 
+                      ? editModal.employee.resignationDate.split('T')[0] 
+                      : new Date(editModal.employee.resignationDate).toISOString().split('T')[0]
+                    ) : ''
+                  }
+                  onChange={(e) =>
+                    setEditModal(prev => ({
+                      ...prev,
+                      employee: {
+                        ...prev.employee,
+                        resignationDate: e.target.value
+                      }
+                    }))
+                  }
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>Reason for Resignation</label>
+                <input
+                  type="text"
+                  value={editModal.employee.resignationReason || ''}
+                  onChange={(e) =>
+                    setEditModal(prev => ({
+                      ...prev,
+                      employee: {
+                        ...prev.employee,
+                        resignationReason: e.target.value
+                      }
+                    }))
+                  }
+                  placeholder="Enter reason for resignation"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Modal Footer with Action Buttons */}
+      <div className="modal-footer">
+        <button
+          className="cancel-button"
+          onClick={() => {
+            setEditModal({
+              isOpen: false,
+              employee: null,
+              currentCategory: '',
+              originalCategory: '',
+              showRejoinDate: false
+            });
+          }}
+        >
+          Cancel
+        </button>
+        
+        <button
+          className="download-individual-button"
+          onClick={() => downloadIndividualData(editModal.employee)}
+        >
+          Download Data
+        </button>
+        
+        <button
+          className="save-button"
+          onClick={handleSave}
+        >
+          Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       <style>{`
         .employee-directory {
@@ -1172,7 +1246,67 @@ export default function Employees() {
         .filter-buttons button:nth-child(2).active {
           background: #28a745;
         }
+.section-title {
+  color: #003366;
+  margin: 0 0 15px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eaeaea;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
 
+.form-section {
+  background: #f9f9f9;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.form-section.full-width {
+  width: 100%;
+}
+
+.readonly-field {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.employee-id-display {
+  padding: 10px 12px;
+  background-color: #f0f7ff;
+  border: 1px solid #cce5ff;
+  border-radius: 6px;
+  font-family: monospace;
+  color: #003366;
+  font-weight: 500;
+}
+
+.initials-display-container {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+}
+
+.employee-initials-large {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 36px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  border: 3px solid #003366;
+}
+
+small {
+  display: block;
+  margin-top: 5px;
+  color: #666;
+  font-size: 0.8rem;
+}
         .filter-buttons button:nth-child(3).active {
           background: #dc3545;
         }

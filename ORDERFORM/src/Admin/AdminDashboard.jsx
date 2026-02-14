@@ -828,6 +828,15 @@ function AdminDashboard() {
               >
                 View All Orders
               </NavLink>
+                <NavLink
+                to="view-leaves"
+                style={linkStyle('view-leaves')}
+                onMouseEnter={() => setHoveredItem('view-leaves')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                View Leave Requests
+              </NavLink>
               <NavLink
                 to="parties"
                 style={linkStyle('parties')}

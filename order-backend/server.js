@@ -48,6 +48,7 @@ const purchase = require('./routes/purchase'); // ADD THIS LINE
 const whatsapp =require("./routes/whatsapp")
 const salaryRoutes = require('./routes/salaryRoutes');
 const greetingsRoutes = require('./routes/greetings');
+const leaveRoutes = require('./routes/leaveRoutes');
 const app = express();
 runReminderCron();
 
@@ -55,6 +56,7 @@ runReminderCron();
 app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use('/api', leaveRoutes);
 app.use('/api/salaries', salaryRoutes);
 app.use('/api/purchases', purchase); // ADD THIS LINE
 app.use("/api/followup",whatsapp)
