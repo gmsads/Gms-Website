@@ -9,6 +9,9 @@ const SalaryComponent = ({ employees }) => {
   // State for basic salary input value
   const [basicSalary, setBasicSalary] = useState('');
   
+  // State for selected employee
+  const [selectedEmployee, setSelectedEmployee] = useState('');
+  
   // Loading state for API calls
   const [loading, setLoading] = useState(false);
   
@@ -22,7 +25,8 @@ const SalaryComponent = ({ employees }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   
   // Filtered list of active employees
-  const [filteredEmployees, setFilteredEmployees] = useState([]);  
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
+  
   // Available months that have payment records
   const [availableMonths, setAvailableMonths] = useState([]);
   
@@ -38,67 +42,65 @@ const SalaryComponent = ({ employees }) => {
   // State to track which employee is being paid
   const [payingEmployee, setPayingEmployee] = useState(null);
 
-  // State for editing basic salary only
-  const [editingEmployee, setEditingEmployee] = useState(null);
-  const [editBasicSalary, setEditBasicSalary] = useState('');
-  
   // Payment history view state
   const [viewPaymentHistory, setViewPaymentHistory] = useState(null);
 
   // Month selection dialog state
   const [selectingMonthFor, setSelectingMonthFor] = useState(null);
 
+  // Function to show user messages with auto-hide
+  const showMessage = (text, type) => {
+    setMessage({ show: true, text, type });
+    setTimeout(() => setMessage({ show: false, text: '', type: '' }), 5000);
+  };
+
   // useEffect hook to load data from localStorage when component mounts
   useEffect(() => {
-    console.log('Loading from localStorage...');
-    
-    const savedSalaries = localStorage.getItem('salariesData');
-    const savedAvailableMonths = localStorage.getItem('availableMonths');
-    
-    if (savedSalaries && savedSalaries !== '{}' && savedSalaries !== 'null') {
+    const loadFromLocalStorage = () => {
+      console.log('Loading from localStorage...');
+      
       try {
-        const parsedSalaries = JSON.parse(savedSalaries);
-        if (Object.keys(parsedSalaries).length > 0) {
-          setSalaries(parsedSalaries);
+        const savedSalaries = localStorage.getItem('salariesData');
+        const savedAvailableMonths = localStorage.getItem('availableMonths');
+        
+        if (savedSalaries && savedSalaries !== '{}' && savedSalaries !== 'null') {
+          const parsedSalaries = JSON.parse(savedSalaries);
+          if (Object.keys(parsedSalaries).length > 0) {
+            setSalaries(parsedSalaries);
+            console.log('Loaded salaries from localStorage:', parsedSalaries);
+          }
+        }
+        
+        if (savedAvailableMonths && savedAvailableMonths !== '[]' && savedAvailableMonths !== 'null') {
+          const parsedMonths = JSON.parse(savedAvailableMonths);
+          if (parsedMonths.length > 0) {
+            setAvailableMonths(parsedMonths);
+            console.log('Loaded months from localStorage:', parsedMonths);
+          }
         }
       } catch (error) {
-        console.error('Error parsing saved salaries:', error);
-        localStorage.removeItem('salariesData');
+        console.error('Error parsing saved data:', error);
       }
-    }
+      
+      setDataLoaded(true);
+    };
     
-    if (savedAvailableMonths && savedAvailableMonths !== '[]' && savedAvailableMonths !== 'null') {
-      try {
-        const parsedMonths = JSON.parse(savedAvailableMonths);
-        if (parsedMonths.length > 0) {
-          setAvailableMonths(parsedMonths);
-        }
-      } catch (error) {
-        console.error('Error parsing saved months:', error);
-        localStorage.removeItem('availableMonths');
-      }
-    }
-    
-    setDataLoaded(true);
-    
+    loadFromLocalStorage();
   }, []);
 
+  // useEffect hook to fetch from API only when employees are available and data not loaded
   useEffect(() => {
     if (employees && employees.length > 0) {
-      const shouldFetchFromAPI = 
-        Object.keys(salaries).length === 0 ||
-        availableMonths.length === 0 ||
-        !dataLoaded;
-      
-      if (shouldFetchFromAPI) {
+      const fetchData = async () => {
+        // Always fetch from API to ensure data is up to date
         console.log('Fetching from API...');
-        fetchSalaries();
-        fetchAvailableMonths();
-      } else {
-        console.log('Using localStorage data, skipping API fetch');
-      }
+        await fetchSalaries();
+        await fetchAvailableMonths();
+      };
+      
+      fetchData();
     }
-  }, [employees, dataLoaded]);
+  }, [employees]);
 
   // useEffect hook to filter employees to show only active ones
   useEffect(() => {
@@ -111,6 +113,7 @@ const SalaryComponent = ({ employees }) => {
   useEffect(() => {
     if (Object.keys(salaries).length > 0) {
       localStorage.setItem('salariesData', JSON.stringify(salaries));
+      console.log('Saved salaries to localStorage');
     }
   }, [salaries]);
 
@@ -118,6 +121,7 @@ const SalaryComponent = ({ employees }) => {
   useEffect(() => {
     if (availableMonths.length > 0) {
       localStorage.setItem('availableMonths', JSON.stringify(availableMonths));
+      console.log('Saved months to localStorage');
     }
   }, [availableMonths]);
 
@@ -133,44 +137,42 @@ const SalaryComponent = ({ employees }) => {
         const data = await response.json();
         console.log('API response data:', data);
         
-        const salaryMap = {};
-        let hasValidData = false;
-        
-        data.forEach(salary => {
-          let employeeId = null;
+        if (data && data.length > 0) {
+          const salaryMap = {};
           
-          if (salary.employeeId && typeof salary.employeeId === 'object' && salary.employeeId._id) {
-            employeeId = salary.employeeId._id;
-          } else if (salary.employeeId && typeof salary.employeeId === 'string') {
-            employeeId = salary.employeeId;
-          }
+          data.forEach(salary => {
+            let employeeId = null;
+            
+            if (salary.employeeId && typeof salary.employeeId === 'object' && salary.employeeId._id) {
+              employeeId = salary.employeeId._id;
+            } else if (salary.employeeId && typeof salary.employeeId === 'string') {
+              employeeId = salary.employeeId;
+            }
+            
+            if (employeeId) {
+              salaryMap[employeeId] = {
+                ...salary,
+                employeeId: employeeId,
+                _id: salary._id
+              };
+            }
+          });
           
-          if (employeeId && employees.some(emp => emp._id === employeeId)) {
-            salaryMap[employeeId] = {
-              ...salary,
-              employeeId: employeeId
-            };
-            hasValidData = true;
-          }
-        });
-        
-        if (hasValidData) {
-          setSalaries(salaryMap);
+          setSalaries(prevSalaries => {
+            // Merge with existing salaries, API data takes precedence
+            const merged = { ...prevSalaries, ...salaryMap };
+            return merged;
+          });
+          
           console.log('Salaries updated from API');
         } else {
-          console.log('No valid salary data from API, keeping localStorage data');
+          console.log('No salary data from API');
         }
-        
-        setDataLoaded(true);
       } else {
         console.error('API response not OK:', response.status);
-        showMessage('Failed to load salary data from server', 'error');
-        setDataLoaded(true);
       }
     } catch (error) {
       console.error('Error fetching salaries:', error);
-      showMessage('Failed to connect to server. Using cached data.', 'warning');
-      setDataLoaded(true);
     } finally {
       setLoading(false);
     }
@@ -189,90 +191,88 @@ const SalaryComponent = ({ employees }) => {
         
         if (data && data.length > 0) {
           setAvailableMonths(data);
-          console.log('Available months updated from API');
-        } else {
-          console.log('No available months from API, keeping existing data');
         }
-      } else {
-        console.error('Failed to fetch available months:', response.status);
       }
     } catch (error) {
       console.error('Error fetching available months:', error);
     }
   };
 
-  // Function to show user messages with auto-hide
-  const showMessage = (text, type) => {
-    setMessage({ show: true, text, type });
-    setTimeout(() => setMessage({ show: false, text: '', type: '' }), 5000);
-  };
+  // Function to handle basic salary setting/updating
+  const handleBasicSalarySubmit = async (e) => {
+    e.preventDefault();
 
-  // Function to handle basic salary editing
-  const handleBasicSalaryEdit = async (employeeId) => {
-    if (!editBasicSalary || editBasicSalary <= 0) {
-      showMessage('Please enter a valid basic salary', 'error');
+    if (!selectedEmployee || !basicSalary) {
+      showMessage('Please select an employee and enter basic salary', 'error');
       return;
     }
 
-    const employee = employees.find(emp => emp._id === employeeId);
-    
-    if (!employee) {
-      showMessage('Employee not found', 'error');
+    if (basicSalary <= 0) {
+      showMessage('Please enter a valid positive basic salary', 'error');
+      return;
+    }
+
+    const selectedEmp = employees.find(emp => emp._id === selectedEmployee);
+    if (!selectedEmp) {
+      showMessage('Selected employee not found', 'error');
       return;
     }
 
     setLoading(true);
     try {
-      const existingSalary = salaries[employeeId];
-      const isUpdate = !!existingSalary;
+      const payload = {
+        employeeId: selectedEmp._id,
+        employeeName: selectedEmp.name,
+        basicSalary: Number(basicSalary)
+      };
+
+      console.log('Saving salary payload:', payload);
 
       const response = await fetch('/api/salaries', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          employeeId: employeeId,
-          employeeName: employee.name,
-          basicSalary: Number(editBasicSalary),
-          ...(isUpdate && {
-            paymentHistory: existingSalary.paymentHistory || [],
-            allowances: existingSalary.allowances || {},
-            deductions: existingSalary.deductions || {}
-          })
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
         const savedSalary = await response.json();
+        console.log('Saved salary response:', savedSalary);
         
-        if (isUpdate) {
-          showMessage('Basic salary updated successfully', 'success');
-        } else {
-          showMessage('Basic salary set successfully', 'success');
-        }
-        
+        const isUpdate = salaries[selectedEmp._id];
+        showMessage(
+          isUpdate ? 'Basic salary updated successfully' : 'Basic salary set successfully',
+          'success'
+        );
+
+        // Update salaries state
         const updatedSalaries = {
           ...salaries,
-          [employeeId]: {
+          [selectedEmp._id]: {
             ...savedSalary,
-            employeeId: employeeId,
-            paymentHistory: savedSalary.paymentHistory || existingSalary?.paymentHistory || []
+            employeeId: selectedEmp._id,
+            employeeName: selectedEmp.name,
+            paymentHistory: savedSalary.paymentHistory || salaries[selectedEmp._id]?.paymentHistory || []
           }
         };
-        setSalaries(updatedSalaries);
-        localStorage.setItem('salariesData', JSON.stringify(updatedSalaries));
         
-        setEditingEmployee(null);
-        setEditBasicSalary('');
+        setSalaries(updatedSalaries);
+        
+        // Clear form
+        setBasicSalary('');
+        setSelectedEmployee('');
         setShowSalaryForm(false);
+        
+        // Force save to localStorage
+        localStorage.setItem('salariesData', JSON.stringify(updatedSalaries));
       } else {
         const errorData = await response.json();
-        showMessage(errorData.message || 'Failed to save basic salary', 'error');
+        showMessage(errorData.message || 'Failed to save salary details', 'error');
       }
     } catch (error) {
-      console.error('Error saving basic salary:', error);
-      showMessage('Failed to save basic salary', 'error');
+      console.error('Network error saving salary:', error);
+      showMessage('Failed to save salary details. Please check your connection.', 'error');
     } finally {
       setLoading(false);
     }
@@ -285,16 +285,14 @@ const SalaryComponent = ({ employees }) => {
       return;
     }
 
+    const salary = salaries[employeeId];
+    if (!salary) {
+      showMessage('Basic salary not set for this employee. Please set basic salary first.', 'error');
+      return;
+    }
+
+    setLoading(true);
     try {
-      const salary = salaries[employeeId];
-      
-      if (!salary) {
-        showMessage('Basic salary not set for this employee. Please set basic salary first.', 'error');
-        return;
-      }
-
-      setLoading(true);
-
       const response = await fetch(`/api/salaries/${employeeId}/payments`, {
         method: 'POST',
         headers: {
@@ -310,6 +308,7 @@ const SalaryComponent = ({ employees }) => {
         const updatedSalary = await response.json();
         showMessage(`Payment of ₹${paymentAmount} recorded for ${getEmployeeName(employeeId)} - ${formatMonth(month)}`, 'success');
         
+        // Update salaries state
         const updatedSalaries = {
           ...salaries,
           [employeeId]: {
@@ -317,15 +316,18 @@ const SalaryComponent = ({ employees }) => {
             employeeId: employeeId
           }
         };
+        
         setSalaries(updatedSalaries);
         localStorage.setItem('salariesData', JSON.stringify(updatedSalaries));
         
+        // Update available months if needed
         if (!availableMonths.includes(month)) {
           const newAvailableMonths = [...availableMonths, month].sort().reverse();
           setAvailableMonths(newAvailableMonths);
           localStorage.setItem('availableMonths', JSON.stringify(newAvailableMonths));
         }
         
+        // Close dialogs
         setPaymentAmount('');
         setPayingEmployee(null);
         setSelectingMonthFor(null);
@@ -348,7 +350,9 @@ const SalaryComponent = ({ employees }) => {
       setPayingEmployee(employeeId);
       setSelectedMonth(month);
       const existingPayment = getPaymentForMonth(salary, month);
-      setPaymentAmount(existingPayment ? existingPayment.amount.toString() : (salary.basicSalary || ''));
+      setPaymentAmount(existingPayment ? existingPayment.amount.toString() : (salary.basicSalary?.toString() || ''));
+    } else {
+      showMessage('Please set basic salary first', 'error');
     }
   };
 
@@ -357,96 +361,6 @@ const SalaryComponent = ({ employees }) => {
     setPayingEmployee(null);
     setPaymentAmount('');
     setSelectingMonthFor(null);
-  };
-
-  // Function to handle basic salary form submission
-  const handleSaveSalary = async (e) => {
-    e.preventDefault();
-
-    if (!selectedEmployee || !basicSalary) {
-      showMessage('Please select an employee and enter basic salary', 'error');
-      return;
-    }
-
-    const selectedEmp = employees.find(emp => emp._id === selectedEmployee);
-    if (!selectedEmp) {
-      showMessage('Selected employee not found', 'error');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const payload = {
-        employeeId: selectedEmp._id,
-        employeeName: selectedEmp.name,
-        employeeRole: selectedEmp.role,
-        basicSalary: Number(basicSalary)
-      };
-
-      console.log('Saving salary payload:', payload);
-
-      const response = await fetch('/api/salaries', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      console.log('Response status:', response.status);
-
-      if (response.ok) {
-        const savedSalary = await response.json();
-        console.log('Saved salary response:', savedSalary);
-        showMessage('Basic salary set successfully', 'success');
-
-        setSalaries(prev => ({
-          ...prev,
-          [selectedEmp._id]: {
-            ...savedSalary,
-            employeeId: selectedEmp._id,
-            employeeName: selectedEmp.name,
-            employeeRole: selectedEmp.role,
-            paymentHistory: savedSalary.paymentHistory || []
-          }
-        }));
-
-        setBasicSalary('');
-        setSelectedEmployee('');
-        setShowSalaryForm(false);
-      } else {
-        const errorText = await response.text();
-        console.error('Server error details:', errorText);
-
-        let errorMessage = 'Failed to save salary details';
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.message || errorMessage;
-        } catch (parseError) {
-          errorMessage = errorText || errorMessage;
-        }
-
-        showMessage(errorMessage, 'error');
-      }
-    } catch (error) {
-      console.error('Network error saving salary:', error);
-      showMessage('Failed to save salary details. Please check your connection.', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Function to start basic salary editing
-  const startBasicSalaryEdit = (employeeId, currentSalary = '') => {
-    setEditingEmployee(employeeId);
-    setEditBasicSalary(currentSalary.toString());
-  };
-
-  // Function to cancel salary editing
-  const cancelSalaryEdit = () => {
-    setEditingEmployee(null);
-    setEditBasicSalary('');
-    setShowSalaryForm(false);
   };
 
   // Function to view payment history
@@ -461,6 +375,11 @@ const SalaryComponent = ({ employees }) => {
 
   // Function to open month selection dialog
   const openMonthSelectionDialog = (employeeId) => {
+    const salary = salaries[employeeId];
+    if (!salary) {
+      showMessage('Please set basic salary first', 'error');
+      return;
+    }
     setSelectingMonthFor(employeeId);
     setPaymentAmount('');
   };
@@ -667,7 +586,7 @@ const SalaryComponent = ({ employees }) => {
             <p className="card-subtitle">Set basic salary once per employee. Update only when there's a salary hike.</p>
           </div>
           <div className="card-body">
-            <form onSubmit={handleSaveSalary}>
+            <form onSubmit={handleBasicSalarySubmit}>
               <div className="form-row">
                 <div className="form-group">
                   <label>Select Employee *</label>
@@ -680,7 +599,7 @@ const SalaryComponent = ({ employees }) => {
                     <option value="">Select an employee</option>
                     {filteredEmployees.map(employee => (
                       <option key={employee._id} value={employee._id}>
-                        {employee.name} - {employee.role}
+                        {employee.name} - {employee.role} {salaries[employee._id] ? '(Salary: ₹' + salaries[employee._id].basicSalary + ')' : ''}
                       </option>
                     ))}
                   </select>
@@ -773,55 +692,6 @@ const SalaryComponent = ({ employees }) => {
         </div>
       )}
 
-      {/* Edit Basic Salary Dialog */}
-      {editingEmployee && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h3>Update Basic Salary</h3>
-              <button onClick={cancelSalaryEdit} className="btn-close">×</button>
-            </div>
-            <div className="modal-body">
-              <div className="employee-info">
-                <h4>{getEmployeeName(editingEmployee)}</h4>
-                <p className="text-muted">Current Basic Salary: ₹{salaries[editingEmployee]?.basicSalary?.toLocaleString() || '0'}</p>
-              </div>
-              
-              <div className="form-group">
-                <label>New Basic Salary (₹) *</label>
-                <input
-                  type="number"
-                  value={editBasicSalary}
-                  onChange={(e) => setEditBasicSalary(e.target.value)}
-                  placeholder="Enter new basic salary"
-                  required
-                  min="0"
-                  step="100"
-                  className="form-control"
-                />
-                <small className="form-text">Update only when there's a salary hike/revision</small>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button 
-                onClick={() => handleBasicSalaryEdit(editingEmployee)}
-                disabled={loading || !editBasicSalary}
-                className="btn btn-success"
-              >
-                {loading ? 'Updating...' : '📝 Update Basic Salary'}
-              </button>
-              <button 
-                onClick={cancelSalaryEdit}
-                disabled={loading}
-                className="btn btn-secondary"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Payment History Modal */}
       {viewPaymentHistory && (
         <div className="modal-overlay">
@@ -858,7 +728,7 @@ const SalaryComponent = ({ employees }) => {
                             {payment.month === getCurrentMonth() ? 'Current' : 'Paid'}
                           </span>
                         </td>
-                        <td>{payment.date ? new Date(payment.date).toLocaleDateString() : 'Not recorded'}</td>
+                        <td>{payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString() : 'Not recorded'}</td>
                         <td>
                           <button 
                             onClick={() => {
@@ -873,6 +743,11 @@ const SalaryComponent = ({ employees }) => {
                         </td>
                       </tr>
                     ))}
+                    {(!salaries[viewPaymentHistory]?.paymentHistory || salaries[viewPaymentHistory].paymentHistory.length === 0) && (
+                      <tr>
+                        <td colSpan="5" className="empty-state">No payment records found</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -897,23 +772,28 @@ const SalaryComponent = ({ employees }) => {
             <div className="modal-body">
               <div className="employee-info">
                 <h4>{getEmployeeName(selectingMonthFor)}</h4>
+                <p className="text-muted">Basic Salary: ₹{salaries[selectingMonthFor]?.basicSalary?.toLocaleString() || '0'}</p>
                 <p className="text-muted">Select a month to set payment</p>
               </div>
               
               <div className="month-grid">
-                {getMonthsInYear(selectedYear).map(month => (
-                  <button
-                    key={month}
-                    onClick={() => {
-                      closeMonthSelectionDialog();
-                      openMonthPaymentDialog(selectingMonthFor, month);
-                    }}
-                    className={`month-btn ${month === getCurrentMonth() ? 'current' : ''}`}
-                  >
-                    {formatMonth(month)}
-                    {month === getCurrentMonth() && ' ★'}
-                  </button>
-                ))}
+                {getMonthsInYear(selectedYear).map(month => {
+                  const payment = getPaymentForMonth(salaries[selectingMonthFor], month);
+                  return (
+                    <button
+                      key={month}
+                      onClick={() => {
+                        closeMonthSelectionDialog();
+                        openMonthPaymentDialog(selectingMonthFor, month);
+                      }}
+                      className={`month-btn ${month === getCurrentMonth() ? 'current' : ''} ${payment ? 'has-payment' : ''}`}
+                    >
+                      {formatMonth(month)}
+                      {month === getCurrentMonth() && ' ★'}
+                      {payment && ' ✓'}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <div className="modal-footer">
@@ -943,10 +823,6 @@ const SalaryComponent = ({ employees }) => {
                 <span className="legend-color future"></span>
                 <span>Future</span>
               </div>
-              <div className="legend-item">
-                <span className="legend-color clickable"></span>
-                <span>Click to Set Payment</span>
-              </div>
             </div>
           </div>
         </div>
@@ -966,7 +842,6 @@ const SalaryComponent = ({ employees }) => {
                 <thead>
                   <tr>
                     <th>Employee Details</th>
-                    <th>Basic Salary</th>
                     {getMonthsInYear(selectedYear).map(month => (
                       <th key={month} className={month === getCurrentMonth() ? 'current-month' : ''}>
                         {formatMonth(month)}
@@ -981,29 +856,22 @@ const SalaryComponent = ({ employees }) => {
                   {filteredEmployees.map(employee => {
                     const salary = getSalaryForEmployee(employee._id);
                     const totalPaidThisYear = salary ? calculateTotalPaidInYear(salary) : 0;
+                    const hasSalary = !!salary;
                     
                     return (
                       <tr key={employee._id}>
                         <td className="employee-details">
                           <div className="employee-name">{employee.name}</div>
                           <div className="employee-role">{employee.role}</div>
-                        </td>
-                        
-                        <td className="basic-salary-cell">
-                          {salary ? (
-                            <div className="salary-info">
-                              <div className="salary-amount">₹{salary.basicSalary?.toLocaleString() || '0'}</div>
-                              <button 
-                                onClick={() => startBasicSalaryEdit(employee._id, salary?.basicSalary || '')}
-                                className="btn-edit-salary"
-                                title="Edit basic salary"
-                              >
-                                ✏️
-                              </button>
-                            </div>
-                          ) : (
+                          {hasSalary && (
+                            <div className="employee-salary">₹{salary.basicSalary?.toLocaleString() || '0'}</div>
+                          )}
+                          {!hasSalary && (
                             <button 
-                              onClick={() => startBasicSalaryEdit(employee._id)}
+                              onClick={() => {
+                                setSelectedEmployee(employee._id);
+                                setShowSalaryForm(true);
+                              }}
                               className="btn-set-salary-sm"
                             >
                               Set Salary
@@ -1013,28 +881,28 @@ const SalaryComponent = ({ employees }) => {
                         
                         {getMonthsInYear(selectedYear).map(month => {
                           const payment = getPaymentForMonth(salary, month);
-                          const isCurrentMonth = month === getCurrentMonth();
                           const isFutureMonth = month > getCurrentMonth();
                           const isPastMonth = month < getCurrentMonth();
                           
-                          let cellClass = 'payment-cell clickable';
+                          let cellClass = 'payment-cell';
+                          if (hasSalary) cellClass += ' clickable';
                           if (payment) cellClass += ' paid';
-                          if (!payment && isPastMonth) cellClass += ' pending';
+                          if (!payment && isPastMonth && hasSalary) cellClass += ' pending';
                           if (isFutureMonth) cellClass += ' future';
-                          if (isCurrentMonth) cellClass += ' current';
+                          if (month === getCurrentMonth()) cellClass += ' current';
                           
                           return (
                             <td 
                               key={month} 
                               className={cellClass}
                               onClick={() => {
-                                if (salary) {
+                                if (hasSalary) {
                                   openMonthPaymentDialog(employee._id, month);
                                 } else {
                                   showMessage('Please set basic salary first', 'error');
                                 }
                               }}
-                              title={salary ? `Click to set payment for ${formatMonth(month)}` : 'Set basic salary first'}
+                              title={hasSalary ? `Click to set payment for ${formatMonth(month)}` : 'Set basic salary first'}
                             >
                               {payment ? (
                                 <div className="paid-amount">
@@ -1042,7 +910,7 @@ const SalaryComponent = ({ employees }) => {
                                 </div>
                               ) : (
                                 <div className="no-payment">
-                                  {isFutureMonth ? 'Future' : 'Set'}
+                                  {isFutureMonth ? 'Future' : hasSalary ? 'Set' : '—'}
                                 </div>
                               )}
                             </td>
@@ -1050,21 +918,27 @@ const SalaryComponent = ({ employees }) => {
                         })}
                         
                         <td className="total-paid-cell">
-                          <div className="total-amount">₹{totalPaidThisYear.toLocaleString()}</div>
-                          <button 
-                            onClick={() => viewEmployeePaymentHistory(employee._id)}
-                            className="btn-view-history"
-                            title="View payment history"
-                          >
-                            📊
-                          </button>
+                          {hasSalary ? (
+                            <>
+                              <div className="total-amount">₹{totalPaidThisYear.toLocaleString()}</div>
+                              <button 
+                                onClick={() => viewEmployeePaymentHistory(employee._id)}
+                                className="btn-view-history"
+                                title="View payment history"
+                              >
+                                📊
+                              </button>
+                            </>
+                          ) : (
+                            <div className="total-amount">—</div>
+                          )}
                         </td>
                         
                         <td className="quick-actions-cell">
                           <div className="quick-actions">
                             <button 
                               onClick={() => openMonthSelectionDialog(employee._id)}
-                              disabled={!salary}
+                              disabled={!hasSalary}
                               className="btn-quick-pay"
                               title="Quick payment for any month"
                             >
@@ -1090,6 +964,7 @@ const SalaryComponent = ({ employees }) => {
           margin: 0 auto;
           background: #f8f9fa;
           min-height: 100vh;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
         }
         
         /* Header Styles */
@@ -1109,12 +984,6 @@ const SalaryComponent = ({ employees }) => {
           margin: 0;
           font-size: 28px;
           font-weight: 700;
-        }
-        
-        .subtitle {
-          margin: 8px 0 0;
-          opacity: 0.9;
-          font-size: 16px;
         }
         
         .header-actions .btn-primary {
@@ -1155,6 +1024,7 @@ const SalaryComponent = ({ employees }) => {
         
         .stat-card:hover {
           transform: translateY(-4px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         
         .stat-icon {
@@ -1183,6 +1053,7 @@ const SalaryComponent = ({ employees }) => {
           display: flex;
           align-items: center;
           gap: 20px;
+          flex-wrap: wrap;
         }
         
         .year-select {
@@ -1195,6 +1066,11 @@ const SalaryComponent = ({ employees }) => {
           background: white;
           cursor: pointer;
           min-width: 180px;
+        }
+        
+        .year-select:focus {
+          outline: none;
+          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         
         .year-info {
@@ -1271,7 +1147,7 @@ const SalaryComponent = ({ employees }) => {
           border: 2px solid #e2e8f0;
           border-radius: 8px;
           font-size: 16px;
-          transition: border-color 0.3s ease;
+          transition: all 0.3s ease;
         }
         
         .form-control:focus {
@@ -1299,11 +1175,6 @@ const SalaryComponent = ({ employees }) => {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-        }
-        
-        .btn-sm {
-          padding: 8px 16px;
-          font-size: 13px;
         }
         
         .btn-primary {
@@ -1347,6 +1218,24 @@ const SalaryComponent = ({ employees }) => {
           margin-top: 24px;
         }
         
+        .btn-set-salary-sm {
+          background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+          color: #212529;
+          border: none;
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-weight: 600;
+          cursor: pointer;
+          font-size: 12px;
+          margin-top: 8px;
+          transition: all 0.3s ease;
+        }
+        
+        .btn-set-salary-sm:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 8px rgba(255, 193, 7, 0.3);
+        }
+        
         /* Month Grid for Selection */
         .month-grid {
           display: grid;
@@ -1371,6 +1260,7 @@ const SalaryComponent = ({ employees }) => {
           border-color: #667eea;
           background: #f8fafc;
           transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
         
         .month-btn.current {
@@ -1379,11 +1269,18 @@ const SalaryComponent = ({ employees }) => {
           color: #667eea;
         }
         
+        .month-btn.has-payment {
+          border-color: #48bb78;
+          background: rgba(72, 187, 120, 0.1);
+        }
+        
         /* Table Styles */
         .table-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
+          flex-wrap: wrap;
+          gap: 16px;
         }
         
         .table-legend {
@@ -1418,10 +1315,6 @@ const SalaryComponent = ({ employees }) => {
           background-color: #e9ecef;
         }
         
-        .legend-color.clickable {
-          background-color: #d4edda;
-        }
-        
         .table-responsive {
           overflow-x: auto;
         }
@@ -1429,7 +1322,7 @@ const SalaryComponent = ({ employees }) => {
         .salary-table {
           width: 100%;
           border-collapse: collapse;
-          min-width: 1200px;
+          min-width: 1000px;
         }
         
         .salary-table th {
@@ -1480,6 +1373,7 @@ const SalaryComponent = ({ employees }) => {
         .employee-name {
           font-weight: 600;
           color: #2d3748;
+          font-size: 16px;
         }
         
         .employee-role {
@@ -1488,58 +1382,21 @@ const SalaryComponent = ({ employees }) => {
           margin-top: 4px;
         }
         
-        .basic-salary-cell {
-          min-width: 150px;
-        }
-        
-        .salary-info {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          justify-content: center;
-        }
-        
-        .salary-amount {
-          font-weight: 600;
-          color: #2c5aa0;
-        }
-        
-        .btn-edit-salary {
-          background: none;
-          border: none;
-          color: #718096;
-          cursor: pointer;
+        .employee-salary {
           font-size: 14px;
-          padding: 4px;
-          border-radius: 4px;
-        }
-        
-        .btn-edit-salary:hover {
-          background: #edf2f7;
-          color: #4a5568;
-        }
-        
-        .btn-set-salary-sm {
-          background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
-          color: #212529;
-          border: none;
-          padding: 8px 16px;
-          border-radius: 6px;
+          color: #48bb78;
           font-weight: 600;
-          cursor: pointer;
-          font-size: 13px;
-        }
-        
-        .btn-set-salary-sm:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 8px rgba(255, 193, 7, 0.3);
+          margin-top: 4px;
         }
         
         .payment-cell {
-          min-width: 120px;
+          min-width: 100px;
           height: 60px;
-          cursor: pointer;
           transition: all 0.3s ease;
+        }
+        
+        .payment-cell.clickable {
+          cursor: pointer;
         }
         
         .payment-cell.clickable:hover {
@@ -1547,6 +1404,7 @@ const SalaryComponent = ({ employees }) => {
           box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
           z-index: 1;
           position: relative;
+          background-color: #f0f4f8;
         }
         
         .payment-cell.paid {
@@ -1580,7 +1438,7 @@ const SalaryComponent = ({ employees }) => {
         }
         
         .total-paid-cell {
-          min-width: 150px;
+          min-width: 120px;
           font-weight: 600;
           color: #48bb78;
         }
@@ -1596,16 +1454,18 @@ const SalaryComponent = ({ employees }) => {
           color: #718096;
           cursor: pointer;
           font-size: 14px;
-          padding: 4px;
+          padding: 4px 8px;
           border-radius: 4px;
+          transition: all 0.3s ease;
         }
         
         .btn-view-history:hover {
+          background: #edf2f7;
           color: #4a5568;
         }
         
         .quick-actions-cell {
-          min-width: 150px;
+          min-width: 120px;
         }
         
         .quick-actions {
@@ -1624,6 +1484,7 @@ const SalaryComponent = ({ employees }) => {
           cursor: pointer;
           font-size: 13px;
           width: 100%;
+          transition: all 0.3s ease;
         }
         
         .btn-quick-pay:hover:not(:disabled) {
@@ -1695,6 +1556,7 @@ const SalaryComponent = ({ employees }) => {
           align-items: center;
           justify-content: center;
           border-radius: 4px;
+          transition: all 0.3s ease;
         }
         
         .btn-close:hover {
@@ -1743,11 +1605,47 @@ const SalaryComponent = ({ employees }) => {
           color: #2d3748;
         }
         
+        /* Employee Summary */
+        .employee-summary {
+          background: #f8f9fa;
+          padding: 16px;
+          border-radius: 8px;
+          margin-bottom: 20px;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 12px;
+        }
+        
+        .employee-summary p {
+          margin: 0;
+          color: #2d3748;
+        }
+        
+        .employee-info {
+          text-align: center;
+          margin-bottom: 20px;
+        }
+        
+        .employee-info h4 {
+          margin: 0 0 8px;
+          color: #2d3748;
+          font-size: 18px;
+        }
+        
+        .text-muted {
+          color: #718096;
+          font-size: 14px;
+          margin: 4px 0;
+        }
+        
         /* Payment History Table */
+        .payment-history-table {
+          margin-top: 20px;
+        }
+        
         .payment-history-table table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 20px;
         }
         
         .payment-history-table th {
@@ -1803,6 +1701,18 @@ const SalaryComponent = ({ employees }) => {
           border-radius: 8px;
           margin-bottom: 24px;
           font-weight: 500;
+          animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
         
         .alert-success {

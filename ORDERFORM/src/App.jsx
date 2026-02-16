@@ -76,8 +76,9 @@ import GreetingDesign from './Admin/GreetingDesign.jsx';
 // Import HR specific components
 import SalaryComponent from './Admin/SalaryComponent.jsx';
 import AttendanceComponent from './Admin/AttendanceComponent.jsx';
-import ViewLeave from './Admin/AdminAllLeaves.jsx'
-
+import ViewLeave from './Admin/AdminAllLeaves.jsx';
+import DailyHrDashbaord from './HR/DailyHRReport.jsx';
+import ViewHRReports from './Admin/ViewHRReports.jsx'
 
 // ============ WRAPPER COMPONENT FOR HR ATTENDANCE ============
 const AttendanceWithEmployees = () => {
@@ -148,6 +149,7 @@ function App() {
           
           {/* Using existing Admin components for HR */}
           <Route path="employees" element={<Employees />} />
+           <Route path="hr-report" element={<DailyHrDashbaord />} />
           <Route path="add-employee" element={<AddExecutiveAdmin />} />
           <Route path="view-performance" element={<ViewPerformance />} />
             <Route path="view-leaves" element={<ViewLeave />} />
@@ -228,6 +230,7 @@ function App() {
           }
         >
           <Route path="purchase" element={<Purchase />} />
+             <Route path="view-hrreport" element={<ViewHRReports />} />
            <Route path="view-leaves" element={<ViewLeave />} />
           <Route path="greeting-design" element={<GreetingDesign/>} />
           <Route path="tele-breaks" element={<TeleBreaks/>} />

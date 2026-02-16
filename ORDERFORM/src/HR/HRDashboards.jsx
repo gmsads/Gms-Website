@@ -628,6 +628,16 @@ function HRDashboard() {
           >
            View Leave Requests
           </NavLink>
+           <NavLink
+            to="/hr-dashboard/hr-report"
+            end
+            style={linkStyle('hr-report')}
+            onMouseEnter={() => setHoveredItem('hr-report')}
+            onMouseLeave={() => setHoveredItem('')}
+            onClick={handleSidebarItemClick}
+          >
+         Report 
+          </NavLink>
         </div>
 
         {/* Main Content Area - Now using Outlet for nested routes */}

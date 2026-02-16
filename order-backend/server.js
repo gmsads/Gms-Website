@@ -49,6 +49,8 @@ const whatsapp =require("./routes/whatsapp")
 const salaryRoutes = require('./routes/salaryRoutes');
 const greetingsRoutes = require('./routes/greetings');
 const leaveRoutes = require('./routes/leaveRoutes');
+const hrReportsRouter = require('./routes/hrReports');
+
 const app = express();
 runReminderCron();
 
@@ -59,6 +61,7 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 app.use('/api', leaveRoutes);
 app.use('/api/salaries', salaryRoutes);
 app.use('/api/purchases', purchase); // ADD THIS LINE
+app.use('/', hrReportsRouter);
 app.use("/api/followup",whatsapp)
 // Upload endpoint
 app.use("/api/upload", uploadRoute);

@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 
+const API_BASE_URL = 'http://localhost:5000/api';
+
 const GreetingDesignForm = ({ onDesignAdded }) => {
   const [formData, setFormData] = useState({
     occasion: '',
@@ -15,8 +17,9 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
   const [designFile, setDesignFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [message, setMessage] = useState('');
-  const [occasions, setOccasions] = useState([]);
+  const [messageType, setMessageType] = useState('success');
   
   // Camera/File refs
   const fileInputRef = useRef(null);
@@ -29,62 +32,25 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
   // Predefined occasions
   const occasionCategories = {
     festival: [
-      'Diwali',
-      'Holi', 
-      'Dussehra',
-      'Ganesh Chaturthi',
-      'Navratri',
-      'Durga Puja',
-      'Eid',
-      'Christmas',
-      'New Year',
-      'Makar Sankranti',
-      'Raksha Bandhan',
-      'Pongal',
-      'Onam',
-      'Gurpurab',
-      'Good Friday',
-      'Ramadan',
-      'Bakrid'
+      'Diwali', 'Holi', 'Dussehra', 'Ganesh Chaturthi', 'Navratri',
+      'Durga Puja', 'Eid', 'Christmas', 'New Year', 'Makar Sankranti',
+      'Raksha Bandhan', 'Pongal', 'Onam', 'Gurpurab', 'Good Friday',
+      'Ramadan', 'Bakrid'
     ],
     special: [
-      'Birthday',
-      'Anniversary',
-      'Marriage Anniversary',
-      'Business Anniversary',
-      'Achievement',
-      'Thank You',
-      'Welcome',
-      'Promotion',
-      'Retirement',
-      'Condolence'
+      'Birthday', 'Anniversary', 'Marriage Anniversary', 'Business Anniversary',
+      'Achievement', 'Thank You', 'Welcome', 'Promotion', 'Retirement'
     ],
     seasonal: [
-      'Spring',
-      'Summer',
-      'Monsoon',
-      'Autumn',
-      'Winter',
-      'Valentine\'s Day',
-      'Mother\'s Day',
-      'Father\'s Day',
-      'Women\'s Day',
-      'Teachers Day'
+      'Spring', 'Summer', 'Monsoon', 'Autumn', 'Winter',
+      'Valentine\'s Day', 'Mother\'s Day', 'Father\'s Day',
+      'Women\'s Day', 'Teachers Day'
     ],
     corporate: [
-      'Quarter End',
-      'Year End',
-      'Budget Approval',
-      'Project Launch',
-      'Team Success',
-      'Client Appreciation'
+      'Quarter End', 'Year End', 'Budget Approval', 'Project Launch',
+      'Team Success', 'Client Appreciation'
     ]
   };
-
-  useEffect(() => {
-    // Load existing occasions from API
-    fetchOccasions();
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -97,15 +63,10 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
     };
   }, [stream, previewUrl]);
 
-  const fetchOccasions = async () => {
-    try {
-      const response = await axios.get('/api/greetings/occasions');
-      if (response.data.success) {
-        setOccasions(response.data.data);
-      }
-    } catch (error) {
-      console.error('Error fetching occasions:', error);
-    }
+  const showMessage = (msg, type = 'success') => {
+    setMessage(msg);
+    setMessageType(type);
+    setTimeout(() => setMessage(''), 4000);
   };
 
   // Handle file selection from gallery
@@ -113,26 +74,23 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
-      setMessage('Please select an image file');
+      showMessage('Please select an image file', 'error');
       return;
     }
 
-    // Validate file size (10MB limit)
     if (file.size > 10 * 1024 * 1024) {
-      setMessage('File size should be less than 10MB');
+      showMessage('File size should be less than 10MB', 'error');
       return;
     }
 
     setDesignFile(file);
     setPreviewUrl(URL.createObjectURL(file));
     
-    // Clear other input
     if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
 
-  // Start camera for design capture
+  // Start camera
   const startCamera = async () => {
     try {
       setShowCameraModal(true);
@@ -155,7 +113,7 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
       }
     } catch (error) {
       console.error('Error accessing camera:', error);
-      setMessage('Cannot access camera. Please check permissions or use file upload.');
+      showMessage('Cannot access camera. Please check permissions.', 'error');
       setShowCameraModal(false);
     }
   };
@@ -163,7 +121,7 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
   // Capture design from camera
   const captureDesign = () => {
     if (!videoRef.current || !canvasRef.current) {
-      setMessage('Camera not ready');
+      showMessage('Camera not ready', 'error');
       return;
     }
 
@@ -173,7 +131,7 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
       const context = canvas.getContext('2d');
 
       if (video.videoWidth === 0 || video.videoHeight === 0) {
-        setMessage('Camera not ready. Please try again.');
+        showMessage('Camera not ready. Please try again.', 'error');
         return;
       }
 
@@ -186,7 +144,7 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           const timestamp = new Date().getTime();
           const file = new File(
             [blob],
-            `greeting_design_${timestamp}.jpg`,
+            `greeting_${timestamp}.jpg`,
             { type: 'image/jpeg' }
           );
 
@@ -194,12 +152,12 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           setPreviewUrl(URL.createObjectURL(blob));
           stopCamera();
           setShowCameraModal(false);
-          setMessage('Design captured successfully!');
+          showMessage('Design captured successfully!');
         }
       }, 'image/jpeg', 0.95);
     } catch (error) {
       console.error('Error capturing design:', error);
-      setMessage('Error capturing design. Please try again.');
+      showMessage('Error capturing design', 'error');
     }
   };
 
@@ -213,10 +171,6 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
   const closeCamera = () => {
     stopCamera();
     setShowCameraModal(false);
-  };
-
-  const triggerFileUpload = () => {
-    fileInputRef.current?.click();
   };
 
   const triggerCamera = () => {
@@ -240,25 +194,23 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
     e.preventDefault();
 
     if (!designFile) {
-      setMessage('Please upload a design image');
+      showMessage('Please upload a design image', 'error');
       return;
     }
 
     if (!formData.occasion || !formData.scheduledDate) {
-      setMessage('Please select occasion and scheduled date');
+      showMessage('Please select occasion and scheduled date', 'error');
       return;
     }
 
     setUploading(true);
-    setMessage('Uploading greeting design...');
+    setUploadProgress(0);
+    showMessage('Uploading to Cloudinary...', 'info');
 
     try {
       const submitData = new FormData();
       
-      // Add design file
       submitData.append('design', designFile);
-      
-      // Add form fields
       submitData.append('occasion', formData.occasion);
       submitData.append('title', formData.title || formData.occasion);
       submitData.append('description', formData.description);
@@ -266,23 +218,20 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
       submitData.append('category', formData.category);
       submitData.append('tags', formData.tags);
       submitData.append('isActive', formData.isActive);
-      
-      // Add metadata
       submitData.append('uploadedBy', localStorage.getItem('userId') || 'designer');
       submitData.append('uploaderName', localStorage.getItem('userName') || 'Designer');
-      submitData.append('fileSize', designFile.size);
-      submitData.append('fileType', designFile.type);
 
-      const response = await axios.post('/api/greetings/designs', submitData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
+      const response = await axios.post(`${API_BASE_URL}/greetings/designs`, submitData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percentCompleted);
         }
       });
 
       if (response.data.success) {
-        setMessage('Greeting design uploaded successfully!');
+        showMessage('✅ Design uploaded to Cloudinary successfully!');
         
-        // Reset form
         setFormData({
           occasion: '',
           title: '',
@@ -294,18 +243,16 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
         });
         removeDesign();
         
-        // Notify parent
         if (onDesignAdded) {
           onDesignAdded(response.data.data);
         }
-      } else {
-        setMessage(response.data.message || 'Upload failed');
       }
     } catch (error) {
       console.error('Error uploading design:', error);
-      setMessage(error.response?.data?.message || 'Error uploading design. Please try again.');
+      showMessage(error.response?.data?.message || 'Error uploading design', 'error');
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -337,32 +284,39 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
                 <span className="btn-icon">📸</span>
                 Capture Design
               </button>
-              <button className="cancel-btn" onClick={closeCamera}>
-                Cancel
-              </button>
-            </div>
-            <div className="camera-instructions">
-              Position the greeting design in frame and click Capture
+              <button className="cancel-btn" onClick={closeCamera}>Cancel</button>
             </div>
           </div>
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="design-form">
-        <h2>Upload Greeting Design</h2>
+        <h2>Upload Greeting Design to Cloudinary</h2>
         
         {message && (
-          <div className={`message ${message.includes('success') ? 'success' : 'error'}`}>
+          <div className={`message ${messageType}`}>
             {message}
+          </div>
+        )}
+
+        {/* Upload Progress */}
+        {uploading && (
+          <div className="upload-progress">
+            <div className="progress-bar">
+              <div 
+                className="progress-fill" 
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+            <span className="progress-text">{uploadProgress}% Uploaded to Cloudinary</span>
           </div>
         )}
 
         {/* Design Upload Section */}
         <div className="form-section">
-          <h3>1. Upload Design</h3>
+          <h3>1. Upload Design to Cloudinary</h3>
           
           <div className="design-upload-container">
-            {/* Hidden inputs */}
             <input
               type="file"
               ref={fileInputRef}
@@ -386,13 +340,13 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
                 <label htmlFor="design-gallery" className="upload-option gallery-option">
                   <span className="option-icon">📁</span>
                   <span className="option-text">Choose from Gallery</span>
-                  <span className="option-desc">Select existing design</span>
+                  <span className="option-note">(Uploads to Cloudinary)</span>
                 </label>
                 
                 <button type="button" onClick={triggerCamera} className="upload-option camera-option">
                   <span className="option-icon">📷</span>
                   <span className="option-text">Take Photo</span>
-                  <span className="option-desc">Capture new design</span>
+                  <span className="option-note">(Uploads to Cloudinary)</span>
                 </button>
               </div>
             ) : (
@@ -401,7 +355,7 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
                 <div className="preview-info">
                   <span className="file-name">{designFile?.name}</span>
                   <span className="file-size">
-                    {(designFile?.size / 1024).toFixed(0)} KB
+                    {(designFile?.size / 1024).toFixed(2)} KB
                   </span>
                 </div>
                 <button type="button" onClick={removeDesign} className="remove-btn">
@@ -463,7 +417,7 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Enter greeting message or design description..."
+              placeholder="Enter greeting message..."
               rows="3"
               className="form-input"
             />
@@ -479,9 +433,6 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
               min={new Date().toISOString().split('T')[0]}
               className="form-input"
             />
-            <small className="field-hint">
-              Designs will be available for sending from this date
-            </small>
           </div>
 
           <div className="form-group">
@@ -490,7 +441,7 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
               type="text"
               value={formData.tags}
               onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-              placeholder="e.g., premium, animated, 2024, festival"
+              placeholder="e.g., premium, festival, 2024"
               className="form-input"
             />
           </div>
@@ -516,14 +467,7 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
             className="submit-btn"
             disabled={uploading || !designFile}
           >
-            {uploading ? (
-              <>
-                <span className="spinner"></span>
-                Uploading...
-              </>
-            ) : (
-              'Upload Design'
-            )}
+            {uploading ? `Uploading to Cloudinary (${uploadProgress}%)` : 'Upload to Cloudinary'}
           </button>
         </div>
       </form>
@@ -583,6 +527,39 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           border: 1px solid #fecaca;
         }
 
+        .message.info {
+          background: #dbeafe;
+          color: #1e40af;
+          border: 1px solid #bfdbfe;
+        }
+
+        .upload-progress {
+          margin-bottom: 20px;
+          padding: 15px;
+          background: #f8fafc;
+          border-radius: 8px;
+        }
+
+        .progress-bar {
+          height: 8px;
+          background: #e2e8f0;
+          border-radius: 4px;
+          overflow: hidden;
+          margin-bottom: 8px;
+        }
+
+        .progress-fill {
+          height: 100%;
+          background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+          transition: width 0.3s ease;
+        }
+
+        .progress-text {
+          font-size: 14px;
+          color: #475569;
+          font-weight: 500;
+        }
+
         .hidden-input {
           position: absolute;
           width: 1px;
@@ -590,8 +567,6 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           padding: 0;
           margin: -1px;
           overflow: hidden;
-          clip: rect(0,0,0,0);
-          border: 0;
         }
 
         .upload-options {
@@ -605,13 +580,12 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 30px 20px;
+          padding: 40px 20px;
           background: #f8fafc;
           border: 2px dashed #cbd5e1;
           border-radius: 12px;
           cursor: pointer;
           transition: all 0.3s ease;
-          text-align: center;
         }
 
         .upload-option:hover {
@@ -620,29 +594,20 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           transform: translateY(-2px);
         }
 
-        .gallery-option {
-          background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-        }
-
-        .camera-option {
-          background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
-          border-color: #7dd3fc;
-        }
-
         .option-icon {
           font-size: 48px;
-          margin-bottom: 15px;
+          margin-bottom: 10px;
         }
 
         .option-text {
-          font-size: 18px;
+          font-size: 16px;
           font-weight: 600;
           color: #1e293b;
           margin-bottom: 5px;
         }
 
-        .option-desc {
-          font-size: 13px;
+        .option-note {
+          font-size: 12px;
           color: #64748b;
         }
 
@@ -653,15 +618,13 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           padding: 20px;
           background: #f8fafc;
           border-radius: 12px;
-          border: 1px solid #e2e8f0;
         }
 
         .preview-image {
-          width: 120px;
-          height: 120px;
+          width: 100px;
+          height: 100px;
           object-fit: cover;
           border-radius: 8px;
-          border: 1px solid #cbd5e1;
         }
 
         .preview-info {
@@ -670,15 +633,12 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
 
         .file-name {
           display: block;
-          font-size: 16px;
-          font-weight: 600;
-          color: #0f172a;
-          margin-bottom: 5px;
-          word-break: break-all;
+          font-weight: 500;
+          margin-bottom: 4px;
         }
 
         .file-size {
-          font-size: 14px;
+          font-size: 12px;
           color: #64748b;
         }
 
@@ -688,14 +648,7 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           color: #dc2626;
           border: none;
           border-radius: 6px;
-          font-size: 14px;
-          font-weight: 500;
           cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .remove-btn:hover {
-          background: #fecaca;
         }
 
         .category-selector {
@@ -710,14 +663,7 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           background: #f1f5f9;
           border: 1px solid #cbd5e1;
           border-radius: 20px;
-          font-size: 14px;
-          color: #475569;
           cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .category-btn:hover {
-          background: #e2e8f0;
         }
 
         .category-btn.active {
@@ -735,7 +681,6 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           margin-bottom: 8px;
           font-weight: 500;
           color: #334155;
-          font-size: 14px;
         }
 
         .form-input, .occasion-select {
@@ -744,43 +689,6 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           border: 1px solid #cbd5e1;
           border-radius: 8px;
           font-size: 14px;
-          transition: all 0.2s ease;
-        }
-
-        .form-input:focus, .occasion-select:focus {
-          outline: none;
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
-        }
-
-        textarea.form-input {
-          resize: vertical;
-          min-height: 80px;
-        }
-
-        .field-hint {
-          display: block;
-          margin-top: 5px;
-          font-size: 12px;
-          color: #64748b;
-        }
-
-        .checkbox-group {
-          display: flex;
-          align-items: center;
-        }
-
-        .checkbox-label {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          cursor: pointer;
-        }
-
-        .checkbox-label input[type="checkbox"] {
-          width: 18px;
-          height: 18px;
-          cursor: pointer;
         }
 
         .form-actions {
@@ -797,20 +705,15 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           font-size: 16px;
           font-weight: 600;
           cursor: pointer;
-          transition: all 0.2s ease;
         }
 
         .submit-btn {
           background: #3b82f6;
           color: white;
-          flex: 1;
-          max-width: 200px;
         }
 
         .submit-btn:hover:not(:disabled) {
           background: #2563eb;
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(59,130,246,0.3);
         }
 
         .submit-btn:disabled {
@@ -823,26 +726,7 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           color: #475569;
         }
 
-        .cancel-btn:hover {
-          background: #e2e8f0;
-        }
-
-        .spinner {
-          display: inline-block;
-          width: 16px;
-          height: 16px;
-          border: 2px solid #ffffff;
-          border-radius: 50%;
-          border-top-color: transparent;
-          animation: spin 1s linear infinite;
-          margin-right: 8px;
-        }
-
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-
-        /* Camera Modal Styles */
+        /* Camera Modal */
         .camera-modal-overlay {
           position: fixed;
           top: 0;
@@ -854,7 +738,6 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           align-items: center;
           justify-content: center;
           z-index: 1000;
-          padding: 20px;
         }
 
         .camera-modal {
@@ -863,7 +746,6 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           width: 100%;
           max-width: 800px;
           overflow: hidden;
-          box-shadow: 0 20px 40px rgba(0,0,0,0.5);
         }
 
         .camera-header {
@@ -875,24 +757,7 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
           color: white;
         }
 
-        .camera-header h3 {
-          margin: 0;
-          font-size: 18px;
-          font-weight: 600;
-        }
-
-        .camera-close-btn {
-          background: rgba(255,255,255,0.1);
-          border: none;
-          color: white;
-          font-size: 20px;
-          cursor: pointer;
-          padding: 5px 10px;
-          border-radius: 6px;
-        }
-
         .camera-container {
-          position: relative;
           background: black;
           min-height: 400px;
           display: flex;
@@ -914,54 +779,18 @@ const GreetingDesignForm = ({ onDesignAdded }) => {
         }
 
         .capture-btn {
-          display: flex;
-          align-items: center;
-          gap: 10px;
           padding: 12px 30px;
           background: #10b981;
           color: white;
           border: none;
           border-radius: 30px;
           font-size: 16px;
-          font-weight: 600;
           cursor: pointer;
         }
 
-        .camera-instructions {
-          text-align: center;
-          padding: 15px;
-          color: #94a3b8;
-          font-size: 14px;
-          border-top: 1px solid #404040;
-        }
-
         @media (max-width: 768px) {
-          .greeting-design-form {
-            padding: 10px;
-          }
-
-          .design-form {
-            padding: 20px;
-          }
-
           .upload-options {
             grid-template-columns: 1fr;
-          }
-
-          .form-actions {
-            flex-direction: column;
-          }
-
-          .submit-btn {
-            max-width: 100%;
-          }
-
-          .camera-modal {
-            max-width: 95%;
-          }
-
-          .camera-container {
-            min-height: 300px;
           }
         }
       `}</style>

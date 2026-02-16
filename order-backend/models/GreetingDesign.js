@@ -9,9 +9,12 @@ const greetingDesignSchema = new mongoose.Schema({
   tags: [String],
   isActive: { type: Boolean, default: true },
   
-  // File info
+  // Cloudinary info
   imageUrl: { type: String, required: true },
-  filename: String,
+  cloudinaryId: String, // Cloudinary public ID for deletion/updates
+  filename: String, // Original filename
+  
+  // File info
   fileSize: Number,
   fileType: String,
   
