@@ -10,7 +10,10 @@ const ServiceManagerSchema = new mongoose.Schema({
   aadhar: String,
   joiningDate: Date,
   experience: Number,
-    active: {
+   imageUrl: String,
+  cloudinaryId: String, // to store uploaded image path with cloudinary 
+
+ active: {
     type: Boolean,
     default: true
   },

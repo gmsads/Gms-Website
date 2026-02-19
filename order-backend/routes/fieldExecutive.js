@@ -378,4 +378,47 @@ router.get('/check-phone', async (req, res) => {
         res.status(500).json({ error: 'Failed to check phone number' });
     }
 });
+// Get data for specific executive with month/year filtering
+router.get('/data', async (req, res) => {
+    try {
+        const { executive, month, year } = req.query;
+
+        if (!executive) {
+            return res.status(400).json({ error: 'Executive name is required' });
+        }
+
+        // Build date filter if month and year are provided
+        let dateFilter = {};
+        if (month && year) {
+            const startDate = new Date(year, month - 1, 1);
+            const endDate = new Date(year, month, 0, 23, 59, 59);
+            dateFilter.date = { $gte: startDate, $lte: endDate };
+        }
+
+        // Get visits of the executive with date filter
+        const visits = await Visit.find({ 
+            executive,
+            ...dateFilter 
+        }).sort({ date: -1 });
+
+        // Get total leads from reports (filter by date if needed)
+        const reportFilter = { executive };
+        if (month && year) {
+            const startDate = new Date(year, month - 1, 1);
+            const endDate = new Date(year, month, 0, 23, 59, 59);
+            reportFilter.reportDate = { $gte: startDate, $lte: endDate };
+        }
+        
+        const reports = await Report.find(reportFilter);
+        const totalLeads = reports.reduce((sum, r) => sum + (r.leads || 0), 0);
+
+        res.json({
+            activities: visits,
+            leads: totalLeads
+        });
+    } catch (err) {
+        console.error('Error fetching field executive data:', err);
+        res.status(500).json({ error: 'Failed to fetch data' });
+    }
+});
 module.exports = router;

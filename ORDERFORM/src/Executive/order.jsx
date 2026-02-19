@@ -16,9 +16,7 @@ import PendingPayment from "../Admin/PendingPayment";
 import "../Executive/order.css";
 import TeleCRM from "./TeleCRM";
 import WhatsAppDashboard from "../Admin/WhatsApp";
-import MyLeaves from "./LeaveRequest";
 import { FaWhatsapp } from "react-icons/fa";
-import ViewLeaveRequests from './ViewLeaveRequests'
 
 function Admin() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
@@ -26,7 +24,7 @@ function Admin() {
   const [selectedExecutive] = useState(
     localStorage.getItem("userName") || "Executive"
   );
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [userRole] = useState(localStorage.getItem("userRole") || "executive");
 
   const [targetData, setTargetData] = useState({
     target: 0,
@@ -46,7 +44,6 @@ function Admin() {
   const [activeDuration, setActiveDuration] = useState("00:00:00");
   const [isSessionActive, setIsSessionActive] = useState(true);
   const timerRef = useRef(null);
-  const sidebarRef = useRef(null);
   
   // WhatsApp dashboard state
   const [showWhatsAppDashboard, setShowWhatsAppDashboard] = useState(false);
@@ -56,11 +53,11 @@ function Admin() {
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [dailySummary, setDailySummary] = useState({
     callsMade: 0,
-    ordersClosed: 0,
+    followUps: 0,
     whatsappMessages: 0,
-    appointments: 0,
-    prospects: 0,
+    ordersClosed: 0,
     totalSales: 0,
+    visits: 0,
     pendingPaymentCount: 0,
     totalPendingAmount: 0,
     target: 0,
@@ -76,8 +73,31 @@ function Admin() {
     loading: true
   });
 
-  const userRole = localStorage.getItem("userRole") || "executive";
   const logoutRef = useRef(null);
+  
+  // ===== CHECK IF USER IS FIELD EXECUTIVE =====
+  const userRoleLower = (userRole || "").toLowerCase();
+  const executiveNameLower = (selectedExecutive || "").toLowerCase();
+  
+  console.log('👤 User role from localStorage:', userRole);
+  console.log('👤 User role lowercase:', userRoleLower);
+  console.log('👤 Executive name:', selectedExecutive);
+  
+  // More comprehensive check for field executive
+  const isFieldExecutive = 
+    userRoleLower === 'field' ||
+    userRoleLower === 'fieldexecutive' ||
+    userRoleLower === 'field-executive' ||
+    userRoleLower === 'field executive' ||
+    userRoleLower.includes('field') ||
+    executiveNameLower.includes('field') ||
+    executiveNameLower.includes('fieldexecutive') ||
+    executiveNameLower.includes('field-executive') ||
+    executiveNameLower.includes('field executive') ||
+    localStorage.getItem('userType') === 'field' ||
+    false;
+  
+  console.log('👤 FINAL Is Field Executive:', isFieldExecutive);
   
   useEffect(() => {
     if (!localStorage.getItem('loginTime')) {
@@ -93,231 +113,425 @@ function Admin() {
     };
   }, []);
 
-  // Handle window resize
-  useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth <= 768;
-      setIsMobile(mobile);
-      setSidebarOpen(!mobile);
-    };
-    
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  // Close sidebar when clicking outside on mobile
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (isMobile && sidebarOpen && sidebarRef.current && !sidebarRef.current.contains(event.target)) {
-        setSidebarOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isMobile, sidebarOpen]);
-
   // Fetch unread WhatsApp messages count
   useEffect(() => {
     const fetchUnreadCount = async () => {
       try {
-        const response = await axios.get('/api/whatsapp/unread-count');
+        const response = await axios.get('/api/whatsapp/unread-count', {
+          params: {
+            executive: selectedExecutive
+          }
+        });
         setUnreadCount(response.data.count || 0);
       } catch (error) {
         console.error('Error fetching unread count:', error);
+        setUnreadCount(0);
       }
     };
 
     fetchUnreadCount();
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedExecutive]);
 
-  // Fetch daily executive summary
+  // Debug effect
+  useEffect(() => {
+    console.log('📊 Current dailySummary state:', dailySummary);
+    console.log('👤 User role:', userRole);
+    console.log('👤 FINAL Is Field Executive:', isFieldExecutive);
+    console.log('🚶 Visits count in state:', dailySummary.visits);
+  }, [dailySummary, userRole, isFieldExecutive]);
+
+  // ===== FETCH DAILY SUMMARY WITH ONLY TODAY'S VISITS =====
   const fetchDailySummary = async () => {
     try {
       setDailySummary(prev => ({ ...prev, loading: true }));
       
-      const today = new Date();
-      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
-      const tomorrow = new Date(todayStart);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      
       const executiveName = selectedExecutive;
+      const today = new Date();
       const todayStr = today.toISOString().split('T')[0];
       
+      console.log(`📊 Fetching REAL daily summary for ${executiveName} on ${todayStr}`);
+      console.log('👤 FINAL Is Field Executive:', isFieldExecutive);
+      
+      // ===== 1. GET DATA FROM RECORDFORM =====
       let callsMade = 0;
-      let whatsappMessages = 0;
+      let followUps = 0;
+      let whatsappFromReports = 0;
       
       try {
-        const recordResponse = await axios.get('/api/reports', {
+        console.log('🔍 Fetching records from API: /api/reports/executive-records');
+        const response = await axios.get('/api/reports/executive-records', {
           params: {
-            executiveName: executiveName,
-            date: todayStr
+            executive: executiveName
           }
         });
         
-        if (recordResponse.data) {
-          if (Array.isArray(recordResponse.data)) {
-            const todayRecord = recordResponse.data.find(record => {
-              const recordDate = new Date(record.date).toISOString().split('T')[0];
-              return recordDate === todayStr;
-            });
+        console.log('✅ API Response:', response.data);
+        
+        if (Array.isArray(response.data) && response.data.length > 0) {
+          const todayRecord = response.data.find(record => {
+            const recordDate = new Date(record.date).toISOString().split('T')[0];
+            return recordDate === todayStr;
+          });
+          
+          if (todayRecord) {
+            callsMade = parseInt(todayRecord.totalCalls) || 0;
+            followUps = parseInt(todayRecord.followUps) || 0;
+            whatsappFromReports = parseInt(todayRecord.whatsapp) || 0;
             
-            if (todayRecord) {
-              callsMade = parseInt(todayRecord.totalCalls) || 0;
-              whatsappMessages = parseInt(todayRecord.whatsapp) || 0;
-            }
-          } else if (recordResponse.data.totalCalls !== undefined) {
-            callsMade = parseInt(recordResponse.data.totalCalls) || 0;
-            whatsappMessages = parseInt(recordResponse.data.whatsapp) || 0;
+            console.log('✅ Found today\'s record from API:', { 
+              callsMade, 
+              followUps, 
+              whatsapp: whatsappFromReports 
+            });
+          } else {
+            console.log('⚠️ No record found for today in API response');
           }
+        } else {
+          console.log('⚠️ No records found in API response');
         }
-      } catch (recordError) {
-        console.error('Error fetching performance records:', recordError);
+      } catch (apiError) {
+        console.error('❌ Error fetching from API:', apiError);
+        
+        console.log('⚠️ API failed, trying localStorage as fallback...');
         try {
-          const altResponse = await axios.get(`/api/reports/today?executive=${executiveName}`);
-          if (altResponse.data) {
-            callsMade = parseInt(altResponse.data.totalCalls) || 0;
-            whatsappMessages = parseInt(altResponse.data.whatsapp) || 0;
+          const allReports = JSON.parse(localStorage.getItem('dailyReports') || '[]');
+          const todayReport = allReports.find(report => 
+            report.executiveName === executiveName && 
+            report.date === todayStr
+          );
+          
+          if (todayReport) {
+            callsMade = parseInt(todayReport.totalCalls) || 0;
+            followUps = parseInt(todayReport.followUps) || 0;
+            whatsappFromReports = parseInt(todayReport.whatsapp) || 0;
+            console.log('✅ Found fallback data in localStorage:', todayReport);
           }
-        } catch (altError) {
-          console.error('Alternative API also failed:', altError);
+        } catch (localError) {
+          console.error('Error reading from localStorage:', localError);
         }
       }
       
+      console.log('📞 FINAL RecordForm data - Calls:', callsMade, 'Follow-ups:', followUps, 'WhatsApp:', whatsappFromReports);
+      
+      // ===== 2. GET ORDERS CLOSED TODAY =====
       let ordersClosed = 0;
       let totalSales = 0;
       
       try {
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+        const tomorrow = new Date(todayStart);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        console.log('📅 Fetching orders for date range:', {
+          todayStart: todayStart.toISOString(),
+          tomorrow: tomorrow.toISOString()
+        });
+        
         const ordersResponse = await axios.get('/api/orders', {
           params: {
             executive: executiveName,
-            startDate: todayStart.toISOString(),
-            endDate: tomorrow.toISOString()
+            _: new Date().getTime() // Prevent caching
           }
         });
         
-        const ordersToday = Array.isArray(ordersResponse.data) ? ordersResponse.data : [];
+        console.log('📦 All orders for executive:', ordersResponse.data.length);
+        
+        // Filter orders for today only
+        const ordersToday = Array.isArray(ordersResponse.data) ? ordersResponse.data.filter(order => {
+          if (!order.orderDate) return false;
+          
+          const orderDate = new Date(order.orderDate);
+          const isToday = orderDate >= todayStart && orderDate < tomorrow;
+          
+          if (isToday) {
+            console.log('✅ Found today\'s order:', {
+              orderNo: order.orderNo,
+              orderDate: order.orderDate,
+              totalAmount: order.totalAmount,
+              rows: order.rows
+            });
+          }
+          
+          return isToday;
+        }) : [];
+        
         ordersClosed = ordersToday.length;
         
+        // Calculate total sales - Check both totalAmount and rows total
         totalSales = ordersToday.reduce((sum, order) => {
-          return sum + (order.totalAmount || order.total || 0);
+          // Try to get totalAmount directly
+          let orderTotal = order.totalAmount || 0;
+          
+          // If totalAmount is 0, try to calculate from rows
+          if (orderTotal === 0 && order.rows && Array.isArray(order.rows)) {
+            orderTotal = order.rows.reduce((rowSum, row) => {
+              return rowSum + (parseFloat(row.total) || 0);
+            }, 0);
+            console.log(`💰 Calculated total from rows for order ${order.orderNo}:`, orderTotal);
+          }
+          
+          console.log(`💰 Order ${order.orderNo} total:`, orderTotal);
+          return sum + orderTotal;
         }, 0);
         
-      } catch (orderError) {
-        console.error('Error fetching orders:', orderError);
-        try {
-          const fallbackResponse = await axios.get(`/api/executive/${executiveName}`);
-          const fallbackData = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : [];
-          
-          const todayFormatted = today.toLocaleDateString('en-IN');
-          const todayOrders = fallbackData.filter(order => {
-            const orderDate = new Date(order.orderDate || order.createdAt);
-            return orderDate.toLocaleDateString('en-IN') === todayFormatted;
+        console.log('✅ Found orders today:', ordersClosed, 'Total sales:', totalSales);
+        
+        // Log each order's details for debugging
+        ordersToday.forEach((order, index) => {
+          console.log(`📋 Order ${index + 1}:`, {
+            orderNo: order.orderNo,
+            totalAmount: order.totalAmount,
+            rowsTotal: order.rows?.reduce((sum, r) => sum + (parseFloat(r.total) || 0), 0),
+            status: order.status
           });
-          
-          ordersClosed = todayOrders.length;
-          totalSales = todayOrders.reduce((sum, order) => {
-            return sum + (order.totalAmount || order.total || 0);
-          }, 0);
-          
-        } catch (fallbackError) {
-          console.error('Fallback order fetch error:', fallbackError);
-        }
+        });
+        
+      } catch (orderError) {
+        console.error('❌ Error fetching orders:', orderError);
+        console.error('Error details:', orderError.response?.data || orderError.message);
       }
       
+      // ===== 3. GET WHATSAPP MESSAGES =====
+      let whatsappMessages = whatsappFromReports;
+      
+      try {
+        const whatsappResponse = await axios.get('/api/whatsapp/today', {
+          params: { executive: executiveName }
+        }).catch(() => ({ data: { count: 0 } }));
+        whatsappMessages += (whatsappResponse.data?.count || 0);
+      } catch (whatsappError) {
+        console.log('WhatsApp API not available');
+      }
+      
+      // ===== 4. GET ONLY TODAY'S VISITS FROM FIELD EXECUTIVE PAGE =====
+      let visits = 0;
+      
+      // ONLY get visits for TODAY, not all visits
+      console.log('🔍 FETCHING TODAY\'S VISITS ONLY FROM FIELD EXECUTIVE DATA FOR:', executiveName);
+      
+      try {
+        // METHOD 1: Get from fieldVisits_ specific key (this is the most reliable - saved by FieldExecutivePage)
+        const todayVisitsKey = `fieldVisits_${executiveName}_${todayStr}`;
+        const todayVisitsData = localStorage.getItem(todayVisitsKey);
+        console.log(`📦 ${todayVisitsKey}:`, todayVisitsData ? 'Found' : 'Not found');
+        
+        if (todayVisitsData) {
+          try {
+            const parsedVisits = JSON.parse(todayVisitsData);
+            if (Array.isArray(parsedVisits)) {
+              visits = parsedVisits.length;
+              console.log('✅ Found today\'s visits from fieldVisits key:', visits);
+            }
+          } catch (e) {
+            console.error('❌ Error parsing todayVisitsData:', e);
+          }
+        }
+        
+        // METHOD 2: Get from fieldExecutiveData in localStorage and filter for today only
+        if (visits === 0) {
+          const storedData = localStorage.getItem('fieldExecutiveData');
+          console.log('📦 fieldExecutiveData from localStorage:', storedData ? 'Found' : 'Not found');
+          
+          if (storedData) {
+            try {
+              const fieldData = JSON.parse(storedData);
+              console.log('📊 Parsed field data:', fieldData);
+              
+              if (fieldData.activities && Array.isArray(fieldData.activities)) {
+                console.log('📋 Total activities in storage:', fieldData.activities.length);
+                
+                // Filter activities for TODAY ONLY
+                const todayVisits = fieldData.activities.filter(activity => {
+                  if (!activity || !activity.date) return false;
+                  
+                  let activityDateStr;
+                  try {
+                    activityDateStr = new Date(activity.date).toISOString().split('T')[0];
+                  } catch (e) {
+                    console.error('Error parsing activity date:', e);
+                    return false;
+                  }
+                  
+                  // Also check if this activity belongs to current executive
+                  const matchesExecutive = 
+                    !activity.executive || 
+                    activity.executive === executiveName || 
+                    activity.executiveName === executiveName;
+                  
+                  const isToday = activityDateStr === todayStr;
+                  
+                  if (isToday && matchesExecutive) {
+                    console.log('✅ Found today\'s visit:', activity.client || activity.businessName);
+                  }
+                  
+                  return isToday && matchesExecutive;
+                });
+                
+                visits = todayVisits.length;
+                console.log('✅ Found field visits for TODAY only from fieldExecutiveData:', visits);
+              }
+            } catch (e) {
+              console.error('❌ Error parsing field data:', e);
+            }
+          }
+        }
+        
+        // METHOD 3: Check for visits in fieldData array and filter for today only
+        if (visits === 0) {
+          const fieldDataArray = localStorage.getItem('fieldData');
+          console.log('📦 fieldData:', fieldDataArray ? 'Found' : 'Not found');
+          
+          if (fieldDataArray) {
+            try {
+              const parsed = JSON.parse(fieldDataArray);
+              if (Array.isArray(parsed)) {
+                const todayVisits = parsed.filter(visit => {
+                  if (!visit || !visit.date) return false;
+                  
+                  let visitDateStr;
+                  try {
+                    visitDateStr = new Date(visit.date).toISOString().split('T')[0];
+                  } catch (e) {
+                    return false;
+                  }
+                  
+                  const matchesExecutive = 
+                    !visit.executive || 
+                    visit.executive === executiveName || 
+                    visit.executiveName === executiveName;
+                  
+                  // Only count if it's TODAY
+                  return visitDateStr === todayStr && matchesExecutive;
+                });
+                
+                if (todayVisits.length > 0) {
+                  visits += todayVisits.length;
+                  console.log('✅ Found visits for TODAY only in fieldData:', todayVisits.length);
+                }
+              }
+            } catch (e) {
+              console.error('Error parsing fieldData:', e);
+            }
+          }
+        }
+        
+        // METHOD 4: Check for any visit-related keys and filter for today only
+        if (visits === 0) {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.toLowerCase().includes('visit') || key.toLowerCase().includes('field')) && key.includes(todayStr)) {
+              try {
+                const value = localStorage.getItem(key);
+                if (value) {
+                  const parsed = JSON.parse(value);
+                  if (Array.isArray(parsed)) {
+                    const executiveVisits = parsed.filter(v => {
+                      if (!v || !v.date) return false;
+                      
+                      let visitDateStr;
+                      try {
+                        visitDateStr = new Date(v.date).toISOString().split('T')[0];
+                      } catch (e) {
+                        return false;
+                      }
+                      
+                      const matchesExecutive = 
+                        !v.executive || 
+                        v.executive === executiveName || 
+                        v.executiveName === executiveName;
+                      
+                      // Already filtered by key containing todayStr, but double-check
+                      return visitDateStr === todayStr && matchesExecutive;
+                    });
+                    
+                    if (executiveVisits.length > 0) {
+                      visits += executiveVisits.length;
+                      console.log(`✅ Found visits for TODAY in key ${key}:`, executiveVisits.length);
+                    }
+                  }
+                }
+              } catch (e) {
+                // Skip if not parseable
+              }
+            }
+          }
+        }
+        
+      } catch (storageError) {
+        console.error('❌ Error reading from localStorage:', storageError);
+      }
+      
+      console.log('🚶 FINAL TODAY\'S VISITS COUNT:', visits);
+      
+      // ===== 5. GET PENDING PAYMENTS =====
       let pendingPaymentCount = 0;
       let totalPendingAmount = 0;
-      
       try {
         const pendingResponse = await axios.get('/api/orders/pending-payments');
         const pendingOrders = Array.isArray(pendingResponse.data) ? pendingResponse.data : [];
-        
         const executivePending = pendingOrders.filter(order => 
-          order?.executive?.toLowerCase() === executiveName.toLowerCase() && 
-          order?.balance > 0
+          order?.executive?.toLowerCase() === executiveName.toLowerCase() && order?.balance > 0
         );
-        
         pendingPaymentCount = executivePending.length;
         totalPendingAmount = executivePending.reduce((sum, order) => sum + (order?.balance || 0), 0);
-        
       } catch (pendingError) {
         console.error('Error fetching pending payments:', pendingError);
       }
       
+      // ===== 6. GET TARGET DATA =====
       let target = 0;
-      let achieved = 0;
-      
+      let achieved = totalSales; // Use today's sales for achieved
       try {
         const currentMonth = today.getMonth() + 1;
         const currentYear = today.getFullYear();
-        
         const targetResponse = await axios.get(`/api/get-target/${executiveName}/${currentMonth}/${currentYear}`);
         target = targetResponse.data?.target || 0;
-        achieved = totalSales;
-        
       } catch (targetError) {
         console.error('Error fetching target:', targetError);
       }
       
-      let prospects = 0;
-      
-      try {
-        const prospectsResponse = await axios.get('/api/prospects', {
-          params: {
-            executiveName: executiveName,
-            date: todayStr
-          }
-        });
-        
-        if (Array.isArray(prospectsResponse.data)) {
-          prospects = prospectsResponse.data.length;
-        }
-      } catch (prospectsError) {
-        console.error('Error fetching prospects:', prospectsError);
-        try {
-          const altProspectsResponse = await axios.get(`/api/prospects/today?executive=${executiveName}`);
-          if (Array.isArray(altProspectsResponse.data)) {
-            prospects = altProspectsResponse.data.length;
-          } else if (altProspectsResponse.data) {
-            prospects = 1;
-          }
-        } catch (altError) {
-          console.error('Alternative prospect API failed:', altError);
-        }
-      }
-      
+      // Calculate metrics
       const conversionRate = callsMade > 0 ? Math.round((ordersClosed / callsMade) * 100) : 0;
       const averageOrderValue = ordersClosed > 0 ? Math.round(totalSales / ordersClosed) : 0;
       
+      console.log('📊 FINAL DAILY SUMMARY (TODAY ONLY):', {
+        callsMade: callsMade,
+        followUps: followUps,
+        whatsappMessages: whatsappMessages,
+        ordersClosed: ordersClosed,
+        totalSales: totalSales,
+        visits: visits,
+        pendingPaymentCount: pendingPaymentCount,
+        totalPendingAmount: totalPendingAmount,
+        isFieldExecutive: isFieldExecutive
+      });
+      
       setDailySummary({
-        callsMade,
-        ordersClosed,
-        whatsappMessages,
-        appointments: 0,
-        prospects,
-        totalSales,
-        pendingPaymentCount,
-        totalPendingAmount,
-        target,
-        achieved,
-        conversionRate,
-        averageOrderValue,
+        callsMade: callsMade,
+        followUps: followUps,
+        whatsappMessages: whatsappMessages,
+        ordersClosed: ordersClosed,
+        totalSales: totalSales,
+        pendingPaymentCount: pendingPaymentCount,
+        totalPendingAmount: totalPendingAmount,
+        target: target,
+        achieved: achieved,
+        conversionRate: conversionRate,
+        averageOrderValue: averageOrderValue,
+        visits: visits,
         loading: false
       });
       
     } catch (error) {
-      console.error('Error fetching daily summary:', error);
+      console.error('❌ Error fetching daily summary:', error);
       setDailySummary(prev => ({ 
         ...prev, 
         loading: false,
-        ordersClosed: 0,
+        visits: 0,
         totalSales: 0,
-        prospects: 0
+        ordersClosed: 0
       }));
     }
   };
@@ -423,25 +637,46 @@ function Admin() {
       });
 
       if (activity === "Logout") {
+        // Fetch the latest daily summary including visits before showing modal
         await fetchDailySummary();
         setShowSummaryModal(true);
       }
     } catch (error) {
       console.error("Error during activity selection:", error);
       if (activity === "Logout") {
+        // Still try to show summary even if API fails
+        await fetchDailySummary();
         setShowSummaryModal(true);
       }
     }
   };
 
+  // ===== FIXED: Don't clear all localStorage, only session items =====
   const handleFinalLogout = () => {
     resetTimer();
-    localStorage.clear();
+    
+    // DON'T clear all localStorage - this was deleting the field visits data
+    // localStorage.clear(); // REMOVE THIS LINE
+    
+    // Instead, only remove session-related items
+    localStorage.removeItem('loginTime');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('userName');
+    localStorage.removeItem('userType');
+    localStorage.removeItem('authToken'); // if you have this
+    // Keep fieldExecutiveData and fieldVisits_* in localStorage
+    
     setShowSummaryModal(false);
     window.location.href = "/";
   };
 
-  // Close logout dropdown when clicking outside
+  useEffect(() => {
+    const handleResize = () => setSidebarOpen(window.innerWidth > 768);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (logoutRef.current && !logoutRef.current.contains(event.target)) {
@@ -455,7 +690,6 @@ function Admin() {
     };
   }, []);
 
-  // Fetch target data
   useEffect(() => {
     const fetchTargetData = async () => {
       try {
@@ -585,25 +819,14 @@ function Admin() {
     setActiveTab("pending-payments");
   };
 
-  // Handle menu item click - closes sidebar on mobile
-  const handleMenuItemClick = (key) => {
-    setActiveTab(key);
-    if (key === "order") {
-      setShowOrderForm(false);
-      setOrderNumber("");
-    }
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
-  };
-
+  // ===== STYLES OBJECT WITH CONDITIONAL GRID =====
   const styles = {
     whatsappButton: {
       position: 'fixed',
       bottom: '30px',
       right: '30px',
-      width: isMobile ? '50px' : '60px',
-      height: isMobile ? '50px' : '60px',
+      width: '60px',
+      height: '60px',
       backgroundColor: '#25D366',
       borderRadius: '50%',
       display: 'flex',
@@ -616,7 +839,7 @@ function Admin() {
       border: 'none',
     },
     whatsappIcon: {
-      fontSize: isMobile ? '24px' : '32px',
+      fontSize: '32px',
       color: 'white',
     },
     unreadBadge: {
@@ -626,12 +849,12 @@ function Admin() {
       backgroundColor: '#FF3B30',
       color: 'white',
       borderRadius: '50%',
-      width: isMobile ? '20px' : '24px',
-      height: isMobile ? '20px' : '24px',
+      width: '24px',
+      height: '24px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      fontSize: isMobile ? '10px' : '12px',
+      fontSize: '12px',
       fontWeight: 'bold',
       boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
     },
@@ -646,13 +869,13 @@ function Admin() {
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 2000,
-      padding: isMobile ? '10px' : '20px',
+      padding: '20px',
     },
     modalContent: {
       backgroundColor: 'white',
       borderRadius: '8px',
-      padding: isMobile ? '15px' : '20px',
-      maxWidth: '400px',
+      padding: '20px',
+      maxWidth: '500px',
       width: '100%',
       color: '#333',
       boxShadow: '0 5px 20px rgba(0, 0, 0, 0.1)',
@@ -664,56 +887,61 @@ function Admin() {
       borderBottom: '1px solid #e0e0e0',
     },
     modalTitle: {
-      fontSize: isMobile ? '14px' : '16px',
+      fontSize: '18px',
       fontWeight: '600',
       marginBottom: '3px',
       color: '#2c3e50',
     },
     modalSubtitle: {
-      fontSize: isMobile ? '10px' : '11px',
+      fontSize: '12px',
       color: '#7f8c8d',
     },
     metricsGrid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(4, 1fr)',
-      gap: isMobile ? '5px' : '10px',
+      // FORCE SHOW 5 COLUMNS FOR FIELD EXECUTIVES TO INCLUDE VISITS
+      gridTemplateColumns: isFieldExecutive ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)',
+      gap: '8px',
       marginBottom: '15px',
     },
     metricItem: {
       textAlign: 'center',
+      padding: '8px 5px',
+      backgroundColor: '#f8f9fa',
+      borderRadius: '6px',
     },
     metricIcon: {
-      fontSize: isMobile ? '12px' : '14px',
-      marginBottom: '3px',
+      fontSize: '18px',
+      marginBottom: '4px',
     },
     metricValue: {
-      fontSize: isMobile ? '14px' : '16px',
-      fontWeight: '600',
+      fontSize: '18px',
+      fontWeight: '700',
       color: '#2c3e50',
       lineHeight: '1.2',
     },
     metricLabel: {
-      fontSize: isMobile ? '8px' : '10px',
+      fontSize: '10px',
       color: '#7f8c8d',
       textTransform: 'uppercase',
       letterSpacing: '0.3px',
+      fontWeight: '500',
     },
     salesBox: {
       backgroundColor: '#f8f9fa',
-      padding: isMobile ? '10px' : '12px',
+      padding: '12px',
       borderRadius: '6px',
       marginBottom: '15px',
       textAlign: 'center',
       border: '1px solid #e9ecef',
     },
     salesAmount: {
-      fontSize: isMobile ? '18px' : '22px',
+      fontSize: '24px',
       fontWeight: 'bold',
       color: '#27ae60',
       margin: '3px 0',
     },
     salesLabel: {
-      fontSize: isMobile ? '10px' : '12px',
+      fontSize: '12px',
       color: '#7f8c8d',
       fontWeight: '500',
     },
@@ -721,9 +949,9 @@ function Admin() {
       backgroundColor: '#3498db',
       color: 'white',
       border: 'none',
-      padding: isMobile ? '8px' : '10px',
-      fontSize: isMobile ? '12px' : '13px',
-      borderRadius: '5px',
+      padding: '12px',
+      fontSize: '14px',
+      borderRadius: '6px',
       cursor: 'pointer',
       width: '100%',
       fontWeight: '600',
@@ -731,35 +959,7 @@ function Admin() {
     },
     loadingSpinner: {
       textAlign: 'center',
-      padding: '20px',
-    },
-    mobileMenuButton: {
-      position: 'fixed',
-      top: '15px',
-      left: '15px',
-      zIndex: 1001,
-      backgroundColor: '#003366',
-      color: 'white',
-      width: '40px',
-      height: '40px',
-      borderRadius: '8px',
-      display: isMobile ? 'flex' : 'none',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '24px',
-      cursor: 'pointer',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
-      border: 'none',
-    },
-    overlay: {
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.5)',
-      zIndex: 999,
-      display: isMobile && sidebarOpen ? 'block' : 'none',
+      padding: '30px',
     },
   };
 
@@ -772,258 +972,71 @@ function Admin() {
     .modal-animation {
       animation: fadeIn 0.15s ease-out;
     }
-
-    /* Sidebar scrollable styles */
-    .sidebar {
-      overflow-y: auto !important;
-      scrollbar-width: thin;
-      scrollbar-color: #667eea #001529;
-    }
-
-    .sidebar::-webkit-scrollbar {
-      width: 5px;
-    }
-
-    .sidebar::-webkit-scrollbar-track {
-      background: #001529;
-    }
-
-    .sidebar::-webkit-scrollbar-thumb {
-      background: #667eea;
-      border-radius: 10px;
-    }
-
-    .sidebar::-webkit-scrollbar-thumb:hover {
-      background: #5a67d8;
-    }
-
-    /* Mobile responsive navbar */
-    @media (max-width: 768px) {
-      .navbar {
-        padding: 10px !important;
-        height: auto !important;
-        min-height: 60px !important;
-        flex-wrap: wrap !important;
-      }
-      
-      .navbar-title {
-        font-size: 16px !important;
-        margin-left: 40px !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        max-width: calc(100% - 80px) !important;
-      }
-      
-      .navbar-right {
-        width: 100% !important;
-        justify-content: space-between !important;
-        margin-top: 10px !important;
-        flex-wrap: wrap !important;
-        gap: 10px !important;
-      }
-      
-      .session-timer-card {
-        padding: 5px 8px !important;
-        min-width: auto !important;
-      }
-      
-      .timer-value {
-        font-size: 12px !important;
-      }
-      
-      .target-display {
-        min-width: auto !important;
-        padding: 5px 8px !important;
-      }
-      
-      .target-text {
-        font-size: 11px !important;
-      }
-      
-      .progress-bar {
-        width: 80px !important;
-      }
-      
-      .profile-icon {
-        width: 30px !important;
-        height: 30px !important;
-      }
-      
-      .logout-btn {
-        padding: 5px 10px !important;
-        font-size: 12px !important;
-      }
-      
-      .pending-payment-notification {
-        width: 100% !important;
-        margin-right: 0 !important;
-        font-size: 12px !important;
-      }
-      
-      .pending-payment-notification small {
-        font-size: 10px !important;
-      }
-      
-      .main-content {
-        padding: 60px 10px 10px 10px !important;
-      }
-      
-      .form-container {
-        padding: 10px !important;
-      }
-      
-      .phone-search-box {
-        padding: 15px !important;
-      }
-      
-      .phone-search-box h3 {
-        font-size: 16px !important;
-      }
-      
-      .form-type-selector {
-        flex-direction: column !important;
-        gap: 8px !important;
-      }
-      
-      .search-button {
-        width: 100% !important;
-      }
-      
-      /* Make sidebar full width on mobile */
-      .sidebar.open {
-        width: 280px !important;
-        z-index: 1000 !important;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .navbar-title {
-        font-size: 14px !important;
-        margin-left: 35px !important;
-      }
-      
-      .timer-label {
-        font-size: 10px !important;
-      }
-      
-      .timer-value {
-        font-size: 11px !important;
-      }
-      
-      .target-icon {
-        font-size: 11px !important;
-      }
-      
-      .target-text {
-        font-size: 10px !important;
-      }
-      
-      .profile-icon {
-        width: 28px !important;
-        height: 28px !important;
-      }
-      
-      .profile-icon-symbol {
-        font-size: 12px !important;
-      }
-      
-      .logout-btn {
-        padding: 4px 8px !important;
-        font-size: 11px !important;
-      }
-      
-      .pending-payment-notification {
-        padding: 6px 8px !important;
-        font-size: 11px !important;
-      }
-      
-      .main-content {
-        padding: 70px 8px 8px 8px !important;
-      }
-      
-      .phone-search-box h3 {
-        font-size: 14px !important;
-      }
-      
-      .phone-search-box input {
-        padding: 8px !important;
-        font-size: 14px !important;
-      }
-      
-      .form-type-selector label {
-        font-size: 13px !important;
-      }
-      
-      /* Make sidebar even smaller on very small screens */
-      .sidebar.open {
-        width: 250px !important;
-      }
-    }
   `;
 
   return (
     <div className="app-container">
       {isSessionActive && <AutoLogout />}
       
-      {/* Add modal and responsive styles */}
       <style>{modalStyles}</style>
       
-      {/* Mobile Menu Button */}
-      {isMobile && (
-        <>
-          <button
-            style={styles.mobileMenuButton}
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-          >
-            ☰
-          </button>
-          <div style={styles.overlay} onClick={() => setSidebarOpen(false)} />
-        </>
-      )}
-      
-      {/* Executive Summary Modal */}
+      {/* Executive Summary Modal - Shows Daily Summary with Today's Visits */}
       {showSummaryModal && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalContent} className="modal-animation">
             <div style={styles.modalHeader}>
               <h2 style={styles.modalTitle}>Daily Summary</h2>
-              <p style={styles.modalSubtitle}>{selectedExecutive} • {new Date().toLocaleDateString('en-IN', { 
-                day: 'numeric',
-                month: 'short'
-              })} • TODAY</p>
+              <p style={styles.modalSubtitle}>
+                {selectedExecutive} • {new Date().toLocaleDateString('en-IN', { 
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric'
+                })} • TODAY
+                {isFieldExecutive && ' • Field Executive'}
+              </p>
             </div>
             
             {dailySummary.loading ? (
               <div style={styles.loadingSpinner}>
-                <div className="spinner-border text-primary" style={{ width: '16px', height: '16px' }} role="status"></div>
-                <p style={{ marginTop: '10px', color: '#95a5a6', fontSize: '11px' }}>Loading...</p>
+                <div className="spinner-border text-primary" style={{ width: '20px', height: '20px' }} role="status"></div>
+                <p style={{ marginTop: '10px', color: '#95a5a6', fontSize: '12px' }}>Loading your daily summary...</p>
               </div>
             ) : (
               <>
                 <div style={styles.metricsGrid}>
+                  {/* Calls */}
                   <div style={styles.metricItem}>
                     <div style={{...styles.metricIcon, color: '#3498db'}}>📞</div>
                     <div style={styles.metricValue}>{dailySummary.callsMade}</div>
                     <div style={styles.metricLabel}>Calls</div>
                   </div>
                   
+                  {/* Follow-ups */}
+                  <div style={styles.metricItem}>
+                    <div style={{...styles.metricIcon, color: '#f39c12'}}>🔄</div>
+                    <div style={styles.metricValue}>{dailySummary.followUps}</div>
+                    <div style={styles.metricLabel}>Follow-ups</div>
+                  </div>
+                  
+                  {/* WhatsApp */}
                   <div style={styles.metricItem}>
                     <div style={{...styles.metricIcon, color: '#25D366'}}>💬</div>
                     <div style={styles.metricValue}>{dailySummary.whatsappMessages}</div>
                     <div style={styles.metricLabel}>WhatsApp</div>
                   </div>
                   
+                  {/* Orders */}
                   <div style={styles.metricItem}>
                     <div style={{...styles.metricIcon, color: '#2ecc71'}}>💰</div>
                     <div style={styles.metricValue}>{dailySummary.ordersClosed}</div>
                     <div style={styles.metricLabel}>Orders</div>
                   </div>
                   
+                  {/* VISITS - Shows Today's Visits Only */}
                   <div style={styles.metricItem}>
-                    <div style={{...styles.metricIcon, color: '#e74c3c'}}>👥</div>
-                    <div style={styles.metricValue}>{dailySummary.prospects}</div>
-                    <div style={styles.metricLabel}>Prospects</div>
+                    <div style={{...styles.metricIcon, color: '#1abc9c'}}>🚶</div>
+                    <div style={styles.metricValue}>{dailySummary.visits}</div>
+                    <div style={styles.metricLabel}>Visits</div>
                   </div>
                 </div>
                 
@@ -1032,11 +1045,42 @@ function Admin() {
                   <div style={styles.salesAmount}>
                     ₹{dailySummary.totalSales.toLocaleString('en-IN')}
                   </div>
+                  <div style={{ fontSize: '11px', color: '#7f8c8d', marginTop: '5px' }}>
+                    Conversion: {dailySummary.conversionRate}% | Avg Order: ₹{dailySummary.averageOrderValue.toLocaleString('en-IN')}
+                  </div>
                 </div>
+                
+                {/* Pending Payments Alert */}
+                {dailySummary.pendingPaymentCount > 0 && (
+                  <div style={{
+                    backgroundColor: '#fff3cd',
+                    border: '1px solid #ffeeba',
+                    borderRadius: '4px',
+                    padding: '8px',
+                    marginBottom: '10px',
+                    fontSize: '11px',
+                    color: '#856404',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px'
+                  }}>
+                    <span>⚠️</span>
+                    <span>
+                      You have {dailySummary.pendingPaymentCount} pending payment(s) 
+                      totaling ₹{dailySummary.totalPendingAmount.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                )}
                 
                 <button 
                   onClick={handleFinalLogout}
                   style={styles.logoutButton}
+                  onMouseEnter={(e) => {
+                    e.target.style.backgroundColor = '#2980b9';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.backgroundColor = '#3498db';
+                  }}
                 >
                   Logout
                 </button>
@@ -1048,15 +1092,13 @@ function Admin() {
       
       {/* Navbar */}
       <div className="navbar">
-        {!isMobile && (
-          <button
-            className="toggle-btn"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            aria-label="Toggle sidebar"
-          >
-            ☰
-          </button>
-        )}
+        <button
+          className="toggle-btn"
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          aria-label="Toggle sidebar"
+        >
+          ☰
+        </button>
         
         <h1
           className="navbar-title"
@@ -1064,10 +1106,9 @@ function Admin() {
             background: "linear-gradient(to right, #4facfe, #00f2fe)",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
-            marginLeft: !isMobile ? '60px' : '0',
           }}
         >
-          Welcome {selectedExecutive}
+          Welcome {selectedExecutive} {isFieldExecutive ? "(Field Executive)" : ""}
         </h1>
 
         <div className="navbar-right">
@@ -1092,18 +1133,17 @@ function Admin() {
               style={{
                 backgroundColor: '#e74c3c',
                 color: 'white',
-                padding: isMobile ? '6px 8px' : '8px 12px',
+                padding: '8px 12px',
                 borderRadius: '6px',
                 cursor: 'pointer',
-                fontSize: isMobile ? '12px' : '14px',
+                fontSize: '14px',
                 fontWeight: '600',
                 display: 'flex',
                 alignItems: 'center',
-                gap: isMobile ? '4px' : '8px',
-                marginRight: isMobile ? '0' : '15px',
+                gap: '8px',
+                marginRight: '15px',
                 boxShadow: '0 2px 4px rgba(231, 76, 60, 0.3)',
                 transition: 'all 0.2s',
-                width: isMobile ? '100%' : 'auto',
               }}
               onMouseEnter={(e) => {
                 e.target.style.backgroundColor = '#c0392b';
@@ -1116,7 +1156,7 @@ function Admin() {
             >
               <span>⚠️</span>
               <span>
-                {isMobile ? `${pendingPaymentData.count} pending` : `${selectedExecutive}, you have ${pendingPaymentData.count} pending payments`}
+                {selectedExecutive}, you have {pendingPaymentData.count} pending payments
                 <br />
                 <small>Total: ₹{pendingPaymentData.amount.toLocaleString()}</small>
               </span>
@@ -1134,9 +1174,7 @@ function Admin() {
               <span className="target-text">
                 {loading
                   ? "Loading..."
-                  : isMobile 
-                    ? `${targetData.formattedAchieved} / ${targetData.formattedTarget}`
-                    : `${targetData.formattedAchieved} / ${targetData.formattedTarget}`}
+                  : `${targetData.formattedAchieved} / ${targetData.formattedTarget}`}
               </span>
               <div className="progress-bar">
                 {!loading && (
@@ -1190,15 +1228,8 @@ function Admin() {
         </div>
       </div>
 
-      {/* Sidebar - Made scrollable */}
-      <div 
-        ref={sidebarRef}
-        className={`sidebar ${sidebarOpen ? "open" : "closed"}`}
-        style={{
-          overflowY: 'auto',
-          maxHeight: '100vh',
-        }}
-      >
+      {/* Sidebar */}
+      <div className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
         <div className="sidebar-content">
           <div className="nav-menu">
             {[
@@ -1211,8 +1242,6 @@ function Admin() {
               { key: "viewAppointments", icon: "📂", text: "View Appointments" },
               { key: "prospective", icon: "🔍", text: "Create Prospects ➕" },
               { key: "viewProspects", icon: "👁️", text: "View Prospects" },
-              { key: "myleaves", icon: "📞", text: "Request-Leaves" },
-              { key: "view-leaves", icon: "📋", text: "My Leaves" },
               { key: "price-list", icon: "💰", text: "Price List" },
               { key: "pending-payments", icon: "💰", text: "Pending Payments" },
               { key: "tele", icon: "📞", text: "Tele-CRM" },
@@ -1220,7 +1249,13 @@ function Admin() {
               <div
                 key={key}
                 className={`nav-item ${activeTab === key ? "active" : ""}`}
-                onClick={() => handleMenuItemClick(key)}
+                onClick={() => {
+                  setActiveTab(key);
+                  if (key === "order") {
+                    setShowOrderForm(false);
+                    setOrderNumber("");
+                  }
+                }}
               >
                 <span className="nav-icon">{icon}</span>
                 <span className="nav-text">{text}</span>
@@ -1233,18 +1268,21 @@ function Admin() {
       {/* Main Content */}
       <div className={`main-content ${sidebarOpen ? "" : "expanded"}`}>
         <div className="form-container">
-          {activeTab === "executive-dashboard" && <ExecutiveDashboard />}
-          {activeTab === "record" && <Record />}
-          {activeTab === "tele" && <TeleCRM />}
-          {activeTab === "appointment" && <Appointment />}
-          {activeTab === "viewOrders" && <ViewOrders userRole={userRole} />}
-          {activeTab === "myleaves" && <MyLeaves />}
-          {activeTab === "view-leaves" && <ViewLeaveRequests />}
+          {activeTab === "executive-dashboard" && (
+            <>
+              <ExecutiveDashboard executiveName={selectedExecutive} />
+            </>
+          )}
+
+          {activeTab === "record" && <Record executiveName={selectedExecutive} />}
+          {activeTab === "tele" && <TeleCRM executiveName={selectedExecutive} />}
+          {activeTab === "appointment" && <Appointment executiveName={selectedExecutive} />}
+          {activeTab === "viewOrders" && <ViewOrders userRole={userRole} executiveName={selectedExecutive} />}
           {activeTab === "price-list" && <Pricelist />}
-          {activeTab === "viewAppointments" && <ViewAppointments />}
-          {activeTab === "prospective" && <Prospective />}
-          {activeTab === "viewProspects" && <ViewProspective />}
-          {activeTab === "viewRecord" && <ViewRecord />}
+          {activeTab === "viewAppointments" && <ViewAppointments executiveName={selectedExecutive} />}
+          {activeTab === "prospective" && <Prospective executiveName={selectedExecutive} />}
+          {activeTab === "viewProspects" && <ViewProspective executiveName={selectedExecutive} />}
+          {activeTab === "viewRecord" && <ViewRecord executiveName={selectedExecutive} />}
           {activeTab === "pending-payments" && (
             <PendingPayment executiveFilter={selectedExecutive} />
           )}
@@ -1322,6 +1360,7 @@ function Admin() {
                   setActiveTab("executive-dashboard");
                   setShowOrderForm(false);
                 }}
+                executiveName={selectedExecutive}
               />
             )}
 
@@ -1332,19 +1371,18 @@ function Admin() {
                 <button
                   onClick={() => setShowOrderForm(false)}
                   style={{
-                    padding: isMobile ? "8px 16px" : "10px 20px",
+                    padding: "10px 20px",
                     backgroundColor: "#dc3545",
                     color: "#fff",
                     border: "none",
                     borderRadius: "5px",
                     cursor: "pointer",
                     marginBottom: "20px",
-                    width: isMobile ? "100%" : "auto",
                   }}
                 >
                   Back
                 </button>
-                <DigitalMarketingOrderForm />
+                <DigitalMarketingOrderForm executiveName={selectedExecutive} />
               </div>
             )}
         </div>
@@ -1377,6 +1415,7 @@ function Admin() {
           onClose={() => setShowWhatsAppDashboard(false)}
           unreadCount={unreadCount}
           onMarkAsRead={() => setUnreadCount(0)}
+          executiveName={selectedExecutive}
         />
       )}
     </div>

@@ -148,6 +148,8 @@ function App() {
           <Route index element={<HRDashboard />} />
           
           {/* Using existing Admin components for HR */}
+          <Route path="fieldvisitsadmin" element={<FieldVisitsAdmin/>} />
+          <Route path="daily-report" element={<DailyReport />} />
           <Route path="employees" element={<Employees />} />
            <Route path="hr-report" element={<DailyHrDashbaord />} />
           <Route path="add-employee" element={<AddExecutiveAdmin />} />
@@ -230,6 +232,7 @@ function App() {
           }
         >
           <Route path="purchase" element={<Purchase />} />
+             <Route path="hour-reeport" element={<HourReport />} />
              <Route path="view-hrreport" element={<ViewHRReports />} />
            <Route path="view-leaves" element={<ViewLeave />} />
           <Route path="greeting-design" element={<GreetingDesign/>} />

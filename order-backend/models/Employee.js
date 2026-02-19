@@ -1,25 +1,25 @@
-// models/Employee.js
 const mongoose = require('mongoose');
 
 const employeeSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   name: { type: String, required: true },
   phone: { type: String, required: true },
-  email: { type: String },
-  guardianName: { type: String },
-  guardianContact: { type: String },  // ✅ Now added
-  aadhar: { type: String },
-  joiningDate: { type: Date },
-  experience: { type: Number },
-  role: { type: String, required: true },
+  email: String,
+  password: String,
+  guardianName: String,
+  guardianContact: String,
+  aadhar: String,
+  joiningDate: Date,
+  experience: String,
+  role: String,
   active: { type: Boolean, default: true },
-  imageUrl: { type: String },
-  resignationDate: { type: Date },
-  resignationReason: { type: String },
-  rejoinDate: { type: Date },
-  employeeId: { type: String, unique: true }
-}, {
-  timestamps: true
+  resignationDate: Date,
+  resignationReason: String,
+  rejoinDate: Date,
+  employeeId: String,
+  imageUrl: String,  // Store Cloudinary URL here
+  cloudinaryId: String, // Store Cloudinary public ID for deletion if needed
+  createdAt: { type: Date, default: Date.now }
 });
 
 module.exports = mongoose.model('Employee', employeeSchema);

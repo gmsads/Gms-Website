@@ -23,11 +23,13 @@ const digitalMarketingSchema = new mongoose.Schema({
   aadhar: String,
   joiningDate: Date,
   experience: Number,
-    active: {
+   imageUrl: String,
+  cloudinaryId: String, // to store uploaded image path with cloudinary 
+
+ active: {
     type: Boolean,
     default: true
-  },
-  imageUrl: String, // to store uploaded image path
+  }, // to store uploaded image path
   resignationDate: String,
   resignationReason: String,
   rejoinDate: String,

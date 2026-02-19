@@ -39,7 +39,7 @@ function ViewOrders() {
   });
   const [showDeleteModal, setShowDeleteModal] = useState(false); // Delete confirmation modal
   const [leadSourceFilter, setLeadSourceFilter] = useState(null); // Lead source filter
-  
+
   // NEW: Lead source filter dropdown visibility state
   const [showLeadSourceFilter, setShowLeadSourceFilter] = useState(false); // Lead source filter dropdown
   const leadSourceFilterRef = useRef(null); // Ref for click outside detection
@@ -174,7 +174,7 @@ function ViewOrders() {
   const navigateToMonth = (direction) => {
     let newMonth = currentViewMonth;
     let newYear = currentViewYear;
-    
+
     if (direction === 'next') {
       newMonth = newMonth === 12 ? 1 : newMonth + 1;
       newYear = newMonth === 1 ? newYear + 1 : newYear;
@@ -182,11 +182,11 @@ function ViewOrders() {
       newMonth = newMonth === 1 ? 12 : newMonth - 1;
       newYear = newMonth === 12 ? newYear - 1 : newYear;
     }
-    
+
     const params = new URLSearchParams();
     params.set('month', newMonth);
     params.set('year', newYear);
-    
+
     // Remove other filters when navigating months
     params.delete('clientType');
     params.delete('executive');
@@ -197,7 +197,7 @@ function ViewOrders() {
     params.delete('monthName');
     params.delete('weekCount');
     params.delete('leadSource');
-    
+
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
   };
 
@@ -264,17 +264,17 @@ function ViewOrders() {
 
       // Calculate order total from rows
       let orderAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-      
+
       // Calculate total received (advance + payment history)
       const orderAdvance = parseFloat(order.advance) || 0;
       let paymentHistoryTotal = 0;
-      
+
       // Sum up payment history amounts
       if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
-        paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) => 
+        paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) =>
           sum + (parseFloat(payment.amount) || 0), 0);
       }
-      
+
       // Calculate received amount and balance
       const orderReceived = orderAdvance + paymentHistoryTotal;
       const orderBalance = orderAmount - orderReceived;
@@ -307,20 +307,20 @@ function ViewOrders() {
         // Calculate order total from rows
         const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
         totalAmount += orderTotal;
-        
+
         // Calculate total received (advance + all payments)
         const advanceReceived = parseFloat(order.advance) || 0;
         let paymentHistoryTotal = 0;
-        
+
         // Sum payment history
         if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
-          paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) => 
+          paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) =>
             sum + (parseFloat(payment.amount) || 0), 0);
         }
-        
+
         // Update received total
         totalReceived += advanceReceived + paymentHistoryTotal;
-        
+
         // Calculate balance for this order
         const orderBalance = orderTotal - (advanceReceived + paymentHistoryTotal);
         totalBalance += orderBalance;
@@ -348,14 +348,14 @@ function ViewOrders() {
       // Get role and name from localStorage with fallbacks
       const role = localStorage.getItem('role') || '';
       const name = localStorage.getItem('name') || localStorage.getItem('userName') || '';
-      
+
       // Log user info for debugging
       console.log('User info from localStorage:', { role, name });
-      
+
       // Update state with user info
       setUserRole(role);
       setExecutiveName(name);
-      
+
       // Return user info
       return { role, name };
     } catch (error) {
@@ -381,12 +381,12 @@ function ViewOrders() {
       const leadSourceFromUrl = searchParams.get('leadSource');
 
       console.log('🔍 Fetching orders with params:', {
-        role, 
-        name, 
-        month, 
-        year, 
-        clientType, 
-        executive, 
+        role,
+        name,
+        month,
+        year,
+        clientType,
+        executive,
         executiveName,
         executiveFromUrl,
         executiveTypeFromUrl,
@@ -396,7 +396,7 @@ function ViewOrders() {
 
       // Build query parameters
       const queryParams = new URLSearchParams();
-      
+
       // CASE 1: If specific executive filtering is requested from performance view
       if (executiveNameFromUrl) {
         console.log('🎯 Filtering by specific executive from performance view:', executiveNameFromUrl);
@@ -407,7 +407,7 @@ function ViewOrders() {
       else {
         const rolesThatCanSeeAll = ['Admin', 'Account', 'Service Executive'];
         const shouldFilter = role && !rolesThatCanSeeAll.includes(role) && name;
-        
+
         if (shouldFilter) {
           queryParams.append('executive', name);
           console.log('👤 FILTERING: Showing only orders for current executive:', name);
@@ -426,7 +426,7 @@ function ViewOrders() {
 
       // Log API call for debugging
       console.log('📡 API Call:', `${url}?${queryParams.toString()}`);
-      
+
       // Make API request
       const res = await axios.get(`${url}?${queryParams.toString()}`);
       console.log('📦 Total orders received from API:', res.data.length);
@@ -445,10 +445,10 @@ function ViewOrders() {
       if (executiveNameFromUrl) {
         const executiveOrders = filteredOrders.filter(order => order.executive === executiveNameFromUrl);
         console.log('🔍 VERIFICATION: Executive orders count:', executiveOrders.length);
-        console.log('🔍 VERIFICATION: Executive orders:', executiveOrders.map(o => ({ 
-          orderNo: o.orderNo, 
+        console.log('🔍 VERIFICATION: Executive orders:', executiveOrders.map(o => ({
+          orderNo: o.orderNo,
           executive: o.executive,
-          match: o.executive === executiveNameFromUrl 
+          match: o.executive === executiveNameFromUrl
         })));
       }
 
@@ -478,7 +478,7 @@ function ViewOrders() {
   // Function to handle lead source filter selection
   const handleLeadSourceFilterSelect = (source) => {
     const params = new URLSearchParams(location.search);
-    
+
     if (source) {
       params.set('leadSource', source);
       setLeadSourceFilter(source);
@@ -486,7 +486,7 @@ function ViewOrders() {
       params.delete('leadSource');
       setLeadSourceFilter(null);
     }
-    
+
     // Remove other filters when selecting lead source
     params.delete('month');
     params.delete('year');
@@ -498,10 +498,10 @@ function ViewOrders() {
     params.delete('monthCount');
     params.delete('monthName');
     params.delete('weekCount');
-    
+
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
     setShowLeadSourceFilter(false); // Close the dropdown
-    
+
     // Fetch orders with new filter
     const { role, name } = getUserInfo();
     const month = params.get('month');
@@ -523,7 +523,7 @@ function ViewOrders() {
     const executiveType = params.get('executiveType');
     const executiveName = params.get('executiveName');
     const leadSource = params.get('leadSource');
-    
+
     // Parse month filter info
     const monthCount = params.get('monthCount');
     const monthName = params.get('monthName');
@@ -576,7 +576,7 @@ function ViewOrders() {
     // Get user info and fetch orders
     const { role, name } = getUserInfo();
     fetchOrders(role, name, month, year, clientType, executive, executiveName, leadSource);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, location.state, yearFilter]);
   // useEffect to handle click outside lead source filter dropdown
   useEffect(() => {
@@ -585,7 +585,7 @@ function ViewOrders() {
         setShowLeadSourceFilter(false);
       }
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
@@ -595,12 +595,12 @@ function ViewOrders() {
     const newYear = parseInt(e.target.value);
     setYearFilter(newYear);
     setCurrentViewYear(newYear);
-    
+
     // Update URL with new year parameter
     const params = new URLSearchParams(location.search);
     params.set('year', newYear);
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
-    
+
     // Refresh orders with new year filter
     const { role, name } = getUserInfo();
     const month = params.get('month');
@@ -675,7 +675,7 @@ function ViewOrders() {
     navigate(`/admin-dashboard/view-orders?${params.toString()}`); // Update URL
     setLeadSourceFilter(null); // Reset lead source filter state
     setShowLeadSourceFilter(false); // Close dropdown
-    
+
     // Refresh orders without lead source filter
     const { role, name } = getUserInfo();
     fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, null);
@@ -725,7 +725,7 @@ function ViewOrders() {
       toast.error('You can only edit your own orders');
       return;
     }
-    
+
     // Set editing order with formatted dates
     setEditingOrder({
       ...order,
@@ -782,11 +782,11 @@ function ViewOrders() {
       // Send PUT request to update order
       await axios.put(API_ENDPOINTS.UPDATE_ORDER(editingOrder._id), editingOrder);
       setShowModal(false); // Close modal
-      
+
       // Refresh orders list
       const { role, name } = getUserInfo();
       fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, leadSourceFilter);
-      
+
       toast.success('Order updated successfully!'); // Show success message
     } catch (err) {
       // Handle update error
@@ -804,7 +804,7 @@ function ViewOrders() {
       toast.error('You can only delete your own orders');
       return;
     }
-    
+
     console.log('Confirming delete for order:', orderId);
     setOrderToDelete(orderId); // Set order to delete
     setShowDeleteModal(true); // Show delete confirmation modal
@@ -871,14 +871,14 @@ function ViewOrders() {
       toast.error('You can only record payments for your own orders');
       return;
     }
-    
+
     try {
       setPaymentLoading(true); // Set loading state
       setCurrentOrder(order); // Set current order
 
       // Create payment history that includes advance
       const payments = [];
-      
+
       // Add advance as first payment if it exists
       if (order.advance > 0) {
         payments.push({
@@ -889,7 +889,7 @@ function ViewOrders() {
           note: 'Initial advance payment'
         });
       }
-      
+
       // Add regular payment history
       if (order.paymentHistory) {
         payments.push(...order.paymentHistory);
@@ -924,7 +924,7 @@ function ViewOrders() {
 
       // Create payment history that includes advance
       const payments = [];
-      
+
       // Add advance as first payment if it exists
       if (order.advance > 0) {
         payments.push({
@@ -935,7 +935,7 @@ function ViewOrders() {
           note: 'Initial advance payment'
         });
       }
-      
+
       // Add regular payment history
       if (order.paymentHistory) {
         payments.push(...order.paymentHistory);
@@ -1017,7 +1017,7 @@ function ViewOrders() {
             </tr>
           </thead>
           <tbody>
-            ${paymentHistory.map((payment, ) => `
+            ${paymentHistory.map((payment,) => `
               <tr>
                 <td>${formatDate(payment.date)}</td>
                 <td>${parseFloat(payment.amount || 0).toLocaleString('en-IN')}</td>
@@ -1045,7 +1045,7 @@ function ViewOrders() {
       </body>
       </html>
     `;
-    
+
     printWindow.document.write(printContent);
     printWindow.document.close();
   };
@@ -1093,11 +1093,11 @@ function ViewOrders() {
       );
 
       toast.success('Payment recorded successfully!'); // Show success message
-      
+
       // Refresh orders list
       const { role, name } = getUserInfo();
       fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, leadSourceFilter);
-      
+
       setShowPaymentsModal(false); // Close modal
     } catch (err) {
       // Handle payment error
@@ -1170,7 +1170,7 @@ function ViewOrders() {
     const worksheet = XLSX.utils.json_to_sheet(flattenedOrders);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
-    
+
     // Generate filename based on user role
     let filename;
     if (shouldSeeOnlyOwnOrders()) {
@@ -1178,7 +1178,7 @@ function ViewOrders() {
     } else {
       filename = `orders_${yearFilter}_export.xlsx`;
     }
-    
+
     // Download Excel file
     XLSX.writeFile(workbook, filename);
     toast.success(`Excel file "${filename}" downloaded successfully!`);
@@ -1190,7 +1190,7 @@ function ViewOrders() {
       toast.error('You do not have permission to import orders');
       return;
     }
-    
+
     const file = e.target.files[0];
     if (!file) return;
 
@@ -1272,20 +1272,20 @@ function ViewOrders() {
 
         // Send import request
         await axios.post(API_ENDPOINTS.IMPORT_ORDERS, ordersToImport);
-        
+
         // Refresh orders list
         const { role, name } = getUserInfo();
         fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, leadSourceFilter);
-        
+
         toast.success(`Successfully imported ${ordersToImport.length} orders!`);
-        
+
         // Reset the file input
         document.getElementById('importExcelInput').value = '';
       } catch (err) {
         // Handle import error
         console.error('Error importing orders:', err);
         toast.error('Failed to import orders. Please check the file format.');
-        
+
         // Reset the file input on error too
         document.getElementById('importExcelInput').value = '';
       }
@@ -1400,27 +1400,26 @@ function ViewOrders() {
     <div style={{ padding: '20px', backgroundColor: '#f9f9f9', minHeight: '100vh' }}>
       {/* Add responsive CSS styles */}
       <style>{responsiveStyles}</style>
-      
+
       {/* Toast container for notifications */}
       <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999 }} />
 
       {/* User Role Info Banner */}
       <div style={{
-        backgroundColor: appliedExecutiveFilters.executiveName ? '#fff3cd' : 
-                        shouldSeeOnlyOwnOrders() ? '#e3f2fd' : '#f3e5f5',
+        backgroundColor: appliedExecutiveFilters.executiveName ? '#fff3cd' :
+          shouldSeeOnlyOwnOrders() ? '#e3f2fd' : '#f3e5f5',
         padding: '10px 15px',
         borderRadius: '6px',
         marginBottom: '20px',
-        border: `2px solid ${
-          appliedExecutiveFilters.executiveName ? '#ffc107' : 
+        border: `2px solid ${appliedExecutiveFilters.executiveName ? '#ffc107' :
           shouldSeeOnlyOwnOrders() ? '#2196f3' : '#9c27b0'
-        }`,
+          }`,
         textAlign: 'center',
         fontWeight: 'bold'
       }}>
-        {appliedExecutiveFilters.executiveName 
+        {appliedExecutiveFilters.executiveName
           ? `🔍 Viewing Orders for: ${appliedExecutiveFilters.executiveName}`
-          : shouldSeeOnlyOwnOrders() 
+          : shouldSeeOnlyOwnOrders()
             ? `👤 Viewing Your Orders Only - ${executiveName || 'User'} (${userRole || 'User'})`
             : `👑 Viewing All Orders - ${userRole || 'Admin'} Role`
         }
@@ -1561,7 +1560,7 @@ function ViewOrders() {
             >
               ← Prev
             </button>
-            
+
             <select
               value={currentViewMonth}
               onChange={(e) => {
@@ -1569,7 +1568,7 @@ function ViewOrders() {
                 const params = new URLSearchParams();
                 params.set('month', newMonth);
                 params.set('year', currentViewYear);
-                
+
                 // Clear other filters
                 params.delete('clientType');
                 params.delete('executive');
@@ -1580,7 +1579,7 @@ function ViewOrders() {
                 params.delete('monthName');
                 params.delete('weekCount');
                 params.delete('leadSource');
-                
+
                 navigate(`/admin-dashboard/view-orders?${params.toString()}`);
               }}
               style={{
@@ -1597,7 +1596,7 @@ function ViewOrders() {
                 </option>
               ))}
             </select>
-            
+
             <button
               onClick={() => navigateToMonth('next')}
               style={{
@@ -1614,7 +1613,7 @@ function ViewOrders() {
               Next →
             </button>
           </div>
-          
+
           <div style={{ textAlign: 'center', flex: 1 }}>
             <h3 style={{ margin: 0, color: '#1976d2' }}>
               {new Date(yearFilter, currentViewMonth - 1).toLocaleString('default', { month: 'long' })} {currentViewYear}
@@ -1623,7 +1622,7 @@ function ViewOrders() {
               {groupedOrders[`${currentViewYear}-${currentViewMonth.toString().padStart(2, '0')}`]?.orders?.length || 0} orders
             </p>
           </div>
-          
+
           <button
             onClick={clearAllFilters}
             style={{
@@ -1936,7 +1935,7 @@ function ViewOrders() {
               <span>📋</span>
               {leadSourceFilter ? `${leadSourceFilter}` : 'Lead Source'}
               {leadSourceFilter && (
-                <span 
+                <span
                   onClick={(e) => {
                     e.stopPropagation();
                     handleLeadSourceFilterSelect(null);
@@ -1958,7 +1957,7 @@ function ViewOrders() {
                 </span>
               )}
             </button>
-            
+
             {/* Lead Source Filter Dropdown */}
             {showLeadSourceFilter && (
               <div style={{
@@ -2001,7 +2000,7 @@ function ViewOrders() {
                   >
                     All Lead Sources
                   </button>
-                  
+
                   {leadSources.map((source, index) => (
                     <button
                       key={index}
@@ -2106,7 +2105,7 @@ function ViewOrders() {
                     <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Amount</div>
                     <div style={{ fontWeight: 'bold', fontSize: '16px' }}>₹{group.totals.amount.toLocaleString('en-IN')}</div>
                   </div>
-                  
+
                   {/* Total Received Display */}
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Received</div>
@@ -2135,39 +2134,39 @@ function ViewOrders() {
                   <thead style={{ backgroundColor: '#218c74', color: '#fff', position: 'sticky', top: 0, zIndex: 10 }}>
                     <tr>
                       {/* Sticky Columns - S.No, Executive, Business with responsive class */}
-                      <th className="sticky-column" style={{ 
-                        padding: '12px 8px', 
-                        fontSize: '14px', 
-                        textAlign: 'center', 
+                      <th className="sticky-column" style={{
+                        padding: '12px 8px',
+                        fontSize: '14px',
+                        textAlign: 'center',
                         backgroundColor: '#218c74',
                         position: 'sticky',
                         left: 0,
                         zIndex: 11,
                         minWidth: '50px'
                       }}>S.No</th>
-                      
-                      <th className="sticky-column" style={{ 
-                        padding: '12px 8px', 
-                        fontSize: '14px', 
-                        textAlign: 'center', 
+
+                      <th className="sticky-column" style={{
+                        padding: '12px 8px',
+                        fontSize: '14px',
+                        textAlign: 'center',
                         backgroundColor: '#218c74',
                         position: 'sticky',
                         left: '50px',
                         zIndex: 11,
                         minWidth: '100px'
                       }}>Executive</th>
-                      
-                      <th className="sticky-column" style={{ 
-                        padding: '12px 8px', 
-                        fontSize: '14px', 
-                        textAlign: 'center', 
+
+                      <th className="sticky-column" style={{
+                        padding: '12px 8px',
+                        fontSize: '14px',
+                        textAlign: 'center',
                         backgroundColor: '#218c74',
                         position: 'sticky',
                         left: '150px',
                         zIndex: 11,
                         minWidth: '150px'
                       }}>Business</th>
-                      
+
                       {/* Regular Headers */}
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Customer</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Location</th>
@@ -2203,7 +2202,7 @@ function ViewOrders() {
                       order.rows.filter(filterOrders(order)).map((row, rowIndex) => {
                         // Calculate background color based on row index
                         const rowBgColor = (orderIndex + rowIndex) % 2 === 0 ? '#fdfdfd' : '#f5f9fa';
-                        
+
                         return (
                           <tr
                             key={`${order._id}-${rowIndex}`}
@@ -2213,8 +2212,8 @@ function ViewOrders() {
                             }}
                           >
                             {/* Sticky Cells - S.No, Executive, Business with responsive class */}
-                            <td className="sticky-column" style={{ 
-                              padding: '10px 8px', 
+                            <td className="sticky-column" style={{
+                              padding: '10px 8px',
                               textAlign: 'center',
                               position: 'sticky',
                               left: 0,
@@ -2222,8 +2221,8 @@ function ViewOrders() {
                               zIndex: 9,
                               minWidth: '50px'
                             }}>{orderIndex + 1}</td>
-                            
-                            <td className="sticky-column" style={{ 
+
+                            <td className="sticky-column" style={{
                               padding: '10px 8px',
                               position: 'sticky',
                               left: '50px',
@@ -2231,8 +2230,9 @@ function ViewOrders() {
                               zIndex: 9,
                               minWidth: '100px'
                             }}>{order.executive}</td>
-                            
-                            <td className="sticky-column" style={{ 
+
+{/* // In the business name cell where you have the button for Admin users */}
+                            <td className="sticky-column" style={{
                               padding: '10px 8px',
                               position: 'sticky',
                               left: '150px',
@@ -2273,7 +2273,7 @@ function ViewOrders() {
                                 </span>
                               )}
                             </td>
-                            
+
                             {/* Regular Cells */}
                             <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactPerson}</td>
                             <td style={{ padding: '10px 8px', minWidth: '100px' }}>{order.location}</td>

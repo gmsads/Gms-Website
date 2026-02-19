@@ -680,7 +680,7 @@ const FieldExecutivePage = () => {
                         {/* Stats Section with filters */}
                         <div className="field-stats">
                             <div className="stats-header">
-                                <h2>Performance Metrics</h2>
+                               
                                 <div className="stats-filters">
                                     <select
                                         value={statsMonthFilter.getMonth()}
@@ -706,29 +706,7 @@ const FieldExecutivePage = () => {
                                     </select>
                                 </div>
                             </div>
-                            <div className="stats-grid">
-                                <div className="stat-card scheduled">
-                                    <div className="stat-icon">📅</div>
-                                    <div className="stat-info">
-                                        <h3>Scheduled Visits</h3>
-                                        <p className="stat-value">{filteredStats.scheduled}</p>
-                                    </div>
-                                </div>
-                                <div className="stat-card completed">
-                                    <div className="stat-icon">✅</div>
-                                    <div className="stat-info">
-                                        <h3>Completed Visits</h3>
-                                        <p className="stat-value">{filteredStats.completed}</p>
-                                    </div>
-                                </div>
-                                <div className="stat-card leads">
-                                    <div className="stat-icon">🔥</div>
-                                    <div className="stat-info">
-                                        <h3>Leads Generated</h3>
-                                        <p className="stat-value">{filteredStats.leads}</p>
-                                    </div>
-                                </div>
-                            </div>
+                           
                         </div>
 
                         {/* Activities Section */}

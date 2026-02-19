@@ -11,8 +11,13 @@ const unitSchema = new mongoose.Schema({
   aadhar: String,
   joiningDate: Date,
   experience: String,
-  active: { type: Boolean, default: true },
-  image: String,
+ imageUrl: String,
+  cloudinaryId: String, // to store uploaded image path with cloudinary 
+
+ active: {
+    type: Boolean,
+    default: true
+  },
   resignationDate: Date,
   resignationReason: String,
   rejoinDate: Date

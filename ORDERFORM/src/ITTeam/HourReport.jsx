@@ -3,17 +3,18 @@ import axios from 'axios';
 import { format, parseISO, startOfDay, isSameDay } from 'date-fns';
 
 const HourReport = () => {
-  const [interactions, setInteractions] = useState([]);
-  const [filteredInteractions, setFilteredInteractions] = useState([]);
+  const [records, setRecords] = useState([]);
+  const [filteredRecords, setFilteredRecords] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [updateTexts, setUpdateTexts] = useState({});
-  const [activeUpdateId, setActiveUpdateId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedExecutive, setSelectedExecutive] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
 
   const formatIndianPhoneNumber = (phoneNumber) => {
+    if (!phoneNumber) return 'Not provided';
+    
     const cleaned = (phoneNumber || '').toString().replace(/\D/g, '');
     if (cleaned.length === 10) {
       return `+91 ${cleaned.substring(0, 5)} ${cleaned.substring(5)}`;
@@ -25,79 +26,95 @@ const HourReport = () => {
     return phoneNumber;
   };
 
+  // Get unique executives for filter dropdown
   const uniqueExecutives = [...new Set(
-    interactions.map(i => i.executiveName).filter(name => name)
+    records.map(r => r.executiveName).filter(name => name)
   )].sort();
 
   useEffect(() => {
-    const fetchInteractions = async () => {
+    const fetchRecords = async () => {
       try {
+        setIsLoading(true);
         const response = await axios.get('/api/interactions');
-        setInteractions(response.data);
-        setFilteredInteractions(response.data);
+        setRecords(response.data);
+        setFilteredRecords(response.data);
       } catch (err) {
-        setError(err.message);
+        setError(err.response?.data?.message || err.message);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchInteractions();
+    fetchRecords();
   }, []);
 
   useEffect(() => {
-    let results = interactions;
+    let results = records;
     
+    // Apply search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      results = results.filter(interaction => 
-        interaction.customerName?.toLowerCase().includes(term) ||
-        interaction.businessName?.toLowerCase().includes(term) ||
-        interaction.phoneNumber?.includes(term) ||
-        interaction.topicDiscussed?.toLowerCase().includes(term) ||
-        interaction.executiveName?.toLowerCase().includes(term) ||
-        interaction.updates?.some(update => 
-          update.text.toLowerCase().includes(term)
-      ));
+      results = results.filter(record => 
+        record.executiveName?.toLowerCase().includes(term) ||
+        record.phoneNumber?.includes(term) ||
+        record.topicDiscussed?.toLowerCase().includes(term) ||
+        record.remark?.toLowerCase().includes(term)
+      );
     }
     
+    // Apply date filter
     if (selectedDate) {
       const selectedDay = startOfDay(selectedDate);
-      results = results.filter(interaction => 
-        isSameDay(parseISO(interaction.createdAt), selectedDay)
+      results = results.filter(record => 
+        isSameDay(parseISO(record.createdAt), selectedDay)
       );
     }
     
+    // Apply executive filter
     if (selectedExecutive) {
-      results = results.filter(interaction => 
-        interaction.executiveName === selectedExecutive
+      results = results.filter(record => 
+        record.executiveName === selectedExecutive
       );
     }
     
-    setFilteredInteractions(results);
-  }, [searchTerm, selectedDate, selectedExecutive, interactions]);
+    // Apply sorting
+    results = sortRecords(results, sortConfig.key, sortConfig.direction);
+    
+    setFilteredRecords(results);
+  }, [searchTerm, selectedDate, selectedExecutive, records, sortConfig]);
 
-  const handleUpdateChange = (id, text) => {
-    setUpdateTexts(prev => ({ ...prev, [id]: text }));
+  const sortRecords = (recordsToSort, key, direction) => {
+    return [...recordsToSort].sort((a, b) => {
+      if (key === 'createdAt') {
+        const dateA = new Date(a[key]).getTime();
+        const dateB = new Date(b[key]).getTime();
+        return direction === 'asc' ? dateA - dateB : dateB - dateA;
+      }
+      
+      let valueA = a[key] || '';
+      let valueB = b[key] || '';
+      
+      if (typeof valueA === 'string') {
+        valueA = valueA.toLowerCase();
+        valueB = valueB.toLowerCase();
+      }
+      
+      if (valueA < valueB) return direction === 'asc' ? -1 : 1;
+      if (valueA > valueB) return direction === 'asc' ? 1 : -1;
+      return 0;
+    });
   };
 
-  const submitUpdate = async (id) => {
-    try {
-      const text = updateTexts[id];
-      if (!text || !text.trim()) return;
-
-      const response = await axios.patch(`/api/interactions/${id}/updates`, {
-        text: text.trim()
-      });
-
-      setInteractions(prev => prev.map(interaction => 
-        interaction._id === id ? response.data : interaction
-      ));
-
-      setUpdateTexts(prev => ({ ...prev, [id]: '' }));
-      setActiveUpdateId(null);
-    } catch (err) {
-      setError(err.response?.data?.message || err.message);
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
     }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key) => {
+    if (sortConfig.key !== key) return '↕️';
+    return sortConfig.direction === 'asc' ? '↑' : '↓';
   };
 
   const clearFilters = () => {
@@ -106,22 +123,79 @@ const HourReport = () => {
     setSelectedExecutive('');
   };
 
-  if (isLoading) return <div>Loading interactions...</div>;
-  if (error) return <div>Error: {error}</div>;
+  const exportToCSV = () => {
+    const headers = ['Date & Time', 'Executive', 'Phone Number', 'Topic Discussed', 'Remarks'];
+    const csvData = filteredRecords.map(record => [
+      format(parseISO(record.createdAt), 'yyyy-MM-dd HH:mm:ss'),
+      record.executiveName,
+      record.phoneNumber || 'Not provided',
+      record.topicDiscussed,
+      record.remark || ''
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `hour_records_${format(new Date(), 'yyyy-MM-dd_HHmm')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  if (isLoading) {
+    return (
+      <div style={styles.loadingContainer}>
+        <div style={styles.loadingSpinner}></div>
+        <p>Loading hour records...</p>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div style={styles.errorContainer}>
+        <h3>Error Loading Records</h3>
+        <p>{error}</p>
+        <button onClick={() => window.location.reload()} style={styles.retryButton}>
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Interaction Report</h1>
+      <div style={styles.header}>
+        <h1 style={styles.title}>Hour Records Report</h1>
+        <button onClick={exportToCSV} style={styles.exportButton}>
+          📥 Export to CSV
+        </button>
+      </div>
       
       <div style={styles.filterContainer}>
         <div style={styles.searchContainer}>
           <input
             type="text"
-            placeholder="Search by customer, business, phone, executive, or topic..."
+            placeholder="Search by executive, phone, topic, or remarks..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={styles.searchInput}
           />
+          {searchTerm && (
+            <button 
+              onClick={() => setSearchTerm('')}
+              style={styles.clearInputButton}
+            >
+              ×
+            </button>
+          )}
         </div>
         
         <div style={styles.dateContainer}>
@@ -165,92 +239,89 @@ const HourReport = () => {
           </button>
         )}
       </div>
+
+      <div style={styles.statsContainer}>
+        <div style={styles.statCard}>
+          <span style={styles.statLabel}>Total Records:</span>
+          <span style={styles.statValue}>{records.length}</span>
+        </div>
+        <div style={styles.statCard}>
+          <span style={styles.statLabel}>Filtered:</span>
+          <span style={styles.statValue}>{filteredRecords.length}</span>
+        </div>
+        <div style={styles.statCard}>
+          <span style={styles.statLabel}>Executives:</span>
+          <span style={styles.statValue}>{uniqueExecutives.length}</span>
+        </div>
+        <div style={styles.statCard}>
+          <span style={styles.statLabel}>With Phone:</span>
+          <span style={styles.statValue}>
+            {records.filter(r => r.phoneNumber).length}
+          </span>
+        </div>
+      </div>
      
       <div style={styles.tableWrapper}>
         <table style={styles.table}>
           <thead>
             <tr>
-              <th style={styles.headerCell}>Date & Time</th>
-              <th style={styles.headerCell}>Executive</th>
-              <th style={styles.headerCell}>Time Since Previous</th>
-              <th style={styles.headerCell}>Business</th>
-              <th style={styles.headerCell}>Customer</th>
-              <th style={styles.headerCell}>Phone</th>
-              <th style={styles.headerCell}>Topic</th>
-              <th style={styles.headerCell}>Updates</th>
-              <th style={styles.headerCell}>Add Update</th>
+              <th style={styles.headerCell} onClick={() => handleSort('createdAt')}>
+                Date & Time {getSortIcon('createdAt')}
+              </th>
+              <th style={styles.headerCell} onClick={() => handleSort('executiveName')}>
+                Executive {getSortIcon('executiveName')}
+              </th>
+              <th style={styles.headerCell}>Phone Number</th>
+              <th style={styles.headerCell} onClick={() => handleSort('topicDiscussed')}>
+                Topic Discussed {getSortIcon('topicDiscussed')}
+              </th>
+              <th style={styles.headerCell}>Remarks</th>
             </tr>
           </thead>
           <tbody>
-            {filteredInteractions.length > 0 ? (
-              filteredInteractions.map((interaction) => (
-                <tr key={interaction._id} style={styles.row}>
+            {filteredRecords.length > 0 ? (
+              filteredRecords.map((record) => (
+                <tr key={record._id} style={styles.row}>
                   <td style={styles.cell}>
-                    {format(parseISO(interaction.createdAt), "MMM d, yyyy h:mm a")}
-                  </td>
-                  <td style={styles.cell}>{interaction.executiveName}</td>
-                  <td style={styles.cell}>{interaction.timeSinceLast}</td>
-                  <td style={styles.cell}>{interaction.businessName}</td>
-                  <td style={styles.cell}>{interaction.customerName}</td>
-                  <td style={styles.cell}>
-                    {formatIndianPhoneNumber(interaction.phoneNumber)}
-                  </td>
-                  <td style={styles.cell}>{interaction.topicDiscussed}</td>
-                  <td style={styles.cell}>
-                    {interaction.updates?.map((update, i) => (
-                      <div key={i} style={{ marginBottom: '4px' }}>
-                        <small>
-                          {format(parseISO(update.updatedAt), "MMM d, h:mm a")}: 
-                          <br />
-                          {update.text}
-                        </small>
-                      </div>
-                    ))}
+                    {format(parseISO(record.createdAt), "MMM d, yyyy h:mm a")}
                   </td>
                   <td style={styles.cell}>
-                    {activeUpdateId === interaction._id ? (
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <textarea
-                          value={updateTexts[interaction._id] || ''}
-                          onChange={(e) => handleUpdateChange(interaction._id, e.target.value)}
-                          style={{ 
-                            width: '100%', 
-                            minHeight: '60px',
-                            padding: '8px',
-                            marginBottom: '4px'
-                          }}
-                          placeholder="Enter your update..."
-                        />
-                        <div>
-                          <button 
-                            onClick={() => submitUpdate(interaction._id)}
-                            style={styles.updateButton}
-                          >
-                            Save
-                          </button>
-                          <button 
-                            onClick={() => setActiveUpdateId(null)}
-                            style={{ ...styles.updateButton, marginLeft: '4px' }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                    <strong>{record.executiveName}</strong>
+                  </td>
+                  <td style={styles.cell}>
+                    {record.phoneNumber ? (
+                      <a href={`tel:${record.phoneNumber}`} style={styles.phoneLink}>
+                        {formatIndianPhoneNumber(record.phoneNumber)}
+                      </a>
+                    ) : (
+                      <span style={styles.noData}>—</span>
+                    )}
+                  </td>
+                  <td style={styles.cell}>
+                    <div style={styles.topicCell}>
+                      {record.topicDiscussed}
+                    </div>
+                  </td>
+                  <td style={styles.cell}>
+                    {record.remark ? (
+                      <div style={styles.remarkCell}>
+                        {record.remark}
                       </div>
                     ) : (
-                      <button 
-                        onClick={() => setActiveUpdateId(interaction._id)}
-                        style={styles.updateButton}
-                      >
-                        Add Update
-                      </button>
+                      <span style={styles.noData}>—</span>
                     )}
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="9" style={{ textAlign: 'center', padding: '20px' }}>
-                  No interactions found matching your criteria
+                <td colSpan="5" style={styles.noResultsCell}>
+                  <div style={styles.noResultsContent}>
+                    <p>No records found matching your criteria</p>
+                    <button onClick={clearFilters} style={styles.clearFiltersButton}>
+                      Clear all filters
+                    </button>
+                  </div>
                 </td>
               </tr>
             )}
@@ -263,116 +334,271 @@ const HourReport = () => {
 
 const styles = {
   container: {
-    maxWidth: '1200px',
+    maxWidth: '1400px',
     margin: '2rem auto',
-    padding: '0 1rem',
-    fontFamily: "'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif"
+    padding: '0 1.5rem',
+    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '1.5rem'
   },
   title: {
     fontSize: '2rem',
     fontWeight: '600',
-    color: '#2c3e50',
-    marginBottom: '0.5rem'
+    color: '#1a202c',
+    margin: 0
+  },
+  exportButton: {
+    padding: '0.5rem 1rem',
+    backgroundColor: '#48bb78',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    fontWeight: '500',
+    transition: 'all 0.2s ease'
+  },
+  loadingContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '400px'
+  },
+  loadingSpinner: {
+    width: '40px',
+    height: '40px',
+    border: '3px solid #f3f3f3',
+    borderTop: '3px solid #3182ce',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite',
+    marginBottom: '1rem'
+  },
+  errorContainer: {
+    textAlign: 'center',
+    padding: '2rem',
+    backgroundColor: '#fff5f5',
+    borderRadius: '8px',
+    maxWidth: '500px',
+    margin: '2rem auto'
+  },
+  retryButton: {
+    padding: '0.5rem 1rem',
+    backgroundColor: '#3182ce',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    marginTop: '1rem'
   },
   filterContainer: {
     display: 'flex',
     flexWrap: 'wrap',
     gap: '1rem',
     marginBottom: '1.5rem',
-    alignItems: 'center'
+    alignItems: 'center',
+    backgroundColor: '#f7fafc',
+    padding: '1rem',
+    borderRadius: '8px'
   },
   searchContainer: {
-    flex: '1',
-    minWidth: '300px'
+    flex: '2',
+    minWidth: '300px',
+    position: 'relative'
   },
   searchInput: {
     width: '100%',
-    padding: '0.5rem',
-    borderRadius: '4px',
-    border: '1px solid #ddd',
-    fontSize: '1rem'
+    padding: '0.75rem',
+    paddingRight: '2rem',
+    borderRadius: '6px',
+    border: '1px solid #e2e8f0',
+    fontSize: '0.95rem',
+    transition: 'all 0.2s ease'
+  },
+  clearInputButton: {
+    position: 'absolute',
+    right: '10px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    background: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '1.2rem',
+    color: '#a0aec0',
+    padding: '4px 8px'
   },
   dateContainer: {
     position: 'relative',
     display: 'flex',
-    alignItems: 'center'
+    alignItems: 'center',
+    minWidth: '200px'
   },
   dateInput: {
-    padding: '0.5rem',
-    borderRadius: '4px',
-    border: '1px solid #ddd',
-    fontSize: '1rem'
+    width: '100%',
+    padding: '0.75rem',
+    paddingRight: '2rem',
+    borderRadius: '6px',
+    border: '1px solid #e2e8f0',
+    fontSize: '0.95rem'
   },
   clearDateButton: {
     position: 'absolute',
-    right: '8px',
+    right: '10px',
     background: 'transparent',
     border: 'none',
     cursor: 'pointer',
-    fontSize: '1rem',
-    color: '#777'
+    fontSize: '1.2rem',
+    color: '#a0aec0'
   },
   selectContainer: {
-    minWidth: '200px'
+    minWidth: '200px',
+    flex: '1'
   },
   selectInput: {
     width: '100%',
-    padding: '0.5rem',
-    borderRadius: '4px',
-    border: '1px solid #ddd',
-    fontSize: '1rem',
+    padding: '0.75rem',
+    borderRadius: '6px',
+    border: '1px solid #e2e8f0',
+    fontSize: '0.95rem',
     backgroundColor: 'white'
   },
   clearButton: {
-    padding: '0.5rem 1rem',
-    backgroundColor: '#f0f0f0',
-    color: '#333',
+    padding: '0.75rem 1.5rem',
+    backgroundColor: '#edf2f7',
+    color: '#4a5568',
     border: 'none',
-    borderRadius: '4px',
+    borderRadius: '6px',
     cursor: 'pointer',
-    fontSize: '0.9rem'
+    fontSize: '0.95rem',
+    fontWeight: '500',
+    transition: 'all 0.2s ease'
   },
-  updateButton: {
-    padding: '4px 8px',
-    backgroundColor: '#4CAF50',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '0.8rem'
+  statsContainer: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+    gap: '1rem',
+    marginBottom: '1.5rem'
+  },
+  statCard: {
+    backgroundColor: '#f7fafc',
+    padding: '0.75rem',
+    borderRadius: '6px',
+    textAlign: 'center',
+    border: '1px solid #e2e8f0'
+  },
+  statLabel: {
+    display: 'block',
+    fontSize: '0.8rem',
+    color: '#718096',
+    marginBottom: '0.25rem'
+  },
+  statValue: {
+    display: 'block',
+    fontSize: '1.25rem',
+    fontWeight: '600',
+    color: '#2d3748'
   },
   tableWrapper: {
-    maxHeight: '500px',
+    maxHeight: '600px',
     overflowY: 'auto',
     overflowX: 'auto',
     boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-    borderRadius: '8px'
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0'
   },
   table: {
     width: '100%',
     borderCollapse: 'collapse',
-    backgroundColor: 'white'
+    backgroundColor: 'white',
+    minWidth: '800px'
   },
   headerCell: {
     position: 'sticky',
     top: 0,
-    backgroundColor: '#003366',
-    borderBottom: '2px solid #e0e0e0',
+    backgroundColor: '#2c5282',
+    borderBottom: '2px solid #e2e8f0',
     padding: '1rem',
     textAlign: 'left',
     fontWeight: '600',
     color: 'white',
     fontSize: '0.875rem',
-    zIndex: 2
+    cursor: 'pointer',
+    userSelect: 'none',
+    whiteSpace: 'nowrap'
   },
   row: {
-    borderBottom: '1px solid #f0f0f0'
+    borderBottom: '1px solid #f0f0f0',
+    transition: 'background-color 0.2s ease'
   },
   cell: {
     padding: '1rem',
     fontSize: '0.9375rem',
-    color: '#333'
+    color: '#2d3748',
+    verticalAlign: 'top'
+  },
+  topicCell: {
+    maxWidth: '300px',
+    overflowWrap: 'break-word',
+    wordBreak: 'break-word'
+  },
+  remarkCell: {
+    maxWidth: '250px',
+    overflowWrap: 'break-word',
+    wordBreak: 'break-word',
+    color: '#718096',
+    fontSize: '0.875rem'
+  },
+  phoneLink: {
+    color: '#3182ce',
+    textDecoration: 'none',
+    fontWeight: '500'
+  },
+  noData: {
+    color: '#a0aec0',
+    fontSize: '0.875rem',
+    fontStyle: 'italic'
+  },
+  noResultsCell: {
+    textAlign: 'center',
+    padding: '3rem'
+  },
+  noResultsContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '1rem'
+  },
+  clearFiltersButton: {
+    padding: '0.5rem 1rem',
+    backgroundColor: '#e2e8f0',
+    color: '#4a5568',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer'
   }
 };
+
+// Add keyframe animation for spinner
+const styleSheet = document.createElement("style");
+styleSheet.textContent = `
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  tr:hover {
+    background-color: #f7fafc;
+  }
+  
+  button:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+`;
+document.head.appendChild(styleSheet);
 
 export default HourReport;

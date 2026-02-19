@@ -11,8 +11,13 @@ const hrSchema = new mongoose.Schema({
   aadhar: String,
   joiningDate: Date,
   experience: Number,
-  imageUrl: String,
-  active: { type: Boolean, default: true },
+ imageUrl: String,
+  cloudinaryId: String, // to store uploaded image path with cloudinary 
+
+ active: {
+    type: Boolean,
+    default: true
+  },
   resignationDate: String,
   resignationReason: String,
   rejoinDate: String,

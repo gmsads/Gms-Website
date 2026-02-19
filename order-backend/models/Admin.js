@@ -31,8 +31,13 @@ const adminSchema = new mongoose.Schema({
   aadhar: String,
   joiningDate: Date,
   experience: Number,
-  active: Boolean,
-  imageUrl: String, // to store uploaded image path
+ imageUrl: String,
+  cloudinaryId: String, // to store uploaded image path with cloudinary 
+
+ active: {
+    type: Boolean,
+    default: true
+  }, // to store uploaded image path
   resignationDate: String,
   resignationReason: String,
   rejoinDate: String,

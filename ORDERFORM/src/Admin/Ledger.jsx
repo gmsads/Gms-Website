@@ -9,9 +9,25 @@ const Ledger = () => {
   const [newPayments, setNewPayments] = useState({});
   const [paymentSuccess, setPaymentSuccess] = useState(null);
   const [loading, setLoading] = useState(true);
-  
+  const [activePaymentRow, setActivePaymentRow] = useState(null); // Track which order's payment row is open
+
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Get the business from URL for back navigation
+  const urlParams = new URLSearchParams(location.search);
+  const businessFromUrl = urlParams.get('business');
+
+  // Handle back to view orders
+  const handleBackToViewOrders = () => {
+    if (businessFromUrl) {
+      navigate('/admin-dashboard/view-orders', {
+        state: { businessFilter: decodeURIComponent(businessFromUrl) }
+      });
+    } else {
+      navigate('/admin-dashboard/view-orders');
+    }
+  };
 
   // Fetch all orders
   useEffect(() => {
@@ -24,15 +40,13 @@ const Ledger = () => {
         }
         const data = await response.json();
         setAllOrders(data);
-        
-        // Check if there's a business parameter in URL
+
         const urlParams = new URLSearchParams(location.search);
         const businessFromUrl = urlParams.get('business');
-        
+
         if (businessFromUrl) {
           const decodedBusiness = decodeURIComponent(businessFromUrl);
           setSearchTerm(decodedBusiness);
-          // Auto-filter for this business
           performSearch(data, decodedBusiness);
         }
       } catch (err) {
@@ -51,12 +65,30 @@ const Ledger = () => {
     return order.rows?.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0) || 0;
   };
 
+  // Calculate total advance for an order
+  const calculateTotalAdvance = (order) => {
+    return parseFloat(order.advance) || 0;
+  };
+
+  // Calculate total paid (advance + payment history)
+  const calculateTotalPaid = (order) => {
+    const advance = parseFloat(order.advance) || 0;
+    const paymentHistoryTotal = order.paymentHistory?.reduce((sum, payment) => 
+      sum + (parseFloat(payment.amount) || 0), 0) || 0;
+    return advance + paymentHistoryTotal;
+  };
+
+  // Calculate current balance for an order
+  const calculateCurrentBalance = (order) => {
+    const total = calculateTotal(order);
+    const paid = calculateTotalPaid(order);
+    return total - paid;
+  };
+
   // Validate and parse date safely
   const safeParseDate = (dateString) => {
     if (!dateString) return null;
-    
     const date = new Date(dateString);
-    // Check if date is valid
     return isNaN(date.getTime()) ? null : date;
   };
 
@@ -66,13 +98,39 @@ const Ledger = () => {
     return date ? date.toLocaleDateString() : 'Invalid Date';
   };
 
+  // Calculate client summary totals (ALL orders for this client)
+  const calculateClientSummary = (orders) => {
+    let totalOrderAmount = 0;
+    let totalAdvance = 0;
+    let totalPaid = 0;
+    let totalBalance = 0;
+
+    orders.forEach(order => {
+      const orderTotal = calculateTotal(order);
+      const orderAdvance = calculateTotalAdvance(order);
+      const orderPaid = calculateTotalPaid(order);
+      
+      totalOrderAmount += orderTotal;
+      totalAdvance += orderAdvance;
+      totalPaid += orderPaid;
+      totalBalance += (orderTotal - orderPaid);
+    });
+
+    return {
+      totalOrderAmount,
+      totalAdvance,
+      totalPaid,
+      totalBalance
+    };
+  };
+
   // Organize client data into timeline
   const organizeClientTimeline = (orders) => {
     const timeline = {};
-    
+
     orders.forEach(order => {
       const business = order.business || 'Unknown Business';
-      
+
       if (!timeline[business]) {
         timeline[business] = {
           clientInfo: {
@@ -82,30 +140,36 @@ const Ledger = () => {
             contactCode: order.contactCode,
             clientType: order.clientType
           },
-          timeline: []
+          timeline: [],
+          orders: [] // Store all orders for summary calculation
         };
       }
 
+      timeline[business].orders.push(order);
+
       // Add order entry
       const orderTotal = calculateTotal(order);
-      const currentBalance = order.balance !== undefined ? order.balance : orderTotal - (order.advance || 0);
-      
+      const orderAdvance = calculateTotalAdvance(order);
+      const orderPaid = calculateTotalPaid(order);
+      const currentBalance = orderTotal - orderPaid;
+
       timeline[business].timeline.push({
         type: 'order',
         date: order.orderDate,
         orderNo: order.orderNo,
         requirements: order.rows || [],
         totalAmount: orderTotal,
-        advance: order.advance || 0,
+        advance: orderAdvance,
+        paid: orderPaid,
         balance: currentBalance,
         orderId: order._id
       });
 
-      // Add payment entries
+      // Add advance payment entry
       if (order.advance > 0) {
         timeline[business].timeline.push({
           type: 'advance_payment',
-          date: order.orderDate,
+          date: order.advanceDate || order.orderDate,
           orderNo: order.orderNo,
           amount: order.advance,
           method: 'Advance',
@@ -130,7 +194,7 @@ const Ledger = () => {
       }
     });
 
-    // Sort timeline by date (newest first) with safe date parsing
+    // Sort timeline by date (newest first)
     Object.keys(timeline).forEach(business => {
       timeline[business].timeline.sort((a, b) => {
         const dateA = safeParseDate(a.date) || new Date(0);
@@ -153,17 +217,15 @@ const Ledger = () => {
     }
 
     const filtered = orders.filter(order => {
-      // Check all fields for partial matches
       const businessMatch = order.business?.toLowerCase().includes(searchTerm);
       const orderNoMatch = order.orderNo?.toLowerCase().includes(searchTerm);
       const clientTypeMatch = order.clientType?.toLowerCase().includes(searchTerm);
       const contactPersonMatch = order.contactPerson?.toLowerCase().includes(searchTerm);
       const phoneMatch = order.phone?.toLowerCase().includes(searchTerm);
-      
-      // Return true if any field matches
+
       return businessMatch || orderNoMatch || clientTypeMatch || contactPersonMatch || phoneMatch;
     });
-    
+
     setFilteredOrders(filtered);
     setClientTimeline(organizeClientTimeline(filtered));
   };
@@ -171,18 +233,15 @@ const Ledger = () => {
   // Handle search form submission
   const handleSearch = (e) => {
     e.preventDefault();
-    
+
     if (searchTerm.trim().length < 1) {
       setFilteredOrders([]);
       setClientTimeline({});
-      // Update URL without business parameter when search is cleared
       navigate('/admin-dashboard/ledger');
       return;
     }
 
     performSearch(allOrders, searchTerm);
-    
-    // Update URL with search term
     navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(searchTerm)}`);
   };
 
@@ -190,8 +249,7 @@ const Ledger = () => {
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchTerm(value);
-    
-    // Perform search immediately as user types
+
     if (value.trim().length > 0) {
       performSearch(allOrders, value);
     } else {
@@ -210,6 +268,28 @@ const Ledger = () => {
         date: field === 'date' ? value : (prev[orderId]?.date || new Date().toISOString().split('T')[0])
       }
     }));
+  };
+
+  // Toggle payment form for specific order row
+  const togglePaymentRow = (orderId) => {
+    if (activePaymentRow === orderId) {
+      setActivePaymentRow(null);
+      setNewPayments(prev => ({ ...prev, [orderId]: {} }));
+    } else {
+      setActivePaymentRow(orderId);
+      const order = allOrders.find(o => o._id === orderId);
+      if (order) {
+        const currentBalance = calculateCurrentBalance(order);
+        setNewPayments(prev => ({
+          ...prev,
+          [orderId]: {
+            amount: currentBalance,
+            method: '',
+            date: new Date().toISOString().split('T')[0]
+          }
+        }));
+      }
+    }
   };
 
   // Apply payment to order
@@ -236,15 +316,13 @@ const Ledger = () => {
       if (!res.ok) throw new Error('Failed to update payment');
 
       const updatedOrder = await res.json();
-      
-      // Show success message
+
       setPaymentSuccess({
         orderId,
         message: `Payment of ₹${payment.amount} added successfully!`,
         balance: updatedOrder.balance
       });
-      
-      // Clear success message after 5 seconds
+
       setTimeout(() => setPaymentSuccess(null), 5000);
 
       // Update orders in state
@@ -257,9 +335,10 @@ const Ledger = () => {
       setFilteredOrders(updatedFilteredOrders);
       setAllOrders(updatedAllOrders);
       setClientTimeline(organizeClientTimeline(updatedFilteredOrders));
-      
-      // Clear payment form for this order
+
+      // Clear payment form and close the row
       setNewPayments(prev => ({ ...prev, [orderId]: {} }));
+      setActivePaymentRow(null);
 
     } catch (err) {
       console.error('Payment update failed:', err);
@@ -275,56 +354,23 @@ const Ledger = () => {
     navigate('/admin-dashboard/ledger');
   };
 
-  // Get current balance for an order with null safety
-  const getCurrentBalance = (orderId) => {
-    const order = allOrders.find(o => o._id === orderId);
-    if (!order) {
-      console.warn(`Order with ID ${orderId} not found`);
-      return 0; // Return 0 instead of null/undefined
-    }
-    
-    // Calculate balance if not present in order object
-    if (order.balance !== undefined) {
-      return order.balance;
-    }
-    
-    // Fallback calculation
-    const orderTotal = calculateTotal(order);
-    const advance = order.advance || 0;
-    const paidAmount = order.paymentHistory?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
-    
-    return orderTotal - advance - paidAmount;
-  };
-
-  // Calculate total payable for a client
-  const calculateTotalPayable = (timeline) => {
-    let total = 0;
-    timeline.forEach(entry => {
-      if (entry.type === 'order') {
-        total += entry.totalAmount;
-      }
-    });
-    return total;
-  };
-
-  // Get date range for a client with safe date handling
+  // Get date range for a client
   const getDateRange = (timeline) => {
     if (timeline.length === 0) return { start: 'N/A', end: 'N/A' };
-    
+
     const validDates = timeline
       .map(entry => safeParseDate(entry.date))
       .filter(date => date !== null);
-    
+
     if (validDates.length === 0) return { start: 'N/A', end: 'N/A' };
-    
+
     const startDate = new Date(Math.min(...validDates));
     const endDate = new Date(Math.max(...validDates));
-    
-    // Format dates safely without toISOString
+
     const formatDateForDisplay = (date) => {
-      return date.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+      return date.toLocaleDateString('en-CA');
     };
-    
+
     return {
       start: formatDateForDisplay(startDate),
       end: formatDateForDisplay(endDate)
@@ -341,7 +387,18 @@ const Ledger = () => {
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.title}>Client Transaction Timeline</h2>
+      {/* Header with Back Button */}
+      <div style={styles.headerWithBack}>
+        <button
+          onClick={handleBackToViewOrders}
+          style={styles.backButton}
+          onMouseOver={(e) => e.target.style.backgroundColor = '#5a6268'}
+          onMouseLeave={(e) => e.target.style.backgroundColor = '#6c757d'}
+        >
+          ← Back to Orders
+        </button>
+        <h2 style={styles.title}>Client Transaction Timeline</h2>
+      </div>
 
       {/* Search Form */}
       <form onSubmit={handleSearch} style={styles.searchForm}>
@@ -394,9 +451,9 @@ const Ledger = () => {
 
       {/* Client Timeline Display */}
       {Object.entries(clientTimeline).map(([business, clientData]) => {
-        const totalPayable = calculateTotalPayable(clientData.timeline);
+        const summary = calculateClientSummary(clientData.orders);
         const dateRange = getDateRange(clientData.timeline);
-        
+
         return (
           <div key={business} style={styles.clientSection}>
             {/* Client Header */}
@@ -409,21 +466,43 @@ const Ledger = () => {
               </div>
             </div>
 
-            {/* Header Content from Screenshot */}
+            {/* Header Content with Client Summary */}
             <div style={styles.headerContent}>
               <div style={styles.addressSection}>
                 <p style={styles.toText}>To,</p>
                 <p style={styles.companyName}>{business}</p>
                 <p style={styles.location}>Hyd</p>
               </div>
-              
+
               <div style={styles.dateAmountSection}>
                 <p style={styles.dateRange}>
                   {dateRange.start} - {dateRange.end}
                 </p>
-                <p style={styles.totalPayable}>
-                  Total Payable: <strong>₹{totalPayable.toFixed(2)}</strong>
-                </p>
+                <div style={styles.summaryContainer}>
+                  <div style={styles.summaryRow}>
+                    <span style={styles.summaryLabel}>Total Order Amount:</span>
+                    <span style={styles.summaryValue}>₹{summary.totalOrderAmount.toFixed(2)}</span>
+                  </div>
+                  <div style={styles.summaryRow}>
+                    <span style={styles.summaryLabel}>Total Advance:</span>
+                    <span style={{...styles.summaryValue, color: '#f39c12'}}>₹{summary.totalAdvance.toFixed(2)}</span>
+                  </div>
+                  <div style={styles.summaryRow}>
+                    <span style={styles.summaryLabel}>Total Paid:</span>
+                    <span style={{...styles.summaryValue, color: '#27ae60'}}>₹{summary.totalPaid.toFixed(2)}</span>
+                  </div>
+                  <div style={styles.summaryRow}>
+                    <span style={styles.summaryLabel}>Total Balance:</span>
+                    <span style={{
+                      ...styles.summaryValue,
+                      color: summary.totalBalance > 0 ? '#e74c3c' : '#27ae60',
+                      fontWeight: 'bold',
+                      fontSize: '18px'
+                    }}>
+                      ₹{summary.totalBalance.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -438,28 +517,31 @@ const Ledger = () => {
                     <th style={styles.tableHeader}>Amount</th>
                     <th style={styles.tableHeader}>Payment Method</th>
                     <th style={styles.tableHeader}>Balance</th>
-                    <th style={styles.tableHeader}>Actions</th>
+                    <th style={styles.tableHeader}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {clientData.timeline.map((entry, index) => {
-                    const currentBalance = getCurrentBalance(entry.orderId);
-                    const displayBalance = currentBalance !== null && currentBalance !== undefined 
-                      ? currentBalance.toFixed(2) 
-                      : '0.00';
+                    const order = clientData.orders.find(o => o._id === entry.orderId);
+                    const currentBalance = order ? calculateCurrentBalance(order) : 0;
+                    const isPaymentRowActive = activePaymentRow === entry.orderId && entry.type === 'order';
 
                     return (
                       <React.Fragment key={index}>
-                        {entry.type === 'order' ? (
-                          // Order Row
-                          <tr style={styles.orderRow}>
-                            <td style={styles.tableCell}>
-                              {formatDateSafe(entry.date)}
-                            </td>
-                            <td style={styles.tableCell}>
-                              <strong>{entry.orderNo}</strong>
-                            </td>
-                            <td style={styles.tableCell}>
+                        {/* Main Row */}
+                        <tr style={
+                          entry.type === 'order' ? styles.orderRow :
+                          entry.type === 'advance_payment' ? styles.advanceRow :
+                          styles.paymentRow
+                        }>
+                          <td style={styles.tableCell}>
+                            {formatDateSafe(entry.date)}
+                          </td>
+                          <td style={styles.tableCell}>
+                            <strong>{entry.orderNo}</strong>
+                          </td>
+                          <td style={styles.tableCell}>
+                            {entry.type === 'order' ? (
                               <div style={styles.requirementsList}>
                                 {entry.requirements.map((req, idx) => (
                                   <div key={idx} style={styles.requirementItem}>
@@ -467,68 +549,151 @@ const Ledger = () => {
                                   </div>
                                 ))}
                               </div>
+                            ) : (
+                              entry.type === 'advance_payment' ? 'Advance Payment' : 'Payment Received'
+                            )}
+                          </td>
+                          <td style={styles.tableCell}>
+                            <span style={{
+                              fontWeight: '600',
+                              color: entry.type === 'order' ? '#003366' : '#27ae60'
+                            }}>
+                              ₹{(entry.totalAmount || entry.amount || 0).toFixed(2)}
+                            </span>
+                          </td>
+                          <td style={styles.tableCell}>
+                            {entry.method || '-'}
+                            {entry.upiNumber && ` (${entry.upiNumber})`}
+                            {entry.chequeNumber && ` (Cheque #${entry.chequeNumber})`}
+                          </td>
+                          <td style={styles.tableCell}>
+                            <span style={{
+                              color: currentBalance > 0 ? '#e74c3c' : '#27ae60',
+                              fontWeight: '600'
+                            }}>
+                              ₹{currentBalance.toFixed(2)}
+                            </span>
+                          </td>
+                          <td style={styles.tableCell}>
+                            {entry.type === 'order' && currentBalance > 0 && (
+                              <button
+                                style={isPaymentRowActive ? styles.cancelButton : styles.payButton}
+                                onClick={() => togglePaymentRow(entry.orderId)}
+                              >
+                                {isPaymentRowActive ? 'Cancel' : 'Record Payment'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+
+                        {/* Payment Form Row - Shows directly below the order row when active */}
+                        {isPaymentRowActive && (
+                          <tr>
+                            <td colSpan="7" style={styles.paymentFormCell}>
+                              <div style={styles.paymentForm}>
+                                <div style={styles.paymentFormHeader}>
+                                  <span style={styles.paymentFormTitle}>
+                                    Record Payment for Order {entry.orderNo}
+                                  </span>
+                                  <button 
+                                    style={styles.closeFormButton}
+                                    onClick={() => togglePaymentRow(entry.orderId)}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                                <div style={styles.paymentFormContent}>
+                                  <div style={styles.orderSummary}>
+                                    <span>Order Total: ₹{entry.totalAmount.toFixed(2)}</span>
+                                    <span style={{
+                                      marginLeft: '20px',
+                                      color: currentBalance > 0 ? '#e74c3c' : '#27ae60',
+                                      fontWeight: 'bold'
+                                    }}>
+                                      Balance: ₹{currentBalance.toFixed(2)}
+                                    </span>
+                                  </div>
+                                  <div style={styles.inputGroup}>
+                                    <input
+                                      type="number"
+                                      placeholder="Amount"
+                                      value={newPayments[entry.orderId]?.amount || currentBalance}
+                                      onChange={e => handlePaymentChange(entry.orderId, 'amount', e.target.value)}
+                                      style={styles.inputSmall}
+                                      min="0.01"
+                                      step="0.01"
+                                      max={currentBalance}
+                                    />
+                                    <select
+                                      value={newPayments[entry.orderId]?.method || ''}
+                                      onChange={e => handlePaymentChange(entry.orderId, 'method', e.target.value)}
+                                      style={styles.inputSmall}
+                                      required
+                                    >
+                                      <option value="">Select Method</option>
+                                      <option value="Cash">Cash</option>
+                                      <option value="UPI">UPI</option>
+                                      <option value="Cheque">Cheque</option>
+                                    </select>
+
+                                    <input
+                                      type="date"
+                                      value={newPayments[entry.orderId]?.date || new Date().toISOString().split('T')[0]}
+                                      onChange={e => handlePaymentChange(entry.orderId, 'date', e.target.value)}
+                                      style={styles.inputSmall}
+                                    />
+
+                                    {newPayments[entry.orderId]?.method === 'UPI' && (
+                                      <select
+                                        value={newPayments[entry.orderId]?.upiNumber || ''}
+                                        onChange={e => handlePaymentChange(entry.orderId, 'upiNumber', e.target.value)}
+                                        style={styles.inputSmall}
+                                        required
+                                      >
+                                        <option value="">Select UPI Number</option>
+                                        <option value="9985330008@Chary">9985330008@Chary</option>
+                                        <option value="9985330004@Swathi">9985330004@Swathi</option>
+                                        <option value="924642893@VenkatGupta">924642893@VenkatGupta</option>
+                                      </select>
+                                    )}
+
+                                    {newPayments[entry.orderId]?.method === 'Cheque' && (
+                                      <input
+                                        type="text"
+                                        placeholder="Cheque Number"
+                                        maxLength={6}
+                                        value={newPayments[entry.orderId]?.chequeNumber || ''}
+                                        onChange={e => handlePaymentChange(entry.orderId, 'chequeNumber', e.target.value)}
+                                        style={styles.inputSmall}
+                                        required
+                                      />
+                                    )}
+
+                                    <button
+                                      onClick={() => applyPayment(entry.orderId)}
+                                      style={styles.addButton}
+                                      disabled={!newPayments[entry.orderId]?.amount || !newPayments[entry.orderId]?.method}
+                                    >
+                                      Add Payment
+                                    </button>
+                                  </div>
+
+                                  {paymentSuccess?.orderId === entry.orderId && (
+                                    <div style={styles.successMessage}>
+                                      <div>
+                                        {paymentSuccess.message} Remaining balance: ₹{paymentSuccess.balance?.toFixed(2) || '0.00'}
+                                      </div>
+                                      <button
+                                        style={styles.closeButton}
+                                        onClick={() => setPaymentSuccess(null)}
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             </td>
-                            <td style={styles.tableCell}>
-                              <strong>₹{entry.totalAmount.toFixed(2)}</strong>
-                            </td>
-                            <td style={styles.tableCell}>-</td>
-                            <td style={styles.tableCell}>
-                              <span style={{ 
-                                color: currentBalance > 0 ? '#dc3545' : '#28a745',
-                                fontWeight: '600'
-                              }}>
-                                ₹{displayBalance}
-                              </span>
-                            </td>
-                            <td style={styles.tableCell}>
-                              {currentBalance > 0 && (
-                                <button
-                                  style={styles.payButton}
-                                  onClick={() => {
-                                    setNewPayments(prev => ({
-                                      ...prev,
-                                      [entry.orderId]: {
-                                        amount: currentBalance,
-                                        method: '',
-                                        date: new Date().toISOString().split('T')[0]
-                                      }
-                                    }));
-                                    document.getElementById(`payment-${entry.orderId}`)?.scrollIntoView({ behavior: 'smooth' });
-                                  }}
-                                >
-                                  Add Payment
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ) : (
-                          // Payment Row
-                          <tr style={entry.type === 'advance_payment' ? styles.advanceRow : styles.paymentRow}>
-                            <td style={styles.tableCell}>
-                              {formatDateSafe(entry.date)}
-                            </td>
-                            <td style={styles.tableCell}>
-                              {entry.orderNo}
-                            </td>
-                            <td style={styles.tableCell}>
-                              {entry.type === 'advance_payment' ? 'Advance Payment' : 'Payment Received'}
-                            </td>
-                            <td style={styles.tableCell}>
-                              <span style={{ color: '#28a745', fontWeight: '600' }}>
-                                ₹{entry.amount?.toFixed(2) || '0.00'}
-                              </span>
-                            </td>
-                            <td style={styles.tableCell}>
-                              {entry.method}
-                              {entry.upiNumber && ` (${entry.upiNumber})`}
-                              {entry.chequeNumber && ` (Cheque #${entry.chequeNumber})`}
-                            </td>
-                            <td style={styles.tableCell}>
-                              <span style={{ fontWeight: '600' }}>
-                                ₹{displayBalance}
-                              </span>
-                            </td>
-                            <td style={styles.tableCell}>-</td>
                           </tr>
                         )}
                       </React.Fragment>
@@ -537,102 +702,6 @@ const Ledger = () => {
                 </tbody>
               </table>
             </div>
-
-            {/* Payment Forms for orders with balance */}
-            {clientData.timeline
-              .filter(entry => entry.type === 'order')
-              .map(orderEntry => {
-                const currentBalance = getCurrentBalance(orderEntry.orderId);
-                
-                return currentBalance > 0 ? (
-                  <div key={orderEntry.orderId} id={`payment-${orderEntry.orderId}`} style={styles.paymentFormSection}>
-                    <h4>Add Payment for Order {orderEntry.orderNo}</h4>
-                    <div style={styles.paymentForm}>
-                      <div style={styles.inputGroup}>
-                        <input
-                          type="number"
-                          placeholder="Amount"
-                          value={newPayments[orderEntry.orderId]?.amount ?? currentBalance}
-                          onChange={e => handlePaymentChange(orderEntry.orderId, 'amount', e.target.value)}
-                          style={styles.inputSmall}
-                          min="0.01"
-                          step="0.01"
-                          max={currentBalance}
-                        />
-                        <select
-                          value={newPayments[orderEntry.orderId]?.method || ''}
-                          onChange={e => handlePaymentChange(orderEntry.orderId, 'method', e.target.value)}
-                          style={styles.inputSmall}
-                          required
-                        >
-                          <option value="">Select Method</option>
-                          <option value="Cash">Cash</option>
-                          <option value="UPI">UPI</option>
-                          <option value="Cheque">Cheque</option>
-                        </select>
-                        
-                        <input
-                          type="date"
-                          value={newPayments[orderEntry.orderId]?.date || new Date().toISOString().split('T')[0]}
-                          onChange={e => handlePaymentChange(orderEntry.orderId, 'date', e.target.value)}
-                          style={styles.inputSmall}
-                        />
-
-                        {/* UPI Number Selection */}
-                        {newPayments[orderEntry.orderId]?.method === 'UPI' && (
-                          <select
-                            value={newPayments[orderEntry.orderId]?.upiNumber || ''}
-                            onChange={e => handlePaymentChange(orderEntry.orderId, 'upiNumber', e.target.value)}
-                            style={styles.inputSmall}
-                            required
-                          >
-                            <option value="">Select UPI Number</option>
-                            <option value="9985330008@Chary">9985330008@Chary</option>
-                            <option value="9985330004@Swathi">9985330004@Swathi</option>
-                            <option value="924642893@VenkatGupta">924642893@VenkatGupta</option>
-                          </select>
-                        )}
-
-                        {/* Cheque Number Input */}
-                        {newPayments[orderEntry.orderId]?.method === 'Cheque' && (
-                          <input
-                            type="text"
-                            placeholder="Cheque Number"
-                            maxLength={6}
-                            value={newPayments[orderEntry.orderId]?.chequeNumber || ''}
-                            onChange={e => handlePaymentChange(orderEntry.orderId, 'chequeNumber', e.target.value)}
-                            style={styles.inputSmall}
-                            required
-                          />
-                        )}
-
-                        <button
-                          onClick={() => applyPayment(orderEntry.orderId)}
-                          style={styles.addButton}
-                          disabled={!newPayments[orderEntry.orderId]?.amount || !newPayments[orderEntry.orderId]?.method}
-                        >
-                          Add Payment
-                        </button>
-                      </div>
-                      
-                      {/* Success Message */}
-                      {paymentSuccess?.orderId === orderEntry.orderId && (
-                        <div style={styles.successMessage}>
-                          <div>
-                            {paymentSuccess.message} Remaining balance: ₹{paymentSuccess.balance?.toFixed(2) || '0.00'}
-                          </div>
-                          <button 
-                            style={styles.closeButton}
-                            onClick={() => setPaymentSuccess(null)}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : null;
-              })}
           </div>
         );
       })}
@@ -640,8 +709,25 @@ const Ledger = () => {
   );
 };
 
-// ... (styles remain exactly the same as previous code)
 const styles = {
+  headerWithBack: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '20px',
+    marginBottom: '30px',
+    position: 'relative',
+  },
+  backButton: {
+    backgroundColor: '#6c757d',
+    color: 'white',
+    border: 'none',
+    padding: '8px 16px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+    transition: 'background-color 0.2s',
+  },
   container: {
     maxWidth: '1400px',
     margin: '30px auto',
@@ -654,9 +740,10 @@ const styles = {
   title: {
     textAlign: 'center',
     color: '#003366',
-    marginBottom: '30px',
     fontSize: '28px',
     fontWeight: 'bold',
+    margin: 0,
+    flex: 1,
   },
   loadingContainer: {
     display: 'flex',
@@ -796,15 +883,34 @@ const styles = {
   dateAmountSection: {
     textAlign: 'right',
     flex: '1',
-    minWidth: '200px',
+    minWidth: '300px',
   },
   dateRange: {
     margin: '0 0 10px 0',
     fontSize: '14px',
     color: '#666',
   },
-  totalPayable: {
-    margin: '0',
+  summaryContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    backgroundColor: '#fff',
+    padding: '15px',
+    borderRadius: '6px',
+    border: '1px solid #dee2e6',
+  },
+  summaryRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '4px 0',
+    borderBottom: '1px dashed #dee2e6',
+  },
+  summaryLabel: {
+    fontSize: '14px',
+    color: '#666',
+  },
+  summaryValue: {
     fontSize: '16px',
     fontWeight: '600',
     color: '#003366',
@@ -863,13 +969,57 @@ const styles = {
     fontSize: '12px',
     fontWeight: '600',
   },
-  paymentFormSection: {
-    padding: '20px',
+  cancelButton: {
+    backgroundColor: '#dc3545',
+    color: 'white',
+    border: 'none',
+    padding: '6px 12px',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: '600',
+  },
+  paymentFormCell: {
+    padding: '15px',
     backgroundColor: '#f8f9fa',
-    borderTop: '1px solid #dee2e6',
+    borderBottom: '2px solid #dee2e6',
   },
   paymentForm: {
-    marginTop: '10px',
+    backgroundColor: '#fff',
+    borderRadius: '8px',
+    padding: '20px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+  },
+  paymentFormHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '15px',
+  },
+  paymentFormTitle: {
+    color: '#003366',
+    fontSize: '16px',
+    fontWeight: '600',
+  },
+  closeFormButton: {
+    background: 'none',
+    border: 'none',
+    fontSize: '20px',
+    cursor: 'pointer',
+    color: '#666',
+    padding: '0 5px',
+  },
+  paymentFormContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '15px',
+  },
+  orderSummary: {
+    padding: '10px',
+    backgroundColor: '#e3f2fd',
+    borderRadius: '4px',
+    fontSize: '14px',
+    fontWeight: '500',
   },
   inputGroup: {
     display: 'flex',
@@ -895,6 +1045,10 @@ const styles = {
     fontWeight: '600',
     fontSize: '14px',
     minWidth: '120px',
+    ':disabled': {
+      backgroundColor: '#ccc',
+      cursor: 'not-allowed',
+    },
   },
   successMessage: {
     backgroundColor: '#d4edda',
@@ -905,7 +1059,7 @@ const styles = {
     border: '1px solid #c3e6cb',
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   closeButton: {
     background: 'none',
@@ -914,8 +1068,8 @@ const styles = {
     cursor: 'pointer',
     fontSize: '20px',
     fontWeight: 'bold',
-    padding: '0 5px'
-  }
+    padding: '0 5px',
+  },
 };
 
 export default Ledger;

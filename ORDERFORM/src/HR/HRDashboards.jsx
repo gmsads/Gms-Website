@@ -636,7 +636,27 @@ function HRDashboard() {
             onMouseLeave={() => setHoveredItem('')}
             onClick={handleSidebarItemClick}
           >
-         Report 
+         Create Report ➕
+          </NavLink>
+             <NavLink
+            to="/hr-dashboard/daily-report"
+            end
+            style={linkStyle('daily-report')}
+            onMouseEnter={() => setHoveredItem('daily-report')}
+            onMouseLeave={() => setHoveredItem('')}
+            onClick={handleSidebarItemClick}
+          >
+        Executive Report 
+          </NavLink>
+            <NavLink
+            to="/hr-dashboard/fieldvisitsadmin"
+            end
+            style={linkStyle('fieldvisitsadmin')}
+            onMouseEnter={() => setHoveredItem('fieldvisitsadmin')}
+            onMouseLeave={() => setHoveredItem('')}
+            onClick={handleSidebarItemClick}
+          >
+        Field Executive Report 
           </NavLink>
         </div>
 

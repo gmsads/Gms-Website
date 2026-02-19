@@ -39,6 +39,8 @@ const executiveSchema = new mongoose.Schema({
     resignationDate: String,
     resignationReason: String,
     rejoinDate: String,
+    imageUrl: String,
+    cloudinaryId: String
 });
 
 module.exports = mongoose.model('Executive', executiveSchema);

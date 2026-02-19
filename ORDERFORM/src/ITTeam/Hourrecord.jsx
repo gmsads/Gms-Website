@@ -8,9 +8,6 @@ const HourRecord = () => {
   const [formData, setFormData] = useState({
     executiveName: '', // Will be populated from auth data
     phoneNumber: '',
-    businessName: '',
-    customerName: '',
-    purpose: 'Select',
     topicDiscussed: '',
     remark: ''
   });
@@ -30,6 +27,15 @@ const HourRecord = () => {
         ...prev,
         executiveName: userData.name || userData.username
       }));
+    } else {
+      // Fallback to any stored user name
+      const storedName = localStorage.getItem('userName') || sessionStorage.getItem('userName');
+      if (storedName) {
+        setFormData(prev => ({
+          ...prev,
+          executiveName: storedName
+        }));
+      }
     }
   }, []);
 
@@ -37,19 +43,10 @@ const HourRecord = () => {
     const { name, value } = e.target;
 
     if (name === 'phoneNumber') {
-      const digitsOnly = value.replace(/\D/g, '').slice(0, 10);
-      let formattedValue = digitsOnly;
-      if (digitsOnly.length > 5) {
-        formattedValue = `${digitsOnly.slice(0, 5)} ${digitsOnly.slice(5)}`;
-      }
-
-      setFormData(prev => ({ ...prev, [name]: formattedValue }));
-
-      if (digitsOnly.length !== 10 && digitsOnly.length > 0) {
-        setErrors(prev => ({ ...prev, phoneNumber: 'Please enter a valid 10-digit Indian phone number' }));
-      } else {
-        setErrors(prev => ({ ...prev, phoneNumber: '' }));
-      }
+      // Allow empty value and any input without validation
+      setFormData(prev => ({ ...prev, [name]: value }));
+      // Clear any existing error
+      setErrors(prev => ({ ...prev, phoneNumber: '' }));
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
@@ -59,24 +56,15 @@ const HourRecord = () => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const phoneDigits = formData.phoneNumber.replace(/\D/g, '');
-
-    if (phoneDigits.length !== 10) {
-      setErrors(prev => ({ ...prev, phoneNumber: 'Please enter a valid 10-digit Indian phone number' }));
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (formData.purpose === 'Select') {
-      alert('Please select a purpose');
-      setIsSubmitting(false);
-      return;
-    }
+    // Phone number is optional now, no validation required
+    // Just proceed with the submission
 
     try {
       const dataToSend = {
-        ...formData,
-        phoneNumber: phoneDigits
+        executiveName: formData.executiveName,
+        phoneNumber: formData.phoneNumber, // Can be empty
+        topicDiscussed: formData.topicDiscussed,
+        remark: formData.remark || '' // Ensure remark is at least empty string
       };
 
       const response = await axios.post('/api/interactions', dataToSend);
@@ -85,17 +73,15 @@ const HourRecord = () => {
       setSubmittedData({
         ...response.data,
         createdAt: timestamp,
-        phoneNumber: formData.phoneNumber
+        phoneNumber: formData.phoneNumber // Keep the formatted phone number for display
       });
       
       setShowSuccess(true);
       
+      // Reset form - keep executive name
       setFormData(prev => ({
-        ...prev,
+        executiveName: prev.executiveName, // Keep executive name
         phoneNumber: '',
-        businessName: '',
-        customerName: '',
-        purpose: 'Select',
         topicDiscussed: '',
         remark: ''
       }));
@@ -111,33 +97,14 @@ const HourRecord = () => {
   const handleModalClose = () => {
     setShowSuccess(false);
     
-    if (submittedData) {
-      const phoneDigits = submittedData.phoneNumber.replace(/\D/g, '');
-      
-      if (submittedData.purpose === 'Sale') {
-        navigate('/it-dashboard/create-order', {
-          state: { 
-            phoneNumber: phoneDigits,
-            customerName: submittedData.customerName,
-            businessName: submittedData.businessName
-          }
-        });
-      } else if (submittedData.purpose === 'Call Back') {
-        navigate('/it-dashboard/create-prospect', {
-          state: { 
-            phoneNumber: phoneDigits,
-            customerName: submittedData.customerName,
-            businessName: submittedData.businessName
-          }
-        });
-      }
-    }
+    // No automatic navigation - just close the modal
+    // The user can continue adding more interactions
   };
 
   // Styles
   const styles = {
     container: {
-      maxWidth: '900px',
+      maxWidth: '800px',
       margin: '0 auto',
       padding: '32px 24px',
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif"
@@ -156,7 +123,8 @@ const HourRecord = () => {
     },
     formHeaderText: {
       fontSize: '18px',
-      fontWeight: '500'
+      fontWeight: '500',
+      margin: 0
     },
     formBody: {
       padding: '24px'
@@ -168,7 +136,7 @@ const HourRecord = () => {
       marginBottom: '24px'
     },
     formGroup: {
-      marginBottom: '16px'
+      marginBottom: '20px'
     },
     label: {
       display: 'block',
@@ -197,32 +165,13 @@ const HourRecord = () => {
       backgroundColor: '#edf2f7',
       color: '#4a5568',
       boxSizing: 'border-box',
-      cursor: 'not-allowed'
-    },
-    select: {
-      width: '100%',
-      padding: '12px 16px',
-      border: '1px solid #e2e8f0',
-      borderRadius: '8px',
-      fontSize: '15px',
-      transition: 'all 0.2s ease',
-      backgroundColor: '#f8fafc',
-      outline: 'none',
-      boxSizing: 'border-box',
-      appearance: 'none',
-      backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23131313%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")',
-      backgroundRepeat: 'no-repeat',
-      backgroundPosition: 'right 0.7rem top 50%',
-      backgroundSize: '0.65rem auto'
+      cursor: 'not-allowed',
+      fontWeight: '500'
     },
     inputFocus: {
       borderColor: '#3182ce',
       boxShadow: '0 0 0 3px rgba(49, 130, 206, 0.2)',
       backgroundColor: '#ffffff'
-    },
-    inputError: {
-      borderColor: '#e53e3e',
-      backgroundColor: '#fff5f5'
     },
     textarea: {
       minHeight: '120px',
@@ -231,6 +180,11 @@ const HourRecord = () => {
     errorText: {
       color: '#e53e3e',
       fontSize: '13px',
+      marginTop: '4px'
+    },
+    helperText: {
+      fontSize: '12px',
+      color: '#718096',
       marginTop: '4px'
     },
     submitButton: {
@@ -304,10 +258,7 @@ const HourRecord = () => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      transition: 'all 0.2s ease',
-      ':hover': {
-        backgroundColor: '#f8fafc'
-      }
+      transition: 'all 0.2s ease'
     },
     modalBody: {
       padding: '24px'
@@ -348,7 +299,7 @@ const HourRecord = () => {
       marginBottom: '12px'
     },
     detailLabel: {
-      flex: '0 0 120px',
+      flex: '0 0 100px',
       fontSize: '14px',
       fontWeight: '500',
       color: '#4a5568'
@@ -373,115 +324,78 @@ const HourRecord = () => {
       fontSize: '14px',
       fontWeight: '500',
       cursor: 'pointer',
-      transition: 'all 0.2s ease',
-      ':hover': {
-        backgroundColor: '#2b6cb0'
-      }
+      transition: 'all 0.2s ease'
     }
   };
+
+  // Add keyframe animation for spinner
+  const styleSheet = document.createElement("style");
+  styleSheet.textContent = `
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes modalFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  `;
+  document.head.appendChild(styleSheet);
 
   return (
     <div style={styles.container}>
       <div style={styles.formCard}>
         <div style={styles.formHeader}>
-          <h2 style={styles.formHeaderText}>New Interaction</h2>
+          <h2 style={styles.formHeaderText}>New Hour Record</h2>
         </div>
         
         <form onSubmit={handleSubmit} style={styles.formBody}>
-          <div style={styles.formGrid}>
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Executive Name*</label>
-              <input
-                type="text"
-                name="executiveName"
-                value={formData.executiveName}
-                onChange={handleChange}
-                style={{
-                  ...styles.input,
-                  ':focus': styles.inputFocus
-                }}
-                placeholder="Your name"
-                required
-              />
-            </div>
+          {/* Executive Name - Readonly/Automatically filled */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Executive Name*</label>
+            <input
+              type="text"
+              name="executiveName"
+              value={formData.executiveName}
+              readOnly
+              style={styles.readonlyInput}
+              placeholder="Loading..."
+              required
+            />
+            {!formData.executiveName && (
+              <div style={styles.helperText}>Loading executive name...</div>
+            )}
+          </div>
 
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Indian Phone Number*</label>
-              <input
-                type="tel"
-                name="phoneNumber"
-                value={formData.phoneNumber}
-                onChange={handleChange}
-                style={{
-                  ...styles.input,
-                  ...(errors.phoneNumber ? styles.inputError : {}),
-                  ':focus': styles.inputFocus
-                }}
-                placeholder="98765 43210"
-                maxLength={11}
-                required
-              />
-              {errors.phoneNumber && (
-                <div style={styles.errorText}>{errors.phoneNumber}</div>
-              )}
-              <div style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>
-                10 digit Number
-              </div>
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Business Name*</label>
-              <input
-                type="text"
-                name="businessName"
-                value={formData.businessName}
-                onChange={handleChange}
-                style={{
-                  ...styles.input,
-                  ':focus': styles.inputFocus
-                }}
-                placeholder="Acme Corporation"
-                required
-              />
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Customer Name*</label>
-              <input
-                type="text"
-                name="customerName"
-                value={formData.customerName}
-                onChange={handleChange}
-                style={{
-                  ...styles.input,
-                  ':focus': styles.inputFocus
-                }}
-                placeholder="John Smith"
-                required
-              />
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Purpose*</label>
-              <select
-                name="purpose"
-                value={formData.purpose}
-                onChange={handleChange}
-                style={{
-                  ...styles.select,
-                  ':focus': styles.inputFocus
-                }}
-                required
-              >
-                <option value="Select">Select </option>
-                <option value="Sale">Sale</option>
-                <option value="Service">Service</option>
-                <option value="Call Back">Call Back</option>
-                <option value="Others">Others</option>
-              </select>
+          {/* Phone Number - Optional */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Phone Number (Optional)</label>
+            <input
+              type="tel"
+              name="phoneNumber"
+              value={formData.phoneNumber}
+              onChange={handleChange}
+              style={{
+                ...styles.input,
+                ':focus': styles.inputFocus
+              }}
+              placeholder="Enter phone number (optional)"
+            />
+            {errors.phoneNumber && (
+              <div style={styles.errorText}>{errors.phoneNumber}</div>
+            )}
+            <div style={styles.helperText}>
+              Optional - You can leave this empty
             </div>
           </div>
 
+          {/* Topic Discussed - Required */}
           <div style={styles.formGroup}>
             <label style={styles.label}>Topic Discussed*</label>
             <textarea
@@ -498,8 +412,9 @@ const HourRecord = () => {
             />
           </div>
 
+          {/* Remarks - Optional */}
           <div style={styles.formGroup}>
-            <label style={styles.label}>Remarks</label>
+            <label style={styles.label}>Remarks (Optional)</label>
             <textarea
               name="remark"
               value={formData.remark}
@@ -520,7 +435,7 @@ const HourRecord = () => {
               ...(isSubmitting ? styles.submitButtonDisabled : {}),
               ':hover': !isSubmitting ? styles.submitButtonHover : {}
             }}
-            disabled={!!errors.phoneNumber || isSubmitting}
+            disabled={isSubmitting}
           >
             {isSubmitting ? (
               <>
@@ -543,7 +458,7 @@ const HourRecord = () => {
                 </svg>
                 Processing...
               </>
-            ) : 'Save Interaction'}
+            ) : 'Save Hour Record'}
           </button>
         </form>
       </div>
@@ -569,7 +484,7 @@ const HourRecord = () => {
                 </svg>
               </div>
               <div style={styles.successMessage}>
-                <h4 style={styles.successTitle}>Interaction Recorded Successfully</h4>
+                <h4 style={styles.successTitle}>Hour Record Saved Successfully</h4>
                 <p style={styles.successTime}>{submittedData.createdAt}</p>
               </div>
               
@@ -578,22 +493,12 @@ const HourRecord = () => {
                   <div style={styles.detailLabel}>Executive:</div>
                   <div style={styles.detailValue}>{submittedData.executiveName}</div>
                 </div>
-                <div style={styles.detailRow}>
-                  <div style={styles.detailLabel}>Business:</div>
-                  <div style={styles.detailValue}>{submittedData.businessName}</div>
-                </div>
-                <div style={styles.detailRow}>
-                  <div style={styles.detailLabel}>Customer:</div>
-                  <div style={styles.detailValue}>{submittedData.customerName}</div>
-                </div>
-                <div style={styles.detailRow}>
-                  <div style={styles.detailLabel}>Phone:</div>
-                  <div style={styles.detailValue}>{submittedData.phoneNumber}</div>
-                </div>
-                <div style={styles.detailRow}>
-                  <div style={styles.detailLabel}>Purpose:</div>
-                  <div style={styles.detailValue}>{submittedData.purpose}</div>
-                </div>
+                {submittedData.phoneNumber && (
+                  <div style={styles.detailRow}>
+                    <div style={styles.detailLabel}>Phone:</div>
+                    <div style={styles.detailValue}>{submittedData.phoneNumber}</div>
+                  </div>
+                )}
                 <div style={styles.detailRow}>
                   <div style={styles.detailLabel}>Topic:</div>
                   <div style={styles.detailValue}>{submittedData.topicDiscussed}</div>
@@ -611,7 +516,7 @@ const HourRecord = () => {
                 style={styles.continueButton}
                 onClick={handleModalClose}
               >
-                Continue
+                Add Another Record
               </button>
             </div>
           </div>

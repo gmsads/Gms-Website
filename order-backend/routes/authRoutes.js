@@ -37,23 +37,97 @@ const Order = require("../models/Order");
 const FieldExecutive = require("../models/FieldExecutive");
 const Unit = require("../models/Unit");
 const Agent = require("../models/Agent");
-const HR = require("../models/HR"); // Add this line with other model imports
-// ✅ Login route for Executive, Admin, Designer, Account,Service
+const HR = require("../models/HR");
+
+// ✅ Login route for Executive, Admin, Designer, Account, Service
 router.post("/login", async (req, res) => {
   const { name, password } = req.body;
 
   try {
-    const serviceExecutive = await ServiceExecutive.findOne({
-      name: new RegExp(`^${name.trim()}$`, "i"),
-      password: password.trim(),
+    console.log(`Login attempt for: ${name}`);
+
+    // Check Service Manager
+    const serviceManager = await ServiceManager.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
     });
+    
+    if (serviceManager) {
+      console.log('Service Manager found:', {
+        name: serviceManager.name,
+        active: serviceManager.active
+      });
+      
+      // Check if active is false (explicitly check for false)
+      if (serviceManager.active === false) {
+        console.log('Service Manager is inactive, denying login');
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
+      
+      console.log('Service Manager login successful');
+      return res.json({
+        success: true,
+        role: "Service Manager",
+        name: serviceManager.name,
+      });
+    }
+
+    // Check Account
+    const account = await Account.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    });
+    
+    if (account) {
+      console.log('Account found:', {
+        name: account.name,
+        active: account.active
+      });
+      
+      if (account.active === false) {
+        console.log('Account is inactive, denying login');
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
+      
+      console.log('Account login successful');
+      return res.json({ success: true, role: "Account", name: account.name });
+    }
+
+    // Check Service Executive
+    const serviceExecutive = await ServiceExecutive.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    });
+    
     if (serviceExecutive) {
+      if (serviceExecutive.active === false) {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
       return res.json({
         success: true,
         role: "Service Executive",
         name: serviceExecutive.name,
       });
     }
+
     // Check IT Team
     const itStaff = await ItTeam.findOne({
       $or: [
@@ -62,83 +136,129 @@ router.post("/login", async (req, res) => {
       ],
       password: password.trim()
     });
-
+    
     if (itStaff) {
+      if (itStaff.active === false) {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
       return res.json({
         success: true,
         role: "IT",
         name: itStaff.name,
       });
     }
-    // Add this with your other model checks in the login route
+
+    // Check Sales Manager
     const salesManager = await SalesManager.findOne({
-      name: new RegExp(`^${name.trim()}$`, "i"),
-      password: password.trim(),
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
     });
+    
     if (salesManager) {
+      if (salesManager.active === false) {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
       return res.json({
         success: true,
         role: "Sales Manager",
         name: salesManager.name,
       });
     }
-    // Check Service Manager
-    const serviceManager = await ServiceManager.findOne({
-      name: new RegExp(`^${name.trim()}$`, "i"),
-      password: password.trim(),
-    });
-    if (serviceManager) {
-      return res.json({
-        success: true,
-        role: "Service Manager",
-        name: serviceManager.name,
-      });
-    }
+
     // Check Digital Marketing
     const digitalMarketing = await DigitalMarketing.findOne({
-      name: new RegExp(`^${name.trim()}$`, "i"),
-      password: password.trim(),
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
     });
+    
     if (digitalMarketing) {
+      if (digitalMarketing.active === false) {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
       return res.json({
         success: true,
         role: "Digital Marketing",
         name: digitalMarketing.name,
       });
     }
-// Check Agent
-const agent = await Agent.findOne({
-  name: new RegExp(`^${name.trim()}$`, "i"),
-  password: password.trim(),
-});
-if (agent) {
-  return res.json({
-    success: true,
-    role: "Agent",
-    name: agent.name,
-  });
-}
-// Check HR - ADDED
-const hr = await HR.findOne({
-  $or: [
-    { name: new RegExp(`^${name.trim()}$`, "i") },
-    { username: new RegExp(`^${name.trim()}$`, "i") }
-  ],
-  password: password.trim(),
-});
-if (hr) {
-  return res.json({
-    success: true,
-    role: "HR",
-    name: hr.name,
-  });
-}
-    // Client service
-    const clientService = await ClientService.findOne({
-      name: new RegExp(`^${name.trim()}$`, "i"),
-      password: password.trim(),
+
+    // Check Agent
+    const agent = await Agent.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
     });
+    
+    if (agent) {
+      if (agent.active === false) {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
+      return res.json({
+        success: true,
+        role: "Agent",
+        name: agent.name,
+      });
+    }
+
+    // Check HR
+    const hr = await HR.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    });
+    
+    if (hr) {
+      if (hr.active === false) {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
+      return res.json({
+        success: true,
+        role: "HR",
+        name: hr.name,
+      });
+    }
+
+    // Check Client service
+    const clientService = await ClientService.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    });
+    
     if (clientService) {
+      if (clientService.active === false) {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
       return res.json({
         success: true,
         role: "Client service",
@@ -148,10 +268,20 @@ if (hr) {
 
     // Check Executive
     const executive = await Executive.findOne({
-      name: new RegExp(`^${name.trim()}$`, "i"),
-      password: password.trim(),
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
     });
+    
     if (executive) {
+      if (executive.active === false) {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
       return res.json({
         success: true,
         role: "Executive",
@@ -161,64 +291,109 @@ if (hr) {
 
     // Check Admin
     const admin = await Admin.findOne({
-      name: new RegExp(`^${name.trim()}$`, "i"),
-      password: password.trim(),
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
     });
+    
     if (admin) {
+      if (admin.active === false) {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
       return res.json({ success: true, role: "Admin", name: admin.name });
     }
 
     // Check Designer
     const designer = await Designer.findOne({
-      name: new RegExp(`^${name.trim()}$`, "i"),
-      password: password.trim(),
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
     });
+    
     if (designer) {
+      if (designer.active === false) {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
       return res.json({ success: true, role: "Designer", name: designer.name });
     }
+
     // Check Vendor
     const vendor = await Vendor.findOne({
-      name: new RegExp(`^${name.trim()}$`, "i"),
-      password: password.trim(),
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
     });
+    
     if (vendor) {
+      if (vendor.active === false) {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
       return res.json({
         success: true,
         role: "Vendor",
         name: vendor.name
       });
     }
+
     // Check Field Executive
     const fieldExecutive = await FieldExecutive.findOne({
-      name: new RegExp(`^${name.trim()}$`, "i"),
-      password: password.trim(),
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
     });
+    
     if (fieldExecutive) {
+      if (fieldExecutive.active === false) {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
       return res.json({
         success: true,
         role: "FieldExecutive",
         name: fieldExecutive.name,
       });
     }
+
+    // Check Unit
     const unitEmployee = await Unit.findOne({
-      name: new RegExp(`^${name.trim()}$`, "i"),
-      password: password.trim(),
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
     });
+    
     if (unitEmployee) {
+      if (unitEmployee.active === false) {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
       return res.json({
         success: true,
         role: "Unit",
         name: unitEmployee.name,
       });
-    }
-
-    // Check Account
-    const account = await Account.findOne({
-      name: new RegExp(`^${name.trim()}$`, "i"),
-      password: password.trim(),
-    });
-    if (account) {
-      return res.json({ success: true, role: "Account", name: account.name });
     }
 
     return res
@@ -236,7 +411,8 @@ router.post("/add-executive", async (req, res) => {
     guardianName,
     aadhar,
     joiningDate,
-    experience, } = req.body;
+    experience,
+    active } = req.body;
 
   try {
     // Check if executive exists by username OR name
@@ -257,7 +433,8 @@ router.post("/add-executive", async (req, res) => {
       guardianName,
       aadhar,
       joiningDate,
-      experience
+      experience,
+      active: active !== false // Default to true if not specified
     });
     await newExecutive.save();
     res.status(201).json({ message: "Executive added successfully" });
@@ -266,7 +443,8 @@ router.post("/add-executive", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-// ✅ Route to add Vendor (with username) - ADD THIS TO YOUR BACKEND
+
+// ✅ Route to add Vendor (with username)
 router.post("/add-vendor", async (req, res) => {
   const {
     username,
@@ -313,13 +491,15 @@ router.post("/add-vendor", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 // ✅ Route to add an Admin (with username)
 router.post("/add-admin", async (req, res) => {
   const { username, name, password, phone, email,
     guardianName,
     aadhar,
     joiningDate,
-    experience, } = req.body;
+    experience,
+    active } = req.body;
 
   try {
     const existing = await Admin.findOne({
@@ -339,7 +519,8 @@ router.post("/add-admin", async (req, res) => {
       guardianName,
       aadhar,
       joiningDate,
-      experience
+      experience,
+      active: active !== false
     });
     await newAdmin.save();
     res.status(201).json({ message: "Admin added successfully" });
@@ -355,7 +536,8 @@ router.post("/add-designer", async (req, res) => {
     guardianName,
     aadhar,
     joiningDate,
-    experience } = req.body;
+    experience,
+    active } = req.body;
 
   try {
     const existing = await Designer.findOne({
@@ -375,7 +557,8 @@ router.post("/add-designer", async (req, res) => {
       guardianName,
       aadhar,
       joiningDate,
-      experience
+      experience,
+      active: active !== false
     });
     await newUser.save();
     res.status(201).json({ message: "Designer added successfully" });
@@ -384,7 +567,8 @@ router.post("/add-designer", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-// ✅ Route to add HR - ADDED
+
+// ✅ Route to add HR
 router.post("/add-hr", async (req, res) => {
   const {
     username,
@@ -433,13 +617,15 @@ router.post("/add-hr", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 // ✅ Route to add an Account (with username)
 router.post("/add-account", async (req, res) => {
   const { username, name, password, phone, email,
     guardianName,
     aadhar,
     joiningDate,
-    experience } = req.body;
+    experience,
+    active } = req.body;
 
   try {
     const existing = await Account.findOne({
@@ -459,7 +645,8 @@ router.post("/add-account", async (req, res) => {
       guardianName,
       aadhar,
       joiningDate,
-      experience
+      experience,
+      active: active !== false
     });
     await newUser.save();
     res.status(201).json({ message: "Account user added successfully" });
@@ -475,7 +662,8 @@ router.post("/add-service-executive", async (req, res) => {
     guardianName,
     aadhar,
     joiningDate,
-    experience } = req.body;
+    experience,
+    active } = req.body;
 
   try {
     const existing = await ServiceExecutive.findOne({
@@ -495,7 +683,8 @@ router.post("/add-service-executive", async (req, res) => {
       guardianName,
       aadhar,
       joiningDate,
-      experience
+      experience,
+      active: active !== false
     });
     await newUser.save();
     res.status(201).json({ message: "Service Executive added successfully" });
@@ -507,11 +696,21 @@ router.post("/add-service-executive", async (req, res) => {
 
 // ✅ Route to add Service Manager (with username)
 router.post("/add-service-manager", async (req, res) => {
-  const { username, name, password, phone, email,
+  const { 
+    username, 
+    name, 
+    password, 
+    phone, 
+    email,
     guardianName,
     aadhar,
     joiningDate,
-    experience } = req.body;
+    experience,
+    resignationDate,
+    resignationReason,
+    rejoinDate,
+    active 
+  } = req.body;
 
   try {
     const existing = await ServiceManager.findOne({
@@ -527,11 +726,19 @@ router.post("/add-service-manager", async (req, res) => {
     }
 
     const newUser = new ServiceManager({
-      username, name, password, phone, email,
+      username, 
+      name, 
+      password, 
+      phone, 
+      email,
       guardianName,
       aadhar,
       joiningDate,
-      experience
+      experience,
+      resignationDate,
+      resignationReason,
+      rejoinDate,
+      active: active !== false
     });
     await newUser.save();
     res.status(201).json({ message: "Service Manager added successfully" });
@@ -547,7 +754,8 @@ router.post("/add-sales-manager", async (req, res) => {
     guardianName,
     aadhar,
     joiningDate,
-    experience } = req.body;
+    experience,
+    active } = req.body;
 
   try {
     const existing = await SalesManager.findOne({
@@ -567,7 +775,8 @@ router.post("/add-sales-manager", async (req, res) => {
       guardianName,
       aadhar,
       joiningDate,
-      experience
+      experience,
+      active: active !== false
     });
     await newUser.save();
     res.status(201).json({ message: "Sales Manager added successfully" });
@@ -631,7 +840,8 @@ router.post("/add-digital-marketing", async (req, res) => {
     guardianName,
     aadhar,
     joiningDate,
-    experience } = req.body;
+    experience,
+    active } = req.body;
 
   try {
     const existing = await DigitalMarketing.findOne({
@@ -651,7 +861,8 @@ router.post("/add-digital-marketing", async (req, res) => {
       guardianName,
       aadhar,
       joiningDate,
-      experience
+      experience,
+      active: active !== false
     });
     await newUser.save();
     res
@@ -669,7 +880,8 @@ router.post("/add-clientservice", async (req, res) => {
     guardianName,
     aadhar,
     joiningDate,
-    experience } = req.body;
+    experience,
+    active } = req.body;
 
   try {
     const existing = await ClientService.findOne({
@@ -689,7 +901,8 @@ router.post("/add-clientservice", async (req, res) => {
       guardianName,
       aadhar,
       joiningDate,
-      experience
+      experience,
+      active: active !== false
     });
     await newUser.save();
     res.status(201).json({ message: "Client Service user added successfully" });
@@ -770,7 +983,8 @@ router.get("/employees", async (req, res) => {
       units,
       fieldExecutives,
       agents,
-        hrs // Add this
+      vendors,
+      hrs
     ] = await Promise.all([
       Executive.find({}).lean(),
       Admin.find({}).lean(),
@@ -784,8 +998,9 @@ router.get("/employees", async (req, res) => {
       ClientService.find({}).lean(),
       Unit.find({}).lean(),
       FieldExecutive.find({}).lean(),
-       Agent.find({}).lean(),
-         HR.find({}).lean() // Add this
+      Agent.find({}).lean(),
+      Vendor.find({}).lean(),
+      HR.find({}).lean()
     ]);
 
     const employeeCategories = {
@@ -802,8 +1017,8 @@ router.get("/employees", async (req, res) => {
       Unit: units,
       FieldExecutive: fieldExecutives,
       Agent: agents,
-        HR: hrs // Add this
-
+      Vendor: vendors,
+      HR: hrs
     };
 
     res.json(employeeCategories);
@@ -832,16 +1047,20 @@ router.get("/user-profile", async (req, res) => {
       { model: Unit, name: "Unit" },
       { model: FieldExecutive, name: "FieldExecutive" },
       { model: Agent, name: "Agent" },
-        { model: HR, name: "HR" } // Add this
-
-
+      { model: Vendor, name: "Vendor" },
+      { model: HR, name: "HR" }
     ];
 
     let user = null;
     let role = "";
 
     for (const { model, name: roleName } of collections) {
-      user = await model.findOne({ name });
+      user = await model.findOne({ 
+        $or: [
+          { name: new RegExp(`^${name.trim()}$`, "i") },
+          { username: new RegExp(`^${name.trim()}$`, "i") }
+        ]
+      });
       if (user) {
         role = roleName;
         break;
@@ -855,7 +1074,7 @@ router.get("/user-profile", async (req, res) => {
     res.json({
       name: user.name,
       phone: user.phone,
-      active: user.active !== false, // Ensure consistent active status
+      active: user.active !== false,
       role,
     });
   } catch (err) {
@@ -890,6 +1109,7 @@ router.put("/update-profile", async (req, res) => {
       Unit,
       FieldExecutive,
       Agent,
+      Vendor,
       HR
     };
 
@@ -898,9 +1118,18 @@ router.put("/update-profile", async (req, res) => {
     let currentUser = null;
 
     for (const [modelName, Model] of Object.entries(collections)) {
-      currentUser = await Model.findOne({ name });
+      currentUser = await Model.findOne({ 
+        $or: [
+          { name: new RegExp(`^${name.trim()}$`, "i") },
+          { username: new RegExp(`^${name.trim()}$`, "i") }
+        ]
+      });
       if (currentUser) {
         currentModel = Model;
+        console.log(`Found user in ${modelName}:`, {
+          name: currentUser.name,
+          currentActive: currentUser.active
+        });
         break;
       }
     }
@@ -923,7 +1152,12 @@ router.put("/update-profile", async (req, res) => {
       }
 
       // Check for existing user in new role
-      const existingUser = await NewModel.findOne({ name });
+      const existingUser = await NewModel.findOne({ 
+        $or: [
+          { name: new RegExp(`^${currentUser.name.trim()}$`, "i") },
+          { username: new RegExp(`^${currentUser.username?.trim()}$`, "i") }
+        ]
+      });
       if (existingUser) {
         return res.status(400).json({
           success: false,
@@ -933,14 +1167,22 @@ router.put("/update-profile", async (req, res) => {
 
       // Create new user in target collection
       const newUser = new NewModel({
+        username: currentUser.username,
         name: currentUser.name,
         phone: updates.phone || currentUser.phone,
-        active: updates.active !== false, // Explicitly set active status
-        password: currentUser.password || "defaultPassword",
+        active: updates.active === true || updates.active === 'true' ? true : false,
+        password: currentUser.password,
+        email: currentUser.email,
+        guardianName: currentUser.guardianName,
+        aadhar: currentUser.aadhar,
+        joiningDate: currentUser.joiningDate,
+        experience: currentUser.experience
       });
 
       await newUser.save();
       await currentModel.deleteOne({ _id: currentUser._id });
+
+      console.log(`User moved to ${updates.role} with active:`, newUser.active);
 
       return res.json({
         success: true,
@@ -948,17 +1190,19 @@ router.put("/update-profile", async (req, res) => {
         data: {
           name: newUser.name,
           phone: newUser.phone,
-          active: newUser.active !== false,
+          active: newUser.active,
           role: updates.role,
         },
       });
     }
 
-    // Regular update
+    // Regular update - ensure active is properly handled
     const updateData = {
       ...updates,
-      active: updates.active !== false, // Ensure active is properly set
+      active: updates.active === true || updates.active === 'true' ? true : false,
     };
+
+    console.log('Updating user with data:', updateData);
 
     const updatedUser = await currentModel.findOneAndUpdate(
       { _id: currentUser._id },
@@ -966,13 +1210,15 @@ router.put("/update-profile", async (req, res) => {
       { new: true }
     );
 
+    console.log('User updated, new active status:', updatedUser.active);
+
     res.json({
       success: true,
       message: "Profile updated successfully",
       data: {
         name: updatedUser.name,
         phone: updatedUser.phone,
-        active: updatedUser.active !== false,
+        active: updatedUser.active,
         role: currentModel.modelName,
       },
     });
@@ -1033,6 +1279,7 @@ router.post("/add-unit", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 // ✅ Route to add Agent (with username)
 router.post("/add-agent", async (req, res) => {
   const {
@@ -1092,7 +1339,8 @@ router.post("/add-field-executive", upload.single('image'), async (req, res) => 
     guardianName,
     aadhar,
     joiningDate,
-    experience
+    experience,
+    active
   } = req.body;
 
   try {
@@ -1121,7 +1369,8 @@ router.post("/add-field-executive", upload.single('image'), async (req, res) => 
       aadhar,
       joiningDate,
       experience,
-      image: req.file ? req.file.filename : null // Add image path if file was uploaded
+      active: active !== false,
+      image: req.file ? req.file.filename : null
     });
 
     await newExec.save();
@@ -1131,12 +1380,13 @@ router.post("/add-field-executive", upload.single('image'), async (req, res) => 
     res.status(500).json({ error: "Server error: " + err.message });
   }
 });
+
 // Get all Unit employees
 router.get("/units", async (req, res) => {
   try {
     const units = await Unit.find({})
-      .select('-password') // Exclude password from the response
-      .sort({ createdAt: -1 }); // Sort by newest first
+      .select('-password')
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -1151,4 +1401,36 @@ router.get("/units", async (req, res) => {
     });
   }
 });
+
+// Debug route to check Service Manager
+router.get("/debug/service-manager/:name", async (req, res) => {
+  try {
+    const { name } = req.params;
+    
+    const serviceManager = await ServiceManager.findOne({
+      $or: [
+        { name: new RegExp(`^${name}$`, "i") },
+        { username: new RegExp(`^${name}$`, "i") }
+      ]
+    });
+    
+    if (!serviceManager) {
+      return res.json({ found: false });
+    }
+    
+    res.json({
+      found: true,
+      name: serviceManager.name,
+      username: serviceManager.username,
+      active: serviceManager.active,
+      activeType: typeof serviceManager.active,
+      activeValue: serviceManager.active,
+      hasActiveField: serviceManager.hasOwnProperty('active'),
+      allFields: Object.keys(serviceManager._doc)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

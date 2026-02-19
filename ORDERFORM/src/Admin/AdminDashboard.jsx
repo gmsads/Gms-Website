@@ -36,14 +36,16 @@ function AdminDashboard() {
     clients: false,
     events: false,
     manageUsers: false,
-    accounts: false
+    accounts: false,
+    reports: false // Added missing reports section
   });
   const location = useLocation();
   const navigate = useNavigate();
   const [prospectiveData, setProspectiveData] = useState(null);
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [year, setYear] = useState(new Date().getFullYear());
+  const [weeklyLoading, setWeeklyLoading] = useState(false);
+  const [year, setYear] = useState(2026); // Default to 2026
   const [selectedMonth, setSelectedMonth] = useState(null);
 
   // WhatsApp dashboard state
@@ -63,6 +65,12 @@ function AdminDashboard() {
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
+
+  // Generate year options with 'ALL' option
+  const years = ['all', ...Array.from({ length: 11 }, (_, i) => {
+    const currentYear = new Date().getFullYear();
+    return currentYear - 5 + i;
+  })];
 
   // Helper function to get client type data in consistent format
   const getClientTypeData = () => {
@@ -147,26 +155,49 @@ function AdminDashboard() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       setLoading(true);
+      setWeeklyLoading(true);
       try {
         const params = new URLSearchParams();
-        params.append('year', year);
+        
+        // Only append year if it's not 'all'
+        if (year !== 'all') {
+          params.append('year', year);
+        }
+        
         if (selectedMonth !== null) {
           params.append('month', selectedMonth + 1);
         }
 
         const [chartRes, prospectRes] = await Promise.all([
-          axios.get(`/api/dashboard/chart-data?${params.toString()}`),
-          axios.get(`/api/prospective-clients/stats?${params.toString()}`)
+          axios.get(`/api/dashboard/chart-data?${params.toString()}`).catch(err => {
+            console.error('Chart data error:', err);
+            return { data: null };
+          }),
+          axios.get(`/api/prospective-clients/stats?${params.toString()}`).catch(err => {
+            console.error('Prospective data error:', err);
+            return { data: null };
+          })
         ]);
 
-        setChartData(chartRes.data);
-        setProspectiveData(prospectRes.data);
+        if (chartRes && chartRes.data) {
+          setChartData(chartRes.data);
+        } else {
+          setChartData(null);
+        }
+
+        if (prospectRes && prospectRes.data) {
+          setProspectiveData(prospectRes.data);
+        } else {
+          setProspectiveData(null);
+        }
+
       } catch (err) {
-        console.error('API Error:', err.response?.data || err.message);
+        console.error('API Error:', err);
         setChartData(null);
         setProspectiveData(null);
       } finally {
         setLoading(false);
+        setWeeklyLoading(false);
       }
     };
     fetchDashboardData();
@@ -241,17 +272,19 @@ function AdminDashboard() {
       // For monthly view - use the total amount for the selected month
       return safeArray(chartData.amountByMonth)[0] || 0;
     } else {
-      // For yearly view - sum all monthly amounts
+      // For yearly view or all years - sum all monthly amounts
       return safeArray(chartData.amountByMonth).reduce((sum, amount) => sum + amount, 0);
     }
   };
 
-  // Generate year options
-  const years = [];
-  const currentYear = new Date().getFullYear();
-  for (let y = currentYear - 5; y <= currentYear + 5; y++) {
-    years.push(y);
-  }
+  // Get total orders count
+  const getTotalOrdersCount = () => {
+    if (!chartData) return 0;
+    if (selectedMonth !== null) {
+      return chartData?.weeklyOrders?.reduce((sum, w) => sum + (w.count || 0), 0) || 0;
+    }
+    return safeArray(chartData?.totalOrdersByMonth).reduce((a, b) => a + b, 0);
+  };
 
   // Handle chart clicks
   const handleChartClick = (chartType) => {
@@ -259,7 +292,7 @@ function AdminDashboard() {
       // Prepare query parameters for month/year filtering
       const queryParams = new URLSearchParams();
       
-      if (year) {
+      if (year !== 'all') {
         queryParams.append('year', year);
       }
       
@@ -285,12 +318,18 @@ function AdminDashboard() {
     handleMenuItemClick();
   };
 
+  // Clear all filters
+  const handleClearFilters = () => {
+    setYear('all');
+    setSelectedMonth(null);
+  };
+
   // Get time period text for display
   const getTimePeriodText = () => {
     if (selectedMonth !== null) {
-      return `${monthLabels[selectedMonth]} ${year}`;
+      return `${monthLabels[selectedMonth]} ${year !== 'all' ? year : '(All Years)'}`;
     }
-    return `Year ${year}`;
+    return year === 'all' ? 'All Years' : `Year ${year}`;
   };
 
   // Styles - Added WhatsApp button styles
@@ -657,6 +696,24 @@ function AdminDashboard() {
       marginTop: '5px',
       fontStyle: 'italic'
     },
+    clearButton: {
+      padding: '5px 10px',
+      backgroundColor: '#f0f0f0',
+      border: '1px solid #d9d9d9',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: '12px',
+      marginLeft: '10px',
+      color: '#003366'
+    },
+    noDataMessage: {
+      height: '220px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#666',
+      fontSize: '14px'
+    },
     // NEW STYLES FOR DAILY ACTIVITIES CARD
     dailyActivitiesCard: {
       backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -828,14 +885,14 @@ function AdminDashboard() {
               >
                 View All Orders
               </NavLink>
-                <NavLink
+              <NavLink
                 to="view-leaves"
                 style={linkStyle('view-leaves')}
                 onMouseEnter={() => setHoveredItem('view-leaves')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
-                View Leave Requests
+                View Leave Requests 
               </NavLink>
               <NavLink
                 to="parties"
@@ -944,7 +1001,7 @@ function AdminDashboard() {
               >
                 Employees
               </NavLink>
- <NavLink
+              <NavLink
                 to="tele-breaks"
                 style={linkStyle('tele-breaks')}
                 onMouseEnter={() => setHoveredItem('tele-breaks')}
@@ -1034,14 +1091,14 @@ function AdminDashboard() {
               >
                 Daily Report
               </NavLink>
-               <NavLink
+                <NavLink
                 to="view-hrreport"
                 style={linkStyle('view-hrreport')}
                 onMouseEnter={() => setHoveredItem('view-hrreport')}
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
-              HR Report
+                HR Report
               </NavLink>
               <NavLink
                 to="fieldvisitsadmin"
@@ -1051,6 +1108,15 @@ function AdminDashboard() {
                 onClick={handleMenuItemClick}
               >
                 Field Visits
+              </NavLink>
+               <NavLink
+                to="hour-reeport"
+                style={linkStyle('hour-reeport')}
+                onMouseEnter={() => setHoveredItem('hour-reeport')}
+                onMouseLeave={() => setHoveredItem('')}
+                onClick={handleMenuItemClick}
+              >
+                Hour Report
               </NavLink>
             </>
           )}
@@ -1092,15 +1158,7 @@ function AdminDashboard() {
               >
                 Pending Service
               </NavLink>
-<NavLink
-                to="greeting-design"
-                style={linkStyle('greeting-design')}
-                onMouseEnter={() => setHoveredItem('greeting-design')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-             Greeting Design
-              </NavLink>
+
               <NavLink
                 to="view-design"
                 style={linkStyle('view-design')}
@@ -1401,7 +1459,7 @@ function AdminDashboard() {
               <>
                 {/* Year and Month Selector with User Controls */}
                 <div style={styles.yearSelectorWrapper}>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <label htmlFor="year-select" style={styles.yearSelectorLabel}>
                       Select Year:
                     </label>
@@ -1409,14 +1467,15 @@ function AdminDashboard() {
                       id="year-select"
                       value={year}
                       onChange={(e) => {
-                        setYear(parseInt(e.target.value));
-                        setSelectedMonth(null);
+                        const selectedValue = e.target.value;
+                        setYear(selectedValue === 'all' ? 'all' : parseInt(selectedValue));
+                        setSelectedMonth(null); // Reset month when year changes
                       }}
                       style={styles.yearSelector}
                     >
                       {years.map((y) => (
                         <option key={y} value={y}>
-                          {y}
+                          {y === 'all' ? 'ALL' : y}
                         </option>
                       ))}
                     </select>
@@ -1440,6 +1499,19 @@ function AdminDashboard() {
                         </option>
                       ))}
                     </select>
+
+                    <button
+                      onClick={handleClearFilters}
+                      style={styles.clearButton}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#e0e0e0';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#f0f0f0';
+                      }}
+                    >
+                      Clear Filters
+                    </button>
                   </div>
 
                   <div style={styles.userControls}>
@@ -1465,260 +1537,18 @@ function AdminDashboard() {
                 </div>
 
                 {loading ? (
-                  <div>Loading dashboard data...</div>
+                  <div style={{ textAlign: 'center', padding: '50px', fontSize: '18px', color: '#003366' }}>
+                    Loading dashboard data...
+                  </div>
                 ) : !chartData ? (
-                  <div>Error loading dashboard data.</div>
+                  <div style={{ textAlign: 'center', padding: '50px', fontSize: '18px', color: '#ff4d4f' }}>
+                    Error loading dashboard data. Please try again.
+                  </div>
                 ) : (
                   <div style={styles.dashboardCards}>
-{/* Total Revenue Bar Chart - FIRST CARD */}
-<div style={styles.card}>
-  <div>Total Revenue {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : '(Monthly)'}</div>
-  <div style={styles.chartContainer}>
-    <Bar
-      data={{
-        labels: selectedMonth !== null
-          ? chartData?.weeklyOrders?.map((_, i) => `Week ${i + 1}`) || ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
-          : monthLabels,
-        datasets: [
-          {
-            label: 'Total Revenue',
-            data: selectedMonth !== null
-              ? chartData?.weeklyOrders?.map(w => w.amount || 0) || []
-              : safeArray(chartData?.amountByMonth),
-            backgroundColor: selectedMonth !== null
-              ? [
-                  'rgba(49, 122, 176, 0.8)',  // Blue Grotto - Week 1
-                  'rgba(49, 122, 176, 0.7)',  // Lighter - Week 2
-                  'rgba(49, 122, 176, 0.6)',  // Lighter - Week 3
-                  'rgba(49, 122, 176, 0.5)',  // Lighter - Week 4
-                  'rgba(49, 122, 176, 0.4)',  // Lightest - Week 5
-                ]
-              : [
-                  'rgba(49, 122, 176, 0.9)',   // Jan - Solid Blue Grotto
-                  'rgba(49, 122, 176, 0.85)',  // Feb
-                  'rgba(49, 122, 176, 0.8)',   // Mar
-                  'rgba(49, 122, 176, 0.75)',  // Apr
-                  'rgba(49, 122, 176, 0.7)',   // May
-                  'rgba(49, 122, 176, 0.65)',  // Jun
-                  'rgba(49, 122, 176, 0.6)',   // Jul
-                  'rgba(49, 122, 176, 0.65)',  // Aug
-                  'rgba(49, 122, 176, 0.7)',   // Sep
-                  'rgba(49, 122, 176, 0.75)',  // Oct
-                  'rgba(49, 122, 176, 0.8)',   // Nov
-                  'rgba(49, 122, 176, 0.85)',  // Dec
-                ],
-            borderColor: selectedMonth !== null
-              ? [
-                  'rgba(49, 122, 176, 1)',
-                  'rgba(49, 122, 176, 0.9)',
-                  'rgba(49, 122, 176, 0.8)',
-                  'rgba(49, 122, 176, 0.7)',
-                  'rgba(49, 122, 176, 0.6)',
-                ]
-              : [
-                  'rgba(49, 122, 176, 1)',
-                  'rgba(49, 122, 176, 0.95)',
-                  'rgba(49, 122, 176, 0.9)',
-                  'rgba(49, 122, 176, 0.85)',
-                  'rgba(49, 122, 176, 0.8)',
-                  'rgba(49, 122, 176, 0.75)',
-                  'rgba(49, 122, 176, 0.7)',
-                  'rgba(49, 122, 176, 0.75)',
-                  'rgba(49, 122, 176, 0.8)',
-                  'rgba(49, 122, 176, 0.85)',
-                  'rgba(49, 122, 176, 0.9)',
-                  'rgba(49, 122, 176, 0.95)',
-                ],
-            borderWidth: 1,
-            borderRadius: 8,
-            hoverBackgroundColor: selectedMonth !== null
-              ? [
-                  'rgba(49, 122, 176, 1)',
-                  'rgba(49, 122, 176, 0.9)',
-                  'rgba(49, 122, 176, 0.8)',
-                  'rgba(49, 122, 176, 0.7)',
-                  'rgba(49, 122, 176, 0.6)',
-                ]
-              : [
-                  'rgba(49, 122, 176, 1)',
-                  'rgba(49, 122, 176, 0.95)',
-                  'rgba(49, 122, 176, 0.9)',
-                  'rgba(49, 122, 176, 0.85)',
-                  'rgba(49, 122, 176, 0.8)',
-                  'rgba(49, 122, 176, 0.75)',
-                  'rgba(49, 122, 176, 0.7)',
-                  'rgba(49, 122, 176, 0.75)',
-                  'rgba(49, 122, 176, 0.8)',
-                  'rgba(49, 122, 176, 0.85)',
-                  'rgba(49, 122, 176, 0.9)',
-                  'rgba(49, 122, 176, 0.95)',
-                ],
-            hoverBorderColor: '#FFFFFF',
-            hoverBorderWidth: 2,
-            barPercentage: 0.7,
-            categoryPercentage: 0.8
-          }
-        ]
-      }}
-      options={{
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: 'rgba(49, 122, 176, 0.95)',
-            titleColor: '#FFFFFF',
-            bodyColor: '#FFFFFF',
-            borderColor: '#317ab0',
-            borderWidth: 1,
-            cornerRadius: 8,
-            padding: 12,
-            titleFont: {
-              size: 13,
-              weight: 'bold'
-            },
-            bodyFont: {
-              size: 12
-            },
-            callbacks: {
-              title: function(tooltipItems) {
-                const dataIndex = tooltipItems[0].dataIndex;
-                if (selectedMonth !== null) {
-                  return `Week ${dataIndex + 1}`;
-                } else {
-                  return monthLabels[dataIndex];
-                }
-              },
-              label: (context) => {
-                const amount = context.raw;
-                const formattedAmount = formatAmount(amount);
-                const fullAmount = formatAmountFull(amount);
-                return [
-                  `Revenue: ₹${formattedAmount}`,
-                  `Amount: ${fullAmount}`
-                ];
-              }
-            }
-          }
-        },
-        onClick: (_, elements) => {
-          if (elements.length > 0) {
-            const queryParams = new URLSearchParams();
-
-            if (selectedMonth === null) {
-              const clickedMonth = elements[0].index + 1;
-              queryParams.append('month', clickedMonth);
-              queryParams.append('year', year);
-
-              const monthAmount = safeArray(chartData?.amountByMonth)[elements[0].index] || 0;
-              queryParams.append('monthAmount', monthAmount);
-              queryParams.append('monthName', monthLabels[elements[0].index]);
-            } else {
-              const weekNumber = elements[0].index + 1;
-              queryParams.append('month', selectedMonth + 1);
-              queryParams.append('year', year);
-              queryParams.append('week', weekNumber);
-
-              const weekAmount = chartData?.weeklyOrders?.[elements[0].index]?.amount || 0;
-              queryParams.append('weekAmount', weekAmount);
-              queryParams.append('monthName', monthLabels[selectedMonth]);
-            }
-
-            navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-          }
-        },
-        scales: {
-          x: {
-            grid: { 
-              display: true,
-              color: 'rgba(49, 122, 176, 0.1)',
-              drawBorder: false
-            },
-            ticks: { 
-              autoSkip: false,
-              color: '#317ab0',
-              font: {
-                size: 11,
-                weight: '500'
-              }
-            }
-          },
-          y: {
-            beginAtZero: true,
-            grid: { 
-              color: 'rgba(49, 122, 176, 0.1)',
-              drawBorder: false
-            },
-            ticks: {
-              callback: function(value) {
-                if (value >= 10000000) {
-                  return (value / 10000000).toFixed(1) + 'Cr';
-                } else if (value >= 100000) {
-                  return (value / 100000).toFixed(1) + 'L';
-                } else if (value >= 1000) {
-                  return (value / 1000).toFixed(1) + 'K';
-                }
-                return value;
-              },
-              color: '#317ab0',
-              font: {
-                size: 10
-              },
-              padding: 5
-            }
-          }
-        },
-        interaction: {
-          intersect: false,
-          mode: 'index'
-        },
-        animation: {
-          duration: 1000,
-          easing: 'easeOutQuart'
-        }
-      }}
-    />
-  </div>
-  <div style={styles.number}>
-    {formatAmount(calculateTotalRevenue())}
-  </div>
-  <div style={styles.revenueSubtext}>
-    {formatAmountFull(calculateTotalRevenue())}
-  </div>
-  {selectedMonth !== null && (
-    <button
-      onClick={() => setSelectedMonth(null)}
-      style={{
-        padding: '6px 12px',
-        backgroundColor: '#317ab0',
-        color: 'white',
-        border: 'none',
-        borderRadius: '6px',
-        cursor: 'pointer',
-        marginTop: '10px',
-        fontWeight: 'bold',
-        fontSize: '12px',
-        transition: 'all 0.3s',
-        boxShadow: '0 2px 4px rgba(49, 122, 176, 0.3)'
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = '#2a6a9d';
-        e.currentTarget.style.transform = 'translateY(-1px)';
-        e.currentTarget.style.boxShadow = '0 4px 8px rgba(49, 122, 176, 0.4)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = '#317ab0';
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = '0 2px 4px rgba(49, 122, 176, 0.3)';
-      }}
-    >
-      View All Months
-    </button>
-  )}
-</div>
-                    {/* Total Orders Bar Chart - WITH AMOUNT TOOLTIP */}
+                    {/* Total Revenue Bar Chart - FIRST CARD */}
                     <div style={styles.card}>
-                      <div>Total Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : '(Monthly)'}</div>
+                      <div>Total Revenue {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : '(Monthly)'}</div>
                       <div style={styles.chartContainer}>
                         <Bar
                           data={{
@@ -1727,15 +1557,82 @@ function AdminDashboard() {
                               : monthLabels,
                             datasets: [
                               {
-                                label: 'Total Orders',
+                                label: 'Total Revenue',
                                 data: selectedMonth !== null
-                                  ? chartData?.weeklyOrders?.map(w => w.count) || []
-                                  : safeArray(chartData?.totalOrdersByMonth),
-                                backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                                borderColor: 'rgba(54, 162, 235, 1)',
+                                  ? chartData?.weeklyOrders?.map(w => w.amount || 0) || []
+                                  : safeArray(chartData?.amountByMonth),
+                                backgroundColor: selectedMonth !== null
+                                  ? [
+                                      'rgba(49, 122, 176, 0.8)',  // Blue Grotto - Week 1
+                                      'rgba(49, 122, 176, 0.7)',  // Lighter - Week 2
+                                      'rgba(49, 122, 176, 0.6)',  // Lighter - Week 3
+                                      'rgba(49, 122, 176, 0.5)',  // Lighter - Week 4
+                                      'rgba(49, 122, 176, 0.4)',  // Lightest - Week 5
+                                    ]
+                                  : [
+                                      'rgba(49, 122, 176, 0.9)',   // Jan - Solid Blue Grotto
+                                      'rgba(49, 122, 176, 0.85)',  // Feb
+                                      'rgba(49, 122, 176, 0.8)',   // Mar
+                                      'rgba(49, 122, 176, 0.75)',  // Apr
+                                      'rgba(49, 122, 176, 0.7)',   // May
+                                      'rgba(49, 122, 176, 0.65)',  // Jun
+                                      'rgba(49, 122, 176, 0.6)',   // Jul
+                                      'rgba(49, 122, 176, 0.65)',  // Aug
+                                      'rgba(49, 122, 176, 0.7)',   // Sep
+                                      'rgba(49, 122, 176, 0.75)',  // Oct
+                                      'rgba(49, 122, 176, 0.8)',   // Nov
+                                      'rgba(49, 122, 176, 0.85)',  // Dec
+                                    ],
+                                borderColor: selectedMonth !== null
+                                  ? [
+                                      'rgba(49, 122, 176, 1)',
+                                      'rgba(49, 122, 176, 0.9)',
+                                      'rgba(49, 122, 176, 0.8)',
+                                      'rgba(49, 122, 176, 0.7)',
+                                      'rgba(49, 122, 176, 0.6)',
+                                    ]
+                                  : [
+                                      'rgba(49, 122, 176, 1)',
+                                      'rgba(49, 122, 176, 0.95)',
+                                      'rgba(49, 122, 176, 0.9)',
+                                      'rgba(49, 122, 176, 0.85)',
+                                      'rgba(49, 122, 176, 0.8)',
+                                      'rgba(49, 122, 176, 0.75)',
+                                      'rgba(49, 122, 176, 0.7)',
+                                      'rgba(49, 122, 176, 0.75)',
+                                      'rgba(49, 122, 176, 0.8)',
+                                      'rgba(49, 122, 176, 0.85)',
+                                      'rgba(49, 122, 176, 0.9)',
+                                      'rgba(49, 122, 176, 0.95)',
+                                    ],
                                 borderWidth: 1,
-                                barPercentage: 0.8,
-                                categoryPercentage: 0.9
+                                borderRadius: 8,
+                                hoverBackgroundColor: selectedMonth !== null
+                                  ? [
+                                      'rgba(49, 122, 176, 1)',
+                                      'rgba(49, 122, 176, 0.9)',
+                                      'rgba(49, 122, 176, 0.8)',
+                                      'rgba(49, 122, 176, 0.7)',
+                                      'rgba(49, 122, 176, 0.6)',
+                                    ]
+                                  : [
+                                      'rgba(49, 122, 176, 1)',
+                                      'rgba(49, 122, 176, 0.95)',
+                                      'rgba(49, 122, 176, 0.9)',
+                                      'rgba(49, 122, 176, 0.85)',
+                                      'rgba(49, 122, 176, 0.8)',
+                                      'rgba(49, 122, 176, 0.75)',
+                                      'rgba(49, 122, 176, 0.7)',
+                                      'rgba(49, 122, 176, 0.75)',
+                                      'rgba(49, 122, 176, 0.8)',
+                                      'rgba(49, 122, 176, 0.85)',
+                                      'rgba(49, 122, 176, 0.9)',
+                                      'rgba(49, 122, 176, 0.95)',
+                                    ],
+                                hoverBorderColor: '#FFFFFF',
+                                hoverBorderWidth: 2,
+                                barPercentage: 0.7,
+                                categoryPercentage: 0.8
                               }
                             ]
                           }}
@@ -1745,9 +1642,22 @@ function AdminDashboard() {
                             plugins: {
                               legend: { display: false },
                               tooltip: {
+                                backgroundColor: 'rgba(49, 122, 176, 0.95)',
+                                titleColor: '#FFFFFF',
+                                bodyColor: '#FFFFFF',
+                                borderColor: '#317ab0',
+                                borderWidth: 1,
+                                cornerRadius: 8,
+                                padding: 12,
+                                titleFont: {
+                                  size: 13,
+                                  weight: 'bold'
+                                },
+                                bodyFont: {
+                                  size: 12
+                                },
                                 callbacks: {
                                   title: function(tooltipItems) {
-                                    // Show month/week name in title
                                     const dataIndex = tooltipItems[0].dataIndex;
                                     if (selectedMonth !== null) {
                                       return `Week ${dataIndex + 1}`;
@@ -1756,26 +1666,10 @@ function AdminDashboard() {
                                     }
                                   },
                                   label: (context) => {
-                                    const orders = context.raw;
-                                    let amount = 0;
-                                    
-                                    // Get the amount for this month
-                                    if (selectedMonth === null) {
-                                      // For monthly view
-                                      const monthIndex = context.dataIndex;
-                                      amount = safeArray(chartData?.amountByMonth)[monthIndex] || 0;
-                                    } else {
-                                      // For weekly view (selected month)
-                                      const weekIndex = context.dataIndex;
-                                      amount = chartData?.weeklyOrders?.[weekIndex]?.amount || 0;
-                                    }
-                                    
-                                    // Format the amount
+                                    const amount = context.raw;
                                     const formattedAmount = formatAmount(amount);
                                     const fullAmount = formatAmountFull(amount);
-                                    
                                     return [
-                                      `Orders: ${orders}`,
                                       `Revenue: ₹${formattedAmount}`,
                                       `Amount: ${fullAmount}`
                                     ];
@@ -1788,25 +1682,25 @@ function AdminDashboard() {
                                 const queryParams = new URLSearchParams();
 
                                 if (selectedMonth === null) {
-                                  // When viewing all months, click on a month bar
                                   const clickedMonth = elements[0].index + 1;
                                   queryParams.append('month', clickedMonth);
-                                  queryParams.append('year', year);
+                                  if (year !== 'all') {
+                                    queryParams.append('year', year);
+                                  }
 
-                                  // Add the count for display in view orders
-                                  const monthCount = safeArray(chartData?.totalOrdersByMonth)[elements[0].index] || 0;
-                                  queryParams.append('monthCount', monthCount);
+                                  const monthAmount = safeArray(chartData?.amountByMonth)[elements[0].index] || 0;
+                                  queryParams.append('monthAmount', monthAmount);
                                   queryParams.append('monthName', monthLabels[elements[0].index]);
                                 } else {
-                                  // When viewing specific month, click on a week bar
                                   const weekNumber = elements[0].index + 1;
                                   queryParams.append('month', selectedMonth + 1);
-                                  queryParams.append('year', year);
+                                  if (year !== 'all') {
+                                    queryParams.append('year', year);
+                                  }
                                   queryParams.append('week', weekNumber);
 
-                                  // Add the count for display in view orders
-                                  const weekCount = chartData?.weeklyOrders?.[elements[0].index]?.count || 0;
-                                  queryParams.append('weekCount', weekCount);
+                                  const weekAmount = chartData?.weeklyOrders?.[elements[0].index]?.amount || 0;
+                                  queryParams.append('weekAmount', weekAmount);
                                   queryParams.append('monthName', monthLabels[selectedMonth]);
                                 }
 
@@ -1815,22 +1709,208 @@ function AdminDashboard() {
                             },
                             scales: {
                               x: {
-                                grid: { display: false },
-                                ticks: { autoSkip: false }
+                                grid: { 
+                                  display: true,
+                                  color: 'rgba(49, 122, 176, 0.1)',
+                                  drawBorder: false
+                                },
+                                ticks: { 
+                                  autoSkip: false,
+                                  color: '#317ab0',
+                                  font: {
+                                    size: 11,
+                                    weight: '500'
+                                  }
+                                }
                               },
                               y: {
                                 beginAtZero: true,
-                                ticks: { precision: 0, stepSize: 1 },
-                                grid: { color: 'rgba(0,0,0,0.05)' }
+                                grid: { 
+                                  color: 'rgba(49, 122, 176, 0.1)',
+                                  drawBorder: false
+                                },
+                                ticks: {
+                                  callback: function(value) {
+                                    if (value >= 10000000) {
+                                      return (value / 10000000).toFixed(1) + 'Cr';
+                                    } else if (value >= 100000) {
+                                      return (value / 100000).toFixed(1) + 'L';
+                                    } else if (value >= 1000) {
+                                      return (value / 1000).toFixed(1) + 'K';
+                                    }
+                                    return value;
+                                  },
+                                  color: '#317ab0',
+                                  font: {
+                                    size: 10
+                                  },
+                                  padding: 5
+                                }
                               }
+                            },
+                            interaction: {
+                              intersect: false,
+                              mode: 'index'
+                            },
+                            animation: {
+                              duration: 1000,
+                              easing: 'easeOutQuart'
                             }
                           }}
                         />
                       </div>
                       <div style={styles.number}>
-                        {selectedMonth !== null
-                          ? chartData?.weeklyOrders?.reduce((sum, w) => sum + w.count, 0) || 0
-                          : safeArray(chartData?.totalOrdersByMonth).reduce((a, b) => a + b, 0)}
+                        {formatAmount(calculateTotalRevenue())}
+                      </div>
+                      <div style={styles.revenueSubtext}>
+                        {formatAmountFull(calculateTotalRevenue())}
+                      </div>
+                      {selectedMonth !== null && (
+                        <button
+                          onClick={() => setSelectedMonth(null)}
+                          style={{
+                            padding: '6px 12px',
+                            backgroundColor: '#317ab0',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            marginTop: '10px',
+                            fontWeight: 'bold',
+                            fontSize: '12px',
+                            transition: 'all 0.3s',
+                            boxShadow: '0 2px 4px rgba(49, 122, 176, 0.3)'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#2a6a9d';
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                            e.currentTarget.style.boxShadow = '0 4px 8px rgba(49, 122, 176, 0.4)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = '#317ab0';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(49, 122, 176, 0.3)';
+                          }}
+                        >
+                          View All Months
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Total Orders Bar Chart - WITH AMOUNT TOOLTIP */}
+                    <div style={styles.card}>
+                      <div>Total Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : '(Monthly)'}</div>
+                      <div style={styles.chartContainer}>
+                        {selectedMonth !== null && weeklyLoading ? (
+                          <div style={styles.noDataMessage}>Loading weekly data...</div>
+                        ) : selectedMonth !== null && (!chartData?.weeklyOrders || chartData.weeklyOrders.length === 0) ? (
+                          <div style={styles.noDataMessage}>No weekly data available for this month</div>
+                        ) : (
+                          <Bar
+                            data={{
+                              labels: selectedMonth !== null
+                                ? chartData?.weeklyOrders?.map((_, i) => `Week ${i + 1}`) || ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
+                                : monthLabels,
+                              datasets: [
+                                {
+                                  label: 'Total Orders',
+                                  data: selectedMonth !== null
+                                    ? chartData?.weeklyOrders?.map(w => w.count) || []
+                                    : safeArray(chartData?.totalOrdersByMonth),
+                                  backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                                  borderColor: 'rgba(54, 162, 235, 1)',
+                                  borderWidth: 1,
+                                  barPercentage: 0.8,
+                                  categoryPercentage: 0.9
+                                }
+                              ]
+                            }}
+                            options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                  callbacks: {
+                                    title: function(tooltipItems) {
+                                      const dataIndex = tooltipItems[0].dataIndex;
+                                      if (selectedMonth !== null) {
+                                        return `Week ${dataIndex + 1}`;
+                                      } else {
+                                        return monthLabels[dataIndex];
+                                      }
+                                    },
+                                    label: (context) => {
+                                      const orders = context.raw;
+                                      let amount = 0;
+                                      
+                                      if (selectedMonth === null) {
+                                        const monthIndex = context.dataIndex;
+                                        amount = safeArray(chartData?.amountByMonth)[monthIndex] || 0;
+                                      } else {
+                                        const weekIndex = context.dataIndex;
+                                        amount = chartData?.weeklyOrders?.[weekIndex]?.amount || 0;
+                                      }
+                                      
+                                      const formattedAmount = formatAmount(amount);
+                                      const fullAmount = formatAmountFull(amount);
+                                      
+                                      return [
+                                        `Orders: ${orders}`,
+                                        `Revenue: ₹${formattedAmount}`,
+                                        `Amount: ${fullAmount}`
+                                      ];
+                                    }
+                                  }
+                                }
+                              },
+                              onClick: (_, elements) => {
+                                if (elements.length > 0) {
+                                  const queryParams = new URLSearchParams();
+
+                                  if (selectedMonth === null) {
+                                    const clickedMonth = elements[0].index + 1;
+                                    queryParams.append('month', clickedMonth);
+                                    if (year !== 'all') {
+                                      queryParams.append('year', year);
+                                    }
+
+                                    const monthCount = safeArray(chartData?.totalOrdersByMonth)[elements[0].index] || 0;
+                                    queryParams.append('monthCount', monthCount);
+                                    queryParams.append('monthName', monthLabels[elements[0].index]);
+                                  } else {
+                                    const weekNumber = elements[0].index + 1;
+                                    queryParams.append('month', selectedMonth + 1);
+                                    if (year !== 'all') {
+                                      queryParams.append('year', year);
+                                    }
+                                    queryParams.append('week', weekNumber);
+
+                                    const weekCount = chartData?.weeklyOrders?.[elements[0].index]?.count || 0;
+                                    queryParams.append('weekCount', weekCount);
+                                    queryParams.append('monthName', monthLabels[selectedMonth]);
+                                  }
+
+                                  navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                                }
+                              },
+                              scales: {
+                                x: {
+                                  grid: { display: false },
+                                  ticks: { autoSkip: false }
+                                },
+                                y: {
+                                  beginAtZero: true,
+                                  ticks: { precision: 0, stepSize: 1 },
+                                  grid: { color: 'rgba(0,0,0,0.05)' }
+                                }
+                              }
+                            }}
+                          />
+                        )}
+                      </div>
+                      <div style={styles.number}>
+                        {getTotalOrdersCount()}
                       </div>
                       {selectedMonth !== null && (
                         <button
@@ -1852,14 +1932,14 @@ function AdminDashboard() {
 
                     {/* Pending Payment - SHOW ONLY PENDING AMOUNT */}
                     <div style={styles.card}>
-                      <div>Payment Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}</div>
+                      <div>Payment Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}</div>
                       <div style={styles.pieChart}>
                         <Doughnut
                           data={{
                             labels: ['Paid', 'Pending'],
                             datasets: [
                               {
-                                data: pendingPayments,
+                                data: pendingPayments.length === 2 ? pendingPayments : [0, 0],
                                 backgroundColor: ['green', 'red'],
                               },
                             ],
@@ -1880,8 +1960,7 @@ function AdminDashboard() {
                           onClick={() => pendingPayments[1] > 0 && handleChartClick('pending-payment')}
                         />
                       </div>
-                      {/* Show count and ONLY PENDING AMOUNT */}
-                      <div style={styles.number}>{pendingPayments[1]}</div>
+                      <div style={styles.number}>{pendingPayments[1] || 0}</div>
                       <div style={{ fontSize: '16px', color: 'red', marginTop: '5px', fontWeight: 'bold' }}>
                         Pending Amount: ₹{(chartData?.pendingAmount || 0).toLocaleString('en-IN')}
                       </div>
@@ -1889,14 +1968,14 @@ function AdminDashboard() {
 
                     {/* Pending Service */}
                     <div style={styles.card}>
-                      <div>Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}</div>
+                      <div>Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}</div>
                       <div style={styles.pieChart}>
                         <Doughnut
                           data={{
                             labels: ['Completed', 'Pending'],
                             datasets: [
                               {
-                                data: pendingServices,
+                                data: pendingServices.length === 2 ? pendingServices : [0, 0],
                                 backgroundColor: ['green', 'red'],
                               },
                             ],
@@ -1917,19 +1996,19 @@ function AdminDashboard() {
                           onClick={() => pendingServices[1] > 0 && handleChartClick('pending-service')}
                         />
                       </div>
-                      <div style={styles.number}>{pendingServices[1]}</div>
+                      <div style={styles.number}>{pendingServices[1] || 0}</div>
                     </div>
 
                     {/* Appointments PolarArea */}
                     <div style={styles.card}>
-                      <div>Appointments {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}</div>
+                      <div>Appointments {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}</div>
                       <div style={styles.pieChart}>
                         <PolarArea
                           data={{
                             labels: ['Done', 'Upcoming'],
                             datasets: [
                               {
-                                data: appointments,
+                                data: appointments.length === 2 ? appointments : [0, 0],
                                 backgroundColor: ['red', 'green'],
                               },
                             ],
@@ -1940,10 +2019,14 @@ function AdminDashboard() {
                             plugins: { legend: { position: 'right' } },
                             onClick: (event, elements) => {
                               if (elements.length > 0) {
-                                const queryParams = selectedMonth !== null
-                                  ? `?month=${selectedMonth + 1}&year=${year}`
-                                  : '';
-                                navigate(`/admin-dashboard/appointment-status${queryParams}`);
+                                const queryParams = new URLSearchParams();
+                                if (selectedMonth !== null) {
+                                  queryParams.append('month', selectedMonth + 1);
+                                }
+                                if (year !== 'all') {
+                                  queryParams.append('year', year);
+                                }
+                                navigate(`/admin-dashboard/appointment-status${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
                               }
                             },
                           }}
@@ -1955,20 +2038,24 @@ function AdminDashboard() {
                           }}
                           onClick={() => {
                             if (appointments[1] > 0) {
-                              const queryParams = selectedMonth !== null
-                                ? `?month=${selectedMonth + 1}&year=${year}`
-                                : '';
-                              navigate(`/admin-dashboard/appointment-status${queryParams}`);
+                              const queryParams = new URLSearchParams();
+                              if (selectedMonth !== null) {
+                                queryParams.append('month', selectedMonth + 1);
+                              }
+                              if (year !== 'all') {
+                                queryParams.append('year', year);
+                              }
+                              navigate(`/admin-dashboard/appointment-status${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
                             }
                           }}
                         />
                       </div>
-                      <div style={styles.number}>{appointments[1]}</div>
+                      <div style={styles.number}>{appointments[1] || 0}</div>
                     </div>
 
                     {/* Client Types Bar Chart - FIXED VERSION */}
                     <div style={styles.card}>
-                      <div>Client Overview {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : ''}</div>
+                      <div>Client Overview {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}</div>
                       <div style={styles.chartContainer}>
                         <Bar
                           data={{
@@ -1976,7 +2063,6 @@ function AdminDashboard() {
                             datasets: [{
                               label: 'Orders',
                               data: [
-                                // Handle both formats: {count, amount} objects or direct numbers
                                 clientTypes.Retail?.count !== undefined ? clientTypes.Retail.count : (clientTypes.Retail || 0),
                                 clientTypes.Renewal?.count !== undefined ? clientTypes.Renewal.count : (clientTypes.Renewal || 0),
                                 clientTypes.Agent?.count !== undefined ? clientTypes.Agent.count : (clientTypes.Agent || 0),
@@ -2008,7 +2094,6 @@ function AdminDashboard() {
                                     const clientType = context.label;
                                     const count = context.raw;
                                     
-                                    // Handle both formats for amount display
                                     let amount = 0;
                                     if (clientTypes[clientType]?.amount !== undefined) {
                                       amount = clientTypes[clientType].amount;
@@ -2047,7 +2132,7 @@ function AdminDashboard() {
                                 if (selectedMonth !== null) {
                                   queryParams.append('month', selectedMonth + 1);
                                 }
-                                if (year) {
+                                if (year !== 'all') {
                                   queryParams.append('year', year);
                                 }
 
@@ -2059,7 +2144,6 @@ function AdminDashboard() {
                       </div>
                       <div style={styles.number}>
                         {(
-                          // Handle both formats for total count calculation
                           (clientTypes.Retail?.count !== undefined ? clientTypes.Retail.count : (clientTypes.Retail || 0)) +
                           (clientTypes.Renewal?.count !== undefined ? clientTypes.Renewal.count : (clientTypes.Renewal || 0)) +
                           (clientTypes.Agent?.count !== undefined ? clientTypes.Agent.count : (clientTypes.Agent || 0)) +
@@ -2070,11 +2154,13 @@ function AdminDashboard() {
 
                     {/* Agent Orders Chart */}
                     <div style={styles.card}>
-                      <div>Agent Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : '(Monthly)'}</div>
+                      <div>Agent Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : '(Monthly)'}</div>
                       {loading ? (
-                        <div style={{ height: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          Loading agent data...
-                        </div>
+                        <div style={styles.noDataMessage}>Loading agent data...</div>
+                      ) : selectedMonth !== null && weeklyLoading ? (
+                        <div style={styles.noDataMessage}>Loading weekly data...</div>
+                      ) : selectedMonth !== null && (!chartData?.weeklyAgentOrders || chartData.weeklyAgentOrders.length === 0) ? (
+                        <div style={styles.noDataMessage}>No weekly agent data available</div>
                       ) : (
                         <>
                           <div style={styles.chartContainer}>
@@ -2107,7 +2193,6 @@ function AdminDashboard() {
                                   tooltip: {
                                     callbacks: {
                                       title: function(tooltipItems) {
-                                        // Show month/week name in title
                                         const dataIndex = tooltipItems[0].dataIndex;
                                         if (selectedMonth !== null) {
                                           return `Week ${dataIndex + 1}`;
@@ -2119,13 +2204,10 @@ function AdminDashboard() {
                                         const orders = context.raw;
                                         let amount = 0;
                                         
-                                        // Get the amount for this month/week
                                         if (selectedMonth === null) {
-                                          // For monthly view
                                           const monthIndex = context.dataIndex;
                                           amount = safeArray(chartData?.amountByMonth)[monthIndex] || 0;
                                         } else {
-                                          // For weekly view (selected month)
                                           const weekIndex = context.dataIndex;
                                           amount = chartData?.weeklyAgentOrders?.[weekIndex]?.amount || 0;
                                         }
@@ -2154,7 +2236,9 @@ function AdminDashboard() {
                                       queryParams.append('month', selectedMonth + 1);
                                       queryParams.append('week', weekNumber);
                                     }
-                                    queryParams.append('year', year);
+                                    if (year !== 'all') {
+                                      queryParams.append('year', year);
+                                    }
 
                                     navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                                   }
@@ -2197,6 +2281,7 @@ function AdminDashboard() {
                         </>
                       )}
                     </div>
+
                     {/* Prospective Clients Doughnut */}
                     <div style={styles.card}>
                       <div>Prospective Clients {getTimePeriodText()}</div>
@@ -2229,7 +2314,7 @@ function AdminDashboard() {
                                       const label = context.label || '';
                                       const value = context.raw || 0;
                                       const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                      const percentage = Math.round((value / total) * 100);
+                                      const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
                                       return `${label}: ${value} (${percentage}%)`;
                                     }
                                   }
@@ -2242,7 +2327,7 @@ function AdminDashboard() {
                                   const queryParams = new URLSearchParams();
                                   queryParams.append('status', status);
 
-                                  if (year) queryParams.append('year', year);
+                                  if (year !== 'all') queryParams.append('year', year);
                                   if (selectedMonth !== null) queryParams.append('month', selectedMonth + 1);
 
                                   navigate(`/admin-dashboard/view-prospective?${queryParams.toString()}`);
@@ -2251,7 +2336,7 @@ function AdminDashboard() {
                             }}
                           />
                         ) : (
-                          <div>Loading prospective data...</div>
+                          <div style={styles.noDataMessage}>Loading prospective data...</div>
                         )}
                       </div>
                       <div style={styles.number}>
@@ -2262,9 +2347,13 @@ function AdminDashboard() {
                           : 0}
                       </div>
                       <div style={styles.timePeriodText}>
-                        {prospectiveData?.timePeriod?.month
-                          ? `${monthLabels[prospectiveData.timePeriod.month - 1]} ${prospectiveData.timePeriod.year}`
-                          : `Year ${prospectiveData?.timePeriod?.year || year}`}
+                        {prospectiveData?.timePeriod ? (
+                          prospectiveData.timePeriod.month ? (
+                            `${monthLabels[prospectiveData.timePeriod.month - 1]} ${prospectiveData.timePeriod.year || year}`
+                          ) : prospectiveData.timePeriod.year ? (
+                            `Year ${prospectiveData.timePeriod.year}`
+                          ) : 'All Years'
+                        ) : year === 'all' ? 'All Years' : `Year ${year}`}
                       </div>
                     </div>
                   </div>
