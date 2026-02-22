@@ -1109,15 +1109,6 @@ function AdminDashboard() {
               >
                 Field Visits
               </NavLink>
-               <NavLink
-                to="hour-reeport"
-                style={linkStyle('hour-reeport')}
-                onMouseEnter={() => setHoveredItem('hour-reeport')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Hour Report
-              </NavLink>
             </>
           )}
         </div>

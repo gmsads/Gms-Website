@@ -17,7 +17,8 @@ import "../Executive/order.css";
 import TeleCRM from "./TeleCRM";
 import WhatsAppDashboard from "../Admin/WhatsApp";
 import { FaWhatsapp } from "react-icons/fa";
-
+import LeaveRequest from './LeaveRequest';
+import ViewRequest from './ViewLeaveRequests'
 function Admin() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [activeTab, setActiveTab] = useState("executive-dashboard");
@@ -1228,9 +1229,16 @@ function Admin() {
         </div>
       </div>
 
-      {/* Sidebar */}
+      {/* Sidebar - UPDATED WITH SCROLLING */}
       <div className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
-        <div className="sidebar-content">
+        <div className="sidebar-content" style={{
+          height: '100%',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          paddingBottom: '20px',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#888 #f1f1f1'
+        }}>
           <div className="nav-menu">
             {[
               { key: "executive-dashboard", icon: "🏠", text: "Dashboard" },
@@ -1242,6 +1250,8 @@ function Admin() {
               { key: "viewAppointments", icon: "📂", text: "View Appointments" },
               { key: "prospective", icon: "🔍", text: "Create Prospects ➕" },
               { key: "viewProspects", icon: "👁️", text: "View Prospects" },
+             { key: "leave-request", icon: "📋", text: "Leave Request" },
+{ key: "view-leave", icon: "📂", text: "View Leave Request" },
               { key: "price-list", icon: "💰", text: "Price List" },
               { key: "pending-payments", icon: "💰", text: "Pending Payments" },
               { key: "tele", icon: "📞", text: "Tele-CRM" },
@@ -1281,6 +1291,8 @@ function Admin() {
           {activeTab === "price-list" && <Pricelist />}
           {activeTab === "viewAppointments" && <ViewAppointments executiveName={selectedExecutive} />}
           {activeTab === "prospective" && <Prospective executiveName={selectedExecutive} />}
+          {activeTab === "leave-request" && <LeaveRequest executiveName={selectedExecutive} />}
+          {activeTab === "view-leave" && <ViewRequest executiveName={selectedExecutive} />}
           {activeTab === "viewProspects" && <ViewProspective executiveName={selectedExecutive} />}
           {activeTab === "viewRecord" && <ViewRecord executiveName={selectedExecutive} />}
           {activeTab === "pending-payments" && (
