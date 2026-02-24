@@ -22,6 +22,11 @@ const ReportSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+   description: {  // Added description field
+    type: String,
+    required: false, // Making it optional
+    default: ''      // Default empty string
+  },
   createdAt: {
     type: Date,
     default: Date.now

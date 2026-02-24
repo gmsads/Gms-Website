@@ -5,14 +5,15 @@ const Report = require('../models/ExecutiveRecord');
 // Create a new report
 router.post('/', async (req, res) => {
   try {
-    const { executiveName, date, totalCalls, followUps, whatsapp } = req.body;
+    const { executiveName, date, totalCalls, followUps, whatsapp, description } = req.body;
     
     const report = new Report({
       executiveName,
       date: new Date(date),
       totalCalls: Number(totalCalls),
-      followUps: followUps.toString(), // Ensure string storage
-      whatsapp: whatsapp.toString()    // Ensure string storage
+      followUps: Number(followUps), // Changed to Number to match schema
+      whatsapp: Number(whatsapp),    // Changed to Number to match schema
+      description: description || ''  // Added description field
     });
 
     await report.save();
@@ -31,6 +32,7 @@ router.get('/', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
 // Get all followups for the logged-in executive
 router.get('/followups', async (req, res) => {
   try {
@@ -42,7 +44,7 @@ router.get('/followups', async (req, res) => {
     }
 
     const followups = await Report.find({ executiveName: executive })
-      .select('date executiveName followUps')
+      .select('date executiveName followUps description') // Added description to selection
       .sort({ date: -1 });
       
     res.json(followups);
@@ -50,6 +52,7 @@ router.get('/followups', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
 // Get reports by date range
 router.get('/by-date', async (req, res) => {
   try {
@@ -66,6 +69,7 @@ router.get('/by-date', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
 // Get records for specific executive
 router.get('/executive-records', async (req, res) => {
   try {
@@ -82,6 +86,7 @@ router.get('/executive-records', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
 // Get executive follow-ups with date filtering
 router.get('/executive-followups', async (req, res) => {
   try {
@@ -101,7 +106,9 @@ router.get('/executive-followups', async (req, res) => {
         $group: {
           _id: "$executiveName",
           count: { $sum: 1 },
-          latestDate: { $max: "$date" } // Add latest follow-up date
+          latestDate: { $max: "$date" }, // Add latest follow-up date
+          totalCalls: { $sum: "$totalCalls" }, // Sum of total calls
+          totalFollowUps: { $sum: "$followUps" } // Sum of follow-ups
         }
       },
       { $sort: { count: -1 } }
@@ -113,17 +120,8 @@ router.get('/executive-followups', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
-// Get all followups exactly as stored
-router.get('/followups', async (req, res) => {
-  try {
-    const followups = await Report.find({})
-      .select('date executiveName followUps')
-      .sort({ date: -1 }); // Newest first
-    res.json(followups);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
+
+// Get chart data
 router.get('/chart-data', async (req, res) => {
   try {
     const { year, month } = req.query;
@@ -166,27 +164,35 @@ router.get('/chart-data', async (req, res) => {
       {
         $group: {
           _id: groupBy,
-          count: { $sum: 1 }
+          count: { $sum: 1 },
+          totalCalls: { $sum: "$totalCalls" },
+          totalFollowUps: { $sum: "$followUps" }
         }
       }
     ];
 
     const results = await Report.aggregate(pipeline);
 
-    // Initialize data array with zeros
-    const data = labels.map(() => 0);
+    // Initialize data arrays with zeros
+    const reportCounts = labels.map(() => 0);
+    const callCounts = labels.map(() => 0);
+    const followUpCounts = labels.map(() => 0);
 
-    // Fill in the counts from the aggregation results
+    // Fill in the data from aggregation results
     results.forEach(item => {
       const index = item._id - 1;
-      if (index >= 0 && index < data.length) {
-        data[index] = item.count;
+      if (index >= 0 && index < reportCounts.length) {
+        reportCounts[index] = item.count;
+        callCounts[index] = item.totalCalls || 0;
+        followUpCounts[index] = item.totalFollowUps || 0;
       }
     });
 
     res.json({
-      dailyReports: month ? data : null,
-      monthlyReports: !month ? data : null
+      dailyReports: month ? reportCounts : null,
+      monthlyReports: !month ? reportCounts : null,
+      callCounts: month ? callCounts : null,
+      followUpCounts: month ? followUpCounts : null
     });
 
   } catch (error) {
@@ -210,22 +216,121 @@ router.get('/dashboard-summary', async (req, res) => {
       date: { $gte: startDate, $lte: endDate }
     });
 
+    const totalCalls = await Report.aggregate([
+      { $match: { date: { $gte: startDate, $lte: endDate } } },
+      { $group: { _id: null, total: { $sum: "$totalCalls" } } }
+    ]);
+
+    const totalFollowUps = await Report.aggregate([
+      { $match: { date: { $gte: startDate, $lte: endDate } } },
+      { $group: { _id: null, total: { $sum: "$followUps" } } }
+    ]);
+
     const executives = await Report.aggregate([
       { $match: { date: { $gte: startDate, $lte: endDate } } },
-      { $group: { _id: "$executiveName", count: { $sum: 1 } } },
-      { $sort: { count: -1 } }
+      { 
+        $group: { 
+          _id: "$executiveName", 
+          reportCount: { $sum: 1 },
+          totalCalls: { $sum: "$totalCalls" },
+          totalFollowUps: { $sum: "$followUps" }
+        } 
+      },
+      { $sort: { reportCount: -1 } }
     ]);
 
     res.json({
       totalReports,
+      totalCalls: totalCalls[0]?.total || 0,
+      totalFollowUps: totalFollowUps[0]?.total || 0,
       topExecutives: executives.slice(0, 5)
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
-// Enhanced chart data endpoint for daily/weekly/monthly reports
 
+// Get reports with description search
+router.get('/search', async (req, res) => {
+  try {
+    const { keyword, executive, startDate, endDate } = req.query;
+    
+    let query = {};
+    
+    if (keyword) {
+      query.description = { $regex: keyword, $options: 'i' }; // Case-insensitive search
+    }
+    
+    if (executive) {
+      query.executiveName = executive;
+    }
+    
+    if (startDate && endDate) {
+      query.date = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
+    }
+    
+    const reports = await Report.find(query).sort({ date: -1 });
+    res.json(reports);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 
+// Get single report by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id);
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+    res.json(report);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update a report
+router.put('/:id', async (req, res) => {
+  try {
+    const { executiveName, date, totalCalls, followUps, whatsapp, description } = req.body;
+    
+    const report = await Report.findByIdAndUpdate(
+      req.params.id,
+      {
+        executiveName,
+        date: new Date(date),
+        totalCalls: Number(totalCalls),
+        followUps: Number(followUps),
+        whatsapp: Number(whatsapp),
+        description: description || ''
+      },
+      { new: true, runValidators: true }
+    );
+    
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+    
+    res.json(report);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Delete a report
+router.delete('/:id', async (req, res) => {
+  try {
+    const report = await Report.findByIdAndDelete(req.params.id);
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+    res.json({ message: 'Report deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 
 module.exports = router;

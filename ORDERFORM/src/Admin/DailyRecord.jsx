@@ -8,6 +8,7 @@ const DailyRecord = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [expandedRows, setExpandedRows] = useState({}); // Track expanded description rows
   
   // Filter states
   const [filters, setFilters] = useState({
@@ -84,6 +85,18 @@ const DailyRecord = () => {
     setSearchTerm('');
   };
 
+  const toggleDescription = (id) => {
+    setExpandedRows(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  const truncateDescription = (text, maxLength = 50) => {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  };
 
   // Get years from 2010 to 2050 for dropdown
   const getAllYears = () => {
@@ -300,7 +313,7 @@ const DailyRecord = () => {
           <table style={{
             width: '100%',
             borderCollapse: 'collapse',
-            minWidth: '600px'
+            minWidth: '800px' // Increased width to accommodate description column
           }}>
             <thead>
               <tr style={{
@@ -357,6 +370,16 @@ const DailyRecord = () => {
                   color: '#fff',
                   zIndex: 2
                 }}>WhatsApp</th>
+                <th style={{
+                  padding: '12px 15px',
+                  textAlign: 'left',
+                  fontWeight: 'bold',
+                  position: 'sticky',
+                  top: 0,
+                  backgroundColor: '#003366',
+                  color: '#fff',
+                  zIndex: 2
+                }}>Description</th> {/* New column */}
               </tr>
             </thead>
             <tbody>
@@ -367,6 +390,40 @@ const DailyRecord = () => {
                   <td style={{ padding: '12px 15px' }}>{record.totalCalls}</td>
                   <td style={{ padding: '12px 15px' }}>{record.followUps}</td>
                   <td style={{ padding: '12px 15px' }}>{record.whatsapp}</td>
+                  <td style={{ 
+                    padding: '12px 15px',
+                    maxWidth: '300px',
+                    wordBreak: 'break-word'
+                  }}>
+                    {record.description ? (
+                      <>
+                        <span>
+                          {expandedRows[record._id] 
+                            ? record.description 
+                            : truncateDescription(record.description)}
+                        </span>
+                        {record.description.length > 50 && (
+                          <button 
+                            onClick={() => toggleDescription(record._id)}
+                            style={{
+                              marginLeft: '8px',
+                              padding: '2px 8px',
+                              backgroundColor: '#f0f0f0',
+                              border: '1px solid #ccc',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              color: '#003366'
+                            }}
+                          >
+                            {expandedRows[record._id] ? 'Show less' : 'Read more'}
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <span style={{ color: '#999', fontStyle: 'italic' }}>No description</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

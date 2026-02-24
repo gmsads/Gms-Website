@@ -6,6 +6,7 @@ const ViewRecord = () => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [expandedRows, setExpandedRows] = useState({}); // Track expanded description rows
 
   const executiveName = localStorage.getItem("userName") || "Executive";
 
@@ -37,6 +38,19 @@ const ViewRecord = () => {
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
+  const toggleDescription = (index) => {
+    setExpandedRows(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
+
+  const truncateDescription = (text, maxLength = 50) => {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  };
+
   return (
     <div style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
       <h2 style={{ marginBottom: "20px" }}>{executiveName}'s Performance Records</h2>
@@ -59,16 +73,38 @@ const ViewRecord = () => {
                 <th style={tableHeaderStyle}>Total Calls</th>
                 <th style={tableHeaderStyle}>Follow Ups</th>
                 <th style={tableHeaderStyle}>WhatsApp</th>
+                <th style={tableHeaderStyle}>Description</th> {/* New column */}
               </tr>
             </thead>
             <tbody>
               {records.map((record, index) => (
-                <tr key={index} style={{ backgroundColor: index % 2 === 0 ? "white" : "#f9f9f9" }}>
+                <tr key={record._id || index} style={{ backgroundColor: index % 2 === 0 ? "white" : "#f9f9f9" }}>
                   <td style={tableCellStyle}>{formatDate(record.date)}</td>
                   <td style={tableCellStyle}>{record.executiveName}</td>
                   <td style={tableCellStyle}>{record.totalCalls}</td>
                   <td style={tableCellStyle}>{record.followUps}</td>
                   <td style={tableCellStyle}>{record.whatsapp}</td>
+                  <td style={descriptionCellStyle}>
+                    {record.description ? (
+                      <>
+                        <span>
+                          {expandedRows[index] 
+                            ? record.description 
+                            : truncateDescription(record.description)}
+                        </span>
+                        {record.description.length > 50 && (
+                          <button 
+                            onClick={() => toggleDescription(index)}
+                            style={toggleButtonStyle}
+                          >
+                            {expandedRows[index] ? 'Show less' : 'Read more'}
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <span style={{ color: "#999", fontStyle: "italic" }}>No description</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -93,6 +129,23 @@ const tableCellStyle = {
   border: "1px solid black",
   padding: "12px",
   textAlign: "left"
+};
+
+const descriptionCellStyle = {
+  ...tableCellStyle,
+  maxWidth: "300px",
+  wordBreak: "break-word"
+};
+
+const toggleButtonStyle = {
+  marginLeft: "8px",
+  padding: "2px 8px",
+  backgroundColor: "#f0f0f0",
+  border: "1px solid #ccc",
+  borderRadius: "4px",
+  cursor: "pointer",
+  fontSize: "12px",
+  color: "#003366"
 };
 
 export default ViewRecord;

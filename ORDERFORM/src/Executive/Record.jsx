@@ -17,7 +17,8 @@ const RecordForm = () => {
     date: getDateOptions()[0],
     totalCalls: '',
     followUps: '',
-    whatsapp: ''
+    whatsapp: '',
+    description: '' // Added description field
   });
 
   const [showModal, setShowModal] = useState(false);
@@ -46,7 +47,8 @@ const RecordForm = () => {
         date: getDateOptions()[0],
         totalCalls: '',
         followUps: '',
-        whatsapp: ''
+        whatsapp: '',
+        description: '' // Reset description field
       });
     } catch (error) {
       console.error('Error:', error);
@@ -89,6 +91,7 @@ const RecordForm = () => {
             value={formData.totalCalls}
             onChange={handleChange}
             style={styles.input}
+            placeholder="Enter number of calls"
           />
         </div>
         <div style={styles.row}>
@@ -99,6 +102,7 @@ const RecordForm = () => {
             value={formData.followUps}
             onChange={handleChange}
             style={styles.input}
+            placeholder="Enter follow-up details"
           />
         </div>
         <div style={styles.row}>
@@ -109,10 +113,22 @@ const RecordForm = () => {
             value={formData.whatsapp}
             onChange={handleChange}
             style={styles.input}
+            placeholder="WhatsApp number or details"
           />
         </div>
         <div style={styles.row}>
-          <button type="submit" style={styles.button}>Save</button>
+          <label style={styles.label}>Description:</label>
+          <textarea
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            style={styles.textarea}
+            placeholder="Enter detailed description..."
+            rows="4"
+          />
+        </div>
+        <div style={styles.row}>
+          <button type="submit" style={styles.button}>Save Report</button>
         </div>
       </form>
 
@@ -162,6 +178,15 @@ const styles = {
     border: '1px solid #ccc',
     borderRadius: '4px'
   },
+  textarea: {
+    padding: '10px',
+    fontSize: '16px',
+    border: '1px solid #ccc',
+    borderRadius: '4px',
+    resize: 'vertical',
+    minHeight: '100px',
+    fontFamily: 'inherit'
+  },
   button: {
     padding: '12px',
     fontSize: '16px',
@@ -170,7 +195,8 @@ const styles = {
     border: 'none',
     borderRadius: '5px',
     cursor: 'pointer',
-    marginTop: '10px'
+    marginTop: '10px',
+    fontWeight: 'bold'
   },
   modalOverlay: {
     position: 'fixed',
