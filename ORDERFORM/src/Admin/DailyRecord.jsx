@@ -8,17 +8,28 @@ const DailyRecord = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [expandedRows, setExpandedRows] = useState({}); // Track expanded description rows
+  const [expandedRows, setExpandedRows] = useState({});
   
-  // Filter states
+  // Enhanced filter states
   const [filters, setFilters] = useState({
     year: '',
-    month: ''
+    month: '',
+    executive: '',
+    specificDate: ''
   });
+
+  // Get unique executives from records
+  const [executives, setExecutives] = useState([]);
 
   useEffect(() => {
     fetchRecords();
   }, []);
+
+  useEffect(() => {
+    if (records.length > 0) {
+      extractExecutives();
+    }
+  }, [records]);
 
   useEffect(() => {
     filterRecords();
@@ -36,6 +47,11 @@ const DailyRecord = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const extractExecutives = () => {
+    const uniqueExecutives = [...new Set(records.map(record => record.executiveName))];
+    setExecutives(uniqueExecutives.sort());
   };
 
   const filterRecords = () => {
@@ -57,7 +73,22 @@ const DailyRecord = () => {
       });
     }
 
-    // Apply search term filter
+    // Apply executive filter
+    if (filters.executive) {
+      filtered = filtered.filter(record => 
+        record.executiveName === filters.executive
+      );
+    }
+
+    // Apply specific date filter
+    if (filters.specificDate) {
+      filtered = filtered.filter(record => {
+        const recordDate = new Date(record.date).toISOString().split('T')[0];
+        return recordDate === filters.specificDate;
+      });
+    }
+
+    // Apply search term filter (for any field)
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter((record) =>
@@ -80,7 +111,9 @@ const DailyRecord = () => {
   const clearFilters = () => {
     setFilters({
       year: '',
-      month: ''
+      month: '',
+      executive: '',
+      specificDate: ''
     });
     setSearchTerm('');
   };
@@ -98,13 +131,30 @@ const DailyRecord = () => {
     return text.substring(0, maxLength) + '...';
   };
 
-  // Get years from 2010 to 2050 for dropdown
-  const getAllYears = () => {
+  // Get years from 2020 to 2030 for dropdown
+  const getYearOptions = () => {
+    const currentYear = new Date().getFullYear();
     const years = [];
-    for (let year = 2050; year >= 2010; year--) {
+    for (let year = currentYear + 5; year >= 2020; year--) {
       years.push(year);
     }
     return years;
+  };
+
+  // Check if any filter is active
+  const isFilterActive = () => {
+    return filters.year || filters.month || filters.executive || filters.specificDate || searchTerm;
+  };
+
+  // Get active filters count
+  const getActiveFiltersCount = () => {
+    let count = 0;
+    if (filters.year) count++;
+    if (filters.month) count++;
+    if (filters.executive) count++;
+    if (filters.specificDate) count++;
+    if (searchTerm) count++;
+    return count;
   };
 
   return (
@@ -114,17 +164,17 @@ const DailyRecord = () => {
       {/* Filter Controls */}
       <div style={{
         backgroundColor: 'white',
-        padding: '15px',
+        padding: '20px',
         borderRadius: '8px',
         marginBottom: '20px',
         border: '1px solid #e0e0e0',
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       }}>
         <div style={{
-          display: 'flex',
-          gap: '20px',
-          alignItems: 'flex-end',
-          flexWrap: 'wrap'
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '15px',
+          alignItems: 'end'
         }}>
           {/* Year Filter */}
           <div style={{
@@ -143,15 +193,15 @@ const DailyRecord = () => {
               value={filters.year}
               onChange={(e) => handleFilterChange('year', e.target.value)}
               style={{
-                padding: '8px 12px',
+                padding: '10px',
                 border: '1px solid #ddd',
                 borderRadius: '4px',
                 fontSize: '14px',
-                minWidth: '120px'
+                width: '100%'
               }}
             >
               <option value="">All Years</option>
-              {getAllYears().map(year => (
+              {getYearOptions().map(year => (
                 <option key={year} value={year}>{year}</option>
               ))}
             </select>
@@ -174,11 +224,11 @@ const DailyRecord = () => {
               value={filters.month}
               onChange={(e) => handleFilterChange('month', e.target.value)}
               style={{
-                padding: '8px 12px',
+                padding: '10px',
                 border: '1px solid #ddd',
                 borderRadius: '4px',
                 fontSize: '14px',
-                minWidth: '140px'
+                width: '100%'
               }}
             >
               <option value="">All Months</option>
@@ -197,68 +247,174 @@ const DailyRecord = () => {
             </select>
           </div>
 
-          {/* Clear Filters Button */}
-          {(filters.year || filters.month) && (
-            <button
-              onClick={clearFilters}
+          {/* Executive Filter */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '5px'
+          }}>
+            <label style={{
+              fontWeight: '500',
+              color: '#2c3e50',
+              fontSize: '14px'
+            }}>
+              Executive:
+            </label>
+            <select
+              value={filters.executive}
+              onChange={(e) => handleFilterChange('executive', e.target.value)}
               style={{
-                padding: '8px 16px',
-                backgroundColor: '#e74c3c',
-                color: 'white',
-                border: 'none',
+                padding: '10px',
+                border: '1px solid #ddd',
                 borderRadius: '4px',
-                cursor: 'pointer',
                 fontSize: '14px',
-                fontWeight: '500',
-                height: '36px'
+                width: '100%'
               }}
             >
-              Clear Filters
-            </button>
+              <option value="">All Executives</option>
+              {executives.map(executive => (
+                <option key={executive} value={executive}>{executive}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Specific Date Filter */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '5px'
+          }}>
+            <label style={{
+              fontWeight: '500',
+              color: '#2c3e50',
+              fontSize: '14px'
+            }}>
+              Specific Date:
+            </label>
+            <input
+              type="date"
+              value={filters.specificDate}
+              onChange={(e) => handleFilterChange('specificDate', e.target.value)}
+              style={{
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '14px',
+                width: '100%'
+              }}
+            />
+          </div>
+
+          {/* Clear Filters Button */}
+          {isFilterActive() && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center'
+            }}>
+              <button
+                onClick={clearFilters}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#e74c3c',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  height: '42px',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                Clear All Filters ({getActiveFiltersCount()})
+              </button>
+            </div>
           )}
         </div>
 
+        {/* Search input moved inside filter box */}
+        <div style={{
+          marginTop: '15px',
+          borderTop: '1px solid #eee',
+          paddingTop: '15px'
+        }}>
+          <input
+            type="text"
+            placeholder="Search by any field..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              padding: '10px',
+              width: '100%',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              fontSize: '14px'
+            }}
+          />
+        </div>
+
         {/* Active Filters Display */}
-        {(filters.year || filters.month) && (
+        {isFilterActive() && (
           <div style={{
-            marginTop: '10px',
-            padding: '8px 12px',
+            marginTop: '15px',
+            padding: '12px',
             backgroundColor: '#e8f4fd',
             borderRadius: '4px',
             fontSize: '14px',
             color: '#2c3e50'
           }}>
-            Active Filters: 
-            {filters.year && ` Year: ${filters.year}`}
-            {filters.month && ` Month: ${filters.month}`}
+            <strong>Active Filters:</strong>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '5px' }}>
+              {filters.year && (
+                <span style={styles.filterTag}>Year: {filters.year}</span>
+              )}
+              {filters.month && (
+                <span style={styles.filterTag}>Month: {
+                  ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(filters.month) - 1]
+                }</span>
+              )}
+              {filters.executive && (
+                <span style={styles.filterTag}>Executive: {filters.executive}</span>
+              )}
+              {filters.specificDate && (
+                <span style={styles.filterTag}>Date: {format(new Date(filters.specificDate), 'MMM dd, yyyy')}</span>
+              )}
+              {searchTerm && (
+                <span style={styles.filterTag}>Search: "{searchTerm}"</span>
+              )}
+            </div>
           </div>
         )}
       </div>
-
-      {/* Search input */}
-      <input
-        type="text"
-        placeholder="Search by any field..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        style={{
-          marginBottom: '20px',
-          padding: '10px',
-          width: '100%',
-          maxWidth: '400px',
-          border: '1px solid #ccc',
-          borderRadius: '4px',
-        }}
-      />
 
       {/* Results count */}
       <div style={{
         marginBottom: '15px',
         color: '#666',
         fontSize: '14px',
-        fontWeight: '500'
+        fontWeight: '500',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
       }}>
-        Showing {filteredRecords.length} of {records.length} records
+        <span>Showing {filteredRecords.length} of {records.length} records</span>
+        {filteredRecords.length > 0 && (
+          <button
+            onClick={fetchRecords}
+            style={{
+              padding: '5px 10px',
+              backgroundColor: '#f0f0f0',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              color: '#666'
+            }}
+          >
+            Refresh
+          </button>
+        )}
       </div>
 
       {error && (
@@ -292,13 +448,14 @@ const DailyRecord = () => {
         </div>
       ) : filteredRecords.length === 0 ? (
         <div style={{
-          padding: '20px',
+          padding: '40px',
           backgroundColor: '#f5f5f5',
           borderRadius: '4px',
-          textAlign: 'center'
+          textAlign: 'center',
+          color: '#666'
         }}>
-          {searchTerm || filters.year || filters.month 
-            ? 'No records found with current filters' 
+          {isFilterActive() 
+            ? 'No records found matching your filters' 
             : 'No records found'
           }
         </div>
@@ -307,91 +464,37 @@ const DailyRecord = () => {
           overflowX: 'auto',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           borderRadius: '4px',
-          maxHeight: '400px',
+          maxHeight: '500px',
           overflowY: 'auto'
         }}>
           <table style={{
             width: '100%',
             borderCollapse: 'collapse',
-            minWidth: '800px' // Increased width to accommodate description column
+            minWidth: '900px'
           }}>
             <thead>
               <tr style={{
                 backgroundColor: '#1976d2',
                 borderBottom: '1px solid #ddd'
               }}>
-                <th style={{
-                  padding: '12px 15px',
-                  textAlign: 'left',
-                  fontWeight: 'bold',
-                  position: 'sticky',
-                  top: 0,
-                  backgroundColor: '#003366',
-                  color: '#fff',
-                  zIndex: 2
-                }}>Executive Name</th>
-                <th style={{
-                  padding: '12px 15px',
-                  textAlign: 'left',
-                  fontWeight: 'bold',
-                  position: 'sticky',
-                  top: 0,
-                  backgroundColor: '#003366',
-                  color: '#fff',
-                  zIndex: 2
-                }}>Date</th>
-                <th style={{
-                  padding: '12px 15px',
-                  textAlign: 'left',
-                  fontWeight: 'bold',
-                  position: 'sticky',
-                  top: 0,
-                  backgroundColor: '#003366',
-                  color: '#fff',
-                  zIndex: 2
-                }}>Total Calls</th>
-                <th style={{
-                  padding: '12px 15px',
-                  textAlign: 'left',
-                  fontWeight: 'bold',
-                  position: 'sticky',
-                  top: 0,
-                  backgroundColor: '#003366',
-                  color: '#fff',
-                  zIndex: 2
-                }}>Follow Ups</th>
-                <th style={{
-                  padding: '12px 15px',
-                  textAlign: 'left',
-                  fontWeight: 'bold',
-                  position: 'sticky',
-                  top: 0,
-                  backgroundColor: '#003366',
-                  color: '#fff',
-                  zIndex: 2
-                }}>WhatsApp</th>
-                <th style={{
-                  padding: '12px 15px',
-                  textAlign: 'left',
-                  fontWeight: 'bold',
-                  position: 'sticky',
-                  top: 0,
-                  backgroundColor: '#003366',
-                  color: '#fff',
-                  zIndex: 2
-                }}>Description</th> {/* New column */}
+                <th style={styles.tableHeader}>Executive Name</th>
+                <th style={styles.tableHeader}>Date</th>
+                <th style={styles.tableHeader}>Total Calls</th>
+                <th style={styles.tableHeader}>Follow Ups</th>
+                <th style={styles.tableHeader}>WhatsApp</th>
+                <th style={styles.tableHeader}>Description</th>
               </tr>
             </thead>
             <tbody>
               {filteredRecords.map((record) => (
-                <tr key={record._id} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '12px 15px' }}>{record.executiveName}</td>
-                  <td style={{ padding: '12px 15px' }}>{format(new Date(record.date), 'MMM dd, yyyy')}</td>
-                  <td style={{ padding: '12px 15px' }}>{record.totalCalls}</td>
-                  <td style={{ padding: '12px 15px' }}>{record.followUps}</td>
-                  <td style={{ padding: '12px 15px' }}>{record.whatsapp}</td>
+                <tr key={record._id} style={{ borderBottom: '1px solid #eee', ':hover': { backgroundColor: '#f5f5f5' } }}>
+                  <td style={styles.tableCell}>{record.executiveName}</td>
+                  <td style={styles.tableCell}>{format(new Date(record.date), 'MMM dd, yyyy')}</td>
+                  <td style={styles.tableCell}>{record.totalCalls}</td>
+                  <td style={styles.tableCell}>{record.followUps}</td>
+                  <td style={styles.tableCell}>{record.whatsapp}</td>
                   <td style={{ 
-                    padding: '12px 15px',
+                    ...styles.tableCell,
                     maxWidth: '300px',
                     wordBreak: 'break-word'
                   }}>
@@ -405,16 +508,7 @@ const DailyRecord = () => {
                         {record.description.length > 50 && (
                           <button 
                             onClick={() => toggleDescription(record._id)}
-                            style={{
-                              marginLeft: '8px',
-                              padding: '2px 8px',
-                              backgroundColor: '#f0f0f0',
-                              border: '1px solid #ccc',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              color: '#003366'
-                            }}
+                            style={styles.readMoreButton}
                           >
                             {expandedRows[record._id] ? 'Show less' : 'Read more'}
                           </button>
@@ -432,6 +526,40 @@ const DailyRecord = () => {
       )}
     </div>
   );
+};
+
+const styles = {
+  tableHeader: {
+    padding: '12px 15px',
+    textAlign: 'left',
+    fontWeight: 'bold',
+    position: 'sticky',
+    top: 0,
+    backgroundColor: '#003366',
+    color: '#fff',
+    zIndex: 2
+  },
+  tableCell: {
+    padding: '12px 15px'
+  },
+  filterTag: {
+    backgroundColor: '#e3f2fd',
+    color: '#1976d2',
+    padding: '4px 8px',
+    borderRadius: '4px',
+    fontSize: '13px',
+    display: 'inline-block'
+  },
+  readMoreButton: {
+    marginLeft: '8px',
+    padding: '2px 8px',
+    backgroundColor: '#f0f0f0',
+    border: '1px solid #ccc',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    color: '#003366'
+  }
 };
 
 export default DailyRecord;

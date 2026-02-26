@@ -1,24 +1,18 @@
 import React, { useState } from 'react';
 
 const RecordForm = () => {
-  const getDateOptions = () => {
-    const dates = [];
+  const getTodaysDate = () => {
     const today = new Date();
-    for (let i = 0; i < 6; i++) {
-      const date = new Date();
-      date.setDate(today.getDate() - i);
-      dates.push(date.toISOString().split('T')[0]);
-    }
-    return dates;
+    return today.toISOString().split('T')[0];
   };
 
   const [formData, setFormData] = useState({
     executiveName: localStorage.getItem('userName') || '',
-    date: getDateOptions()[0],
+    date: getTodaysDate(),
     totalCalls: '',
     followUps: '',
     whatsapp: '',
-    description: '' // Added description field
+    description: ''
   });
 
   const [showModal, setShowModal] = useState(false);
@@ -44,11 +38,11 @@ const RecordForm = () => {
       setShowModal(true);
       setFormData({
         executiveName: localStorage.getItem('userName') || '',
-        date: getDateOptions()[0],
+        date: getTodaysDate(),
         totalCalls: '',
         followUps: '',
         whatsapp: '',
-        description: '' // Reset description field
+        description: ''
       });
     } catch (error) {
       console.error('Error:', error);
@@ -59,6 +53,7 @@ const RecordForm = () => {
   return (
     <div style={styles.container}>
       <h1 style={styles.heading}>Daily Report</h1>
+      
       <form onSubmit={handleSubmit} style={styles.form}>
         <div style={styles.row}>
           <label style={styles.label}>Executive Name:</label>
@@ -70,19 +65,20 @@ const RecordForm = () => {
             style={{ ...styles.input, backgroundColor: '#f0f0f0' }}
           />
         </div>
+        
         <div style={styles.row}>
           <label style={styles.label}>Date:</label>
-          <select
+          <input
+            type="date"
             name="date"
             value={formData.date}
             onChange={handleChange}
+            min={getTodaysDate()} // Prevents selection of past dates
             style={styles.input}
-          >
-            {getDateOptions().map(date => (
-              <option key={date} value={date}>{date}</option>
-            ))}
-          </select>
+            required
+          />
         </div>
+
         <div style={styles.row}>
           <label style={styles.label}>Total Calls:</label>
           <input
@@ -92,8 +88,11 @@ const RecordForm = () => {
             onChange={handleChange}
             style={styles.input}
             placeholder="Enter number of calls"
+            min="0"
+            required
           />
         </div>
+
         <div style={styles.row}>
           <label style={styles.label}>Follow-ups:</label>
           <input
@@ -103,8 +102,10 @@ const RecordForm = () => {
             onChange={handleChange}
             style={styles.input}
             placeholder="Enter follow-up details"
+            required
           />
         </div>
+
         <div style={styles.row}>
           <label style={styles.label}>WhatsApp:</label>
           <input
@@ -114,8 +115,10 @@ const RecordForm = () => {
             onChange={handleChange}
             style={styles.input}
             placeholder="WhatsApp number or details"
+            required
           />
         </div>
+
         <div style={styles.row}>
           <label style={styles.label}>Description:</label>
           <textarea
@@ -125,10 +128,14 @@ const RecordForm = () => {
             style={styles.textarea}
             placeholder="Enter detailed description..."
             rows="4"
+            required
           />
         </div>
+
         <div style={styles.row}>
-          <button type="submit" style={styles.button}>Save Report</button>
+          <button type="submit" style={styles.button}>
+            Save Report
+          </button>
         </div>
       </form>
 
@@ -176,7 +183,9 @@ const styles = {
     padding: '10px',
     fontSize: '16px',
     border: '1px solid #ccc',
-    borderRadius: '4px'
+    borderRadius: '4px',
+    width: '100%',
+    boxSizing: 'border-box'
   },
   textarea: {
     padding: '10px',
@@ -185,7 +194,9 @@ const styles = {
     borderRadius: '4px',
     resize: 'vertical',
     minHeight: '100px',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    width: '100%',
+    boxSizing: 'border-box'
   },
   button: {
     padding: '12px',
@@ -196,7 +207,13 @@ const styles = {
     borderRadius: '5px',
     cursor: 'pointer',
     marginTop: '10px',
-    fontWeight: 'bold'
+    fontWeight: 'bold',
+    width: '100%'
+  },
+  dateHint: {
+    fontSize: '12px',
+    color: '#666',
+    marginTop: '4px'
   },
   modalOverlay: {
     position: 'fixed',
