@@ -7,7 +7,8 @@ const hrSchema = new mongoose.Schema({
   password: String,
   email: String,
   guardianName: String,
-  guardianContact: String,
+guardianContact: Number,
+
   aadhar: String,
   joiningDate: Date,
   experience: Number,

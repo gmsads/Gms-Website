@@ -7,6 +7,8 @@ const VendorSchema = new mongoose.Schema({
   password: { type: String, required: true },
   email: String,
   guardianName : String,
+  guardianContact: Number,
+
   aadhar: String,
   joiningDate: Date,
   experience: Number,

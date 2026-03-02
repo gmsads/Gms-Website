@@ -13,6 +13,8 @@ const FieldVisitsAdmin = () => {
   const [editingVisit, setEditingVisit] = useState(null);
   const [editForm, setEditForm] = useState({
     client: '',
+    contactNumber: '',
+    businessName: '',
     location: '',
     purpose: '',
     status: '',
@@ -24,16 +26,6 @@ const FieldVisitsAdmin = () => {
     date: ''
   });
 
-  // Get base URL dynamically - safe for browser environment
-  const getBaseUrl = () => {
-    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV) {
-      return 'http://localhost:5000';
-    }
-    return '';
-  };
-
-  const BASE_URL = getBaseUrl();
-
   useEffect(() => {
     fetchVisits();
     fetchExecutives();
@@ -42,30 +34,29 @@ const FieldVisitsAdmin = () => {
   useEffect(() => {
     applyFilters();
   }, [filters, visits]);
+
+  // Format Cloudinary image URL
   const formatImageUrl = (photoUrl) => {
     if (!photoUrl) return null;
 
     console.log('Original photo URL:', photoUrl);
 
-    // If it's already a full URL, return as is
+    // If it's already a full URL (Cloudinary URL), return as is
     if (photoUrl.startsWith('http')) {
       return photoUrl;
     }
 
-    // For production domain
-    if (window.location.hostname === 'gms.globalmarketingsolutions.in') {
-      if (photoUrl.startsWith('/uploads')) {
-        return `https://gms.globalmarketingsolutions.in${photoUrl}`;
-      }
-      return `https://gms.globalmarketingsolutions.in/uploads/visits/${photoUrl}`;
-    }
-
-    // For local development
-    if (photoUrl.startsWith('/uploads')) {
-      return `http://localhost:5000${photoUrl}`;
-    }
-    return `http://localhost:5000/uploads/visits/${photoUrl}`;
+    // If it's a local path but we're in production, try to construct Cloudinary URL
+    // Extract filename from path
+    const filename = photoUrl.split('/').pop();
+    
+    // Your Cloudinary configuration
+    const CLOUDINARY_BASE_URL = 'https://res.cloudinary.com/dqy7wlhyg/image/upload';
+    
+    // Return Cloudinary URL with the filename
+    return `${CLOUDINARY_BASE_URL}/visits/${filename}`;
   };
+
   const fetchVisits = async () => {
     try {
       setLoading(true);
@@ -174,7 +165,6 @@ const FieldVisitsAdmin = () => {
     setSelectedImage(null);
   };
 
-  // Delete visit function
   const deleteVisit = async (visitId) => {
     if (!window.confirm('Are you sure you want to delete this visit? This action cannot be undone.')) {
       return;
@@ -190,11 +180,12 @@ const FieldVisitsAdmin = () => {
     }
   };
 
-  // Edit visit functions
   const startEdit = (visit) => {
     setEditingVisit(visit);
     setEditForm({
       client: visit.client || '',
+      contactNumber: visit.contactNumber || '',
+      businessName: visit.businessName || '',
       location: visit.location || '',
       purpose: visit.purpose || '',
       status: visit.status || 'scheduled',
@@ -206,6 +197,8 @@ const FieldVisitsAdmin = () => {
     setEditingVisit(null);
     setEditForm({
       client: '',
+      contactNumber: '',
+      businessName: '',
       location: '',
       purpose: '',
       status: '',
@@ -227,13 +220,12 @@ const FieldVisitsAdmin = () => {
     try {
       const response = await axios.put(`/api/field-executive/admin/visits/${editingVisit._id}`, editForm);
 
-      // Update the visits state with the updated visit
       setVisits(prev => prev.map(visit =>
-        visit._id === editingVisit._id ? response.data.visit : visit
+        visit._id === editingVisit._id ? { ...response.data.visit, photo: visit.photo } : visit
       ));
 
       setFilteredVisits(prev => prev.map(visit =>
-        visit._id === editingVisit._id ? response.data.visit : visit
+        visit._id === editingVisit._id ? { ...response.data.visit, photo: visit.photo } : visit
       ));
 
       cancelEdit();
@@ -244,22 +236,19 @@ const FieldVisitsAdmin = () => {
   };
 
   const exportToCSV = () => {
-    const headers = ['Date', 'Executive', 'Client', 'Location', 'Purpose', 'Status', 'Notes', 'Photo', 'Outcome', 'Leads'];
-    const csvData = filteredVisits.map(visit => {
-      const report = visit.reports && visit.reports[0] ? visit.reports[0] : {};
-      return [
-        visit.date ? format(new Date(visit.date), 'yyyy-MM-dd') : 'N/A',
-        visit.executive || 'Unknown',
-        visit.client || 'N/A',
-        visit.location || 'N/A',
-        visit.purpose || 'N/A',
-        visit.status || 'scheduled',
-        visit.notes || '',
-        visit.photo ? 'Yes' : 'No',
-        report.outcome || '',
-        report.leads || ''
-      ];
-    });
+    const headers = ['Date', 'Executive', 'Client', 'Contact Number', 'Business Name', 'Location', 'Purpose', 'Status', 'Notes', 'Photo'];
+    const csvData = filteredVisits.map(visit => [
+      visit.date ? format(new Date(visit.date), 'yyyy-MM-dd') : 'N/A',
+      visit.executive || 'Unknown',
+      visit.client || 'N/A',
+      visit.contactNumber || 'N/A',
+      visit.businessName || 'N/A',
+      visit.location || 'N/A',
+      visit.purpose || 'N/A',
+      visit.status || 'scheduled',
+      visit.notes || '',
+      visit.photo ? 'Yes' : 'No'
+    ]);
 
     const csvContent = [
       headers.join(','),
@@ -283,6 +272,9 @@ const FieldVisitsAdmin = () => {
     const stats = {
       scheduled: 0,
       completed: 0,
+      'not-interested': 0,
+      'follow-up': 0,
+      'sale-close': 0,
       total: filteredVisits.length,
       withPhotos: filteredVisits.filter(visit => visit.photo).length
     };
@@ -290,6 +282,9 @@ const FieldVisitsAdmin = () => {
     filteredVisits.forEach(visit => {
       if (visit.status === 'scheduled') stats.scheduled++;
       if (visit.status === 'completed') stats.completed++;
+      if (visit.status === 'not-interested') stats['not-interested']++;
+      if (visit.status === 'follow-up') stats['follow-up']++;
+      if (visit.status === 'sale-close') stats['sale-close']++;
     });
 
     return stats;
@@ -345,15 +340,21 @@ const FieldVisitsAdmin = () => {
           <h3>Completed</h3>
           <p className="stat-value">{stats.completed}</p>
         </div>
+        <div className="stat-card not-interested">
+          <h3>Not Interested</h3>
+          <p className="stat-value">{stats['not-interested']}</p>
+        </div>
+        <div className="stat-card follow-up">
+          <h3>Follow Up</h3>
+          <p className="stat-value">{stats['follow-up']}</p>
+        </div>
+        <div className="stat-card sale-close">
+          <h3>Sale Close</h3>
+          <p className="stat-value">{stats['sale-close']}</p>
+        </div>
         <div className="stat-card photos">
           <h3>With Photos</h3>
           <p className="stat-value">{stats.withPhotos}</p>
-        </div>
-        <div className="stat-card">
-          <h3>Completion Rate</h3>
-          <p className="stat-value">
-            {stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}%
-          </p>
         </div>
       </div>
 
@@ -385,6 +386,9 @@ const FieldVisitsAdmin = () => {
               <option value="all">All Statuses</option>
               <option value="scheduled">Scheduled</option>
               <option value="completed">Completed</option>
+              <option value="not-interested">Not Interested</option>
+              <option value="follow-up">Follow Up</option>
+              <option value="sale-close">Sale Close</option>
             </select>
           </div>
 
@@ -433,6 +437,26 @@ const FieldVisitsAdmin = () => {
                 />
               </div>
               <div className="form-group">
+                <label>Contact Number:</label>
+                <input
+                  type="text"
+                  name="contactNumber"
+                  value={editForm.contactNumber}
+                  onChange={handleEditChange}
+                  maxLength="10"
+                  pattern="\d{10}"
+                />
+              </div>
+              <div className="form-group">
+                <label>Business Name:</label>
+                <input
+                  type="text"
+                  name="businessName"
+                  value={editForm.businessName}
+                  onChange={handleEditChange}
+                />
+              </div>
+              <div className="form-group">
                 <label>Location:</label>
                 <input
                   type="text"
@@ -459,6 +483,9 @@ const FieldVisitsAdmin = () => {
                 >
                   <option value="scheduled">Scheduled</option>
                   <option value="completed">Completed</option>
+                  <option value="not-interested">Not Interested</option>
+                  <option value="follow-up">Follow Up</option>
+                  <option value="sale-close">Sale Close</option>
                 </select>
               </div>
               <div className="form-group">
@@ -493,69 +520,66 @@ const FieldVisitsAdmin = () => {
                 <th>Date</th>
                 <th>Executive</th>
                 <th>Client</th>
+                <th>Contact Number</th>
+                <th>Business Name</th>
                 <th>Location</th>
                 <th>Purpose</th>
                 <th>Status</th>
                 <th>Photo</th>
                 <th>Notes</th>
-                <th>Outcome</th>
-                <th>Leads</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredVisits.length > 0 ? (
-                filteredVisits.map((visit, index) => {
-                  const report = visit.reports && visit.reports[0] ? visit.reports[0] : {};
-                  return (
-                    <tr key={visit._id || index}>
-                      <td>{visit.date ? format(new Date(visit.date), 'MMM dd, yyyy') : 'N/A'}</td>
-                      <td>{visit.executive || 'Unknown'}</td>
-                      <td>{visit.client || 'N/A'}</td>
-                      <td>{visit.location || 'N/A'}</td>
-                      <td>{visit.purpose || 'N/A'}</td>
-                      <td>
-                        <span className={`status-badge ${visit.status || 'scheduled'}`}>
-                          {visit.status || 'scheduled'}
-                        </span>
-                      </td>
-                      <td>
-                        {visit.photo ? (
-                          <button
-                            className="view-photo-btn"
-                            onClick={() => openImageModal(visit.photo)}
-                            title="View Photo"
-                          >
-                            📷 View
-                          </button>
-                        ) : (
-                          <span className="no-photo">No Photo</span>
-                        )}
-                      </td>
-                      <td className="notes-cell">{visit.notes || '-'}</td>
-                      <td>{report.outcome || '-'}</td>
-                      <td>{report.leads || '-'}</td>
-                      <td>
-                        <div className="action-buttons">
-                          <button
-                            className="edit-btn"
-                            onClick={() => startEdit(visit)}
-                            title="Edit Visit"
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            className="delete-btn"
-                            onClick={() => deleteVisit(visit._id)}
-                            title="Delete Visit"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
+                filteredVisits.map((visit, index) => (
+                  <tr key={visit._id || index}>
+                    <td>{visit.date ? format(new Date(visit.date), 'MMM dd, yyyy') : 'N/A'}</td>
+                    <td>{visit.executive || 'Unknown'}</td>
+                    <td>{visit.client || 'N/A'}</td>
+                    <td>{visit.contactNumber || 'N/A'}</td>
+                    <td>{visit.businessName || 'N/A'}</td>
+                    <td>{visit.location || 'N/A'}</td>
+                    <td>{visit.purpose || 'N/A'}</td>
+                    <td>
+                      <span className={`status-badge ${visit.status || 'scheduled'}`}>
+                        {visit.status || 'scheduled'}
+                      </span>
+                    </td>
+                    <td>
+                      {visit.photo ? (
+                        <button
+                          className="view-photo-btn"
+                          onClick={() => openImageModal(visit.photo)}
+                          title="View Photo"
+                        >
+                          📷 View
+                        </button>
+                      ) : (
+                        <span className="no-photo">No Photo</span>
+                      )}
+                    </td>
+                    <td className="notes-cell">{visit.notes || '-'}</td>
+                    <td>
+                      <div className="action-buttons">
+                        <button
+                          className="edit-btn"
+                          onClick={() => startEdit(visit)}
+                          title="Edit Visit"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="delete-btn"
+                          onClick={() => deleteVisit(visit._id)}
+                          title="Delete Visit"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               ) : (
                 <tr>
                   <td colSpan="11" className="no-data">
@@ -613,12 +637,11 @@ const FieldVisitsAdmin = () => {
           align-items: center;
           margin-bottom: 2rem;
           padding: 1.5rem;
-background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+          background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
           color: white;
           border-radius: 12px;
           box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-       
         
         .page-header h1 {
           margin: 0;
@@ -696,14 +719,14 @@ background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
         
         .stats-overview {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 1.5rem;
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+          gap: 1rem;
           margin-bottom: 2rem;
         }
         
         .stat-card {
           background-color: white;
-          padding: 1.5rem;
+          padding: 1.2rem;
           border-radius: 12px;
           box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
           text-align: center;
@@ -717,21 +740,33 @@ background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
           border-top: 4px solid #10b981;
         }
         
-        .stat-card.photos {
+        .stat-card.not-interested {
+          border-top: 4px solid #ef4444;
+        }
+        
+        .stat-card.follow-up {
           border-top: 4px solid #f59e0b;
+        }
+        
+        .stat-card.sale-close {
+          border-top: 4px solid #8b5cf6;
+        }
+        
+        .stat-card.photos {
+          border-top: 4px solid #ec4899;
         }
         
         .stat-card h3 {
           margin: 0 0 0.5rem;
           color: #6b7280;
-          font-size: 0.9rem;
+          font-size: 0.85rem;
           font-weight: 500;
           text-transform: uppercase;
         }
         
         .stat-value {
           margin: 0;
-          font-size: 2.5rem;
+          font-size: 2rem;
           font-weight: 700;
           color: #1f2937;
         }
@@ -850,6 +885,21 @@ background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
         .status-badge.completed {
           background-color: #dcfce7;
           color: #16a34a;
+        }
+        
+        .status-badge.not-interested {
+          background-color: #fee2e2;
+          color: #dc2626;
+        }
+        
+        .status-badge.follow-up {
+          background-color: #fef3c7;
+          color: #d97706;
+        }
+        
+        .status-badge.sale-close {
+          background-color: #ede9fe;
+          color: #8b5cf6;
         }
         
         .view-photo-btn {
@@ -1158,6 +1208,10 @@ background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
           .action-buttons {
             flex-direction: column;
             gap: 0.3rem;
+          }
+          
+          .stats-overview {
+            grid-template-columns: repeat(2, 1fr);
           }
         }
       `}</style>

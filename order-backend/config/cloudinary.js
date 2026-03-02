@@ -9,8 +9,8 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Create storage for multer
-const storage = new CloudinaryStorage({
+// Storage for greeting designs
+const greetingStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: 'greeting-designs',
@@ -23,8 +23,78 @@ const storage = new CloudinaryStorage({
   }
 });
 
-// ✅ CREATE multer upload middleware
-const uploadEmployee = multer({ storage });
+// Storage for employee profiles
+const employeeStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'employee-profiles',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif'],
+    transformation: [{ width: 500, height: 500, crop: 'limit' }],
+    public_id: (req, file) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      return `employee-${uniqueSuffix}`;
+    }
+  }
+});
 
-// ✅ EXPORT it
-module.exports = { cloudinary, storage, uploadEmployee };
+// Storage for visit photos
+const visitStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'visits',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+    transformation: [{ width: 1200, height: 1200, crop: 'limit' }],
+    public_id: (req, file) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      return `visit-${uniqueSuffix}`;
+    }
+  }
+});
+
+// Create multer upload instances
+const uploadGreeting = multer({ 
+  storage: greetingStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: function (req, file, cb) {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
+const uploadEmployee = multer({ 
+  storage: employeeStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: function (req, file, cb) {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
+const uploadVisit = multer({ 
+  storage: visitStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: function (req, file, cb) {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
+// SINGLE module.exports with ALL exports
+module.exports = { 
+  cloudinary, 
+  greetingStorage, 
+  employeeStorage,
+  visitStorage,
+  uploadGreeting,
+  uploadEmployee,
+  uploadVisit 
+};

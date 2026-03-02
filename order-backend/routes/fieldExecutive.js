@@ -308,16 +308,23 @@ router.delete('/admin/visits/:id', async (req, res) => {
     }
 });
 
-// Update visit
+// Update visit (admin)
 router.put('/admin/visits/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { client, location, purpose, status, notes } = req.body;
+        const { client, contactNumber, businessName, location, purpose, status, notes } = req.body;
+
+        // Validate phone number if provided
+        if (contactNumber && !/^\d{10}$/.test(contactNumber)) {
+            return res.status(400).json({ error: 'Phone number must be exactly 10 digits' });
+        }
 
         const updatedVisit = await Visit.findByIdAndUpdate(
             id,
             {
                 client,
+                contactNumber,
+                businessName,
                 location,
                 purpose,
                 status,
@@ -336,6 +343,11 @@ router.put('/admin/visits/:id', async (req, res) => {
         });
     } catch (err) {
         console.error('Error updating visit:', err);
+        
+        if (err.name === 'ValidationError') {
+            return res.status(400).json({ error: err.message });
+        }
+        
         res.status(500).json({ error: 'Failed to update visit', details: err.message });
     }
 });

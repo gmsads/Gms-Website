@@ -28,6 +28,8 @@ const executiveSchema = new mongoose.Schema({
   },
   email: String,
   guardianName : String,
+  guardianContact: Number,
+
   guardianContact : Number,
   aadhar: String,
   joiningDate: Date,

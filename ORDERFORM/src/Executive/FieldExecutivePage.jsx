@@ -1,9 +1,8 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import AutoLogout from '../mainpage/AutoLogout';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfYear, endOfYear, eachMonthOfInterval } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 
 const FieldExecutivePage = () => {
     const [fieldData, setFieldData] = useState([]);
@@ -13,16 +12,18 @@ const FieldExecutivePage = () => {
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [showSuccessPopup, setShowSuccessPopup] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
-    const [, setStats] = useState({
-        scheduled: 0,
-        completed: 0,
-        leads: 0
-    });
-    const [filteredStats, setFilteredStats] = useState({
-        scheduled: 0,
-        completed: 0,
-        leads: 0
-    });
+    const [stats, setStats] = useState({ scheduled: 0, saleClosed: 0 });
+
+    // Camera modal states
+    const [showCameraModal, setShowCameraModal] = useState(false);
+    const [stream, setStream] = useState(null);
+    const [currentLocation, setCurrentLocation] = useState(null);
+
+    // Refs
+    const galleryInputRef = useRef(null);
+    const cameraInputRef = useRef(null);
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
 
     // Calendar states
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -58,12 +59,32 @@ const FieldExecutivePage = () => {
     // Mobile menu state
     const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-    // NEW STATES FOR PHONE VALIDATION
+    // Phone validation states
     const [showPhoneInput, setShowPhoneInput] = useState(false);
     const [phoneNumber, setPhoneNumber] = useState('');
     const [checkingPhone, setCheckingPhone] = useState(false);
     const [existingClient, setExistingClient] = useState(null);
     const [phoneError, setPhoneError] = useState('');
+
+    // Load cached data on mount
+    useEffect(() => {
+        const cachedData = localStorage.getItem('fieldExecutiveData');
+        if (cachedData) {
+            try {
+                const { data, timestamp } = JSON.parse(cachedData);
+                const hoursSinceCache = (Date.now() - timestamp) / (1000 * 60 * 60);
+                
+                if (hoursSinceCache < 24) {
+                    setFieldData(data.activities || []);
+                    setFilteredData(data.activities || []);
+                    
+                    console.log('Loaded cached field data');
+                }
+            } catch (e) {
+                console.error('Error loading cached data:', e);
+            }
+        }
+    }, []);
 
     // Auto-hide success popup
     useEffect(() => {
@@ -75,42 +96,39 @@ const FieldExecutivePage = () => {
         }
     }, [showSuccessPopup]);
 
+    // Cleanup camera stream
     useEffect(() => {
-      const checkAuthorization = async () => {
-    try {
-        const userName = localStorage.getItem('userName');
-        console.log('Checking authorization for:', userName);
-        
-        const response = await axios.get('/api/user-profile', {
-            params: { name: userName }
-        });
+        return () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, [stream]);
 
-        console.log('User profile response:', response.data);
-        
-        const userRole = response.data.role?.toLowerCase() || '';
-        const allowedRoles = ['fieldexecutive', 'field executive', 'field-executive', 'field'];
-        
-        if (!allowedRoles.includes(userRole)) {
-            console.warn(`⚠️ User role "${response.data.role}" is not a field executive.`);
-            console.log('⚠️ Continuing to render page anyway for testing...');
-        }
-        
-        // ALWAYS fetch data regardless of role
-        console.log('✅ Fetching field data...');
-        fetchFieldData();
-        
-    } catch (error) {
-        console.error('Error checking authorization:', error);
-        console.log('⚠️ Auth check failed, but rendering page anyway...');
-        
-        // Still fetch data even if auth check fails
-        fetchFieldData();
-    }
-};
+    // Authorization check
+    useEffect(() => {
+        const checkAuthorization = async () => {
+            try {
+                const userName = localStorage.getItem('userName');
+                const response = await axios.get('/api/user-profile', {
+                    params: { name: userName }
+                });
+
+                if (response.data.role.toLowerCase() !== 'fieldexecutive') {
+                    navigate('/dashboard');
+                } else {
+                    fetchFieldData();
+                }
+            } catch (error) {
+                console.error('Error checking authorization:', error);
+                navigate('/login');
+            }
+        };
 
         checkAuthorization();
     }, [navigate]);
 
+    // Fetch data
     const fetchFieldData = async () => {
         try {
             const userName = localStorage.getItem('userName');
@@ -118,16 +136,15 @@ const FieldExecutivePage = () => {
                 params: { executive: userName }
             });
 
-            setFieldData(response.data.activities || []);
-            setFilteredData(response.data.activities || []);
+            const activities = response.data.activities || [];
+            setFieldData(activities);
+            
+            // Cache data
+            localStorage.setItem('fieldExecutiveData', JSON.stringify({
+                data: { activities },
+                timestamp: Date.now()
+            }));
 
-            // Calculate stats from the data
-            const scheduled = response.data.activities.filter(a => a.status === 'scheduled').length;
-            const completed = response.data.activities.filter(a => a.status === 'completed').length;
-            const leads = response.data.leads || 0;
-
-            setStats({ scheduled, completed, leads });
-            setFilteredStats({ scheduled, completed, leads });
             setLoading(false);
         } catch (error) {
             console.error('Error fetching field executive data:', error);
@@ -135,80 +152,107 @@ const FieldExecutivePage = () => {
         }
     };
 
-    // Apply filters when they change
-    useEffect(() => {
-        applyFilters();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedDate, fieldData, statsMonthFilter, statsYearFilter]);
+    // Calculate stats based on month/year filter
+    const calculateFilteredStats = () => {
+        // Filter activities based on selected month and year
+        const filteredActivities = fieldData.filter(activity => {
+            const activityDate = new Date(activity.date);
+            return (
+                activityDate.getMonth() === statsMonthFilter.getMonth() &&
+                activityDate.getFullYear() === statsYearFilter
+            );
+        });
 
-    // Apply stats filters when they change
+        // Calculate stats
+        const scheduled = filteredActivities.filter(a => a.status === 'scheduled').length;
+        const saleClosed = filteredActivities.filter(a => a.status === 'sale-close').length;
+
+        setStats({ scheduled, saleClosed });
+    };
+
+    // Update stats when filter changes or data changes
     useEffect(() => {
-        applyStatsFilters();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        calculateFilteredStats();
     }, [statsMonthFilter, statsYearFilter, fieldData]);
 
-    // Get device location with LB Nagar fix
-    const getDeviceLocation = () => {
-        if (navigator.geolocation) {
-            setNewVisit(prev => ({ ...prev, location: 'Fetching your exact location...' }));
+    // Apply filters for table display
+    useEffect(() => {
+        let filtered = [...fieldData];
+
+        filtered = filtered.filter(activity => {
+            const activityDate = new Date(activity.date);
+            return (
+                activityDate.getMonth() === statsMonthFilter.getMonth() &&
+                activityDate.getFullYear() === statsYearFilter
+            );
+        });
+
+        if (selectedDate) {
+            filtered = filtered.filter(activity => {
+                const activityDate = new Date(activity.date);
+                return isSameDay(activityDate, selectedDate);
+            });
+        }
+
+        setFilteredData(filtered);
+    }, [selectedDate, fieldData, statsMonthFilter, statsYearFilter]);
+
+    // Get current location
+    const getCurrentLocation = () => {
+        return new Promise((resolve) => {
+            if (!navigator.geolocation) {
+                resolve({ latitude: null, longitude: null, locationName: 'Location unavailable' });
+                return;
+            }
+
+            setNewVisit(prev => ({ ...prev, location: 'Fetching location...' }));
 
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
                     try {
                         const { latitude, longitude } = position.coords;
 
-                        // Use a more accurate geocoding service
+                        // Use reverse geocoding
                         const response = await fetch(
                             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`
                         );
                         const data = await response.json();
 
-                        // Extract specific location details
                         const address = data.address;
-                        let locationName = '';
+                        let locationName = address?.neighbourhood || address?.suburb || address?.city_district || address?.city || data.display_name.split(',')[0];
 
-                        // Try to get the most specific location name
-                        if (address.neighbourhood) {
-                            locationName = address.neighbourhood;
-                        } else if (address.suburb) {
-                            locationName = address.suburb;
-                        } else if (address.city_district) {
-                            locationName = address.city_district;
-                        } else if (address.city) {
-                            locationName = address.city;
-                        } else {
-                            locationName = data.display_name.split(',')[0];
-                        }
+                        const location = {
+                            latitude,
+                            longitude,
+                            accuracy: position.coords.accuracy,
+                            timestamp: new Date().toISOString(),
+                            locationName
+                        };
 
-                        // Force LB Nagar if detected in Hyderabad area
-                        if (latitude > 17.34 && latitude < 17.38 && longitude > 78.54 && longitude < 78.56) {
-                            locationName = "LB Nagar, Hyderabad";
-                        }
-
+                        setCurrentLocation(location);
                         setNewVisit(prev => ({ ...prev, location: locationName }));
+                        resolve(location);
                     } catch (error) {
-                        console.error('Error getting location:', error);
-                        // Fallback to LB Nagar
-                        setNewVisit(prev => ({ ...prev, location: 'LB Nagar, Hyderabad' }));
+                        console.error('Error getting location name:', error);
+                        const fallbackLocation = { latitude: 0, longitude: 0, locationName: 'Location unavailable' };
+                        setCurrentLocation(fallbackLocation);
+                        setNewVisit(prev => ({ ...prev, location: fallbackLocation.locationName }));
+                        resolve(fallbackLocation);
                     }
                 },
                 (error) => {
                     console.error('Geolocation error:', error);
-                    // Default to LB Nagar if location access denied
-                    setNewVisit(prev => ({ ...prev, location: 'LB Nagar, Hyderabad' }));
+                    const defaultLocation = { latitude: 0, longitude: 0, locationName: 'Location unavailable' };
+                    setCurrentLocation(defaultLocation);
+                    setNewVisit(prev => ({ ...prev, location: defaultLocation.locationName }));
+                    resolve(defaultLocation);
                 },
-                {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 0
-                }
+                { enableHighAccuracy: true, timeout: 10000 }
             );
-        } else {
-            setNewVisit(prev => ({ ...prev, location: 'LB Nagar, Hyderabad' }));
-        }
+        });
     };
 
-    // NEW FUNCTION: Check if phone number exists
+    // Check phone number
     const checkPhoneNumber = async () => {
         if (!phoneNumber || !/^\d{10}$/.test(phoneNumber)) {
             setPhoneError('Please enter a valid 10-digit phone number');
@@ -219,13 +263,9 @@ const FieldExecutivePage = () => {
         setPhoneError('');
 
         try {
-            // Check if this phone number exists in our data
-            const existingVisits = fieldData.filter(visit => 
-                visit.contactNumber === phoneNumber
-            );
+            const existingVisits = fieldData.filter(visit => visit.contactNumber === phoneNumber);
 
             if (existingVisits.length > 0) {
-                // Get the most recent visit with this number
                 const latestVisit = existingVisits.reduce((latest, current) => {
                     return new Date(current.date) > new Date(latest.date) ? current : latest;
                 });
@@ -241,9 +281,6 @@ const FieldExecutivePage = () => {
                     notes: '',
                     photo: null
                 });
-                
-                // Auto-fill location from existing data
-                setNewVisit(prev => ({ ...prev, location: latestVisit.location }));
             } else {
                 setExistingClient(null);
                 setNewVisit({
@@ -256,22 +293,20 @@ const FieldExecutivePage = () => {
                     notes: '',
                     photo: null
                 });
-                // Get location for new client
-                getDeviceLocation();
+                await getCurrentLocation();
             }
-            
+
             setShowPhoneInput(false);
             setShowAddForm(true);
-            
         } catch (error) {
             console.error('Error checking phone number:', error);
-            setPhoneError('Error checking phone number. Please try again.');
+            setPhoneError('Error checking phone number');
         } finally {
             setCheckingPhone(false);
         }
     };
 
-    // NEW FUNCTION: Start add visit process
+    // Start add visit
     const startAddVisit = () => {
         setPhoneNumber('');
         setExistingClient(null);
@@ -279,13 +314,15 @@ const FieldExecutivePage = () => {
         setShowPhoneInput(true);
     };
 
-    // NEW FUNCTION: Reset phone validation and close all modals
+    // Reset form
     const resetAddVisitProcess = () => {
         setShowPhoneInput(false);
         setShowAddForm(false);
         setPhoneNumber('');
         setExistingClient(null);
         setPhoneError('');
+        setShowCameraModal(false);
+        stopCamera();
         setNewVisit({
             client: '',
             contactNumber: '',
@@ -296,103 +333,126 @@ const FieldExecutivePage = () => {
             notes: '',
             photo: null
         });
+        if (galleryInputRef.current) galleryInputRef.current.value = '';
+        if (cameraInputRef.current) cameraInputRef.current.value = '';
     };
 
-    // Call getDeviceLocation when form opens for new clients
-    useEffect(() => {
-        if (showAddForm && !existingClient) {
-            getDeviceLocation();
-        }
-    }, [showAddForm, existingClient]);
+    // Handle gallery selection
+    const handleGallerySelect = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
 
-    const applyFilters = () => {
-        let filtered = [...fieldData];
-
-        // First apply month/year filter from stats filters
-        filtered = filtered.filter(activity => {
-            const activityDate = new Date(activity.date);
-            return (
-                activityDate.getMonth() === statsMonthFilter.getMonth() &&
-                activityDate.getFullYear() === statsYearFilter
-            );
-        });
-
-        // Then apply date filter if a specific date is selected
-        if (selectedDate) {
-            filtered = filtered.filter(activity => {
-                const activityDate = new Date(activity.date);
-                return isSameDay(activityDate, selectedDate);
-            });
+        if (!file.type.startsWith('image/')) {
+            alert('Please select an image file');
+            return;
         }
 
-        setFilteredData(filtered);
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File size should be less than 5MB');
+            return;
+        }
+
+        setNewVisit(prev => ({ ...prev, photo: file }));
+        if (cameraInputRef.current) cameraInputRef.current.value = '';
     };
 
-    const applyStatsFilters = () => {
-        // Filter activities based on selected month and year
-        const filteredActivities = fieldData.filter(activity => {
-            const activityDate = new Date(activity.date);
-            return (
-                activityDate.getMonth() === statsMonthFilter.getMonth() &&
-                activityDate.getFullYear() === statsYearFilter
-            );
-        });
+    // Start camera
+    const startCamera = async () => {
+        try {
+            setShowCameraModal(true);
+            await getCurrentLocation();
 
-        // Calculate filtered stats
-        const scheduled = filteredActivities.filter(a => a.status === 'scheduled').length;
-        const completed = filteredActivities.filter(a => a.status === 'completed').length;
+            setTimeout(async () => {
+                try {
+                    const constraints = {
+                        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'environment' }
+                    };
 
-        // For leads, we need to get the leads count for the selected period
-        const leads = Math.round(completed * 0.7); // Example calculation
+                    const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    setStream(mediaStream);
 
-        setFilteredStats({ scheduled, completed, leads });
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = mediaStream;
+                        await videoRef.current.play();
+                    }
+                } catch (error) {
+                    console.error('Error accessing camera:', error);
+                    alert('Cannot access camera. Please check permissions.');
+                    setShowCameraModal(false);
+                }
+            }, 500);
+        } catch (error) {
+            console.error('Error starting camera:', error);
+            alert('Camera not supported');
+        }
     };
 
-    const handleDateSelect = (day) => {
-        setSelectedDate(day);
+    // Capture photo
+    const capturePhoto = async () => {
+        if (!videoRef.current || !canvasRef.current) return;
+
+        try {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+            const context = canvas.getContext('2d');
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const freshLocation = await getCurrentLocation();
+
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    const timestamp = new Date().getTime();
+                    const file = new File([blob], `camera_photo_${timestamp}.jpg`, { type: 'image/jpeg' });
+
+                    setNewVisit(prev => ({ 
+                        ...prev, 
+                        photo: file,
+                        location: freshLocation.locationName 
+                    }));
+                    
+                    stopCamera();
+                    setShowCameraModal(false);
+                    setSuccessMessage('Photo captured!');
+                    setShowSuccessPopup(true);
+                }
+            }, 'image/jpeg', 0.9);
+        } catch (error) {
+            console.error('Error capturing photo:', error);
+            alert('Error capturing photo');
+        }
     };
 
-    const resetFilters = () => {
-        setSelectedDate(null);
-        // Reset to show all data for the currently selected month/year
-        const filtered = fieldData.filter(activity => {
-            const activityDate = new Date(activity.date);
-            return (
-                activityDate.getMonth() === statsMonthFilter.getMonth() &&
-                activityDate.getFullYear() === statsYearFilter
-            );
-        });
-        setFilteredData(filtered);
+    // Stop camera
+    const stopCamera = () => {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            setStream(null);
+        }
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
     };
 
-    const handleMonthYearChange = (month, year) => {
-        setStatsMonthFilter(new Date(year, month));
-        setStatsYearFilter(year);
-        setCurrentDate(new Date(year, month)); // Also update calendar view
-        setSelectedDate(null); // Reset date selection when month/year changes
-    };
-
-    // Handle photo change
-    const handlePhotoChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            // Validate file type and size
-            if (!file.type.startsWith('image/')) {
-                alert('Please select an image file (JPEG, PNG, etc.)');
-                return;
+    // Trigger camera
+    const triggerCamera = () => {
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+            if (cameraInputRef.current) {
+                cameraInputRef.current.click();
             }
-            if (file.size > 5 * 1024 * 1024) {
-                alert('File size should be less than 5MB');
-                return;
-            }
-            setNewVisit(prev => ({ ...prev, photo: file }));
+        } else {
+            startCamera();
         }
     };
 
+    // Add visit
     const handleAddVisit = async (e) => {
         e.preventDefault();
 
-        // Phone number validation
         if (!/^\d{10}$/.test(newVisit.contactNumber)) {
             alert('Phone number must be exactly 10 digits');
             return;
@@ -402,7 +462,6 @@ const FieldExecutivePage = () => {
             const userName = localStorage.getItem('userName');
             const formData = new FormData();
 
-            // Append all form data
             formData.append('executive', userName);
             formData.append('client', newVisit.client);
             formData.append('contactNumber', newVisit.contactNumber);
@@ -413,114 +472,72 @@ const FieldExecutivePage = () => {
             formData.append('notes', newVisit.notes || '');
             formData.append('status', 'scheduled');
 
-            // Append photo if selected
             if (newVisit.photo) {
                 formData.append('photo', newVisit.photo);
+                if (currentLocation) {
+                    formData.append('latitude', currentLocation.latitude?.toString() || '');
+                    formData.append('longitude', currentLocation.longitude?.toString() || '');
+                }
             }
 
-            // eslint-disable-next-line no-unused-vars
-            const response = await axios.post('/api/field-executive/visit', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
+            await axios.post('/api/field-executive/visit', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
             });
 
-            // Reset everything and close modals
             resetAddVisitProcess();
-
-            // Show success popup
             setSuccessMessage('Visit scheduled successfully!');
             setShowSuccessPopup(true);
-
-            // Refresh data WITHOUT page reload
             await fetchFieldData();
-
         } catch (error) {
             console.error('Error adding visit:', error);
-
-            // More detailed error message
-            if (error.response?.data?.error) {
-                alert(`Failed to add visit: ${error.response.data.error}`);
-            } else {
-                alert('Failed to add visit. Please check your connection and try again.');
-            }
+            alert('Failed to add visit');
         }
     };
 
-    // Status update handler with sale-close navigation
+    // Handle status change
     const handleStatusChange = async (visitId, newStatus) => {
         try {
             if (newStatus === 'sale-close') {
-                // First update the status to 'sale-close' in the database
                 await axios.put('/api/field-executive/visit-status', {
                     visitId,
                     status: 'sale-close',
-                    remark: 'Sale closed - proceeding to order creation'
+                    remark: 'Sale closed'
                 });
 
-                // Find the visit data
                 const visit = fieldData.find(v => v._id === visitId);
-
-                // Prepare the appointment data for order form
                 const appointmentData = {
                     client: visit?.client,
                     phoneNumber: visit?.contactNumber,
                     businessName: visit?.businessName,
                     location: visit?.location,
-                    purpose: visit?.purpose,
                     visitId: visitId,
                     executive: localStorage.getItem('userName')
                 };
 
-                // Store in localStorage to pass to order form
                 localStorage.setItem('saleClosedAppointmentData', JSON.stringify(appointmentData));
-
-                // Show success message
-                setSuccessMessage('Status updated to Sale Close! Redirecting to order form...');
+                setSuccessMessage('Sale closed! Redirecting...');
                 setShowSuccessPopup(true);
-
-                // Refresh data to show updated status WITHOUT page reload
+                
                 await fetchFieldData();
-
-                // Navigate to the main admin page with order tab active after a short delay
-                setTimeout(() => {
-                    navigate('/order', {
-                        state: {
-                            activeTab: 'order',
-                            appointmentData: appointmentData
-                        }
-                    });
-                }, 1500);
-
+                setTimeout(() => navigate('/order', { state: { activeTab: 'order', appointmentData } }), 1500);
                 return;
             }
 
             if (newStatus === 'follow-up') {
-                // Show modal for follow-up date and remark
-                setStatusUpdate({
-                    visitId,
-                    status: newStatus,
-                    followUpDate: '',
-                    remark: ''
-                });
+                setStatusUpdate({ visitId, status: newStatus, followUpDate: '', remark: '' });
                 setShowStatusModal(true);
                 return;
             }
 
-            // For not-interested status, update directly
             if (newStatus === 'not-interested') {
                 await axios.put('/api/field-executive/visit-status', {
                     visitId,
                     status: newStatus,
-                    remark: 'Marked as not interested'
+                    remark: 'Not interested'
                 });
-
-                // Show success popup for status update
-                setSuccessMessage('Status updated to Not Interested!');
+                setSuccessMessage('Status updated!');
                 setShowSuccessPopup(true);
-
-                await fetchFieldData(); // Refresh data WITHOUT page reload
-                return;
+                await fetchFieldData();
             }
         } catch (error) {
             console.error('Error updating status:', error);
@@ -528,67 +545,44 @@ const FieldExecutivePage = () => {
         }
     };
 
-    // Submit follow-up status
+    // Submit follow-up
     const handleStatusSubmit = async (e) => {
         e.preventDefault();
         try {
             await axios.put('/api/field-executive/visit-status', statusUpdate);
             setShowStatusModal(false);
             setStatusUpdate({ visitId: '', status: '', followUpDate: '', remark: '' });
-
-            // Show success popup for follow-up update
-            setSuccessMessage('Follow-up details updated successfully!');
+            setSuccessMessage('Follow-up details saved!');
             setShowSuccessPopup(true);
-
-            await fetchFieldData(); // Refresh data WITHOUT page reload
+            await fetchFieldData();
         } catch (error) {
             console.error('Error updating follow-up:', error);
             alert('Failed to update follow-up');
         }
     };
 
-    // Calendar generation
+    // Calendar helpers
     const monthStart = startOfMonth(currentDate);
     const monthEnd = endOfMonth(currentDate);
     const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
     const navigateMonth = (direction) => {
-        if (direction > 0) {
-            const newDate = addMonths(currentDate, 1);
-            setCurrentDate(newDate);
-            // Update stats filters when navigating calendar
-            handleMonthYearChange(newDate.getMonth(), newDate.getFullYear());
-        } else {
-            const newDate = subMonths(currentDate, 1);
-            setCurrentDate(newDate);
-            // Update stats filters when navigating calendar
-            handleMonthYearChange(newDate.getMonth(), newDate.getFullYear());
-        }
+        const newDate = direction > 0 ? addMonths(currentDate, 1) : subMonths(currentDate, 1);
+        setCurrentDate(newDate);
+        setStatsMonthFilter(newDate);
     };
 
-    // Get activities for the current month (for calendar display)
-    const getMonthActivities = () => {
-        return fieldData.filter(activity => {
-            const activityDate = new Date(activity.date);
-            return isSameMonth(activityDate, currentDate);
-        });
+    const resetFilters = () => {
+        setSelectedDate(null);
     };
 
-    // Generate years for dropdown
+    const handleDateSelect = (day) => {
+        setSelectedDate(day);
+    };
+
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const currentYear = new Date().getFullYear();
-    const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
-
-    // Generate months for dropdown
-    const months = eachMonthOfInterval({
-        start: startOfYear(new Date()),
-        end: endOfYear(new Date())
-    }).map(month => ({
-        value: month.getMonth(),
-        label: format(month, 'MMMM')
-    }));
-
-    // eslint-disable-next-line no-unused-vars
-    const monthActivities = getMonthActivities();
+    const years = [currentYear - 1, currentYear, currentYear + 1];
 
     if (loading) {
         return <div className="loading">Loading field executive data...</div>;
@@ -605,39 +599,54 @@ const FieldExecutivePage = () => {
                         <div className="success-popup-content">
                             <div className="success-icon">✅</div>
                             <div className="success-message">{successMessage}</div>
-                            <button
-                                className="success-close-btn"
-                                onClick={() => setShowSuccessPopup(false)}
-                            >
-                                ✕
-                            </button>
+                            <button className="success-close-btn" onClick={() => setShowSuccessPopup(false)}>✕</button>
                         </div>
                     </div>
                 </div>
             )}
 
+            {/* Camera Modal */}
+            {showCameraModal && (
+                <div className="camera-modal-overlay">
+                    <div className="camera-modal">
+                        <div className="camera-header">
+                            <h3>Take Photo</h3>
+                            <button className="camera-close-btn" onClick={() => { stopCamera(); setShowCameraModal(false); }}>✕</button>
+                        </div>
+                        
+                        {currentLocation?.locationName && (
+                            <div className="camera-location-info">
+                                <span className="location-icon">📍</span>
+                                <span className="location-text">{currentLocation.locationName}</span>
+                            </div>
+                        )}
+                        
+                        <div className="camera-container">
+                            <video ref={videoRef} autoPlay playsInline className="camera-video" />
+                            <canvas ref={canvasRef} style={{ display: 'none' }} />
+                        </div>
+                        
+                        <div className="camera-controls">
+                            <button className="capture-btn" onClick={capturePhoto}>
+                                <span className="camera-icon">📷</span> Capture
+                            </button>
+                            <button className="cancel-btn" onClick={() => { stopCamera(); setShowCameraModal(false); }}>Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Header */}
             <header className="page-header">
                 <div className="header-left">
-                    <button
-                        className="mobile-menu-btn"
-                        onClick={() => setShowMobileMenu(!showMobileMenu)}
-                    >
-                        ☰
-                    </button>
-                    <button onClick={() => navigate('/order')} className="back-btn">
-                        &larr; Back to Dashboard
-                    </button>
+                    <button className="mobile-menu-btn" onClick={() => setShowMobileMenu(!showMobileMenu)}>☰</button>
+                    <button onClick={() => navigate('/order')} className="back-btn">&larr; Dashboard</button>
                 </div>
-
-                <h1>Daily Report Dashboard</h1>
-
+                <h1>Field Executive Dashboard</h1>
                 <div className="header-actions">
                     <span className="welcome-text">Welcome, {localStorage.getItem('userName')}</span>
-                    <button
-                        onClick={() => setShowCalendar(!showCalendar)}
-                        className="toggle-calendar-btn"
-                    >
-                        {showCalendar ? 'Hide Calendar' : 'Show Calendar'}
+                    <button onClick={() => setShowCalendar(!showCalendar)} className="toggle-calendar-btn">
+                        {showCalendar ? 'Hide' : 'Show'} Calendar
                     </button>
                 </div>
             </header>
@@ -646,27 +655,11 @@ const FieldExecutivePage = () => {
             {showMobileMenu && (
                 <div className="mobile-menu-overlay">
                     <div className="mobile-menu">
-                        <button
-                            className="mobile-menu-close"
-                            onClick={() => setShowMobileMenu(false)}
-                        >
-                            ✕
-                        </button>
+                        <button className="mobile-menu-close" onClick={() => setShowMobileMenu(false)}>✕</button>
                         <div className="mobile-menu-content">
-                            <button
-                                className="mobile-menu-item"
-                                onClick={() => {
-                                    startAddVisit();
-                                    setShowMobileMenu(false);
-                                }}
-                            >
-                                Add New Visit
-                            </button>
-                            <button
-                                className="mobile-menu-item"
-                                onClick={() => setShowCalendar(!showCalendar)}
-                            >
-                                {showCalendar ? 'Hide Calendar' : 'Show Calendar'}
+                            <button className="mobile-menu-item" onClick={() => { startAddVisit(); setShowMobileMenu(false); }}>Add Visit</button>
+                            <button className="mobile-menu-item" onClick={() => setShowCalendar(!showCalendar)}>
+                                {showCalendar ? 'Hide' : 'Show'} Calendar
                             </button>
                         </div>
                     </div>
@@ -674,107 +667,114 @@ const FieldExecutivePage = () => {
             )}
 
             <main className="field-content">
+                {/* Add Schedule Button - Above the table */}
+                <div className="add-schedule-container">
+                    <button className="add-schedule-btn" onClick={startAddVisit}>
+                        <span className="btn-icon">➕</span> Add New Schedule
+                    </button>
+                </div>
+
                 <div className="main-content-layout">
-                    {/* Left column for stats and activities */}
+                    {/* Left Column */}
                     <div className="left-column">
-                        {/* Stats Section with filters */}
+                        {/* Stats with light colors */}
                         <div className="field-stats">
                             <div className="stats-header">
-                               
+                                <h2>Performance Overview - {months[statsMonthFilter.getMonth()]} {statsYearFilter}</h2>
                                 <div className="stats-filters">
-                                    <select
-                                        value={statsMonthFilter.getMonth()}
-                                        onChange={(e) => handleMonthYearChange(parseInt(e.target.value), statsYearFilter)}
-                                        className="stats-filter-select"
+                                    <select 
+                                        value={statsMonthFilter.getMonth()} 
+                                        onChange={(e) => {
+                                            const newDate = new Date(statsYearFilter, parseInt(e.target.value));
+                                            setStatsMonthFilter(newDate);
+                                            setCurrentDate(newDate); // Also update calendar view
+                                        }}
                                     >
                                         {months.map((month, index) => (
-                                            <option key={index} value={month.value}>
-                                                {month.label}
-                                            </option>
+                                            <option key={index} value={index}>{month}</option>
                                         ))}
                                     </select>
-                                    <select
-                                        value={statsYearFilter}
-                                        onChange={(e) => handleMonthYearChange(statsMonthFilter.getMonth(), parseInt(e.target.value))}
-                                        className="stats-filter-select"
+                                    <select 
+                                        value={statsYearFilter} 
+                                        onChange={(e) => {
+                                            const newYear = parseInt(e.target.value);
+                                            setStatsYearFilter(newYear);
+                                            // Keep the same month but update year
+                                            const newDate = new Date(newYear, statsMonthFilter.getMonth());
+                                            setStatsMonthFilter(newDate);
+                                            setCurrentDate(newDate); // Also update calendar view
+                                        }}
                                     >
                                         {years.map(year => (
-                                            <option key={year} value={year}>
-                                                {year}
-                                            </option>
+                                            <option key={year} value={year}>{year}</option>
                                         ))}
                                     </select>
                                 </div>
                             </div>
-                           
+                            <div className="stats-grid">
+                                <div className="stat-card scheduled">
+                                    <div className="stat-icon">📅</div>
+                                    <div className="stat-info">
+                                        <h3>Scheduled Visits</h3>
+                                        <p className="stat-value">{stats.scheduled}</p>
+                                    </div>
+                                </div>
+                                <div className="stat-card sale-closed">
+                                    <div className="stat-icon">💰</div>
+                                    <div className="stat-info">
+                                        <h3>Sales Closed</h3>
+                                        <p className="stat-value">{stats.saleClosed}</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
-                        {/* Activities Section */}
+                        {/* Activities Table */}
                         <div className="field-activities">
                             <div className="section-header">
-                                <h2>
-                                    Field Activities for {format(statsMonthFilter, 'MMMM yyyy')}
-                                    {selectedDate && ` - ${format(selectedDate, 'MMM d, yyyy')}`}
-                                </h2>
-                                <span className="activities-count">
-                                    {filteredData.length} activity{filteredData.length !== 1 ? 'ies' : ''}
-                                    {selectedDate && ` on ${format(selectedDate, 'MMM d, yyyy')}`}
-                                </span>
+                                <h2>Visit Schedule - {months[statsMonthFilter.getMonth()]} {statsYearFilter}</h2>
+                                <span className="activities-count">{filteredData.length} visits</span>
                             </div>
                             <div className="activities-table">
                                 <div className="table-header">
                                     <span>Date</span>
                                     <span>Client/Business</span>
                                     <span>Contact</span>
-                                    <span>Location</span>
                                     <span>Purpose</span>
                                     <span>Status</span>
-                                    <span>Actions</span>
+                                    <span>Action</span>
                                 </div>
                                 {filteredData.length > 0 ? (
                                     filteredData.map((activity, index) => (
                                         <div key={index} className="table-row">
                                             <span className="mobile-label">Date:</span>
                                             <span>{new Date(activity.date).toLocaleDateString()}</span>
-
-                                            <span className="mobile-label">Client/Business:</span>
-                                            <span className="client-name">
-                                                <div>{activity.client}</div>
-                                                <small>{activity.businessName}</small>
+                                            
+                                            <span className="mobile-label">Client:</span>
+                                            <span>
+                                                <div className="client-name">{activity.client}</div>
+                                                <div className="business-name">{activity.businessName}</div>
                                             </span>
-
+                                            
                                             <span className="mobile-label">Contact:</span>
                                             <span>{activity.contactNumber}</span>
-
-                                            <span className="mobile-label">Location:</span>
-                                            <span>{activity.location}</span>
-
+                                            
                                             <span className="mobile-label">Purpose:</span>
                                             <span>{activity.purpose}</span>
-
+                                            
                                             <span className="mobile-label">Status:</span>
                                             <span className={`status ${activity.status}`}>
-                                                {activity.status}
-                                                {activity.followUpDate && (
-                                                    <small>Follow-up: {new Date(activity.followUpDate).toLocaleDateString()}</small>
-                                                )}
-                                                {activity.remark && <small>Remark: {activity.remark}</small>}
+                                                {activity.status === 'sale-close' ? 'Sale Closed' : activity.status}
                                             </span>
-
-                                            <span className="mobile-label">Actions:</span>
+                                            
+                                            <span className="mobile-label">Action:</span>
                                             <span className="status-actions">
-                                                <select
-                                                    value=""
-                                                    onChange={(e) => {
-                                                        if (e.target.value) {
-                                                            handleStatusChange(activity._id, e.target.value);
-                                                            // Reset the dropdown to "Select" after selection
-                                                            e.target.value = "";
-                                                        }
-                                                    }}
+                                                <select 
+                                                    value="" 
+                                                    onChange={(e) => e.target.value && handleStatusChange(activity._id, e.target.value)}
                                                     className="status-select"
                                                 >
-                                                    <option value="">Select</option>
+                                                    <option value="">Update Status</option>
                                                     <option value="not-interested">Not Interested</option>
                                                     <option value="follow-up">Follow Up</option>
                                                     <option value="sale-close">Sale Close</option>
@@ -783,85 +783,51 @@ const FieldExecutivePage = () => {
                                         </div>
                                     ))
                                 ) : (
-                                    <div className="no-data">
-                                        {selectedDate
-                                            ? `No field activities found for ${format(selectedDate, 'MMM d, yyyy')}`
-                                            : `No field activities found for ${format(statsMonthFilter, 'MMMM yyyy')}`
-                                        }
-                                    </div>
+                                    <div className="no-data">No visits scheduled for {months[statsMonthFilter.getMonth()]} {statsYearFilter}</div>
                                 )}
-                            </div>
-                        </div>
-
-                        <div className="quick-actions">
-                            <h2>Quick Actions</h2>
-                            <div className="action-buttons">
-                                <button className="action-btn primary" onClick={startAddVisit}>
-                                    <span className="icon">➕</span>
-                                    <span>Add New Visit</span>
-                                </button>
                             </div>
                         </div>
                     </div>
 
-                    {/* Right column for calendar - conditionally rendered */}
+                    {/* Calendar Column */}
                     {showCalendar && (
                         <div className="right-column">
-                            {/* Calendar Section */}
                             <div className="calendar-section">
                                 <div className="section-header">
-                                    <h2>Calendar View - {format(currentDate, 'MMMM yyyy')}</h2>
+                                    <h2>{format(currentDate, 'MMMM yyyy')}</h2>
                                     <div className="calendar-controls">
-                                        <button onClick={() => navigateMonth(-1)} className="month-nav-btn">&lt; Prev</button>
-                                        <button onClick={resetFilters} className="reset-filters-btn">
-                                            Show All
-                                        </button>
-                                        <button onClick={() => navigateMonth(1)} className="month-nav-btn">Next &gt;</button>
+                                        <button onClick={() => navigateMonth(-1)} className="month-nav-btn">←</button>
+                                        <button onClick={resetFilters} className="reset-filters-btn">Today</button>
+                                        <button onClick={() => navigateMonth(1)} className="month-nav-btn">→</button>
                                     </div>
                                 </div>
-                                <div className="calendar-container">
-                                    <div className="calendar-grid">
-                                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                                            <div key={day} className="calendar-weekday">{day}</div>
-                                        ))}
-                                        {daysInMonth.map(day => {
-                                            const dayActivities = fieldData.filter(activity => {
-                                                const activityDate = new Date(activity.date);
-                                                return (
-                                                    isSameDay(activityDate, day) &&
-                                                    activityDate.getMonth() === statsMonthFilter.getMonth() &&
-                                                    activityDate.getFullYear() === statsYearFilter
-                                                );
-                                            });
-
-                                            const isSelected = selectedDate && isSameDay(day, selectedDate);
-                                            const isCurrentMonth = isSameMonth(day, currentDate);
-
-                                            return (
-                                                <div
-                                                    key={day.toString()}
-                                                    className={`calendar-day ${isSelected ? 'selected' : ''} ${!isCurrentMonth ? 'other-month' : ''} ${dayActivities.length > 0 ? 'has-activities' : ''}`}
-                                                    onClick={() => isCurrentMonth && handleDateSelect(day)}
-                                                >
-                                                    <span className="day-number">{format(day, 'd')}</span>
-                                                    {dayActivities.length > 0 && (
-                                                        <div className="day-activities">
-                                                            {dayActivities.slice(0, 3).map((activity, idx) => (
-                                                                <div
-                                                                    key={idx}
-                                                                    className={`activity-dot ${activity.status}`}
-                                                                    title={`${activity.client} - ${activity.status}`}
-                                                                ></div>
-                                                            ))}
-                                                            {dayActivities.length > 3 && (
-                                                                <span className="more-activities">+{dayActivities.length - 3}</span>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                                <div className="calendar-grid">
+                                    {['Su','Mo','Tu','We','Th','Fr','Sa'].map(day => (
+                                        <div key={day} className="calendar-weekday">{day}</div>
+                                    ))}
+                                    {daysInMonth.map(day => {
+                                        const dayActivities = fieldData.filter(a => isSameDay(new Date(a.date), day));
+                                        const isSelected = selectedDate && isSameDay(day, selectedDate);
+                                        return (
+                                            <div 
+                                                key={day.toString()} 
+                                                className={`calendar-day ${isSelected ? 'selected' : ''} ${dayActivities.length > 0 ? 'has-activities' : ''}`}
+                                                onClick={() => handleDateSelect(day)}
+                                            >
+                                                <span className="day-number">{format(day, 'd')}</span>
+                                                {dayActivities.length > 0 && (
+                                                    <div className="day-activities">
+                                                        {dayActivities.slice(0, 2).map((a, idx) => (
+                                                            <div key={idx} className={`activity-dot ${a.status}`} title={a.status}></div>
+                                                        ))}
+                                                        {dayActivities.length > 2 && (
+                                                            <span className="more-activities">+{dayActivities.length-2}</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                                 <div className="calendar-legend">
                                     <div className="legend-item">
@@ -869,20 +835,16 @@ const FieldExecutivePage = () => {
                                         <span>Scheduled</span>
                                     </div>
                                     <div className="legend-item">
-                                        <div className="legend-dot completed"></div>
-                                        <span>Completed</span>
-                                    </div>
-                                    <div className="legend-item">
-                                        <div className="legend-dot not-interested"></div>
-                                        <span>Not Interested</span>
+                                        <div className="legend-dot sale-close"></div>
+                                        <span>Sale Closed</span>
                                     </div>
                                     <div className="legend-item">
                                         <div className="legend-dot follow-up"></div>
                                         <span>Follow Up</span>
                                     </div>
                                     <div className="legend-item">
-                                        <div className="legend-dot sale-close"></div>
-                                        <span>Sale Close</span>
+                                        <div className="legend-dot not-interested"></div>
+                                        <span>Not Interested</span>
                                     </div>
                                 </div>
                             </div>
@@ -890,47 +852,35 @@ const FieldExecutivePage = () => {
                     )}
                 </div>
 
-                {/* PHONE NUMBER INPUT MODAL */}
+                {/* Phone Input Modal */}
                 {showPhoneInput && (
                     <div className="modal-overlay">
                         <div className="modal">
                             <div className="modal-header">
                                 <h2>Enter Phone Number</h2>
-                                <button
-                                    className="modal-close"
-                                    onClick={resetAddVisitProcess}
-                                >
-                                    ✕
-                                </button>
+                                <button className="modal-close" onClick={resetAddVisitProcess}>✕</button>
                             </div>
                             <div className="form-group">
-                                <label>Contact Number:</label>
-                                <input
-                                    type="tel"
-                                    value={phoneNumber}
-                                    onChange={(e) => {
-                                        const value = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                        setPhoneNumber(value);
-                                        setPhoneError('');
+                                <label>Phone Number:</label>
+                                <input 
+                                    type="tel" 
+                                    value={phoneNumber} 
+                                    onChange={(e) => { 
+                                        setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10)); 
+                                        setPhoneError(''); 
                                     }}
-                                    pattern="[0-9]{10}"
-                                    required
-                                    placeholder="Enter 10-digit phone number"
-                                    autoFocus
+                                    placeholder="10-digit number" 
+                                    autoFocus 
                                 />
-                                {phoneError && (
-                                    <small style={{ color: 'red', fontSize: '0.8rem' }}>{phoneError}</small>
-                                )}
-                                {!phoneError && phoneNumber && !/^\d{10}$/.test(phoneNumber) && (
-                                    <small style={{ color: 'red', fontSize: '0.8rem' }}>Phone number must be exactly 10 digits</small>
-                                )}
+                                {phoneError && <small className="error-text">{phoneError}</small>}
                             </div>
                             <div className="form-buttons">
                                 <button type="button" onClick={resetAddVisitProcess}>Cancel</button>
                                 <button 
                                     type="button" 
-                                    onClick={checkPhoneNumber}
+                                    onClick={checkPhoneNumber} 
                                     disabled={checkingPhone || !/^\d{10}$/.test(phoneNumber)}
+                                    className="primary-btn"
                                 >
                                     {checkingPhone ? 'Checking...' : 'Continue'}
                                 </button>
@@ -939,184 +889,213 @@ const FieldExecutivePage = () => {
                     </div>
                 )}
 
-                {/* Add Visit Form Modal with Phone Validation and Photo Upload */}
+                {/* Add Visit Form */}
                 {showAddForm && (
                     <div className="modal-overlay">
-                        <div className="modal">
+                        <div className="modal modal-lg">
                             <div className="modal-header">
-                                <h2>
-                                    {existingClient ? 'Existing Client - Schedule New Visit' : 'Schedule New Visit'}
-                                </h2>
-                                <button
-                                    className="modal-close"
-                                    onClick={resetAddVisitProcess}
-                                >
-                                    ✕
-                                </button>
+                                <h2>{existingClient ? 'Schedule Follow-up Visit' : 'Schedule New Visit'}</h2>
+                                <button className="modal-close" onClick={resetAddVisitProcess}>✕</button>
                             </div>
-                            
-                            {/* Existing Client Notice */}
+
                             {existingClient && (
                                 <div className="existing-client-notice">
                                     <div className="notice-icon">ℹ️</div>
                                     <div className="notice-content">
                                         <strong>Existing Client Found</strong>
-                                        <p>This phone number is already associated with a client. Some fields are pre-filled.</p>
-                                        <div className="client-details">
-                                            <span><strong>Client:</strong> {existingClient.client}</span>
-                                            <span><strong>Business:</strong> {existingClient.businessName}</span>
-                                            <span><strong>Previous Location:</strong> {existingClient.location}</span>
-                                        </div>
+                                        <p>Client details have been pre-filled based on previous visit.</p>
                                     </div>
                                 </div>
                             )}
 
                             <form onSubmit={handleAddVisit}>
-                                <div className="form-group">
-                                    <label>Client Name:</label>
-                                    <input
-                                        type="text"
-                                        value={newVisit.client}
-                                        onChange={(e) => setNewVisit({ ...newVisit, client: e.target.value })}
-                                        required
-                                        readOnly={!!existingClient}
-                                        className={existingClient ? 'readonly-field' : ''}
-                                    />
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label>Client Name:</label>
+                                        <input 
+                                            type="text" 
+                                            value={newVisit.client} 
+                                            onChange={(e) => setNewVisit({...newVisit, client: e.target.value})} 
+                                            required
+                                            readOnly={!!existingClient} 
+                                            className={existingClient ? 'readonly-field' : ''} 
+                                        />
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label>Phone:</label>
+                                        <input 
+                                            type="tel" 
+                                            value={newVisit.contactNumber} 
+                                            readOnly 
+                                            className="readonly-field" 
+                                        />
+                                    </div>
                                 </div>
 
-                                {/* Contact Number - Readonly */}
-                                <div className="form-group">
-                                    <label>Contact Number:</label>
-                                    <input
-                                        type="tel"
-                                        value={newVisit.contactNumber}
-                                        readOnly
-                                        className="readonly-field"
-                                        style={{backgroundColor: '#f8f9fa', color: '#6c757d'}}
-                                    />
-                                    <small style={{color: '#6c757d'}}>Phone number cannot be changed</small>
-                                </div>
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label>Business Name:</label>
+                                        <input 
+                                            type="text" 
+                                            value={newVisit.businessName} 
+                                            onChange={(e) => setNewVisit({...newVisit, businessName: e.target.value})} 
+                                            required
+                                            readOnly={!!existingClient} 
+                                            className={existingClient ? 'readonly-field' : ''} 
+                                        />
+                                    </div>
 
-                                <div className="form-group">
-                                    <label>Business Name:</label>
-                                    <input
-                                        type="text"
-                                        value={newVisit.businessName}
-                                        onChange={(e) => setNewVisit({ ...newVisit, businessName: e.target.value })}
-                                        required
-                                        readOnly={!!existingClient}
-                                        className={existingClient ? 'readonly-field' : ''}
-                                    />
-                                </div>
-
-                                {/* Location with LB Nagar fix */}
-                                <div className="form-group">
-                                    <label>Location {existingClient && '(Auto-detected for new visit)'}:</label>
-                                    <input
-                                        type="text"
-                                        value={newVisit.location}
-                                        readOnly
-                                        className="location-input"
-                                        placeholder="Getting your location..."
-                                    />
-                                    {!existingClient && (
-                                        <button
-                                            type="button"
-                                            onClick={getDeviceLocation}
-                                            className="refresh-location-btn"
-                                        >
-                                            🔄 Refresh Location
-                                        </button>
-                                    )}
+                                    <div className="form-group">
+                                        <label>Date:</label>
+                                        <input 
+                                            type="date" 
+                                            value={newVisit.date} 
+                                            onChange={(e) => setNewVisit({...newVisit, date: e.target.value})}
+                                            required 
+                                            min={new Date().toISOString().split('T')[0]} 
+                                        />
+                                    </div>
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Date:</label>
-                                    <input
-                                        type="date"
-                                        value={newVisit.date}
-                                        onChange={(e) => setNewVisit({ ...newVisit, date: e.target.value })}
-                                        required
-                                    />
+                                    <label>Location:</label>
+                                    <div className="location-input-group">
+                                        <input 
+                                            type="text" 
+                                            value={newVisit.location} 
+                                            readOnly 
+                                            className="location-input" 
+                                        />
+                                        {!existingClient && (
+                                            <button 
+                                                type="button" 
+                                                onClick={getCurrentLocation} 
+                                                className="refresh-location-btn"
+                                                title="Refresh location"
+                                            >
+                                                ↻
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Description:</label>
-                                    <input
-                                        type="text"
-                                        value={newVisit.purpose}
-                                        onChange={(e) => setNewVisit({ ...newVisit, purpose: e.target.value })}
-                                        required
+                                    <label>Purpose:</label>
+                                    <input 
+                                        type="text" 
+                                        value={newVisit.purpose} 
+                                        onChange={(e) => setNewVisit({...newVisit, purpose: e.target.value})} 
+                                        required 
+                                        placeholder="e.g., Site Visit, Installation"
                                     />
                                 </div>
 
-                                {/* Photo Upload Field */}
+                                {/* Photo Upload */}
                                 <div className="form-group">
-                                    <label>Visit Photo (Optional):</label>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handlePhotoChange}
-                                        className="photo-input"
-                                    />
-                                    {newVisit.photo && (
-                                        <div className="photo-preview">
-                                            <small>Selected: {newVisit.photo.name}</small>
+                                    <label>Visit Photo:</label>
+                                    <div className="photo-upload-container">
+                                        <div className="photo-upload-buttons">
+                                            <input 
+                                                type="file" 
+                                                ref={galleryInputRef} 
+                                                onChange={handleGallerySelect} 
+                                                accept="image/*" 
+                                                className="hidden-file-input" 
+                                                id="gallery-upload" 
+                                            />
+                                            <input 
+                                                type="file" 
+                                                ref={cameraInputRef} 
+                                                onChange={handleGallerySelect} 
+                                                accept="image/*" 
+                                                capture="environment" 
+                                                className="hidden-file-input" 
+                                                id="camera-capture" 
+                                            />
+                                            
+                                            <label htmlFor="gallery-upload" className="photo-upload-btn gallery-btn">
+                                                <span className="btn-icon">📁</span> Choose from Gallery
+                                            </label>
+                                            
+                                            <button type="button" onClick={triggerCamera} className="photo-upload-btn camera-btn">
+                                                <span className="btn-icon">📷</span> Take Photo
+                                            </button>
                                         </div>
-                                    )}
+                                        
+                                        {newVisit.photo && (
+                                            <div className="photo-preview">
+                                                <div className="photo-info">
+                                                    <span className="photo-name">{newVisit.photo.name}</span>
+                                                    <span className="photo-size">({Math.round(newVisit.photo.size / 1024)} KB)</span>
+                                                </div>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setNewVisit(prev => ({...prev, photo: null}))} 
+                                                    className="photo-remove-btn"
+                                                    title="Remove photo"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <small className="photo-hint">
+                                        📸 Add a photo of the visit location or client
+                                    </small>
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Notes:</label>
-                                    <textarea
-                                        value={newVisit.notes}
-                                        onChange={(e) => setNewVisit({ ...newVisit, notes: e.target.value })}
+                                    <label>Notes (Optional):</label>
+                                    <textarea 
+                                        value={newVisit.notes} 
+                                        onChange={(e) => setNewVisit({...newVisit, notes: e.target.value})} 
+                                        rows="2"
+                                        placeholder="Any additional remarks..."
                                     />
                                 </div>
+
                                 <div className="form-buttons">
                                     <button type="button" onClick={resetAddVisitProcess}>Cancel</button>
-                                    <button type="submit">Schedule Visit</button>
+                                    <button type="submit" className="primary-btn">Schedule Visit</button>
                                 </div>
                             </form>
                         </div>
                     </div>
                 )}
 
-                {/* Status Update Modal for Follow-up */}
+                {/* Follow-up Modal */}
                 {showStatusModal && (
                     <div className="modal-overlay">
                         <div className="modal">
                             <div className="modal-header">
-                                <h2>Update Follow-up Details</h2>
-                                <button
-                                    className="modal-close"
-                                    onClick={() => setShowStatusModal(false)}
-                                >
-                                    ✕
-                                </button>
+                                <h2>Schedule Follow-up</h2>
+                                <button className="modal-close" onClick={() => setShowStatusModal(false)}>✕</button>
                             </div>
                             <form onSubmit={handleStatusSubmit}>
                                 <div className="form-group">
                                     <label>Follow-up Date:</label>
-                                    <input
-                                        type="date"
-                                        value={statusUpdate.followUpDate}
-                                        onChange={(e) => setStatusUpdate({ ...statusUpdate, followUpDate: e.target.value })}
-                                        required
+                                    <input 
+                                        type="date" 
+                                        value={statusUpdate.followUpDate} 
+                                        onChange={(e) => setStatusUpdate({...statusUpdate, followUpDate: e.target.value})}
+                                        required 
+                                        min={new Date().toISOString().split('T')[0]} 
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label>Remark:</label>
-                                    <textarea
-                                        value={statusUpdate.remark}
-                                        onChange={(e) => setStatusUpdate({ ...statusUpdate, remark: e.target.value })}
-                                        required
-                                        placeholder="Enter follow-up details..."
+                                    <label>Remarks:</label>
+                                    <textarea 
+                                        value={statusUpdate.remark} 
+                                        onChange={(e) => setStatusUpdate({...statusUpdate, remark: e.target.value})} 
+                                        required 
+                                        rows="2"
+                                        placeholder="Add follow-up details..."
                                     />
                                 </div>
                                 <div className="form-buttons">
                                     <button type="button" onClick={() => setShowStatusModal(false)}>Cancel</button>
-                                    <button type="submit">Update Status</button>
+                                    <button type="submit" className="primary-btn">Save</button>
                                 </div>
                             </form>
                         </div>
@@ -1125,1020 +1104,922 @@ const FieldExecutivePage = () => {
             </main>
 
             <style>{`
-                .field-executive-page {
-                    padding: 1rem;
-                    background-color: #f8fafc;
-                    min-height: 100vh;
-                    position: relative;
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                .field-executive-page { 
+                    padding: 2rem; 
+                    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); 
+                    min-height: 100vh; 
+                    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+                    margin: 0 auto;
+                    max-width: 1600px;
                 }
                 
-                /* Success Popup Styles */
-                .success-popup-overlay {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background-color: rgba(0, 0, 0, 0.5);
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    z-index: 3000;
-                    padding: 1rem;
+                /* Camera Modal */
+                .camera-modal-overlay { 
+                    position: fixed; 
+                    top: 0; 
+                    left: 0; 
+                    right: 0; 
+                    bottom: 0; 
+                    background: rgba(0,0,0,0.95); 
+                    display: flex; 
+                    justify-content: center; 
+                    align-items: center; 
+                    z-index: 2000; 
+                    padding: 2rem; 
                 }
-                
-                .success-popup {
-                    background: white;
-                    padding: 1.5rem;
-                    border-radius: 12px;
-                    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-                    min-width: 300px;
-                    max-width: 400px;
-                    position: relative;
-                    animation: slideIn 0.3s ease-out;
+                .camera-modal { 
+                    background: #1a1a1a; 
+                    border-radius: 24px; 
+                    width: 100%; 
+                    max-width: 600px; 
+                    overflow: hidden; 
+                    display: flex; 
+                    flex-direction: column; 
+                    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
                 }
-                
-                .success-popup-content {
-                    display: flex;
-                    align-items: center;
-                    gap: 1rem;
+                .camera-header { 
+                    display: flex; 
+                    justify-content: space-between; 
+                    align-items: center; 
+                    padding: 1.2rem 1.5rem; 
+                    background: linear-gradient(135deg, #6366f1, #8b5cf6); 
+                    color: white; 
                 }
-                
-                .success-icon {
-                    font-size: 2rem;
-                    color: #10b981;
-                }
-                
-                .success-message {
-                    flex: 1;
-                    font-size: 1rem;
-                    font-weight: 500;
-                    color: #1f2937;
-                }
-                
-                .success-close-btn {
-                    background: none;
-                    border: none;
-                    font-size: 1.2rem;
-                    cursor: pointer;
-                    color: #6b7280;
-                    padding: 0.2rem;
-                    border-radius: 4px;
-                    transition: background 0.2s ease;
-                }
-                
-                .success-close-btn:hover {
-                    background: #f3f4f6;
-                }
-                
-                @keyframes slideIn {
-                    from {
-                        opacity: 0;
-                        transform: translateY(-20px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateY(0);
-                    }
-                }
-                
-                .page-header {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    margin-bottom: 1.5rem;
-                    padding: 1rem;
-                    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-                    color: white;
-                    border-radius: 12px;
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                    position: relative;
-                }
-                
-                .header-left {
-                    display: flex;
-                    align-items: center;
-                    gap: 0.5rem;
-                }
-                
-                .mobile-menu-btn {
-                    display: none;
-                    background: none;
-                    border: none;
-                    color: white;
-                    font-size: 1.2rem;
-                    cursor: pointer;
-                    padding: 0.5rem;
-                }
-                
-                .page-header h1 {
-                    margin: 0;
+                .camera-header h3 { 
+                    margin: 0; 
+                    font-size: 1.2rem; 
                     font-weight: 600;
-                    font-size: 1.5rem;
-                    text-align: center;
-                    flex: 1;
+                }
+                .camera-close-btn { 
+                    background: rgba(255,255,255,0.2); 
+                    border: none; 
+                    color: white; 
+                    font-size: 1.2rem; 
+                    cursor: pointer; 
+                    padding: 0.3rem 0.8rem; 
+                    border-radius: 8px; 
+                }
+                .camera-close-btn:hover { 
+                    background: rgba(255,255,255,0.3); 
+                }
+                .camera-location-info { 
+                    background: #2d2d2d; 
+                    padding: 0.8rem 1.5rem; 
+                    display: flex; 
+                    align-items: center; 
+                    gap: 0.5rem; 
+                    color: white; 
+                    border-bottom: 1px solid #404040; 
+                }
+                .camera-container { 
+                    position: relative; 
+                    width: 100%; 
+                    background: black; 
+                    display: flex; 
+                    justify-content: center; 
+                    min-height: 350px; 
+                }
+                .camera-video { 
+                    width: 100%; 
+                    max-height: 60vh; 
+                    object-fit: contain; 
+                }
+                .camera-controls { 
+                    display: flex; 
+                    gap: 1rem; 
+                    padding: 1.5rem; 
+                    justify-content: center; 
+                    background: #1a1a1a; 
+                }
+                .capture-btn { 
+                    display: flex; 
+                    align-items: center; 
+                    gap: 0.5rem; 
+                    padding: 0.8rem 2rem; 
+                    background: linear-gradient(135deg, #10b981, #059669); 
+                    color: white; 
+                    border: none; 
+                    border-radius: 30px; 
+                    font-size: 1rem; 
+                    font-weight: 600; 
+                    cursor: pointer; 
+                }
+                .cancel-btn { 
+                    padding: 0.8rem 2rem; 
+                    background: rgba(255,255,255,0.1); 
+                    color: white; 
+                    border: 1px solid rgba(255,255,255,0.2); 
+                    border-radius: 30px; 
+                    cursor: pointer; 
                 }
                 
-                .back-btn {
-                    padding: 0.5rem 1rem;
-                    background-color: rgba(255, 255, 255, 0.2);
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-size: 0.9rem;
+                /* Success Popup */
+                .success-popup-overlay { 
+                    position: fixed; 
+                    top: 0; 
+                    left: 0; 
+                    right: 0; 
+                    bottom: 0; 
+                    background: rgba(0,0,0,0.5); 
+                    display: flex; 
+                    justify-content: center; 
+                    align-items: center; 
+                    z-index: 3000; 
+                }
+                .success-popup { 
+                    background: white; 
+                    padding: 2rem; 
+                    border-radius: 20px; 
+                    min-width: 300px; 
+                    max-width: 400px; 
+                    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+                    animation: slideIn 0.3s ease; 
+                }
+                .success-popup-content { 
+                    display: flex; 
+                    align-items: center; 
+                    gap: 1rem; 
+                }
+                .success-icon { 
+                    font-size: 2.5rem; 
+                    color: #10b981; 
+                }
+                .success-message { 
+                    flex: 1; 
+                    font-size: 1rem; 
+                    color: #1f2937; 
                     font-weight: 500;
-                    transition: all 0.2s ease;
-                    display: flex;
-                    align-items: center;
-                    gap: 0.5rem;
                 }
-                
-                .back-btn:hover {
-                    background-color: rgba(255, 255, 255, 0.3);
-                    transform: translateY(-1px);
+                .success-close-btn { 
+                    background: #f3f4f6; 
+                    border: none; 
+                    font-size: 1.2rem; 
+                    cursor: pointer; 
+                    color: #6b7280; 
+                    padding: 0.3rem 0.6rem; 
+                    border-radius: 8px; 
                 }
-                
-                .header-actions {
-                    display: flex;
-                    align-items: center;
-                    gap: 1rem;
-                    font-weight: 500;
-                }
-                
-                .welcome-text {
-                    display: block;
-                }
-                
-                .toggle-calendar-btn {
-                    padding: 0.5rem 0.8rem;
-                    background-color: rgba(255, 255, 255, 0.2);
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-size: 0.8rem;
-                    font-weight: 500;
-                    transition: all 0.2s ease;
-                    white-space: nowrap;
-                }
-                
-                .toggle-calendar-btn:hover {
-                    background-color: rgba(255, 255, 255, 0.3);
-                }
-                
-                /* Mobile Menu */
-                .mobile-menu-overlay {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background-color: rgba(0, 0, 0, 0.5);
-                    z-index: 2000;
-                    display: flex;
-                    justify-content: flex-start;
-                }
-                
-                .mobile-menu {
-                    width: 280px;
-                    background: white;
-                    height: 100%;
-                    padding: 1rem;
-                    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-                }
-                
-                .mobile-menu-close {
-                    background: none;
-                    border: none;
-                    font-size: 1.5rem;
-                    cursor: pointer;
-                    margin-bottom: 1rem;
-                    color: #374151;
-                }
-                
-                .mobile-menu-content {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.5rem;
-                }
-                
-                .mobile-menu-item {
-                    padding: 1rem;
-                    background: #f8fafc;
-                    border: none;
-                    border-radius: 8px;
-                    text-align: left;
-                    cursor: pointer;
-                    font-size: 1rem;
-                    transition: background 0.2s ease;
-                }
-                
-                .mobile-menu-item:hover {
+                .success-close-btn:hover {
                     background: #e5e7eb;
                 }
                 
-                .field-content {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 1.5rem;
+                @keyframes slideIn { 
+                    from { 
+                        opacity: 0; 
+                        transform: translateY(-20px); 
+                    } 
+                    to { 
+                        opacity: 1; 
+                        transform: translateY(0); 
+                    } 
                 }
                 
-                .main-content-layout {
-                    display: grid;
-                    grid-template-columns: ${showCalendar ? '2fr 1fr' : '1fr'};
-                    gap: 1.5rem;
-                    transition: grid-template-columns 0.3s ease;
+                /* Header */
+                .page-header { 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: space-between; 
+                    margin-bottom: 2rem; 
+                    padding: 1.2rem 2rem; 
+                    background: linear-gradient(135deg,rgb(205, 82, 160),rgb(235, 238, 147)); 
+                    color: #1f2937; 
+                    border-radius: 20px; 
+                    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+                }
+                .header-left { 
+                    display: flex; 
+                    align-items: center; 
+                    gap: 1rem; 
+                }
+                .mobile-menu-btn { 
+                    display: none; 
+                    background: #f3f4f6; 
+                    border: none; 
+                    color: #4b5563; 
+                    font-size: 1.2rem; 
+                    cursor: pointer; 
+                    padding: 0.5rem 1rem;
+                    border-radius: 10px;
+                }
+                .back-btn { 
+                    padding: 0.6rem 1.2rem; 
+                    background: #f3f4f6; 
+                    color: #4b5563; 
+                    border: none; 
+                    border-radius: 12px; 
+                    cursor: pointer; 
+                    font-weight: 500;
+                }
+                .back-btn:hover {
+                    background: #e5e7eb;
+                }
+                .toggle-calendar-btn { 
+                    padding: 0.6rem 1.2rem; 
+                    background: linear-gradient(135deg, #6366f1, #8b5cf6); 
+                    color: white; 
+                    border: none; 
+                    border-radius: 12px; 
+                    cursor: pointer; 
+                    font-weight: 500;
+                }
+                .toggle-calendar-btn:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4);
                 }
                 
-                .left-column {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 1.5rem;
+                /* Add Schedule Button */
+                .add-schedule-container {
+                    margin-bottom: 2rem;
                 }
-                
-                .right-column {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 1.5rem;
-                }
-                
-                /* Stats Section */
-                .field-stats {
-                    background-color: white;
-                    padding: 1.2rem;
-                    border-radius: 12px;
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                }
-                
-                .stats-header {
-                    display: flex;
-                    justify-content: space-between;
+                .add-schedule-btn {
+                    display: inline-flex;
                     align-items: center;
-                    margin-bottom: 1rem;
-                    flex-wrap: wrap;
-                    gap: 0.5rem;
-                }
-                
-                .stats-header h2 {
-                    margin: 0;
-                    color: #1f2937;
-                    font-size: 1.2rem;
-                    font-weight: 600;
-                } /* ADD THESE NEW STYLES */
-                .existing-client-notice {
-                    background: #e3f2fd;
-                    border: 1px solid #90caf9;
-                    border-radius: 8px;
-                    padding: 1rem;
-                    margin-bottom: 1.5rem;
-                    display: flex;
                     gap: 0.8rem;
-                }
-                
-                .notice-icon {
-                    font-size: 1.2rem;
-                    flex-shrink: 0;
-                }
-                
-                .notice-content {
-                    flex: 1;
-                }
-                
-                .notice-content strong {
-                    color: #1565c0;
-                    display: block;
-                    margin-bottom: 0.3rem;
-                }
-                
-                .notice-content p {
-                    margin: 0 0 0.8rem 0;
-                    color: #37474f;
-                    font-size: 0.9rem;
-                }
-                
-                .client-details {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.3rem;
-                    font-size: 0.85rem;
-                    color: #455a64;
-                }
-                
-                .client-details span {
-                    display: block;
-                }
-                
-                .readonly-field {
-                    background-color: #f8f9fa !important;
-                    color: #6c757d !important;
-                    cursor: not-allowed !important;
-                    border-color: #dee2e6 !important;
-                }
-                
-                
-                .stats-filters {
-                    display: flex;
-                    gap: 0.5rem;
-                    flex-wrap: wrap;
-                }
-                
-                .stats-filter-select {
-                    padding: 0.4rem;
-                    border: 1px solid #d1d5db;
-                    border-radius: 6px;
-                    background-color: white;
-                    font-size: 0.9rem;
-                    min-width: 120px;
-                }
-                
-                .stats-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-                    gap: 1rem;
-                }
-                
-                .stat-card {
-                    display: flex;
-                    align-items: center;
-                    padding: 1.2rem;
-                    border-radius: 12px;
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                    color: white;
-                    transition: transform 0.2s ease;
-                }
-                
-                .stat-card:hover {
-                    transform: translateY(-2px);
-                }
-                
-                .stat-card.scheduled {
-                    background: linear-gradient(135deg, rgb(140, 168, 213) 0%, #2563eb 100%);
-                }
-                
-                .stat-card.completed {
-                    background: linear-gradient(135deg, rgb(110, 204, 173) 0%, #059669 100%);
-                }
-                
-                .stat-card.leads {
-                    background: linear-gradient(135deg, rgb(222, 187, 125) 0%, #d97706 100%);
-                }
-                
-                .stat-icon {
-                    font-size: 2rem;
-                    margin-right: 1rem;
-                    opacity: 0.9;
-                }
-                
-                .stat-info h3 {
-                    margin: 0 0 0.3rem;
-                    font-size: 0.85rem;
-                    font-weight: 500;
-                    color: white;
-                    opacity: 1;
-                }
-                
-                .stat-value {
-                    margin: 0;
-                    font-size: 1.5rem;
-                    font-weight: 700;
-                    color: white;
-                }
-                
-                /* Calendar Section */
-                .calendar-section {
-                    background-color: white;
-                    padding: 1.2rem;
-                    border-radius: 12px;
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                }
-                
-                .section-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 1rem;
-                    flex-wrap: wrap;
-                    gap: 0.5rem;
-                }
-                
-                .section-header h2 {
-                    margin: 0;
-                    color: #1f2937;
-                    font-size: 1.2rem;
-                    font-weight: 600;
-                }
-                
-                .calendar-controls {
-                    display: flex;
-                    gap: 0.3rem;
-                    align-items: center;
-                    flex-wrap: wrap;
-                }
-                
-                .month-nav-btn {
-                    padding: 0.4rem 0.6rem;
-                    background-color:rgb(39, 192, 74);
-                    border: none;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-weight: 500;
-                    transition: all 0.2s ease;
-                    font-size: 0.75rem;
-                }
-                
-                .month-nav-btn:hover {
-                    background-color:rgb(199, 48, 162);
-                }
-                
-                .reset-filters-btn {
-                    padding: 0.4rem 0.6rem;
-                    background-color: #3b82f6;
+                    padding: 1rem 2rem;
+                    background: linear-gradient(135deg, #6366f1, #8b5cf6);
                     color: white;
                     border: none;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-weight: 500;
-                    transition: all 0.2s ease;
-                    font-size: 0.75rem;
-                }
-                
-                .reset-filters-btn:hover {
-                    background-color: #2563eb;
-                }
-                
-                .calendar-container {
-                    margin-bottom: 1rem;
-                }
-                
-                .calendar-grid {
-                    display: grid;
-                    grid-template-columns: repeat(7, 1fr);
-                    gap: 0.2rem;
-                }
-                
-                .calendar-weekday {
-                    text-align: center;
-                    font-size: 0.65rem;
+                    border-radius: 16px;
+                    font-size: 1.1rem;
                     font-weight: 600;
-                    color: #6b7280;
-                    padding: 0.2rem 0;
-                }
-                
-                .calendar-day {
-                    aspect-ratio: 1;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: space-between;
-                    padding: 0.2rem;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                    background-color: #f9fafb;
-                    position: relative;
-                    border: 1px solid #e5e7eb;
-                    font-size: 0.7rem;
-                }
-                
-                .calendar-day:hover {
-                    background-color: #e5e7eb;
-                }
-                
-                .calendar-day.selected {
-                    background-color: #3b82f6;
-                    color: white;
-                }
-                
-                .calendar-day.other-month {
-                    color: #9ca3af;
-                    background-color: #f3f4f6;
-                    cursor: not-allowed;
-                }
-                
-                .calendar-day.has-activities {
-                    border: 1px solid #3b82f6;
-                }
-                
-                .day-number {
-                    font-size: 0.7rem;
-                    font-weight: 500;
-                    align-self: flex-start;
-                }
-                
-                .day-activities {
-                    display: flex;
-                    flex-wrap: wrap;
-                    justify-content: center;
-                    gap: 0.1rem;
-                    width: 100%;
-                }
-                
-                .activity-dot {
-                    width: 0.3rem;
-                    height: 0.3rem;
-                    border-radius: 50%;
-                }
-                
-                .activity-dot.scheduled {
-                    background-color: #3b82f6;
-                }
-                
-                .activity-dot.completed {
-                    background-color: #10b981;
-                }
-                
-                .activity-dot.not-interested {
-                    background-color: #ef4444;
-                }
-                
-                .activity-dot.follow-up {
-                    background-color: #f59e0b;
-                }
-                
-                .activity-dot.sale-close {
-                    background-color: #8b5cf6;
-                }
-                
-                .more-activities {
-                    font-size: 0.5rem;
-                    font-weight: 600;
-                    color: #6b7280;
-                }
-                
-                .calendar-legend {
-                    display: flex;
-                    justify-content: center;
-                    gap: 1rem;
-                    margin-top: 1rem;
-                    padding-top: 1rem;
-                    border-top: 1px solid #e5e7eb;
-                    font-size: 0.7rem;
-                    flex-wrap: wrap;
-                }
-                
-                .legend-item {
-                    display: flex;
-                    align-items: center;
-                    gap: 0.3rem;
-                    color: #6b7280;
-                }
-                
-                .legend-dot {
-                    width: 0.5rem;
-                    height: 0.5rem;
-                    border-radius: 50%;
-                }
-                
-                .legend-dot.scheduled {
-                    background-color: #3b82f6;
-                }
-                
-                .legend-dot.completed {
-                    background-color: #10b981;
-                }
-                
-                .legend-dot.not-interested {
-                    background-color: #ef4444;
-                }
-                
-                .legend-dot.follow-up {
-                    background-color: #f59e0b;
-                }
-                
-                .legend-dot.sale-close {
-                    background-color: #8b5cf6;
-                }
-                
-                /* Activities Section */
-                .field-activities {
-                    background-color: white;
-                    padding: 1.2rem;
-                    border-radius: 12px;
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                }
-                
-                .activities-count {
-                    color: #6b7280;
-                    font-size: 0.85rem;
-                    font-weight: 500;
-                }
-                
-                .activities-table {
-                    display: flex;
-                    flex-direction: column;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 8px;
-                    overflow: hidden;
-                }
-                
-                .table-header, .table-row {
-                    display: grid;
-                    grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
-                    padding: 0.8rem;
-                    gap: 0.5rem;
-                }
-                
-                .table-header {
-                    background: linear-gradient(135deg, rgb(188, 186, 231) 0%, rgb(88, 79, 219) 100%);
-                    font-weight: 600;
-                    color: white;
-                    border-bottom: 1px solid #e5e7eb;
-                }
-                
-                .table-row {
-                    border-bottom: 1px solid #f3f4f6;
-                    transition: background 0.2s ease;
-                    position: relative;
-                }
-                
-                .table-row:hover {
-                    background-color: #f9fafb;
-                }
-                
-                .table-row:last-child {
-                    border-bottom: none;
-                }
-                
-                .mobile-label {
-                    display: none;
-                    font-weight: 600;
-                    color: #374151;
-                }
-                
-                .client-name {
-                    font-weight: 500;
-                    color: #1f2937;
-                }
-                
-                .client-name small {
-                    display: block;
-                    color: #6b7280;
-                    font-size: 0.8rem;
-                }
-                
-                .no-data {
-                    padding: 2rem;
-                    text-align: center;
-                    color: #6b7280;
-                    font-style: italic;
-                    grid-column: 1 / -1;
-                }
-                
-                .status {
-                    padding: 0.3rem 0.6rem;
-                    border-radius: 20px;
-                    font-size: 0.75rem;
-                    font-weight: 500;
-                    text-align: center;
-                    text-transform: capitalize;
-                    width: fit-content;
-                }
-                
-                .status small {
-                    display: block;
-                    font-size: 0.7rem;
-                    color: #6b7280;
-                    margin-top: 0.2rem;
-                }
-                
-                .status.completed {
-                    background-color: #dcfce7;
-                    color: rgb(40, 112, 30);
-                }
-                
-                .status.scheduled {
-                    background-color: #dbeafe;
-                    color: rgb(95, 129, 239);
-                }
-                
-                .status.not-interested {
-                    background-color: #fecaca;
-                    color: #dc2626;
-                }
-                
-                .status.follow-up {
-                    background-color: #fef3c7;
-                    color: #d97706;
-                }
-                
-                .status.sale-close {
-                    background-color: #ede9fe;
-                    color: #7c3aed;
-                }
-                
-                .status-actions {
-                    display: flex;
-                    gap: 0.5rem;
-                }
-                
-                .status-select {
-                    padding: 0.3rem;
-                    border: 1px solid #d1d5db;
-                    border-radius: 4px;
-                    font-size: 0.8rem;
-                    background: white;
-                    width: 100%;
-                }
-                
-                /* Quick Actions */
-                .quick-actions {
-                    background-color: white;
-                    padding: 1.2rem;
-                    border-radius: 12px;
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                }
-                
-                .quick-actions h2 {
-                    margin: 0 0 1rem;
-                    color: #1f2937;
-                    font-size: 1.2rem;
-                    font-weight: 600;
-                }
-                
-                .action-buttons {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-                    gap: 1rem;
-                }
-                
-                .action-btn {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 1.2rem 0.8rem;
-                    border: none;
-                    border-radius: 12px;
                     cursor: pointer;
                     transition: all 0.3s ease;
-                    gap: 0.6rem;
-                    min-height: 80px;
+                    box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.3);
                 }
-                
-                .action-btn.primary {
-                    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-                    color: white;
-                }
-                
-                .action-btn:hover {
+                .add-schedule-btn:hover {
                     transform: translateY(-2px);
-                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+                    box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.4);
                 }
-                
-                .action-btn .icon {
-                    font-size: 1.5rem;
-                }
-                
-                .action-btn span:last-child {
-                    font-weight: 500;
-                    font-size: 0.9rem;
-                    text-align: center;
-                }
-                
-                .loading {
-                    text-align: center;
-                    padding: 2rem;
-                    font-size: 1.1rem;
-                    color: #6b7280;
-                }
-                
-                /* Modal Styles */
-                .modal-overlay {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background-color: rgba(0, 0, 0, 0.5);
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    z-index: 1000;
-                    padding: 1rem;
-                }
-                
-                .modal {
-                    background-color: white;
-                    padding: 1.5rem;
-                    border-radius: 12px;
-                    width: 100%;
-                    max-width: 500px;
-                    max-height: 90vh;
-                    overflow-y: auto;
-                    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-                    position: relative;
-                }
-                
-                .modal-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 1.5rem;
-                }
-                
-                .modal h2 {
-                    margin: 0;
-                    color: #1f2937;
-                    font-weight: 600;
+                .add-schedule-btn .btn-icon {
                     font-size: 1.3rem;
                 }
                 
-                .modal-close {
-                    background: none;
-                    border: none;
-                    font-size: 1.5rem;
+                /* Main Layout */
+                .main-content-layout { 
+                    display: grid; 
+                    grid-template-columns: ${showCalendar ? '2fr 1fr' : '1fr'}; 
+                    gap: 2rem; 
+                }
+                
+                /* Stats with Light Colors */
+                .field-stats { 
+                    background: white; 
+                    padding: 1.5rem; 
+                    border-radius: 20px; 
+                    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); 
+                    margin-bottom: 2rem;
+                }
+                .stats-header { 
+                    display: flex; 
+                    justify-content: space-between; 
+                    align-items: center; 
+                    margin-bottom: 1.5rem; 
+                }
+                .stats-header h2 { 
+                    margin: 0; 
+                    font-size: 1.3rem; 
+                    color: #1f2937; 
+                    font-weight: 600;
+                }
+                .stats-filters { 
+                    display: flex; 
+                    gap: 0.8rem; 
+                }
+                .stats-filters select { 
+                    padding: 0.6rem 1rem; 
+                    border: 1px solid #e5e7eb; 
+                    border-radius: 12px; 
+                    background: #f9fafb; 
+                    font-size: 0.9rem;
+                    color: #4b5563;
                     cursor: pointer;
+                }
+                .stats-filters select:hover {
+                    border-color: #6366f1;
+                }
+                .stats-grid { 
+                    display: grid; 
+                    grid-template-columns: 1fr 1fr; 
+                    gap: 1.5rem; 
+                }
+                .stat-card { 
+                    display: flex; 
+                    align-items: center; 
+                    padding: 1.5rem; 
+                    border-radius: 20px; 
+                    transition: transform 0.2s ease;
+                }
+                .stat-card:hover {
+                    transform: translateY(-2px);
+                }
+                .stat-card.scheduled { 
+                    background: linear-gradient(135deg, #e0f2fe, #bae6fd); 
+                    border: 1px solid #7dd3fc;
+                }
+                .stat-card.sale-closed { 
+                    background: linear-gradient(135deg, #dcfce7, #bbf7d0); 
+                    border: 1px solid #86efac;
+                }
+                .stat-icon { 
+                    font-size: 2.2rem; 
+                    margin-right: 1.2rem; 
+                }
+                .stat-info h3 { 
+                    margin: 0 0 0.5rem; 
+                    font-size: 0.9rem; 
+                    color: #4b5563; 
+                }
+                .stat-value { 
+                    margin: 0; 
+                    font-size: 2rem; 
+                    font-weight: 700; 
+                    color: #1f2937; 
+                }
+                
+                /* Activities Table */
+                .field-activities { 
+                    background: white; 
+                    padding: 1.5rem; 
+                    border-radius: 20px; 
+                    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); 
+                }
+                .section-header { 
+                    display: flex; 
+                    justify-content: space-between; 
+                    align-items: center; 
+                    margin-bottom: 1.5rem; 
+                }
+                .section-header h2 { 
+                    margin: 0; 
+                    font-size: 1.3rem; 
+                    color: #1f2937; 
+                }
+                .activities-count { 
+                    color: #6b7280; 
+                    font-size: 0.9rem; 
+                    background: #f3f4f6;
+                    padding: 0.4rem 1rem;
+                    border-radius: 20px;
+                }
+                .activities-table { 
+                    display: flex; 
+                    flex-direction: column; 
+                    border: 1px solid #f3f4f6; 
+                    border-radius: 16px; 
+                    overflow: hidden; 
+                }
+                .table-header { 
+                    display: grid; 
+                    grid-template-columns: 1fr 2fr 1fr 1.5fr 1fr 1.2fr; 
+                    padding: 1rem; 
+                    background: linear-gradient(135deg, #f9fafb, #f3f4f6); 
+                    font-weight: 600; 
+                    color: #4b5563; 
+                    border-bottom: 1px solid #e5e7eb;
+                }
+                .table-row { 
+                    display: grid; 
+                    grid-template-columns: 1fr 2fr 1fr 1.5fr 1fr 1.2fr; 
+                    padding: 1rem; 
+                    border-bottom: 1px solid #f3f4f6; 
+                    transition: background 0.2s ease;
+                }
+                .table-row:hover {
+                    background: #f9fafb;
+                }
+                .table-row:last-child {
+                    border-bottom: none;
+                }
+                .mobile-label { 
+                    display: none; 
+                }
+                .client-name {
+                    font-weight: 600;
+                    color: #1f2937;
+                    margin-bottom: 0.2rem;
+                }
+                .business-name {
+                    font-size: 0.8rem;
                     color: #6b7280;
-                    padding: 0;
-                    width: 30px;
-                    height: 30px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
+                }
+                .status { 
+                    padding: 0.4rem 0.8rem; 
+                    border-radius: 30px; 
+                    font-size: 0.8rem; 
+                    font-weight: 600; 
+                    text-align: center; 
+                    width: fit-content; 
+                }
+                .status.scheduled { 
+                    background: #dbeafe; 
+                    color: #2563eb; 
+                }
+                .status.completed { 
+                    background: #dcfce7; 
+                    color: #059669; 
+                }
+                .status.not-interested { 
+                    background: #fee2e2; 
+                    color: #dc2626; 
+                }
+                .status.follow-up { 
+                    background: #fef3c7; 
+                    color: #d97706; 
+                }
+                .status.sale-close { 
+                    background: #ede9fe; 
+                    color: #7c3aed; 
+                }
+                .status-select { 
+                    padding: 0.5rem; 
+                    border: 1px solid #e5e7eb; 
+                    border-radius: 10px; 
+                    font-size: 0.8rem; 
+                    background: white;
+                    cursor: pointer;
+                }
+                .status-select:hover {
+                    border-color: #6366f1;
                 }
                 
-                .form-group {
-                    margin-bottom: 1rem;
+                /* Calendar */
+                .calendar-section { 
+                    background: white; 
+                    padding: 1.5rem; 
+                    border-radius: 20px; 
+                    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); 
                 }
-                
-                .form-group label {
-                    display: block;
-                    margin-bottom: 0.5rem;
+                .calendar-controls { 
+                    display: flex; 
+                    gap: 0.5rem; 
+                }
+                .month-nav-btn, .reset-filters-btn { 
+                    padding: 0.5rem 1rem; 
+                    border: none; 
+                    border-radius: 12px; 
+                    cursor: pointer; 
                     font-weight: 500;
-                    color: #374151;
+                }
+                .month-nav-btn { 
+                    background: #f3f4f6; 
+                    color: #4b5563; 
+                }
+                .month-nav-btn:hover {
+                    background: #e5e7eb;
+                }
+                .reset-filters-btn { 
+                    background: linear-gradient(135deg, #6366f1, #8b5cf6); 
+                    color: white; 
+                }
+                .calendar-grid { 
+                    display: grid; 
+                    grid-template-columns: repeat(7, 1fr); 
+                    gap: 0.5rem; 
+                    margin: 1rem 0;
+                }
+                .calendar-weekday { 
+                    text-align: center; 
+                    font-size: 0.8rem; 
+                    font-weight: 600; 
+                    color: #6b7280; 
+                    padding: 0.5rem 0; 
+                }
+                .calendar-day { 
+                    aspect-ratio: 1; 
+                    display: flex; 
+                    flex-direction: column; 
+                    align-items: center; 
+                    padding: 0.5rem; 
+                    border-radius: 12px; 
+                    cursor: pointer; 
+                    background: #f9fafb; 
+                    border: 1px solid #f3f4f6; 
+                    font-size: 0.9rem; 
+                }
+                .calendar-day:hover { 
+                    background: #f3f4f6; 
+                }
+                .calendar-day.selected { 
+                    background: linear-gradient(135deg, #6366f1, #8b5cf6); 
+                    color: white; 
+                }
+                .calendar-day.has-activities { 
+                    border: 2px solid #6366f1; 
+                }
+                .day-activities { 
+                    display: flex; 
+                    gap: 0.2rem; 
+                    margin-top: 0.3rem; 
+                }
+                .activity-dot { 
+                    width: 0.5rem; 
+                    height: 0.5rem; 
+                    border-radius: 50%; 
+                }
+                .activity-dot.scheduled { 
+                    background: #3b82f6; 
+                }
+                .activity-dot.completed { 
+                    background: #10b981; 
+                }
+                .activity-dot.not-interested { 
+                    background: #ef4444; 
+                }
+                .activity-dot.follow-up { 
+                    background: #f59e0b; 
+                }
+                .activity-dot.sale-close { 
+                    background: #8b5cf6; 
+                }
+                .more-activities { 
+                    font-size: 0.6rem; 
+                    color: #6b7280; 
+                }
+                .calendar-legend { 
+                    display: flex; 
+                    flex-wrap: wrap; 
+                    gap: 1rem; 
+                    margin-top: 1.5rem; 
+                    padding-top: 1.5rem; 
+                    border-top: 1px solid #f3f4f6; 
+                }
+                .legend-item { 
+                    display: flex; 
+                    align-items: center; 
+                    gap: 0.5rem; 
+                    font-size: 0.8rem; 
+                    color: #6b7280; 
+                }
+                .legend-dot { 
+                    width: 0.8rem; 
+                    height: 0.8rem; 
+                    border-radius: 50%; 
+                }
+                .legend-dot.scheduled { 
+                    background: #3b82f6; 
+                }
+                .legend-dot.sale-close { 
+                    background: #8b5cf6; 
+                }
+                .legend-dot.follow-up { 
+                    background: #f59e0b; 
+                }
+                .legend-dot.not-interested { 
+                    background: #ef4444; 
+                }
+                
+                /* Modal */
+                .modal-overlay { 
+                    position: fixed; 
+                    top: 0; 
+                    left: 0; 
+                    right: 0; 
+                    bottom: 0; 
+                    background: rgba(0,0,0,0.5); 
+                    display: flex; 
+                    justify-content: center; 
+                    align-items: center; 
+                    z-index: 1000; 
+                    padding: 2rem; 
+                }
+                .modal { 
+                    background: white; 
+                    padding: 2rem; 
+                    border-radius: 24px; 
+                    width: 100%; 
+                    max-width: 500px; 
+                    max-height: 90vh; 
+                    overflow-y: auto; 
+                    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+                }
+                .modal-lg {
+                    max-width: 600px;
+                }
+                .modal-header { 
+                    display: flex; 
+                    justify-content: space-between; 
+                    align-items: center; 
+                    margin-bottom: 2rem; 
+                }
+                .modal-header h2 { 
+                    margin: 0; 
+                    font-size: 1.5rem; 
+                    color: #1f2937; 
+                }
+                .modal-close { 
+                    background: #f3f4f6; 
+                    border: none; 
+                    font-size: 1.2rem; 
+                    cursor: pointer; 
+                    color: #6b7280; 
+                    padding: 0.5rem 1rem; 
+                    border-radius: 12px; 
+                }
+                .modal-close:hover {
+                    background: #e5e7eb;
+                }
+                
+                /* Form */
+                .form-row {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 1rem;
+                }
+                .form-group { 
+                    margin-bottom: 1.2rem; 
+                }
+                .form-group label { 
+                    display: block; 
+                    margin-bottom: 0.5rem; 
+                    font-weight: 500; 
+                    color: #4b5563; 
+                }
+                .form-group input, 
+                .form-group textarea, 
+                .form-group select { 
+                    width: 100%; 
+                    padding: 0.8rem 1rem; 
+                    border: 1px solidrgb(120, 160, 241); 
+                    border-radius: 14px; 
+                    font-size: 0.95rem; 
+                    box-sizing: border-box; 
+                }
+                .form-group input:focus, 
+                .form-group textarea:focus, 
+                .form-group select:focus { 
+                    outline: none; 
+                    border-color: #6366f1; 
+                    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); 
+                }
+                .readonly-field { 
+                    background: #f9fafb; 
+                    color: #6b7280; 
+                    cursor: not-allowed; 
+                }
+                .location-input-group { 
+                    display: flex; 
+                    gap: 0.5rem; 
+                }
+                .location-input { 
+                    flex: 1;
+                }
+                .refresh-location-btn { 
+                    padding: 0.8rem 1.2rem; 
+                    background: #f3f4f6; 
+                    color: #4b5563; 
+                    border: 1px solid #e5e7eb; 
+                    border-radius: 14px; 
+                    cursor: pointer; 
+                    font-size: 1.2rem;
+                }
+                .refresh-location-btn:hover {
+                    background: #e5e7eb;
+                }
+                
+                /* Existing Client Notice */
+                .existing-client-notice { 
+                    background: #eff6ff; 
+                    border: 1px solid #bfdbfe; 
+                    border-radius: 16px; 
+                    padding: 1.2rem; 
+                    margin-bottom: 2rem; 
+                    display: flex; 
+                    gap: 1rem; 
+                }
+                .notice-icon { 
+                    font-size: 1.5rem; 
+                }
+                .notice-content { 
+                    flex: 1; 
+                }
+                .notice-content strong { 
+                    color: #2563eb; 
+                    display: block; 
+                    margin-bottom: 0.3rem; 
+                }
+                .notice-content p { 
+                    margin: 0; 
+                    color: #4b5563; 
+                    font-size: 0.9rem; 
+                }
+                
+                /* Photo Upload */
+                .hidden-file-input { 
+                    position: absolute; 
+                    width: 1px; 
+                    height: 1px; 
+                    padding: 0; 
+                    margin: -1px; 
+                    overflow: hidden; 
+                }
+                .photo-upload-buttons { 
+                    display: flex; 
+                    gap: 1rem; 
+                }
+                .photo-upload-btn { 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center; 
+                    gap: 0.5rem; 
+                    padding: 0.8rem; 
+                    border-radius: 14px; 
+                    cursor: pointer; 
+                    font-size: 0.9rem; 
+                    font-weight: 500; 
+                    flex: 1; 
+                    border: 2px solid; 
+                }
+                .photo-upload-btn.gallery-btn { 
+                    background: #f8fafc; 
+                    color: #4b5563; 
+                    border-color: #e5e7eb; 
+                }
+                .photo-upload-btn.gallery-btn:hover {
+                    background: #f1f5f9;
+                }
+                .photo-upload-btn.camera-btn { 
+                    background: #e0f2fe; 
+                    color: #0369a1; 
+                    border-color: #7dd3fc; 
+                }
+                .photo-upload-btn.camera-btn:hover {
+                    background: #bae6fd;
+                }
+                .photo-preview { 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: space-between; 
+                    padding: 0.8rem 1rem; 
+                    background: #f0fdf4; 
+                    border: 1px solid #86efac; 
+                    border-radius: 14px; 
+                    margin-top: 1rem; 
+                }
+                .photo-info {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.2rem;
+                }
+                .photo-name { 
+                    font-size: 0.9rem; 
+                    font-weight: 500; 
+                    color: #166534; 
+                }
+                .photo-size {
+                    font-size: 0.8rem;
+                    color: #15803d;
+                }
+                .photo-remove-btn { 
+                    background: none; 
+                    border: none; 
+                    color: #dc2626; 
+                    font-size: 1.2rem; 
+                    cursor: pointer; 
+                    padding: 0.3rem 0.6rem;
+                    border-radius: 8px;
+                }
+                .photo-remove-btn:hover {
+                    background: #fee2e2;
+                }
+                .photo-hint {
+                    display: block;
+                    margin-top: 0.5rem;
+                    color: #6b7280;
+                    font-size: 0.8rem;
+                }
+                
+                .error-text {
+                    color: #dc2626;
+                    font-size: 0.8rem;
+                    margin-top: 0.3rem;
+                    display: block;
+                }
+                
+                .form-buttons { 
+                    display: flex; 
+                    gap: 1rem; 
+                    justify-content: flex-end; 
+                    margin-top: 2rem; 
+                }
+                .form-buttons button { 
+                    padding: 0.8rem 2rem; 
+                    border: none; 
+                    border-radius: 14px; 
+                    cursor: pointer; 
+                    font-weight: 500; 
                     font-size: 0.95rem;
                 }
-                
-                .form-group input,
-                .form-group textarea,
-                .form-group select {
-                    width: 100%;
-                    padding: 0.7rem;
-                    border: 1px solid #d1d5db;
-                    border-radius: 6px;
-                    font-size: 0.95rem;
-                    transition: border 0.2s ease;
-                    box-sizing: border-box;
+                .form-buttons button[type="button"] { 
+                    background: #f3f4f6; 
+                    color: #4b5563; 
                 }
-                
-                .form-group input:focus,
-                .form-group textarea:focus,
-                .form-group select:focus {
-                    outline: none;
-                    border-color: #3b82f6;
-                    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+                .form-buttons button.primary-btn,
+                .form-buttons button[type="submit"] { 
+                    background: linear-gradient(135deg, #6366f1, #8b5cf6); 
+                    color: white; 
                 }
-                
-                .form-group textarea {
-                    min-height: 80px;
-                    resize: vertical;
-                }
-                
-                .location-input {
-                    background-color: #f8f9fa;
+                .form-buttons button:disabled {
+                    opacity: 0.5;
                     cursor: not-allowed;
                 }
                 
-                .refresh-location-btn {
-                    margin-top: 0.5rem;
-                    padding: 0.4rem 0.8rem;
-                    background-color: #6c757d;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    font-size: 0.8rem;
+                /* Loading */
+                .loading { 
+                    text-align: center; 
+                    padding: 3rem; 
+                    font-size: 1.1rem; 
+                    color: #6b7280; 
                 }
                 
-                .refresh-location-btn:hover {
-                    background-color: #5a6268;
+                /* No Data */
+                .no-data { 
+                    padding: 3rem; 
+                    text-align: center; 
+                    color: #6b7280; 
+                    font-size: 1rem; 
                 }
                 
-                /* Photo Input Styles */
-                .photo-input {
-                    padding: 0.5rem;
-                    border: 1px solid #d1d5db;
-                    border-radius: 6px;
-                    width: 100%;
-                    background-color: white;
-                }
-                
-                .photo-preview {
-                    margin-top: 0.5rem;
-                    padding: 0.5rem;
-                    background-color: #f3f4f6;
-                    border-radius: 4px;
-                    font-size: 0.8rem;
-                    color: #374151;
-                }
-                
-                .form-buttons {
-                    display: flex;
-                    gap: 1rem;
-                    justify-content: flex-end;
-                    margin-top: 1.5rem;
-                    flex-wrap: wrap;
-                }
-                
-                .form-buttons button {
-                    padding: 0.7rem 1.2rem;
-                    border: none;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-weight: 500;
-                    transition: all 0.2s ease;
-                    font-size: 0.9rem;
-                    min-width: 100px;
-                }
-                
-                .form-buttons button[type="submit"] {
-                    background-color: #3b82f6;
-                    color: white;
-                }
-                
-                .form-buttons button[type="submit"]:hover {
-                    background-color: #2563eb;
-                }
-                
-                .form-buttons button[type="button"] {
-                    background-color: #f3f4f6;
-                    color: #374151;
-                }
-                
-                .form-buttons button[type="button"]:hover {
-                    background-color: #e5e7eb;
-                }
-                
-                /* Responsive Design */
-                @media (max-width: 1200px) {
-                    .main-content-layout {
-                        grid-template-columns: 1fr;
+                /* Mobile */
+                @media (max-width: 1024px) {
+                    .field-executive-page {
+                        padding: 1.5rem;
                     }
-                    
-                    .right-column {
-                        order: -1;
+                    .main-content-layout { 
+                        grid-template-columns: 1fr; 
                     }
                 }
                 
                 @media (max-width: 768px) {
                     .field-executive-page {
-                        padding: 0.5rem;
+                        padding: 1rem;
                     }
                     
-                    .page-header {
-                        flex-direction: row;
-                        padding: 0.8rem;
-                        margin-bottom: 1rem;
+                    .mobile-menu-btn { 
+                        display: block; 
                     }
-                    
-                    .mobile-menu-btn {
-                        display: block;
+                    .main-content-layout { 
+                        grid-template-columns: 1fr; 
+                    }
+                    .welcome-text { 
+                        display: none; 
                     }
                     
                     .page-header h1 {
                         font-size: 1.2rem;
-                        text-align: center;
                     }
                     
-                    .welcome-text {
-                        display: none;
-                    }
-                    
-                    .header-actions {
-                        gap: 0.5rem;
-                    }
-                    
-                    .toggle-calendar-btn {
-                        padding: 0.4rem 0.6rem;
-                        font-size: 0.75rem;
-                    }
-                    
-                    .back-btn {
-                        padding: 0.4rem 0.8rem;
-                        font-size: 0.8rem;
-                    }
-                    
-                    .stats-header {
-                        flex-direction: column;
-                        align-items: flex-start;
-                        gap: 0.8rem;
-                    }
-                    
-                    .stats-filters {
+                    .add-schedule-btn {
                         width: 100%;
-                        justify-content: space-between;
-                    }
-                    
-                    .stats-filter-select {
-                        flex: 1;
-                        min-width: auto;
+                        justify-content: center;
                     }
                     
                     .stats-grid {
                         grid-template-columns: 1fr;
-                        gap: 0.8rem;
+                    }
+                    
+                    .table-header { 
+                        display: none; 
+                    }
+                    .table-row { 
+                        grid-template-columns: 1fr; 
+                        gap: 0.5rem; 
+                        padding: 1.2rem; 
+                    }
+                    .mobile-label { 
+                        display: inline; 
+                        font-weight: 600; 
+                        color: #4b5563; 
+                        margin-right: 0.5rem;
+                    }
+                    
+                    .form-row {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .photo-upload-buttons { 
+                        flex-direction: column; 
+                    }
+                    
+                    .camera-controls { 
+                        flex-direction: column; 
+                    }
+                    
+                    .modal {
+                        padding: 1.5rem;
+                    }
+                    
+                    .modal-header h2 {
+                        font-size: 1.2rem;
+                    }
+                }
+                
+                @media (max-width: 480px) {
+                    .field-executive-page {
+                        padding: 0.8rem;
+                    }
+                    
+                    .page-header {
+                        padding: 1rem;
                     }
                     
                     .stat-card {
@@ -2147,89 +2028,19 @@ const FieldExecutivePage = () => {
                     
                     .stat-icon {
                         font-size: 1.8rem;
-                        margin-right: 0.8rem;
                     }
                     
                     .stat-value {
-                        font-size: 1.3rem;
-                    }
-                    
-                    .section-header {
-                        flex-direction: column;
-                        align-items: flex-start;
-                        gap: 0.8rem;
-                    }
-                    
-                    .calendar-controls {
-                        width: 100%;
-                        justify-content: space-between;
-                    }
-                    
-                    .month-nav-btn,
-                    .reset-filters-btn {
-                        flex: 1;
-                        text-align: center;
+                        font-size: 1.5rem;
                     }
                     
                     .calendar-grid {
-                        gap: 0.1rem;
+                        gap: 0.2rem;
                     }
                     
                     .calendar-day {
-                        padding: 0.1rem;
-                        font-size: 0.65rem;
-                    }
-                    
-                    .table-header {
-                        display: none;
-                    }
-                    
-                    .table-row {
-                        grid-template-columns: 1fr;
-                        gap: 0.3rem;
-                        padding: 1rem;
-                        border-bottom: 2px solid #e5e7eb;
-                    }
-                    
-                    .mobile-label {
-                        display: inline;
+                        padding: 0.3rem;
                         font-size: 0.8rem;
-                    }
-                    
-                    .table-row span:not(.mobile-label) {
-                        padding-left: 0;
-                        font-size: 0.9rem;
-                    }
-                    
-                    .status, .status-actions {
-                        justify-self: start;
-                    }
-                    
-                    .action-buttons {
-                        grid-template-columns: 1fr;
-                    }
-                    
-                    .action-btn {
-                        padding: 1rem 0.5rem;
-                        min-height: 70px;
-                    }
-                    
-                    .action-btn .icon {
-                        font-size: 1.3rem;
-                    }
-                    
-                    .action-btn span:last-child {
-                        font-size: 0.85rem;
-                    }
-                    
-                    .calendar-legend {
-                        justify-content: flex-start;
-                        gap: 0.8rem;
-                    }
-                    
-                    .modal {
-                        padding: 1.2rem;
-                        margin: 0.5rem;
                     }
                     
                     .form-buttons {
@@ -2242,81 +2053,7 @@ const FieldExecutivePage = () => {
                     
                     .success-popup {
                         min-width: 250px;
-                        max-width: 300px;
-                        padding: 1.2rem;
-                    }
-                    
-                    .success-popup-content {
-                        gap: 0.8rem;
-                    }
-                    
-                    .success-icon {
-                        font-size: 1.5rem;
-                    }
-                    
-                    .success-message {
-                        font-size: 0.9rem;
-                    }
-                }
-                
-                @media (max-width: 480px) {
-                    .page-header {
-                        flex-wrap: wrap;
-                        gap: 0.5rem;
-                    }
-                    
-                    .page-header h1 {
-                        font-size: 1.1rem;
-                        order: 3;
-                        flex-basis: 100%;
-                        margin-top: 0.5rem;
-                    }
-                    
-                    .stats-filter-select {
-                        font-size: 0.8rem;
-                    }
-                    
-                    .stat-card {
-                        flex-direction: column;
-                        text-align: center;
-                        gap: 0.5rem;
-                    }
-                    
-                    .stat-icon {
-                        margin-right: 0;
-                    }
-                    
-                    .calendar-weekday {
-                        font-size: 0.6rem;
-                    }
-                    
-                    .calendar-day {
-                        font-size: 0.6rem;
-                    }
-                    
-                    .day-number {
-                        font-size: 0.6rem;
-                    }
-                }
-                
-                @media (max-width: 360px) {
-                    .page-header {
-                        padding: 0.6rem;
-                    }
-                    
-                    .field-stats,
-                    .field-activities,
-                    .quick-actions,
-                    .calendar-section {
-                        padding: 1rem;
-                    }
-                    
-                    .stat-card {
-                        padding: 0.8rem;
-                    }
-                    
-                    .table-row {
-                        padding: 0.8rem;
+                        padding: 1.5rem;
                     }
                 }
             `}</style>

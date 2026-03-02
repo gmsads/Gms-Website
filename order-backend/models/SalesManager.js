@@ -7,6 +7,8 @@ const SalesManagerSchema = new mongoose.Schema({
   phone: String,
   email: String,
   guardianName : String,
+  guardianContact: Number,
+
   aadhar: String,
   joiningDate: Date,
   experience: Number,

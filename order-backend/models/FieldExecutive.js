@@ -16,6 +16,8 @@ const fieldExecutiveSchema = new mongoose.Schema({
   },
   email: String,
   guardianName: String,
+  guardianContact: Number,
+
   aadhar: String,
   joiningDate: Date,
   experience: Number,

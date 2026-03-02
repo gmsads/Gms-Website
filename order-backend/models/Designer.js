@@ -7,6 +7,8 @@ const designerSchema = new mongoose.Schema({
   password: String,
   email: String,
   guardianName : String,
+  guardianContact: Number,
+
   aadhar: String,
   joiningDate: Date,
   experience: Number,
