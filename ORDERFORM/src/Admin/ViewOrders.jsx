@@ -282,7 +282,7 @@ const handlePrintOrder = (order) => {
     <!DOCTYPE html>
     <html>
     <head>
-    
+      <title>Order #${order.orderNo}</title>
       <style>
         * {
           box-sizing: border-box;
