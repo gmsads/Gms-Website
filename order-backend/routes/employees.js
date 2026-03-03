@@ -1,6 +1,7 @@
+// routes/employees.js
 const express = require('express');
 const router = express.Router();
-const { uploadEmployee } = require('../config/cloudinary');
+const { uploadEmployee, uploadDocuments } = require('../config/cloudinary');
 
 // Import all models
 const Executive = require('../models/Executive');
@@ -49,9 +50,15 @@ router.get('/', async (req, res) => {
       if (employees.length > 0) {
         groupedEmployees[role] = employees.map(emp => ({
           ...emp,
-          active: emp.active !== false, // Handle undefined/null
+          active: emp.active !== false,
           imageUrl: emp.imageUrl || null,
-          cloudinaryId: emp.cloudinaryId || null
+          cloudinaryId: emp.cloudinaryId || null,
+          documents: emp.documents || {
+            aadhar: null,
+            pan: null,
+            educational: null,
+            experience: null
+          }
         }));
       }
     }
@@ -123,15 +130,21 @@ router.post('/', uploadEmployee.single('image'), async (req, res) => {
       role,
       active: true,
       employeeId,
-      password: 'default123', // You should handle this properly
-      resignationDate: '',
+      password: 'default123',
+      resignationDate: null,
       resignationReason: '',
-      rejoinDate: ''
+      rejoinDate: null,
+      documents: {
+        aadhar: null,
+        pan: null,
+        educational: null,
+        experience: null
+      }
     };
 
     // Add image URL if uploaded
     if (req.file) {
-      employeeData.imageUrl = req.file.path; // Cloudinary URL
+      employeeData.imageUrl = req.file.path;
       employeeData.cloudinaryId = req.file.filename;
     }
 
@@ -145,7 +158,8 @@ router.post('/', uploadEmployee.single('image'), async (req, res) => {
       message: 'Employee added successfully',
       employee: {
         ...employee.toObject(),
-        imageUrl: employee.imageUrl || null
+        imageUrl: employee.imageUrl || null,
+        documents: employee.documents || {}
       }
     });
 
@@ -154,6 +168,85 @@ router.post('/', uploadEmployee.single('image'), async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error',
+      error: error.message
+    });
+  }
+});
+
+// Upload documents for employee
+router.post('/upload-documents', uploadDocuments.fields([
+  { name: 'aadhar', maxCount: 1 },
+  { name: 'pan', maxCount: 1 },
+  { name: 'educational', maxCount: 1 },
+  { name: 'experience', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    const { name } = req.body;
+    
+    console.log('Uploading documents for:', name);
+    console.log('Files received:', req.files ? Object.keys(req.files) : 'No files');
+
+    // Find which model contains this employee
+    let foundEmployee = null;
+    let Model = null;
+    let foundRole = null;
+
+    for (const [roleName, model] of Object.entries(modelMap)) {
+      const emp = await model.findOne({ name: name });
+      if (emp) {
+        foundEmployee = emp;
+        Model = model;
+        foundRole = roleName;
+        break;
+      }
+    }
+
+    if (!foundEmployee) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Employee not found' 
+      });
+    }
+
+    // Initialize documents object if it doesn't exist
+    const documents = foundEmployee.documents || {};
+
+    // Update document URLs with uploaded files
+    if (req.files) {
+      if (req.files.aadhar) {
+        documents.aadhar = req.files.aadhar[0].path;
+      }
+      if (req.files.pan) {
+        documents.pan = req.files.pan[0].path;
+      }
+      if (req.files.educational) {
+        documents.educational = req.files.educational[0].path;
+      }
+      if (req.files.experience) {
+        documents.experience = req.files.experience[0].path;
+      }
+    }
+
+    // Update employee with new document URLs
+    const updatedEmployee = await Model.findOneAndUpdate(
+      { name: name },
+      { $set: { documents } },
+      { new: true }
+    );
+
+    console.log('Documents uploaded successfully');
+
+    res.json({
+      success: true,
+      message: 'Documents uploaded successfully',
+      documents: documents
+    });
+
+  } catch (error) {
+    console.error('Document upload error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload documents',
       error: error.message
     });
   }
@@ -277,7 +370,8 @@ router.get('/:name', async (req, res) => {
       success: true,
       employee: {
         ...foundEmployee.toObject(),
-        role: foundRole
+        role: foundRole,
+        documents: foundEmployee.documents || {}
       }
     });
 

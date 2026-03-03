@@ -34,6 +34,12 @@ const agentSchema = new mongoose.Schema({
   resignationDate: String,
   resignationReason: String,
   rejoinDate: String,
+  documents: {
+  aadhar: { type: String, default: null },
+  pan: { type: String, default: null },
+  educational: { type: String, default: null },
+  experience: { type: String, default: null }
+}
 });
 
 module.exports = mongoose.model('Agent', agentSchema);

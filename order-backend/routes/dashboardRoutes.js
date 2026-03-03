@@ -36,33 +36,44 @@ router.get('/chart-data', async (req, res) => {
     if (selectedYear && selectedMonth !== null) {
       // Specific month and year
       startDate = new Date(selectedYear, selectedMonth, 1);
+      startDate.setHours(0, 0, 0, 0);
       endDate = new Date(selectedYear, selectedMonth + 1, 1);
+      endDate.setHours(0, 0, 0, 0);
     } else if (selectedYear) {
       // Whole year
       startDate = new Date(selectedYear, 0, 1);
+      startDate.setHours(0, 0, 0, 0);
       endDate = new Date(selectedYear + 1, 0, 1);
+      endDate.setHours(0, 0, 0, 0);
     } else {
-      // ALL YEARS - fetch everything (set dates far in past and future)
-      startDate = new Date('2000-01-01'); // Assuming no data before 2000
-      endDate = new Date('2100-01-01'); // Far future date
+      // ALL YEARS - fetch everything
+      startDate = new Date('2000-01-01');
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date('2100-01-01');
+      endDate.setHours(0, 0, 0, 0);
     }
 
-    // Get ALL orders and appointments
-    const [orders, allAppointments] = await Promise.all([
-      Order.find({}).lean(),
-      Appointment.find({}).lean()
-    ]);
+    console.log('Fetching orders...');
+    
+    // Get ALL orders
+    const orders = await Order.find({}).lean();
+    
+    console.log(`Total orders in database: ${orders.length}`);
 
-    // Filter in code rather than query to handle mixed formats
+    // Filter orders by date
     const filteredOrders = orders.filter(order => {
       try {
         let orderDate;
-        if (typeof order.orderDate === 'string') {
-          orderDate = new Date(order.orderDate);
-        } else if (order.orderDate) {
-          orderDate = order.orderDate;
+        if (order.orderDate) {
+          if (typeof order.orderDate === 'string') {
+            orderDate = new Date(order.orderDate);
+          } else {
+            orderDate = order.orderDate;
+          }
+        } else if (order.createdAt) {
+          orderDate = new Date(order.createdAt);
         } else {
-          orderDate = order.createdAt || order.updatedAt;
+          return false;
         }
         
         if (!orderDate || isNaN(orderDate.getTime())) return false;
@@ -72,42 +83,20 @@ router.get('/chart-data', async (req, res) => {
         
         return orderDate >= startDate && orderDate < endDate;
       } catch (e) {
-        console.error('Error processing order date:', order._id);
         return false;
       }
     });
 
-    const filteredAppointments = allAppointments.filter(appointment => {
-      try {
-        let apptDate;
-        if (typeof appointment.date === 'string') {
-          apptDate = new Date(appointment.date);
-        } else if (appointment.date) {
-          apptDate = appointment.date;
-        } else {
-          apptDate = appointment.createdAt || appointment.updatedAt;
-        }
-        
-        if (!apptDate || isNaN(apptDate.getTime())) return false;
-        
-        // If ALL years selected, include all appointments regardless of date
-        if (!selectedYear) return true;
-        
-        return apptDate >= startDate && apptDate < endDate;
-      } catch (e) {
-        console.error('Error processing appointment date:', appointment._id);
-        return false;
-      }
-    });
+    console.log(`Filtered orders: ${filteredOrders.length}`);
 
-    // Initialize counters with enhanced client types
+    // Initialize counters
     const result = {
       totalOrdersByMonth: Array(12).fill(0),
-      amountByMonth: Array(12).fill(0), // For amount display
-      totalOrdersAmountByMonth: Array(12).fill(0), // For total orders amount
+      amountByMonth: Array(12).fill(0),
+      totalOrdersAmountByMonth: Array(12).fill(0),
       agentOrdersByMonth: Array(12).fill(0),
       pendingPayments: [0, 0], // [paid, pending]
-      pendingAmount: 0, // Track only pending amount
+      pendingAmount: 0,
       pendingServices: [0, 0], // [completed, pending]
       appointments: [0, 0], // [done, upcoming]
       clientTypes: { 
@@ -116,23 +105,41 @@ router.get('/chart-data', async (req, res) => {
         Agent: { count: 0, amount: 0 },
         'Renewal-Agent': { count: 0, amount: 0 }
       },
+      // Service status counts for the chart
+      serviceStatus: {
+        pending: 0,           // 🟡 Pending - Orange
+        assigned: 0,          // 🔵 Assigned - Blue
+        updated: 0,           // 🟣 Updated - Purple
+        completed: 0,         // 🟢 Completed - Green
+        designPending: 0,     // 🟠 Design Pending - Orange
+        printing: 0,          // 🔴 Printing - Red
+        installationPending: 0, // ⚫ Installation Pending - Dark Gray
+        onboarding: 0         // 🟢 Onboarding - Teal
+      },
       timePeriod: {
         year: selectedYear || 'all',
         month: selectedMonth !== null ? selectedMonth + 1 : null
       }
     };
 
+    console.log('Processing orders for service status...');
+    let totalRows = 0;
+
     // Process filtered orders
     filteredOrders.forEach(order => {
       try {
         // Parse order date to get month
         let orderDate;
-        if (typeof order.orderDate === 'string') {
-          orderDate = new Date(order.orderDate);
-        } else if (order.orderDate) {
-          orderDate = order.orderDate;
+        if (order.orderDate) {
+          if (typeof order.orderDate === 'string') {
+            orderDate = new Date(order.orderDate);
+          } else {
+            orderDate = order.orderDate;
+          }
+        } else if (order.createdAt) {
+          orderDate = new Date(order.createdAt);
         } else {
-          orderDate = order.createdAt || order.updatedAt;
+          return;
         }
         
         if (!orderDate || isNaN(orderDate.getTime())) return;
@@ -147,42 +154,99 @@ router.get('/chart-data', async (req, res) => {
           }, 0);
         }
         
-        // Also get the order total and balance from order fields
-        const orderTotalField = order.total || 0;
-        const orderBalance = order.balance || 0;
-        
-        // Update monthly totals (always track by month)
+        // Update monthly totals
         result.totalOrdersByMonth[month]++;
         result.amountByMonth[month] += orderTotal;
-        result.totalOrdersAmountByMonth[month] += orderTotalField;
+        result.totalOrdersAmountByMonth[month] += (order.total || 0);
         
         // Count agent orders by month
         if (order.clientType === 'Agent' || order.clientType === 'Renewal-Agent') {
           result.agentOrdersByMonth[month]++;
         }
 
-        // Payment status - track pending amount
+        // Payment status
+        const orderBalance = order.balance || 0;
         if (orderBalance > 0) {
           result.pendingPayments[1]++; // Count pending orders
-          result.pendingAmount += orderBalance; // Add pending amount
+          result.pendingAmount += orderBalance;
         } else {
           result.pendingPayments[0]++; // Count paid orders
         }
 
-        // Client type with amounts
+        // Client type
         if (order.clientType && result.clientTypes.hasOwnProperty(order.clientType)) {
           result.clientTypes[order.clientType].count++;
           result.clientTypes[order.clientType].amount += orderTotal;
         } else {
-          // Default to Retail if no client type specified
           result.clientTypes.Retail.count++;
           result.clientTypes.Retail.amount += orderTotal;
         }
 
-        // Service status
+        // Service status - Count each row's status
         if (order.rows && Array.isArray(order.rows)) {
-          order.rows.forEach(row => {
-            row.isCompleted ? result.pendingServices[0]++ : result.pendingServices[1]++;
+          order.rows.forEach((row, rowIndex) => {
+            totalRows++;
+            
+            // Get the remark
+            const remark = row.remark ? row.remark.toString() : '';
+            const isCompleted = row.isCompleted === true;
+            
+            // Log every 10th row to see sample data
+            if (totalRows % 10 === 0) {
+              console.log(`Sample row ${totalRows}:`, {
+                remark: remark,
+                isCompleted: isCompleted,
+                rowId: rowIndex
+              });
+            }
+            
+            // Track completed vs pending for the existing pendingServices array
+            if (isCompleted) {
+              result.pendingServices[0]++;
+            } else {
+              result.pendingServices[1]++;
+            }
+            
+            // Track detailed service status
+            const remarkLower = remark.toLowerCase().trim();
+            
+            // Check for completed first
+            if (isCompleted || remarkLower === 'completed') {
+              result.serviceStatus.completed++;
+            }
+            // Check for assigned to
+            else if (remarkLower.includes('assigned to')) {
+              result.serviceStatus.assigned++;
+            }
+            // Check for updated
+            else if (remarkLower.includes('updated:')) {
+              result.serviceStatus.updated++;
+            }
+            // Check for design pending
+            else if (remarkLower === 'design pending' || remarkLower.includes('design pending')) {
+              result.serviceStatus.designPending++;
+            }
+            // Check for printing
+            else if (remarkLower === 'printing' || remarkLower.includes('printing')) {
+              result.serviceStatus.printing++;
+            }
+            // Check for installation pending
+            else if (remarkLower === 'installation pending' || remarkLower.includes('installation pending')) {
+              result.serviceStatus.installationPending++;
+            }
+            // Check for onboarding
+            else if (remarkLower === 'onboarding' || remarkLower.includes('onboarding')) {
+              result.serviceStatus.onboarding++;
+            }
+            // Default to pending
+            else {
+              result.serviceStatus.pending++;
+              
+              // Log pending remarks to see what's being categorized as pending
+              if (remark) {
+                console.log(`Pending remark detected: "${remark}"`);
+              }
+            }
           });
         }
       } catch (err) {
@@ -190,118 +254,21 @@ router.get('/chart-data', async (req, res) => {
       }
     });
 
-    // Process appointments
-    filteredAppointments.forEach(appointment => {
-      try {
-        // Define which statuses count as "Done"
-        const completedStatuses = ['completed', 'sale closed', 'Closed', 'closed', 'done', 'Done'];
-        const isCompleted = completedStatuses.includes(appointment.status?.toLowerCase());
-        
-        if (isCompleted) {
-          result.appointments[0]++; // Done
-        } else {
-          result.appointments[1]++; // Upcoming
-        }
-      } catch (err) {
-        console.error('Error processing appointment:', appointment._id, err);
-      }
-    });
+    console.log(`Total rows processed: ${totalRows}`);
+    console.log('=== FINAL SERVICE STATUS COUNTS ===');
+    console.log('1. Pending:', result.serviceStatus.pending);
+    console.log('2. Assigned:', result.serviceStatus.assigned);
+    console.log('3. Updated:', result.serviceStatus.updated);
+    console.log('4. Completed:', result.serviceStatus.completed);
+    console.log('5. Design Pending:', result.serviceStatus.designPending);
+    console.log('6. Printing:', result.serviceStatus.printing);
+    console.log('7. Installation Pending:', result.serviceStatus.installationPending);
+    console.log('8. Onboarding:', result.serviceStatus.onboarding);
+    console.log('Total services:', Object.values(result.serviceStatus).reduce((a, b) => a + b, 0));
 
-    // If a specific month is selected, calculate weekly breakdown
-    if (selectedMonth !== null && selectedYear) {
-      // Get weekly breakdown for all orders
-      const weeklyOrdersData = filteredOrders.reduce((acc, order) => {
-        try {
-          let orderDate;
-          if (typeof order.orderDate === 'string') {
-            orderDate = new Date(order.orderDate);
-          } else {
-            orderDate = order.orderDate;
-          }
-          
-          if (!orderDate || isNaN(orderDate.getTime())) return acc;
-          
-          const weekOfMonth = Math.ceil(orderDate.getDate() / 7);
-          
-          if (!acc[weekOfMonth]) {
-            acc[weekOfMonth] = { count: 0, amount: 0 };
-          }
-          
-          acc[weekOfMonth].count++;
-          
-          // Calculate order amount
-          if (order.rows && Array.isArray(order.rows)) {
-            const orderAmount = order.rows.reduce((sum, row) => {
-              return sum + (parseFloat(row.total) || 0);
-            }, 0);
-            acc[weekOfMonth].amount += orderAmount;
-          }
-          
-          return acc;
-        } catch (e) {
-          return acc;
-        }
-      }, {});
-
-      // Get weekly breakdown for agent orders
-      const weeklyAgentOrdersData = filteredOrders.reduce((acc, order) => {
-        try {
-          if (!(order.clientType === 'Agent' || order.clientType === 'Renewal-Agent')) return acc;
-          
-          let orderDate;
-          if (typeof order.orderDate === 'string') {
-            orderDate = new Date(order.orderDate);
-          } else {
-            orderDate = order.orderDate;
-          }
-          
-          if (!orderDate || isNaN(orderDate.getTime())) return acc;
-          
-          const weekOfMonth = Math.ceil(orderDate.getDate() / 7);
-          
-          if (!acc[weekOfMonth]) {
-            acc[weekOfMonth] = { count: 0, amount: 0 };
-          }
-          
-          acc[weekOfMonth].count++;
-          
-          // Calculate order amount
-          if (order.rows && Array.isArray(order.rows)) {
-            const orderAmount = order.rows.reduce((sum, row) => {
-              return sum + (parseFloat(row.total) || 0);
-            }, 0);
-            acc[weekOfMonth].amount += orderAmount;
-          }
-          
-          return acc;
-        } catch (e) {
-          return acc;
-        }
-      }, {});
-
-      // Convert to array format for the frontend
-      result.weeklyOrders = Object.entries(weeklyOrdersData).map(([week, data]) => ({
-        week: parseInt(week),
-        count: data.count,
-        amount: data.amount
-      })).sort((a, b) => a.week - b.week);
-
-      result.weeklyAgentOrders = Object.entries(weeklyAgentOrdersData).map(([week, data]) => ({
-        week: parseInt(week),
-        count: data.count,
-        amount: data.amount
-      })).sort((a, b) => a.week - b.week);
-    }
-
-    // Log summary for debugging (optional - can be removed in production)
-    console.log('Chart data result:', {
-      totalOrders: filteredOrders.length,
-      totalAppointments: filteredAppointments.length,
-      amountByMonth: result.amountByMonth,
-      pendingAmount: result.pendingAmount,
-      clientTypes: result.clientTypes,
-      timePeriod: result.timePeriod
-    });
+    // Also log the appointments
+    const appointments = await Appointment.find({}).lean();
+    console.log(`Total appointments: ${appointments.length}`);
 
     res.json(result);
   } catch (err) {
@@ -309,7 +276,6 @@ router.get('/chart-data', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 // View orders endpoint with filtering
 router.get('/view-orders', async (req, res) => {
   try {

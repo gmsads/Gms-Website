@@ -30,6 +30,12 @@ const fieldExecutiveSchema = new mongoose.Schema({
   },   // ✅ uploaded file path
   resignationDate: String,
   resignationReason: String,
+  documents: {
+  aadhar: { type: String, default: null },
+  pan: { type: String, default: null },
+  educational: { type: String, default: null },
+  experience: { type: String, default: null }
+},
   rejoinDate: String,
 }, { timestamps: true });
 

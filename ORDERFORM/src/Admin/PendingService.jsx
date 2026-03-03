@@ -15,7 +15,12 @@ function PendingService() {
   const navigate = useNavigate();
   
   const [searchParams, setSearchParams] = useSearchParams();
-  
+  useEffect(() => {
+  const statusFromUrl = searchParams.get('status');
+  if (statusFromUrl) {
+    setStatusFilter(statusFromUrl);
+  }
+}, [searchParams]);
   const [year, setYear] = useState(() => {
     const urlYear = searchParams.get('year');
     return urlYear ? parseInt(urlYear) : new Date().getFullYear();

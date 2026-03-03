@@ -22,7 +22,12 @@ const unitSchema = new mongoose.Schema({
   },
   resignationDate: Date,
   resignationReason: String,
-  rejoinDate: Date
+  rejoinDate: Date,documents: {
+  aadhar: { type: String, default: null },
+  pan: { type: String, default: null },
+  educational: { type: String, default: null },
+  experience: { type: String, default: null }
+}
 }, {
   timestamps: true
 });

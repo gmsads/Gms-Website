@@ -179,7 +179,8 @@ function ViewOrders() {
     const rolesThatCanImport = ['Admin', 'Account', 'Service Executive', 'Executive'];
     return rolesThatCanImport.includes(userRole);
   };
-
+// Company GST Number
+const COMPANY_GST = '36AAQFG7654Q2ZB'; // Replace with your actual GST number
   // Function to format date to DD-MM-YYYY format
   const formatDate = (dateString) => {
     // Return empty string if no date provided
@@ -247,504 +248,427 @@ function ViewOrders() {
     }
   };
 
-  // Function to print individual order directly
-  const handlePrintOrder = (order) => {
-    // Calculate order totals
-    const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-    const advancePaid = parseFloat(order.advance) || 0;
-    const paymentHistoryTotal = order.paymentHistory ?
-      order.paymentHistory.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0) : 0;
-    const totalPaid = advancePaid + paymentHistoryTotal;
-    const balanceDue = orderTotal - totalPaid;
+// Function to print individual order directly
+const handlePrintOrder = (order) => {
+  // Calculate order totals
+  const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+  const advancePaid = parseFloat(order.advance) || 0;
+  const paymentHistoryTotal = order.paymentHistory ?
+    order.paymentHistory.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0) : 0;
+  const totalPaid = advancePaid + paymentHistoryTotal;
+  const balanceDue = orderTotal - totalPaid;
 
-    // Create a hidden iframe for printing
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'absolute';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = 'none';
-    iframe.style.top = '-9999px';
-    iframe.style.left = '-9999px';
-    document.body.appendChild(iframe);
+  // Create a hidden iframe for printing
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'absolute';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = 'none';
+  iframe.style.top = '-9999px';
+  iframe.style.left = '-9999px';
+  document.body.appendChild(iframe);
 
-    // Get the iframe document
-    const iframeDoc = iframe.contentWindow.document;
+  // Get the iframe document
+  const iframeDoc = iframe.contentWindow.document;
 
-    // Write the print content to the iframe
-    iframeDoc.open();
-    iframeDoc.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Order #${order.orderNo}</title>
-        <style>
-          * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-          }
-          
+  // Get the base URL for assets
+  const baseUrl = window.location.origin;
+  const logoPath = `${baseUrl}/assets/logo1.png`; // Update this path to your actual logo path
+  const signaturePath = `${baseUrl}/assets/sign.png`; // Update this path to your actual signature path
+
+  // Write the print content to the iframe
+  iframeDoc.open();
+  iframeDoc.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+    
+      <style>
+        * {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+        }
+        
+        body {
+          font-family: Arial, sans-serif;
+          font-size: 12px;
+          line-height: 1.3;
+          color: #333;
+          max-width: 800px;
+          margin: 0 auto;
+          padding: 15px;
+          background: #fff;
+        }
+        
+     /* Header Section with Logo on Left and Company Name on Right */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  border-bottom: 2px solid #333;
+  padding-bottom: 10px;
+}
+
+.logo {
+  width: 70px;
+  height: 70px;
+}
+
+.logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.company-info {
+  text-align: right;
+}
+
+.company-name {
+  font-size: 22px;
+  font-weight: bold;
+  color: #000;
+  margin-bottom: 3px;
+}
+
+.gst-info {
+  font-size: 11px;
+  color: #555;
+}
+
+.order-number {
+  font-size: 10px;
+  color: #666;
+  margin-top: 2px;
+}
+        /* Customer Details Section - Compact Grid */
+        .customer-details {
+          margin-bottom: 12px;
+          padding: 8px;
+          background: #f9f9f9;
+          border: 1px solid #ddd;
+        }
+        
+        .details-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 6px;
+        }
+        
+        .detail-item {
+          font-size: 11px;
+        }
+        
+        .detail-item strong {
+          display: block;
+          color: #666;
+          font-size: 9px;
+          text-transform: uppercase;
+          margin-bottom: 2px;
+        }
+        
+        .detail-item span {
+          font-size: 11px;
+          font-weight: 500;
+        }
+        
+        /* Order Items Table */
+        .order-items {
+          margin-bottom: 12px;
+        }
+        
+        .items-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 10px;
+        }
+        
+        .items-table th {
+          background: #333;
+          color: #fff;
+          font-weight: bold;
+          padding: 6px 4px;
+          text-align: left;
+          font-size: 10px;
+        }
+        
+        .items-table td {
+          padding: 5px 4px;
+          border: 1px solid #ddd;
+          font-size: 10px;
+        }
+        
+        .items-table tr:nth-child(even) {
+          background: #f9f9f9;
+        }
+        
+        /* Financial Section - Two Column Layout */
+        .financial-section {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+          margin-bottom: 12px;
+        }
+        
+        .summary-box, .payment-box {
+          border: 1px solid #ddd;
+          padding: 8px;
+        }
+        
+        .summary-box h3, .payment-box h3 {
+          font-size: 12px;
+          margin-bottom: 8px;
+          padding-bottom: 3px;
+          border-bottom: 1px solid #333;
+        }
+        
+        .summary-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 3px 0;
+          font-size: 11px;
+        }
+        
+        .summary-row.total {
+          font-weight: bold;
+          border-top: 1px solid #333;
+          margin-top: 5px;
+          padding-top: 5px;
+        }
+        
+        .summary-row.balance {
+          font-weight: bold;
+          color: #d32f2f;
+        }
+        
+        /* Payment History Table */
+        .payment-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 10px;
+        }
+        
+        .payment-table th {
+          background: #f0f0f0;
+          padding: 4px;
+          text-align: left;
+          font-size: 9px;
+        }
+        
+        .payment-table td {
+          padding: 3px 4px;
+          border: 1px solid #eee;
+        }
+        
+        
+        .signature-section {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 15px;
+          padding-top: 8px;
+        }
+        
+        .signature-block {
+          text-align: center;
+          width: 200px;
+        }
+        
+        .signature-image {
+          height: 35px;
+          margin-bottom: 3px;
+        }
+        
+        .signature-image img {
+          height: 100%;
+          width: auto;
+        }
+        
+        .signature-line {
+          margin-top: 3px;
+          border-top: 1px solid #333;
+          padding-top: 3px;
+        }
+        
+        .signature-label {
+          font-size: 9px;
+          color: #666;
+        }
+        
+        /* Footer */
+        .print-footer {
+          margin-top: 10px;
+          text-align: center;
+          font-size: 8px;
+          color: #999;
+        }
+        
+        /* Print specific styles */
+        @media print {
           body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #fff;
-          }
-          
-          /* Print Header */
-          .print-header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 3px solid #000;
-          }
-          
-          .print-header h1 {
-            font-size: 28px;
-            margin-bottom: 5px;
-            color: #000;
-          }
-          
-          .print-header h2 {
-            font-size: 20px;
-            color: #333;
-            font-weight: normal;
-          }
-          
-          .print-header .order-no {
-            font-size: 24px;
-            font-weight: bold;
-            color: #218c74;
-            margin-top: 10px;
-          }
-          
-          /* Company Info */
-          .company-info {
-            text-align: center;
-            margin-bottom: 30px;
-            padding: 15px;
-            background: #f9f9f9;
-            border: 1px solid #ddd;
-          }
-          
-          .company-info h3 {
-            font-size: 22px;
-            margin-bottom: 5px;
-          }
-          
-          .company-info p {
-            font-size: 14px;
-            color: #666;
-          }
-          
-          /* Customer Details Section */
-          .customer-details {
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #fff;
-            border: 2px solid #333;
-          }
-          
-          .customer-details h3 {
-            font-size: 18px;
-            margin-bottom: 15px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid #333;
-          }
-          
-          .details-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-          }
-          
-          .detail-item {
-            padding: 8px;
-          }
-          
-          .detail-item strong {
-            display: block;
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 4px;
-          }
-          
-          .detail-item span {
-            font-size: 16px;
-            font-weight: bold;
-            color: #333;
-          }
-          
-          /* Order Items Table */
-          .order-items {
-            margin-bottom: 30px;
-          }
-          
-          .order-items h3 {
-            font-size: 18px;
-            margin-bottom: 15px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid #333;
-          }
-          
-          .items-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-          }
-          
-          .items-table th {
-            background: #333;
-            color: #fff;
-            font-weight: bold;
-            padding: 12px;
-            text-align: left;
-            font-size: 14px;
-          }
-          
-          .items-table td {
-            padding: 10px 12px;
-            border: 1px solid #ddd;
-            font-size: 14px;
-          }
-          
-          .items-table tr:nth-child(even) {
-            background: #f9f9f9;
-          }
-          
-          /* Financial Summary */
-          .financial-summary {
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #f9f9f9;
-            border: 2px solid #333;
-          }
-          
-          .financial-summary h3 {
-            font-size: 18px;
-            margin-bottom: 15px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid #333;
-          }
-          
-          .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-          }
-          
-          .summary-item {
-            padding: 12px;
-            background: #fff;
-            border: 1px solid #ddd;
-          }
-          
-          .summary-item.total {
-            background: #e8f5e9;
-            border: 2px solid #4caf50;
-          }
-          
-          .summary-item.balance {
-            background: #ffebee;
-            border: 2px solid #f44336;
-          }
-          
-          .summary-item strong {
-            display: block;
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 8px;
-          }
-          
-          .summary-item .amount {
-            font-size: 20px;
-            font-weight: bold;
-            color: #333;
-          }
-          
-          .summary-item.total .amount {
-            color: #4caf50;
-          }
-          
-          .summary-item.balance .amount {
-            color: #f44336;
-          }
-          
-          /* Payment History */
-          .payment-history {
-            margin-bottom: 30px;
-          }
-          
-          .payment-history h3 {
-            font-size: 18px;
-            margin-bottom: 15px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid #333;
-          }
-          
-          .payment-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-          }
-          
-          .payment-table th {
-            background: #333;
-            color: #fff;
             padding: 10px;
-            text-align: left;
-            font-size: 14px;
           }
           
-          .payment-table td {
-            padding: 8px 10px;
-            border: 1px solid #ddd;
-            font-size: 14px;
+          .no-print {
+            display: none;
           }
-          
-          .payment-table tr.total-row {
-            background: #f0f0f0;
-            font-weight: bold;
-          }
-          
-          /* Terms and Conditions */
-          .terms-section {
-            margin: 40px 0 30px;
-            padding: 20px;
-            background: #f9f9f9;
-            border: 1px solid #ddd;
-          }
-          
-          .terms-section h3 {
-            font-size: 18px;
-            margin-bottom: 15px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid #333;
-          }
-          
-          .terms-section ul {
-            list-style-type: none;
-            padding-left: 0;
-          }
-          
-          .terms-section li {
-            margin-bottom: 8px;
-            padding-left: 20px;
-            position: relative;
-            font-size: 14px;
-          }
-          
-          .terms-section li:before {
-            content: "•";
-            position: absolute;
-            left: 0;
-            color: #333;
-            font-weight: bold;
-          }
-          
-          /* Signature Section */
-          .signature-section {
-            display: flex;
-            justify-content: space-between;
-            margin: 50px 0 30px;
-            padding: 20px 0;
-            border-top: 2px dashed #333;
-          }
-          
-          .signature-block {
-            text-align: center;
-            min-width: 200px;
-          }
-          
-          .signature-line {
-            margin-top: 40px;
-            padding-top: 10px;
-            border-top: 1px solid #333;
-          }
-          
-          .signature-label {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 5px;
-          }
-          
-          /* Footer */
-          .print-footer {
-            margin-top: 30px;
-            padding: 20px;
-            text-align: center;
-            font-size: 12px;
-            color: #666;
-            border-top: 1px solid #ddd;
-          }
-          
-          .print-footer p {
-            margin: 5px 0;
-          }
-          
-          /* Print Media Styles */
-          @media print {
-            body {
-              padding: 0;
-              margin: 0;
-            }
-            
-            .customer-details,
-            .financial-summary,
-            .terms-section {
-              break-inside: avoid;
-            }
-            
-            .items-table,
-            .payment-table {
-              break-inside: auto;
-            }
-            
-            .signature-section {
-              break-inside: avoid;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <!-- Print Header -->
-        <div class="print-header">
-          <h1>${order.business}</h1>
-          <h2>Order Invoice</h2>
-          <div class="order-no">Order #${order.orderNo}</div>
+        }
+      </style>
+    </head>
+    <body>
+      <!-- Header with Logo, Company Name and GST -->
+      <div class="header">
+        <div class="logo">
+          <img src="${logoPath}" alt="Global Marketing Solution Logo" onerror="this.style.display='none'">
         </div>
-        
-        <!-- Company Information -->
         <div class="company-info">
-          <h3>Your Company Name</h3>
-          <p>123 Business Street, City, State - 123456</p>
-          <p>Phone: +91 9876543210 | Email: info@company.com</p>
-          <p>GST: 22AAAAA0000A1Z5</p>
+          <div class="company-name">GLOBAL MARKETING SOLUTION</div>
+          <div class="gst-info">GST: 22AAAAA0000A1Z5</div>
+          <div style="font-size: 10px; color: #666;">Order #${order.orderNo}</div>
         </div>
-        
-        <!-- Customer Details -->
-        <div class="customer-details">
-          <h3>Customer Information</h3>
-          <div class="details-grid">
-            <div class="detail-item">
-              <strong>Contact Person:</strong>
-              <span>${order.contactPerson || 'N/A'}</span>
-            </div>
-            <div class="detail-item">
-              <strong>Location:</strong>
-              <span>${order.location || 'N/A'}</span>
-            </div>
-            <div class="detail-item">
-              <strong>Executive:</strong>
-              <span>${order.executive || 'N/A'}</span>
-            </div>
-            <div class="detail-item">
-              <strong>Lead Source:</strong>
-              <span>${order.leadSource || 'Not specified'} ${order.otherLeadSource ? `(${order.otherLeadSource})` : ''}</span>
-            </div>
-            <div class="detail-item">
-              <strong>Contact:</strong>
-              <span>${order.contactCode || ''} ${order.phone || ''}</span>
-            </div>
-            <div class="detail-item">
-              <strong>Order Date:</strong>
-              <span>${formatDate(order.orderDate)}</span>
-            </div>
-            <div class="detail-item">
-              <strong>Client Type:</strong>
-              <span>${order.clientType || 'N/A'}</span>
-            </div>
+      </div>
+      
+      <!-- Customer Details -->
+      <div class="customer-details">
+        <div class="details-grid">
+          <div class="detail-item">
+            <strong>Client Type:</strong>
+            <span>${order.clientType === 'Renewal' ? 'Renewal Client' : 'New Client'}</span>
+          </div>
+          <div class="detail-item">
+            <strong>Business Name:</strong>
+            <span>${order.business || 'N/A'}</span>
+          </div>
+          <div class="detail-item">
+            <strong>Contact Person:</strong>
+            <span>${order.contactPerson || 'N/A'}</span>
+          </div>
+          <div class="detail-item">
+            <strong>Address:</strong>
+            <span>${order.location || 'N/A'}</span>
+          </div>
+          <div class="detail-item">
+            <strong>Ph No:</strong>
+            <span>${order.contactCode || ''} ${order.phone || ''}</span>
+          </div>
+          <div class="detail-item">
+            <strong>Alt. Ph No:</strong>
+            <span>${order.alternatePhone || 'N/A'}</span>
+          </div>
+          <div class="detail-item">
+            <strong>Email:</strong>
+            <span>${order.email || 'N/A'}</span>
+          </div>
+          <div class="detail-item">
+            <strong>Executive:</strong>
+            <span>${order.executive || 'N/A'}</span>
           </div>
         </div>
-        
-        <!-- Order Items -->
-        <div class="order-items">
-          <h3>Order Items</h3>
-          <table class="items-table">
-            <thead>
+      </div>
+      
+      <!-- Order Details Grid -->
+      <div class="customer-details" style="margin-bottom: 10px;">
+        <div class="details-grid">
+          <div class="detail-item">
+            <strong>Order No:</strong>
+            <span>${order.orderNo}</span>
+          </div>
+          <div class="detail-item">
+            <strong>Order Date:</strong>
+            <span>${formatDate(order.orderDate)}</span>
+          </div>
+          <div class="detail-item">
+            <strong>Advance Date:</strong>
+            <span>${formatDate(order.advanceDate) || 'N/A'}</span>
+          </div>
+          <div class="detail-item">
+            <strong>Advance Amt:</strong>
+            <span>₹${(parseFloat(order.advance) || 0).toFixed(2)}</span>
+          </div>
+          <div class="detail-item">
+            <strong>Payment Mode:</strong>
+            <span>${order.paymentMethods ? order.paymentMethods.join(', ') : 'N/A'}</span>
+          </div>
+          <div class="detail-item">
+            <strong>Delivery Date:</strong>
+            <span>${formatDate(order.rows[0]?.deliveryDate) || 'N/A'}</span>
+          </div>
+          <div class="detail-item">
+            <strong>Balance Amt:</strong>
+            <span>₹${balanceDue.toFixed(2)}</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Order Items Table -->
+      <div class="order-items">
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>S.No</th>
+              <th>Product Description</th>
+              <th>Quantity</th>
+              <th>Price / Piece</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${order.rows.map((row, index) => `
               <tr>
-                <th>#</th>
-                <th>Description</th>
-                <th>Requirement</th>
-                <th>Qty</th>
-                <th>Rate (₹)</th>
-                <th>Total (₹)</th>
-                <th>Delivery Date</th>
-                <th>Status</th>
+                <td>${index + 1}</td>
+                <td>${row.description || ''} ${row.requirement ? `(${row.requirement})` : ''}</td>
+                <td style="text-align: right;">${row.quantity || 0}</td>
+                <td style="text-align: right;">${parseFloat(row.rate || 0).toFixed(2)}</td>
+                <td style="text-align: right;">${parseFloat(row.total || 0).toFixed(2)}</td>
               </tr>
-            </thead>
-            <tbody>
-              ${order.rows.map((row, index) => `
-                <tr>
-                  <td>${index + 1}</td>
-                  <td>${row.description || ''}</td>
-                  <td>${row.requirement || ''} ${row.customRequirement ? `(${row.customRequirement})` : ''}</td>
-                  <td style="text-align: right;">${row.quantity || 0}</td>
-                  <td style="text-align: right;">${parseFloat(row.rate || 0).toFixed(2)}</td>
-                  <td style="text-align: right; font-weight: bold;">${parseFloat(row.total || 0).toFixed(2)}</td>
-                  <td>${formatDate(row.deliveryDate)}</td>
-                  <td>
-                    <span style="
-                      display: inline-block;
-                      padding: 4px 8px;
-                      background: ${row.status === 'Completed' ? '#4caf50' : row.status === 'In Progress' ? '#ff9800' : '#f44336'};
-                      color: white;
-                      border-radius: 4px;
-                      font-size: 12px;
-                    ">${row.status || 'Pending'}</span>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-        
-        <!-- Financial Summary -->
-        <div class="financial-summary">
-          <h3>Financial Summary</h3>
-          <div class="summary-grid">
-            <div class="summary-item">
-              <strong>Order Total:</strong>
-              <div class="amount">₹${orderTotal.toFixed(2)}</div>
-            </div>
-            <div class="summary-item">
-              <strong>Discount:</strong>
-              <div class="amount">₹${(parseFloat(order.discount) || 0).toFixed(2)}</div>
-            </div>
-            <div class="summary-item total">
-              <strong>Final Amount:</strong>
-              <div class="amount">₹${(parseFloat(order.discountedTotal) || orderTotal).toFixed(2)}</div>
-            </div>
-            <div class="summary-item">
-              <strong>Advance Paid:</strong>
-              <div class="amount">₹${(parseFloat(order.advance) || 0).toFixed(2)}</div>
-            </div>
-            <div class="summary-item balance">
-              <strong>Balance Due:</strong>
-              <div class="amount">₹${balanceDue.toFixed(2)}</div>
-            </div>
-            <div class="summary-item">
-              <strong>Total Paid:</strong>
-              <div class="amount">₹${totalPaid.toFixed(2)}</div>
-            </div>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- Design Note -->
+      <div style="margin-bottom: 10px; font-size: 10px;">
+        <strong>Design:</strong> Y / N
+      </div>
+      
+      <!-- Financial Section - Two Column -->
+      <div class="financial-section">
+        <!-- Summary Box -->
+        <div class="summary-box">
+          <h3>Summary</h3>
+          <div class="summary-row">
+            <span>Order Total:</span>
+            <span>₹${orderTotal.toFixed(2)}</span>
+          </div>
+          <div class="summary-row">
+            <span>Discount:</span>
+            <span>₹${(parseFloat(order.discount) || 0).toFixed(2)}</span>
+          </div>
+          <div class="summary-row total">
+            <span>Final Amount:</span>
+            <span>₹${(parseFloat(order.discountedTotal) || orderTotal).toFixed(2)}</span>
+          </div>
+          <div class="summary-row">
+            <span>Advance Paid:</span>
+            <span>₹${(parseFloat(order.advance) || 0).toFixed(2)}</span>
+          </div>
+          <div class="summary-row balance">
+            <span>Balance Due:</span>
+            <span>₹${balanceDue.toFixed(2)}</span>
           </div>
         </div>
         
-        <!-- Payment History -->
-        ${order.paymentHistory && order.paymentHistory.length > 0 ? `
-          <div class="payment-history">
-            <h3>Payment History</h3>
+        <!-- Payment Box -->
+        <div class="payment-box">
+          <h3>Payment History</h3>
+          ${order.paymentHistory && order.paymentHistory.length > 0 ? `
             <table class="payment-table">
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Amount (₹)</th>
+                  <th>Amount</th>
                   <th>Method</th>
-                  <th>Reference</th>
-                  <th>Note</th>
                 </tr>
               </thead>
               <tbody>
@@ -753,102 +677,72 @@ function ViewOrders() {
                     <td>${formatDate(payment.date)}</td>
                     <td style="text-align: right;">${parseFloat(payment.amount || 0).toFixed(2)}</td>
                     <td>${payment.method}</td>
-                    <td>${payment.reference || '-'}</td>
-                    <td>${payment.note || '-'}</td>
                   </tr>
                 `).join('')}
-                <tr class="total-row">
-                  <td colspan="5" style="text-align: right; font-weight: bold;">
-                    Total Paid: ₹${paymentHistoryTotal.toFixed(2)}
-                  </td>
-                </tr>
               </tbody>
             </table>
-          </div>
-        ` : ''}
-        
-        <!-- Service Details -->
-        <div class="customer-details">
-          <h3>Service Details</h3>
-          <div class="details-grid">
-            ${order.rows.map((row, index) => `
-              <div class="detail-item">
-                <strong>Item ${index + 1} - Service Executive:</strong>
-                <span>${row.assignedExecutive || 'Not Assigned'}</span>
-              </div>
-              <div class="detail-item">
-                <strong>Remark:</strong>
-                <span>${row.remark || 'No remarks'}</span>
-              </div>
-              <div class="detail-item">
-                <strong>Service Period:</strong>
-                <span>${formatDate(row.startDate) || 'N/A'} to ${formatDate(row.endDate) || 'N/A'}</span>
-              </div>
-            `).join('')}
-          </div>
+          ` : '<p style="font-size: 10px; color: #999;">No payment history</p>'}
         </div>
-        
-        <!-- Terms and Conditions -->
-        <div class="terms-section">
-          <h3>Terms and Conditions</h3>
-          <ul>
-            <li>This is a computer generated invoice, signature not required.</li>
-            <li>Payment is due within 30 days of invoice date.</li>
-            <li>All disputes are subject to local jurisdiction.</li>
-            <li>Goods sold are not returnable.</li>
-            <li>Interest @ 18% p.a. will be charged on overdue payments.</li>
-          </ul>
-        </div>
-        
-        <!-- Signature Section -->
+      </div>
+      
+      <!-- Note -->
+      <div style="margin-bottom: 10px; font-size: 10px; color: #666;">
+        <strong>Note:</strong> Delivery date minimum 3 working from Advance Date.
+      </div>
+      
+    
         <div class="signature-section">
           <div class="signature-block">
-            <div class="signature-label">Customer Signature</div>
+            <div class="signature-image">
+              <img src="" alt="Customer Signature" onerror="this.style.display='none'">
+            </div>
             <div class="signature-line"></div>
+            <div class="signature-label">Customer Signature</div>
           </div>
           <div class="signature-block">
-            <div class="signature-label">Authorized Signature</div>
+            <div class="signature-image">
+              <img src="${signaturePath}" alt="Authorized Signature" onerror="this.style.display='none'">
+            </div>
             <div class="signature-line"></div>
+            <div class="signature-label">Authorized Signature</div>
           </div>
         </div>
-        
-        <!-- Footer -->
-        <div class="print-footer">
-          <p>Thank you for your business!</p>
-          <p>Generated on: ${new Date().toLocaleString()}</p>
-          <p>Order #${order.orderNo}</p>
-        </div>
-        
-        <script>
-          // Auto trigger print when content is loaded
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-            }, 100);
-          };
-        </script>
-      </body>
-      </html>
-    `);
-    iframeDoc.close();
+      </div>
+      
+      <!-- Footer -->
+      <div class="print-footer">
+        Generated on: ${new Date().toLocaleDateString()}
+      </div>
+      
+      <script>
+        // Auto trigger print when content is loaded
+        window.onload = function() {
+          setTimeout(function() {
+            window.print();
+          }, 100);
+        };
+      </script>
+    </body>
+    </html>
+  `);
+  iframeDoc.close();
 
-    // Remove the iframe after printing
-    iframe.contentWindow.onafterprint = function () {
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 100);
-    };
-
-    // Fallback for browsers that don't support onafterprint
+  // Remove the iframe after printing
+  iframe.contentWindow.onafterprint = function () {
     setTimeout(() => {
       if (document.body.contains(iframe)) {
         document.body.removeChild(iframe);
       }
-    }, 10000); // Remove after 10 seconds as fallback
+    }, 100);
   };
 
+  // Fallback for browsers that don't support onafterprint
+  setTimeout(() => {
+    if (document.body.contains(iframe)) {
+      document.body.removeChild(iframe);
+    }
+  }, 10000);
+};
   // Function to navigate between months
   const navigateToMonth = (direction) => {
     let newMonth = currentViewMonth;

@@ -29,7 +29,6 @@ const adminSchema = new mongoose.Schema({
   email: String,
   guardianName : String,
   guardianContact: Number,
-
   aadhar: String,
   joiningDate: Date,
   experience: Number,
@@ -43,6 +42,12 @@ const adminSchema = new mongoose.Schema({
   resignationDate: String,
   resignationReason: String,
   rejoinDate: String,
+  documents: {
+  aadhar: { type: String, default: null },
+  pan: { type: String, default: null },
+  educational: { type: String, default: null },
+  experience: { type: String, default: null }
+}
 });
 
 module.exports = mongoose.model('Admin', adminSchema);

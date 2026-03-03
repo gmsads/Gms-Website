@@ -1966,39 +1966,95 @@ const calculateTotalRevenue = () => {
                       </div>
                     </div>
 
-                    {/* Pending Service */}
-                    <div style={styles.card}>
-                      <div>Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}</div>
-                      <div style={styles.pieChart}>
-                        <Doughnut
-                          data={{
-                            labels: ['Completed', 'Pending'],
-                            datasets: [
-                              {
-                                data: pendingServices.length === 2 ? pendingServices : [0, 0],
-                                backgroundColor: ['green', 'red'],
-                              },
-                            ],
-                          }}
-                          options={{
-                            onClick: (e, elements) => {
-                              if (elements.length > 0 && elements[0].index === 1) {
-                                handleChartClick('pending-service');
-                              }
-                            },
-                          }}
-                        />
-                        <div
-                          style={{
-                            ...styles.clickableSection,
-                            pointerEvents: pendingServices[1] > 0 ? 'auto' : 'none'
-                          }}
-                          onClick={() => pendingServices[1] > 0 && handleChartClick('pending-service')}
-                        />
-                      </div>
-                      <div style={styles.number}>{pendingServices[1] || 0}</div>
-                    </div>
+{/* Service Status Chart */}
+<div 
+  style={{ ...styles.card, cursor: 'pointer' }}
+  onClick={() => handleChartClick('pending-service')}
+>
+  <div>
+    Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}
+  </div>
 
+  <div style={styles.pieChart}>
+    <Doughnut
+      data={{
+        labels: [
+          'Pending',
+          'Assigned',
+          'Updated',
+          'Completed',
+          'Design Pending',
+          'Printing',
+          'Installation Pending',
+          'Onboarding'
+        ],
+        datasets: [
+          {
+            data: [
+              chartData?.serviceStatus?.pending || 0,
+              chartData?.serviceStatus?.assigned || 0,
+              chartData?.serviceStatus?.updated || 0,
+              chartData?.serviceStatus?.completed || 0,
+              chartData?.serviceStatus?.designPending || 0,
+              chartData?.serviceStatus?.printing || 0,
+              chartData?.serviceStatus?.installationPending || 0,
+              chartData?.serviceStatus?.onboarding || 0
+            ],
+            backgroundColor: [
+              ' #e74c3c', // Pending - Orange
+              '#3498db', // Assigned - Blue
+              '#9b59b6', // Updated - Purple
+              '#2ecc71', // Completed - Green
+              '#e67e22', // Design Pending - Orange
+              '#f39c12', // Printing - Red
+              '#34495e', // Installation Pending - Dark Gray
+              '#1abc9c'  // Onboarding - Teal
+            ],
+            borderColor: '#fff',
+            borderWidth: 2,
+          },
+        ],
+      }}
+      options={{
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const label = context.label || '';
+                const value = context.raw || 0;
+                return `${label}: ${value}`;
+              }
+            },
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            titleColor: '#fff',
+            bodyColor: '#fff',
+            padding: 10
+          }
+        }
+      }}
+    />
+  </div>
+
+  {/* Total Services Count (Completed removed) */}
+  <div style={styles.number}>
+    {Object.entries(chartData?.serviceStatus || {})
+      .filter(([key]) => key !== 'completed')
+      .reduce((sum, [, value]) => sum + value, 0)}
+  </div>
+
+  <div style={{ 
+    fontSize: '14px', 
+    color: '#666',
+    marginTop: '5px'
+  }}>
+    Total Services
+  </div>
+</div>
                     {/* Appointments PolarArea */}
                     <div style={styles.card}>
                       <div>Appointments {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}</div>

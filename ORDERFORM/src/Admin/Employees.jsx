@@ -36,6 +36,21 @@ export default function Employees() {
     resignationReason: ''
   });
   const [imagePreview, setImagePreview] = useState(null);
+  
+  // New state for document management
+  const [documentModal, setDocumentModal] = useState({
+    isOpen: false,
+    employee: null,
+    category: '',
+    documentType: '',
+    documents: {}
+  });
+  const [selectedFiles, setSelectedFiles] = useState({
+    aadhar: null,
+    pan: null,
+    educational: null,
+    experience: null
+  });
 
   const roleOptions = useMemo(() => [
     'Executive',
@@ -104,7 +119,14 @@ export default function Employees() {
           cloudinaryId: employee.cloudinaryId || null,
           rejoinDate: employee.rejoinDate || '',
           resignationDate: employee.resignationDate || '',
-          resignationReason: employee.resignationReason || ''
+          resignationReason: employee.resignationReason || '',
+          // Document fields
+          documents: employee.documents || {
+            aadhar: null,
+            pan: null,
+            educational: null,
+            experience: null
+          }
         }));
       });
 
@@ -333,7 +355,13 @@ export default function Employees() {
         resignationReason: employee.resignationReason || '',
         rejoinDate: employee.rejoinDate || '',
         imageUrl: employee.imageUrl || null,
-        imageFile: null
+        imageFile: null,
+        documents: employee.documents || {
+          aadhar: null,
+          pan: null,
+          educational: null,
+          experience: null
+        }
       },
       currentCategory: category,
       originalCategory: category,
@@ -356,6 +384,102 @@ export default function Employees() {
           imageFile: file
         }
       }));
+    }
+  }, []);
+
+  // New function to handle document upload
+  const handleDocumentUpload = useCallback(async () => {
+    try {
+      const { employee, category } = documentModal;
+      
+      if (!employee || !employee.name) {
+        showPopup('Employee information missing', 'error');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('name', employee.name);
+      
+      // Append each selected file
+      Object.entries(selectedFiles).forEach(([docType, file]) => {
+        if (file) {
+          formData.append(docType, file);
+        }
+      });
+
+      const response = await fetch('/api/employees/upload-documents', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Document upload failed');
+      }
+
+      const result = await response.json();
+      
+      // Update local state with new document URLs
+      setEmployeeCategories(prev => {
+        const updated = { ...prev };
+        const employeeIndex = updated[category]?.findIndex(emp => emp.name === employee.name);
+        
+        if (employeeIndex !== -1) {
+          updated[category][employeeIndex] = {
+            ...updated[category][employeeIndex],
+            documents: {
+              ...updated[category][employeeIndex].documents,
+              ...result.documents
+            }
+          };
+        }
+        
+        return updated;
+      });
+
+      showPopup('Documents uploaded successfully!', 'success');
+      
+      // Refresh the document modal with updated documents
+      setDocumentModal(prev => ({
+        ...prev,
+        documents: {
+          ...prev.documents,
+          ...result.documents
+        }
+      }));
+      
+      setSelectedFiles({ aadhar: null, pan: null, educational: null, experience: null });
+      
+    } catch (err) {
+      console.error('Document upload error:', err);
+      showPopup(`Error: ${err.message}`, 'error');
+    }
+  }, [documentModal, selectedFiles, employeeCategories, showPopup]);
+
+  // Function to open document upload modal
+  const openDocumentModal = useCallback((employee, category) => {
+    setDocumentModal({
+      isOpen: true,
+      employee,
+      category,
+      documentType: '',
+      documents: employee.documents || {}
+    });
+    setSelectedFiles({ aadhar: null, pan: null, educational: null, experience: null });
+  }, []);
+
+  // Function to handle file selection for documents
+  const handleDocumentFileChange = useCallback((docType, file) => {
+    setSelectedFiles(prev => ({
+      ...prev,
+      [docType]: file
+    }));
+  }, []);
+
+  // Function to view/download document
+  const viewDocument = useCallback((documentUrl, documentName) => {
+    if (documentUrl) {
+      window.open(documentUrl, '_blank');
     }
   }, []);
 
@@ -422,7 +546,11 @@ export default function Employees() {
         department: category,
         status: emp.active ? 'Active' : 'Inactive',
         rejoinDate: emp.rejoinDate || 'N/A',
-        imageUrl: emp.imageUrl || 'No image'
+        imageUrl: emp.imageUrl || 'No image',
+        aadharDocument: emp.documents?.aadhar || 'Not uploaded',
+        panDocument: emp.documents?.pan || 'Not uploaded',
+        educationalDocument: emp.documents?.educational || 'Not uploaded',
+        experienceDocument: emp.documents?.experience || 'Not uploaded'
       }))
     );
 
@@ -437,7 +565,11 @@ export default function Employees() {
       ...employee,
       department: editModal.currentCategory,
       status: employee.active ? 'Active' : 'Inactive',
-      rejoinDate: employee.rejoinDate || 'N/A'
+      rejoinDate: employee.rejoinDate || 'N/A',
+      aadharDocument: employee.documents?.aadhar || 'Not uploaded',
+      panDocument: employee.documents?.pan || 'Not uploaded',
+      educationalDocument: employee.documents?.educational || 'Not uploaded',
+      experienceDocument: employee.documents?.experience || 'Not uploaded'
     }]);
 
     const wb = XLSX.utils.book_new();
@@ -595,6 +727,171 @@ export default function Employees() {
         </div>
       )}
 
+      {/* Document Upload Modal */}
+      {documentModal.isOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h3>Upload Documents - {documentModal.employee?.name}</h3>
+              <button
+                className="close-button"
+                onClick={() => {
+                  setDocumentModal({ isOpen: false, employee: null, category: '', documentType: '', documents: {} });
+                  setSelectedFiles({ aadhar: null, pan: null, educational: null, experience: null });
+                }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="documents-section">
+              {/* Aadhar Card */}
+              <div className="document-row">
+                <div className="document-info">
+                  <strong>Aadhar Card</strong>
+                  {documentModal.documents?.aadhar ? (
+                    <span className="document-status uploaded">
+                      ✓ Uploaded 
+                      <button 
+                        className="view-document-btn"
+                        onClick={() => viewDocument(documentModal.documents.aadhar, 'Aadhar')}
+                      >
+                        View
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="document-status not-uploaded">✗ Not Uploaded</span>
+                  )}
+                </div>
+                <div className="document-upload">
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => handleDocumentFileChange('aadhar', e.target.files[0])}
+                    className="file-input-document"
+                  />
+                  {selectedFiles.aadhar && (
+                    <span className="file-selected">{selectedFiles.aadhar.name}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* PAN Card */}
+              <div className="document-row">
+                <div className="document-info">
+                  <strong>PAN Card</strong>
+                  {documentModal.documents?.pan ? (
+                    <span className="document-status uploaded">
+                      ✓ Uploaded
+                      <button 
+                        className="view-document-btn"
+                        onClick={() => viewDocument(documentModal.documents.pan, 'PAN')}
+                      >
+                        View
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="document-status not-uploaded">✗ Not Uploaded</span>
+                  )}
+                </div>
+                <div className="document-upload">
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => handleDocumentFileChange('pan', e.target.files[0])}
+                    className="file-input-document"
+                  />
+                  {selectedFiles.pan && (
+                    <span className="file-selected">{selectedFiles.pan.name}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Educational Documents */}
+              <div className="document-row">
+                <div className="document-info">
+                  <strong>Educational Documents</strong>
+                  {documentModal.documents?.educational ? (
+                    <span className="document-status uploaded">
+                      ✓ Uploaded
+                      <button 
+                        className="view-document-btn"
+                        onClick={() => viewDocument(documentModal.documents.educational, 'Educational')}
+                      >
+                        View
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="document-status not-uploaded">✗ Not Uploaded</span>
+                  )}
+                </div>
+                <div className="document-upload">
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => handleDocumentFileChange('educational', e.target.files[0])}
+                    className="file-input-document"
+                  />
+                  {selectedFiles.educational && (
+                    <span className="file-selected">{selectedFiles.educational.name}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Experience Letter */}
+              <div className="document-row">
+                <div className="document-info">
+                  <strong>Experience Letter</strong>
+                  {documentModal.documents?.experience ? (
+                    <span className="document-status uploaded">
+                      ✓ Uploaded
+                      <button 
+                        className="view-document-btn"
+                        onClick={() => viewDocument(documentModal.documents.experience, 'Experience')}
+                      >
+                        View
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="document-status not-uploaded">✗ Not Uploaded</span>
+                  )}
+                </div>
+                <div className="document-upload">
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => handleDocumentFileChange('experience', e.target.files[0])}
+                    className="file-input-document"
+                  />
+                  {selectedFiles.experience && (
+                    <span className="file-selected">{selectedFiles.experience.name}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                className="cancel-button"
+                onClick={() => {
+                  setDocumentModal({ isOpen: false, employee: null, category: '', documentType: '', documents: {} });
+                  setSelectedFiles({ aadhar: null, pan: null, educational: null, experience: null });
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="save-button"
+                onClick={handleDocumentUpload}
+                disabled={!Object.values(selectedFiles).some(file => file !== null)}
+              >
+                Upload Selected Documents
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="tabs">
         <button
           className={activeTab === 'directory' ? 'active' : ''}
@@ -668,22 +965,15 @@ export default function Employees() {
                               src={employee.imageUrl} 
                               alt={employee.name}
                               className="employee-avatar-image"
-                              onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.style.display = 'none';
-                                e.target.parentNode.querySelector('.employee-initials-avatar-fallback').style.display = 'flex';
-                              }}
                             />
-                          ) : null}
-                          <div 
-                            className="employee-initials-avatar"
-                            style={{ 
-                              backgroundColor: getAvatarColor(employee.name),
-                              display: employee.imageUrl ? 'none' : 'flex'
-                            }}
-                          >
-                            {getInitials(employee.name)}
-                          </div>
+                          ) : (
+                            <div 
+                              className="employee-initials-avatar"
+                              style={{ backgroundColor: getAvatarColor(employee.name) }}
+                            >
+                              {getInitials(employee.name)}
+                            </div>
+                          )}
                           <div className="employee-details">
                             <span className="employee-name">
                               {employee.name}
@@ -694,15 +984,29 @@ export default function Employees() {
                                 Reason: {employee.resignationReason || 'No reason provided'}
                               </div>
                             )}
+                            {/* Document status indicators */}
+                            <div className="document-indicators">
+                              {employee.documents?.aadhar && <span className="doc-indicator" title="Aadhar uploaded">📄</span>}
+                              {employee.documents?.pan && <span className="doc-indicator" title="PAN uploaded">🪪</span>}
+                              {employee.documents?.educational && <span className="doc-indicator" title="Educational docs uploaded">🎓</span>}
+                              {employee.documents?.experience && <span className="doc-indicator" title="Experience letter uploaded">💼</span>}
+                            </div>
                           </div>
                         </div>
-                        <div className="employee-status">
+                        <div className="employee-actions">
+                          <button
+                            className="documents-button"
+                            onClick={() => openDocumentModal(employee, category)}
+                            title="Upload/View Documents"
+                          >
+                          
+                          </button>
                           <div
                             onClick={() => toggleEmployeeStatus(category, index, employee)}
                             className="toggle-switch"
                             aria-label={employee.active ? 'Deactivate' : 'Activate'}
                           >
-                            <div className={`slider ${employee.active ? 'active' : ''}`}>
+                            <div className={employee.active ? 'slider-active' : 'slider-inactive'}>
                               <span className="slider-knob"></span>
                             </div>
                           </div>
@@ -761,27 +1065,20 @@ export default function Employees() {
                 <div className="form-group">
                   <label>Employee Photo</label>
                   <div className="image-preview-container">
-                    {(imagePreview || editModal.employee.imageUrl) && !editModal.employee.imageFile ? (
+                    {(imagePreview || editModal.employee.imageUrl) ? (
                       <img 
                         src={imagePreview || editModal.employee.imageUrl} 
                         alt={editModal.employee.name}
                         className="employee-image-large"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.style.display = 'none';
-                          e.target.parentNode.querySelector('.employee-initials-large-fallback').style.display = 'flex';
-                        }}
                       />
-                    ) : null}
-                    <div 
-                      className="employee-initials-large"
-                      style={{ 
-                        backgroundColor: getAvatarColor(editModal.employee.name),
-                        display: (imagePreview || editModal.employee.imageUrl) && !editModal.employee.imageFile ? 'none' : 'flex'
-                      }}
-                    >
-                      {getInitials(editModal.employee.name)}
-                    </div>
+                    ) : (
+                      <div 
+                        className="employee-initials-large"
+                        style={{ backgroundColor: getAvatarColor(editModal.employee.name) }}
+                      >
+                        {getInitials(editModal.employee.name)}
+                      </div>
+                    )}
                   </div>
                 </div>
                 
@@ -1058,8 +1355,7 @@ export default function Employees() {
                   <div className="status-toggle">
                     <button
                       type="button"
-                      className={`status-option ${editModal.employee.active ? 'active' : ''}`}
-                      data-status="active"
+                      className={`status-option ${editModal.employee.active ? 'status-active' : ''}`}
                       onClick={() => {
                         const wasInactive = !editModal.employee.active;
                         
@@ -1090,14 +1386,13 @@ export default function Employees() {
                         }
                       }}
                     >
-                      <span className="status-indicator active"></span>
+                      <span className="status-indicator"></span>
                       Active
                     </button>
                     
                     <button
                       type="button"
-                      className={`status-option ${!editModal.employee.active ? 'active' : ''}`}
-                      data-status="inactive"
+                      className={`status-option ${!editModal.employee.active ? 'status-inactive' : ''}`}
                       onClick={() => {
                         const resignationDate = prompt('Please enter resignation date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
                         if (!resignationDate) return;
@@ -1118,7 +1413,7 @@ export default function Employees() {
                         }));
                       }}
                     >
-                      <span className="status-indicator inactive"></span>
+                      <span className="status-indicator"></span>
                       Inactive
                     </button>
                   </div>
@@ -1205,6 +1500,16 @@ export default function Employees() {
                 }}
               >
                 Cancel
+              </button>
+              
+              <button
+                className="documents-button-large"
+                onClick={() => {
+                  setEditModal(prev => ({ ...prev, isOpen: false }));
+                  openDocumentModal(editModal.employee, editModal.currentCategory);
+                }}
+              >
+                Manage Documents
               </button>
               
               <button
@@ -1464,6 +1769,52 @@ export default function Employees() {
           margin-top: 2px;
         }
 
+        .document-indicators {
+          display: flex;
+          gap: 4px;
+          margin-top: 4px;
+        }
+
+        .doc-indicator {
+          font-size: 0.8rem;
+          cursor: help;
+        }
+
+        .employee-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .documents-button {
+          background: none;
+          border: none;
+          font-size: 1.2rem;
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 4px;
+          transition: background 0.2s;
+        }
+
+        .documents-button:hover {
+          background: #f0f0f0;
+        }
+
+        .documents-button-large {
+          padding: 10px 20px;
+          border-radius: 6px;
+          background: #17a2b8;
+          color: white;
+          border: none;
+          cursor: pointer;
+          font-weight: 500;
+          transition: background 0.3s ease;
+        }
+
+        .documents-button-large:hover {
+          background: #138496;
+        }
+
         .employee-status {
           display: flex;
           align-items: center;
@@ -1477,7 +1828,18 @@ export default function Employees() {
           cursor: pointer;
         }
 
-        .slider {
+        .slider-active {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: #28a745;
+          transition: .4s;
+          border-radius: 24px;
+        }
+
+        .slider-inactive {
           position: absolute;
           top: 0;
           left: 0;
@@ -1486,10 +1848,6 @@ export default function Employees() {
           background-color: #dc3545;
           transition: .4s;
           border-radius: 24px;
-        }
-
-        .slider.active {
-          background-color: #28a745;
         }
 
         .slider-knob {
@@ -1503,8 +1861,12 @@ export default function Employees() {
           border-radius: 50%;
         }
 
-        .slider.active .slider-knob {
+        .slider-active .slider-knob {
           transform: translateX(26px);
+        }
+
+        .slider-inactive .slider-knob {
+          transform: translateX(4px);
         }
 
         .show-more {
@@ -1622,6 +1984,14 @@ export default function Employees() {
           padding: 8px;
         }
 
+        .file-input-document {
+          width: 200px;
+          padding: 6px;
+          border-radius: 4px;
+          border: 1px solid #ddd;
+          font-size: 0.85rem;
+        }
+
         .section-title {
           color: #003366;
           margin: 0 0 15px 0;
@@ -1674,32 +2044,109 @@ export default function Employees() {
           justify-content: center;
           gap: 8px;
           font-size: 0.9rem;
+          transition: all 0.2s;
+          color: #555;
         }
 
-        .status-option.active[data-status="active"] {
-          background: #e6f7e6;
-          color: #28a745;
+        .status-option.status-active {
+          background: #28a745;
+          color: white;
           font-weight: 500;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
-        .status-option.active[data-status="inactive"] {
-          background: #fde8e8;
-          color: #dc3545;
+        .status-option.status-inactive {
+          background: #dc3545;
+          color: white;
           font-weight: 500;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .status-indicator {
           width: 10px;
           height: 10px;
           border-radius: 50%;
+          background: white;
+          display: inline-block;
         }
 
-        .status-indicator.active {
-          background: #28a745;
+        /* Document Modal Styles */
+        .documents-section {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+          margin: 20px 0;
         }
 
-        .status-indicator.inactive {
-          background: #dc3545;
+        .document-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 15px;
+          background: #f8f9fa;
+          border-radius: 8px;
+          border: 1px solid #e9ecef;
+        }
+
+        .document-info {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+          min-width: 200px;
+        }
+
+        .document-info strong {
+          color: #003366;
+          font-size: 1rem;
+        }
+
+        .document-status {
+          font-size: 0.85rem;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .document-status.uploaded {
+          color: #28a745;
+          font-weight: 500;
+        }
+
+        .document-status.not-uploaded {
+          color: #dc3545;
+          font-weight: 500;
+        }
+
+        .view-document-btn {
+          padding: 4px 12px;
+          background: #007bff;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          font-size: 0.8rem;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .view-document-btn:hover {
+          background: #0056b3;
+        }
+
+        .document-upload {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+          align-items: flex-end;
+        }
+
+        .file-selected {
+          font-size: 0.8rem;
+          color: #28a745;
+          font-style: italic;
+          max-width: 200px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .modal-footer {
@@ -1720,6 +2167,11 @@ export default function Employees() {
           border: none;
           cursor: pointer;
           font-weight: 500;
+          transition: background 0.3s ease;
+        }
+
+        .download-individual-button:hover {
+          background: #3d8b40;
         }
 
         .cancel-button {
@@ -1730,6 +2182,11 @@ export default function Employees() {
           border: 1px solid #ddd;
           cursor: pointer;
           font-weight: 500;
+          transition: background 0.3s ease;
+        }
+
+        .cancel-button:hover {
+          background: #e0e0e0;
         }
 
         .save-button {
@@ -1740,6 +2197,16 @@ export default function Employees() {
           border: none;
           cursor: pointer;
           font-weight: 500;
+          transition: background 0.3s ease;
+        }
+
+        .save-button:hover {
+          background: #002244;
+        }
+
+        .save-button:disabled {
+          background: #cccccc;
+          cursor: not-allowed;
         }
 
         .loading, .error {

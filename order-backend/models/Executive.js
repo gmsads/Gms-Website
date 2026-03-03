@@ -42,7 +42,13 @@ const executiveSchema = new mongoose.Schema({
     resignationReason: String,
     rejoinDate: String,
     imageUrl: String,
-    cloudinaryId: String
+    cloudinaryId: String,
+    documents: {
+  aadhar: { type: String, default: null },
+  pan: { type: String, default: null },
+  educational: { type: String, default: null },
+  experience: { type: String, default: null }
+}
 });
 
 module.exports = mongoose.model('Executive', executiveSchema);
