@@ -264,19 +264,18 @@ function AdminDashboard() {
   const pendingServices = safeArray(chartData?.pendingServices);
   const appointments = safeArray(chartData?.appointments);
 
-  // Calculate total revenue
-  const calculateTotalRevenue = () => {
-    if (!chartData) return 0;
-    
-    if (selectedMonth !== null) {
-      // For monthly view - use the total amount for the selected month
-      return safeArray(chartData.amountByMonth)[0] || 0;
-    } else {
-      // For yearly view or all years - sum all monthly amounts
-      return safeArray(chartData.amountByMonth).reduce((sum, amount) => sum + amount, 0);
-    }
-  };
-
+// You can either keep this function but update it, or remove it since we're calculating directly in the card
+const calculateTotalRevenue = () => {
+  if (!chartData) return 0;
+  
+  if (selectedMonth !== null) {
+    // For monthly view - use the amount for the selected month
+    return chartData.amountByMonth?.[selectedMonth] || 0;
+  } else {
+    // For yearly view or all years - sum all monthly amounts
+    return safeArray(chartData.amountByMonth).reduce((sum, amount) => sum + amount, 0);
+  }
+};
   // Get total orders count
   const getTotalOrdersCount = () => {
     if (!chartData) return 0;
@@ -1537,256 +1536,266 @@ function AdminDashboard() {
                   </div>
                 ) : (
                   <div style={styles.dashboardCards}>
-                    {/* Total Revenue Bar Chart - FIRST CARD */}
-                    <div style={styles.card}>
-                      <div>Total Revenue {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : '(Monthly)'}</div>
-                      <div style={styles.chartContainer}>
-                        <Bar
-                          data={{
-                            labels: selectedMonth !== null
-                              ? chartData?.weeklyOrders?.map((_, i) => `Week ${i + 1}`) || ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
-                              : monthLabels,
-                            datasets: [
-                              {
-                                label: 'Total Revenue',
-                                data: selectedMonth !== null
-                                  ? chartData?.weeklyOrders?.map(w => w.amount || 0) || []
-                                  : safeArray(chartData?.amountByMonth),
-                                backgroundColor: selectedMonth !== null
-                                  ? [
-                                      'rgba(49, 122, 176, 0.8)',  // Blue Grotto - Week 1
-                                      'rgba(49, 122, 176, 0.7)',  // Lighter - Week 2
-                                      'rgba(49, 122, 176, 0.6)',  // Lighter - Week 3
-                                      'rgba(49, 122, 176, 0.5)',  // Lighter - Week 4
-                                      'rgba(49, 122, 176, 0.4)',  // Lightest - Week 5
-                                    ]
-                                  : [
-                                      'rgba(49, 122, 176, 0.9)',   // Jan - Solid Blue Grotto
-                                      'rgba(49, 122, 176, 0.85)',  // Feb
-                                      'rgba(49, 122, 176, 0.8)',   // Mar
-                                      'rgba(49, 122, 176, 0.75)',  // Apr
-                                      'rgba(49, 122, 176, 0.7)',   // May
-                                      'rgba(49, 122, 176, 0.65)',  // Jun
-                                      'rgba(49, 122, 176, 0.6)',   // Jul
-                                      'rgba(49, 122, 176, 0.65)',  // Aug
-                                      'rgba(49, 122, 176, 0.7)',   // Sep
-                                      'rgba(49, 122, 176, 0.75)',  // Oct
-                                      'rgba(49, 122, 176, 0.8)',   // Nov
-                                      'rgba(49, 122, 176, 0.85)',  // Dec
-                                    ],
-                                borderColor: selectedMonth !== null
-                                  ? [
-                                      'rgba(49, 122, 176, 1)',
-                                      'rgba(49, 122, 176, 0.9)',
-                                      'rgba(49, 122, 176, 0.8)',
-                                      'rgba(49, 122, 176, 0.7)',
-                                      'rgba(49, 122, 176, 0.6)',
-                                    ]
-                                  : [
-                                      'rgba(49, 122, 176, 1)',
-                                      'rgba(49, 122, 176, 0.95)',
-                                      'rgba(49, 122, 176, 0.9)',
-                                      'rgba(49, 122, 176, 0.85)',
-                                      'rgba(49, 122, 176, 0.8)',
-                                      'rgba(49, 122, 176, 0.75)',
-                                      'rgba(49, 122, 176, 0.7)',
-                                      'rgba(49, 122, 176, 0.75)',
-                                      'rgba(49, 122, 176, 0.8)',
-                                      'rgba(49, 122, 176, 0.85)',
-                                      'rgba(49, 122, 176, 0.9)',
-                                      'rgba(49, 122, 176, 0.95)',
-                                    ],
-                                borderWidth: 1,
-                                borderRadius: 8,
-                                hoverBackgroundColor: selectedMonth !== null
-                                  ? [
-                                      'rgba(49, 122, 176, 1)',
-                                      'rgba(49, 122, 176, 0.9)',
-                                      'rgba(49, 122, 176, 0.8)',
-                                      'rgba(49, 122, 176, 0.7)',
-                                      'rgba(49, 122, 176, 0.6)',
-                                    ]
-                                  : [
-                                      'rgba(49, 122, 176, 1)',
-                                      'rgba(49, 122, 176, 0.95)',
-                                      'rgba(49, 122, 176, 0.9)',
-                                      'rgba(49, 122, 176, 0.85)',
-                                      'rgba(49, 122, 176, 0.8)',
-                                      'rgba(49, 122, 176, 0.75)',
-                                      'rgba(49, 122, 176, 0.7)',
-                                      'rgba(49, 122, 176, 0.75)',
-                                      'rgba(49, 122, 176, 0.8)',
-                                      'rgba(49, 122, 176, 0.85)',
-                                      'rgba(49, 122, 176, 0.9)',
-                                      'rgba(49, 122, 176, 0.95)',
-                                    ],
-                                hoverBorderColor: '#FFFFFF',
-                                hoverBorderWidth: 2,
-                                barPercentage: 0.7,
-                                categoryPercentage: 0.8
-                              }
-                            ]
-                          }}
-                          options={{
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                              legend: { display: false },
-                              tooltip: {
-                                backgroundColor: 'rgba(49, 122, 176, 0.95)',
-                                titleColor: '#FFFFFF',
-                                bodyColor: '#FFFFFF',
-                                borderColor: '#317ab0',
-                                borderWidth: 1,
-                                cornerRadius: 8,
-                                padding: 12,
-                                titleFont: {
-                                  size: 13,
-                                  weight: 'bold'
-                                },
-                                bodyFont: {
-                                  size: 12
-                                },
-                                callbacks: {
-                                  title: function(tooltipItems) {
-                                    const dataIndex = tooltipItems[0].dataIndex;
-                                    if (selectedMonth !== null) {
-                                      return `Week ${dataIndex + 1}`;
-                                    } else {
-                                      return monthLabels[dataIndex];
-                                    }
-                                  },
-                                  label: (context) => {
-                                    const amount = context.raw;
-                                    const formattedAmount = formatAmount(amount);
-                                    const fullAmount = formatAmountFull(amount);
-                                    return [
-                                      `Revenue: ₹${formattedAmount}`,
-                                      `Amount: ${fullAmount}`
-                                    ];
-                                  }
-                                }
-                              }
-                            },
-                            onClick: (_, elements) => {
-                              if (elements.length > 0) {
-                                const queryParams = new URLSearchParams();
+                   {/* Total Revenue Bar Chart - FIRST CARD */}
+<div style={styles.card}>
+  <div>Total Revenue {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : '(Monthly)'}</div>
+  <div style={styles.chartContainer}>
+    <Bar
+      data={{
+        labels: selectedMonth !== null
+          ? chartData?.weeklyOrders?.map((_, i) => `Week ${i + 1}`) || ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
+          : monthLabels,
+        datasets: [
+          {
+            label: 'Total Revenue',
+            data: selectedMonth !== null
+              ? chartData?.weeklyOrders?.map(w => w.amount || 0) || []
+              : safeArray(chartData?.amountByMonth),
+            backgroundColor: selectedMonth !== null
+              ? [
+                  'rgba(49, 122, 176, 0.8)',  // Blue Grotto - Week 1
+                  'rgba(49, 122, 176, 0.7)',  // Lighter - Week 2
+                  'rgba(49, 122, 176, 0.6)',  // Lighter - Week 3
+                  'rgba(49, 122, 176, 0.5)',  // Lighter - Week 4
+                  'rgba(49, 122, 176, 0.4)',  // Lightest - Week 5
+                ]
+              : [
+                  'rgba(49, 122, 176, 0.9)',   // Jan - Solid Blue Grotto
+                  'rgba(49, 122, 176, 0.85)',  // Feb
+                  'rgba(49, 122, 176, 0.8)',   // Mar
+                  'rgba(49, 122, 176, 0.75)',  // Apr
+                  'rgba(49, 122, 176, 0.7)',   // May
+                  'rgba(49, 122, 176, 0.65)',  // Jun
+                  'rgba(49, 122, 176, 0.6)',   // Jul
+                  'rgba(49, 122, 176, 0.65)',  // Aug
+                  'rgba(49, 122, 176, 0.7)',   // Sep
+                  'rgba(49, 122, 176, 0.75)',  // Oct
+                  'rgba(49, 122, 176, 0.8)',   // Nov
+                  'rgba(49, 122, 176, 0.85)',  // Dec
+                ],
+            borderColor: selectedMonth !== null
+              ? [
+                  'rgba(49, 122, 176, 1)',
+                  'rgba(49, 122, 176, 0.9)',
+                  'rgba(49, 122, 176, 0.8)',
+                  'rgba(49, 122, 176, 0.7)',
+                  'rgba(49, 122, 176, 0.6)',
+                ]
+              : [
+                  'rgba(49, 122, 176, 1)',
+                  'rgba(49, 122, 176, 0.95)',
+                  'rgba(49, 122, 176, 0.9)',
+                  'rgba(49, 122, 176, 0.85)',
+                  'rgba(49, 122, 176, 0.8)',
+                  'rgba(49, 122, 176, 0.75)',
+                  'rgba(49, 122, 176, 0.7)',
+                  'rgba(49, 122, 176, 0.75)',
+                  'rgba(49, 122, 176, 0.8)',
+                  'rgba(49, 122, 176, 0.85)',
+                  'rgba(49, 122, 176, 0.9)',
+                  'rgba(49, 122, 176, 0.95)',
+                ],
+            borderWidth: 1,
+            borderRadius: 8,
+            hoverBackgroundColor: selectedMonth !== null
+              ? [
+                  'rgba(49, 122, 176, 1)',
+                  'rgba(49, 122, 176, 0.9)',
+                  'rgba(49, 122, 176, 0.8)',
+                  'rgba(49, 122, 176, 0.7)',
+                  'rgba(49, 122, 176, 0.6)',
+                ]
+              : [
+                  'rgba(49, 122, 176, 1)',
+                  'rgba(49, 122, 176, 0.95)',
+                  'rgba(49, 122, 176, 0.9)',
+                  'rgba(49, 122, 176, 0.85)',
+                  'rgba(49, 122, 176, 0.8)',
+                  'rgba(49, 122, 176, 0.75)',
+                  'rgba(49, 122, 176, 0.7)',
+                  'rgba(49, 122, 176, 0.75)',
+                  'rgba(49, 122, 176, 0.8)',
+                  'rgba(49, 122, 176, 0.85)',
+                  'rgba(49, 122, 176, 0.9)',
+                  'rgba(49, 122, 176, 0.95)',
+                ],
+            hoverBorderColor: '#FFFFFF',
+            hoverBorderWidth: 2,
+            barPercentage: 0.7,
+            categoryPercentage: 0.8
+          }
+        ]
+      }}
+      options={{
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(49, 122, 176, 0.95)',
+            titleColor: '#FFFFFF',
+            bodyColor: '#FFFFFF',
+            borderColor: '#317ab0',
+            borderWidth: 1,
+            cornerRadius: 8,
+            padding: 12,
+            titleFont: {
+              size: 13,
+              weight: 'bold'
+            },
+            bodyFont: {
+              size: 12
+            },
+            callbacks: {
+              title: function(tooltipItems) {
+                const dataIndex = tooltipItems[0].dataIndex;
+                if (selectedMonth !== null) {
+                  return `Week ${dataIndex + 1}`;
+                } else {
+                  return monthLabels[dataIndex];
+                }
+              },
+              label: (context) => {
+                const amount = context.raw;
+                const formattedAmount = formatAmount(amount);
+                const fullAmount = formatAmountFull(amount);
+                return [
+                  `Revenue: ₹${formattedAmount}`,
+                  `Amount: ${fullAmount}`
+                ];
+              }
+            }
+          }
+        },
+        onClick: (_, elements) => {
+          if (elements.length > 0) {
+            const queryParams = new URLSearchParams();
 
-                                if (selectedMonth === null) {
-                                  const clickedMonth = elements[0].index + 1;
-                                  queryParams.append('month', clickedMonth);
-                                  if (year !== 'all') {
-                                    queryParams.append('year', year);
-                                  }
+            if (selectedMonth === null) {
+              const clickedMonth = elements[0].index + 1;
+              queryParams.append('month', clickedMonth);
+              if (year !== 'all') {
+                queryParams.append('year', year);
+              }
 
-                                  const monthAmount = safeArray(chartData?.amountByMonth)[elements[0].index] || 0;
-                                  queryParams.append('monthAmount', monthAmount);
-                                  queryParams.append('monthName', monthLabels[elements[0].index]);
-                                } else {
-                                  const weekNumber = elements[0].index + 1;
-                                  queryParams.append('month', selectedMonth + 1);
-                                  if (year !== 'all') {
-                                    queryParams.append('year', year);
-                                  }
-                                  queryParams.append('week', weekNumber);
+              const monthAmount = safeArray(chartData?.amountByMonth)[elements[0].index] || 0;
+              queryParams.append('monthAmount', monthAmount);
+              queryParams.append('monthName', monthLabels[elements[0].index]);
+            } else {
+              const weekNumber = elements[0].index + 1;
+              queryParams.append('month', selectedMonth + 1);
+              if (year !== 'all') {
+                queryParams.append('year', year);
+              }
+              queryParams.append('week', weekNumber);
 
-                                  const weekAmount = chartData?.weeklyOrders?.[elements[0].index]?.amount || 0;
-                                  queryParams.append('weekAmount', weekAmount);
-                                  queryParams.append('monthName', monthLabels[selectedMonth]);
-                                }
+              const weekAmount = chartData?.weeklyOrders?.[elements[0].index]?.amount || 0;
+              queryParams.append('weekAmount', weekAmount);
+              queryParams.append('monthName', monthLabels[selectedMonth]);
+            }
 
-                                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-                              }
-                            },
-                            scales: {
-                              x: {
-                                grid: { 
-                                  display: true,
-                                  color: 'rgba(49, 122, 176, 0.1)',
-                                  drawBorder: false
-                                },
-                                ticks: { 
-                                  autoSkip: false,
-                                  color: '#317ab0',
-                                  font: {
-                                    size: 11,
-                                    weight: '500'
-                                  }
-                                }
-                              },
-                              y: {
-                                beginAtZero: true,
-                                grid: { 
-                                  color: 'rgba(49, 122, 176, 0.1)',
-                                  drawBorder: false
-                                },
-                                ticks: {
-                                  callback: function(value) {
-                                    if (value >= 10000000) {
-                                      return (value / 10000000).toFixed(1) + 'Cr';
-                                    } else if (value >= 100000) {
-                                      return (value / 100000).toFixed(1) + 'L';
-                                    } else if (value >= 1000) {
-                                      return (value / 1000).toFixed(1) + 'K';
-                                    }
-                                    return value;
-                                  },
-                                  color: '#317ab0',
-                                  font: {
-                                    size: 10
-                                  },
-                                  padding: 5
-                                }
-                              }
-                            },
-                            interaction: {
-                              intersect: false,
-                              mode: 'index'
-                            },
-                            animation: {
-                              duration: 1000,
-                              easing: 'easeOutQuart'
-                            }
-                          }}
-                        />
-                      </div>
-                      <div style={styles.number}>
-                        {formatAmount(calculateTotalRevenue())}
-                      </div>
-                      <div style={styles.revenueSubtext}>
-                        {formatAmountFull(calculateTotalRevenue())}
-                      </div>
-                      {selectedMonth !== null && (
-                        <button
-                          onClick={() => setSelectedMonth(null)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: '#317ab0',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            marginTop: '10px',
-                            fontWeight: 'bold',
-                            fontSize: '12px',
-                            transition: 'all 0.3s',
-                            boxShadow: '0 2px 4px rgba(49, 122, 176, 0.3)'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#2a6a9d';
-                            e.currentTarget.style.transform = 'translateY(-1px)';
-                            e.currentTarget.style.boxShadow = '0 4px 8px rgba(49, 122, 176, 0.4)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = '#317ab0';
-                            e.currentTarget.style.transform = 'translateY(0)';
-                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(49, 122, 176, 0.3)';
-                          }}
-                        >
-                          View All Months
-                        </button>
-                      )}
-                    </div>
+            navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+          }
+        },
+        scales: {
+          x: {
+            grid: { 
+              display: true,
+              color: 'rgba(49, 122, 176, 0.1)',
+              drawBorder: false
+            },
+            ticks: { 
+              autoSkip: false,
+              color: '#317ab0',
+              font: {
+                size: 11,
+                weight: '500'
+              }
+            }
+          },
+          y: {
+            beginAtZero: true,
+            grid: { 
+              color: 'rgba(49, 122, 176, 0.1)',
+              drawBorder: false
+            },
+            ticks: {
+              callback: function(value) {
+                if (value >= 10000000) {
+                  return (value / 10000000).toFixed(1) + 'Cr';
+                } else if (value >= 100000) {
+                  return (value / 100000).toFixed(1) + 'L';
+                } else if (value >= 1000) {
+                  return (value / 1000).toFixed(1) + 'K';
+                }
+                return value;
+              },
+              color: '#317ab0',
+              font: {
+                size: 10
+              },
+              padding: 5
+            }
+          }
+        },
+        interaction: {
+          intersect: false,
+          mode: 'index'
+        },
+        animation: {
+          duration: 1000,
+          easing: 'easeOutQuart'
+        }
+      }}
+    />
+  </div>
+  
+  {/* FIXED: Display the correct amount based on selection */}
+  <div style={styles.number}>
+    {selectedMonth !== null 
+      ? formatAmount(chartData?.amountByMonth?.[selectedMonth] || 0)
+      : formatAmount(safeArray(chartData?.amountByMonth).reduce((sum, amount) => sum + amount, 0))
+    }
+  </div>
+  
+  <div style={styles.revenueSubtext}>
+    {selectedMonth !== null 
+      ? formatAmountFull(chartData?.amountByMonth?.[selectedMonth] || 0)
+      : formatAmountFull(safeArray(chartData?.amountByMonth).reduce((sum, amount) => sum + amount, 0))
+    }
+  </div>
+  
+  {selectedMonth !== null && (
+    <button
+      onClick={() => setSelectedMonth(null)}
+      style={{
+        padding: '6px 12px',
+        backgroundColor: '#317ab0',
+        color: 'white',
+        border: 'none',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        marginTop: '10px',
+        fontWeight: 'bold',
+        fontSize: '12px',
+        transition: 'all 0.3s',
+        boxShadow: '0 2px 4px rgba(49, 122, 176, 0.3)'
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = '#2a6a9d';
+        e.currentTarget.style.transform = 'translateY(-1px)';
+        e.currentTarget.style.boxShadow = '0 4px 8px rgba(49, 122, 176, 0.4)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = '#317ab0';
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = '0 2px 4px rgba(49, 122, 176, 0.3)';
+      }}
+    >
+      View All Months
+    </button>
+  )}
+</div>
 
                     {/* Total Orders Bar Chart - WITH AMOUNT TOOLTIP */}
                     <div style={styles.card}>
