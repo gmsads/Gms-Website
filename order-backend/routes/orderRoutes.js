@@ -64,7 +64,150 @@ router.get("/requirements", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch requirements" });
   }
 });
+// ============================
+// GET all orders (including completed) - needed for "Completed" filter
+// ============================
+router.get("/orders/all", async (req, res) => {
+  try {
+    const orders = await Order.find({})
+      .sort({ orderDate: -1, createdAt: -1 });
+    res.json(orders);
+  } catch (err) {
+    console.error("Error fetching all orders:", err);
+    res.status(500).json({ error: "Failed to fetch orders" });
+  }
+});
 
+// ============================
+// GET all orders with advanced filtering for payments dashboard
+// ============================
+router.get("/orders/payments-dashboard", async (req, res) => {
+  try {
+    console.log("Payments dashboard request received with query:", req.query);
+    
+    const { 
+      executive, 
+      year, 
+      month, 
+      date,
+      filterType,
+      searchTerm 
+    } = req.query;
+
+    // Get all orders
+    let orders = await Order.find({}).sort({ orderDate: -1, createdAt: -1 });
+    
+    console.log(`Total orders in database: ${orders.length}`);
+
+    // Apply filters manually
+    let filteredOrders = [...orders];
+
+    // Filter by executive
+    if (executive) {
+      filteredOrders = filteredOrders.filter(order => 
+        order.executive && order.executive.toLowerCase() === executive.toLowerCase()
+      );
+    }
+
+    // Apply date filters
+    if (date) {
+      const filterDate = new Date(date);
+      filterDate.setHours(0, 0, 0, 0);
+      const nextDay = new Date(filterDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.orderDate) return false;
+        const orderDate = new Date(order.orderDate);
+        return orderDate >= filterDate && orderDate < nextDay;
+      });
+    } else if (year && month) {
+      const filterYear = parseInt(year);
+      const filterMonth = parseInt(month) - 1;
+      
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.orderDate) return false;
+        const orderDate = new Date(order.orderDate);
+        return orderDate.getFullYear() === filterYear && 
+               orderDate.getMonth() === filterMonth;
+      });
+    } else if (year) {
+      const filterYear = parseInt(year);
+      
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.orderDate) return false;
+        const orderDate = new Date(order.orderDate);
+        return orderDate.getFullYear() === filterYear;
+      });
+    }
+
+    // Apply filter type
+    if (filterType === 'today') {
+      // TODAY'S COLLECTIONS - Orders with delivery date today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0];
+      
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.rows || !order.rows.length) return false;
+        
+        // Check if any row has delivery date today
+        return order.rows.some(row => {
+          if (!row.deliveryDate) return false;
+          const deliveryDate = new Date(row.deliveryDate);
+          return deliveryDate.toISOString().split('T')[0] === todayStr;
+        });
+      });
+    } else if (filterType === 'other') {
+      // OTHER PENDING - balance > 0 AND no delivery today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0];
+      
+      filteredOrders = filteredOrders.filter(order => {
+        // Must have balance > 0
+        if (order.balance <= 0) return false;
+        
+        // Check if has delivery today
+        const hasDeliveryToday = order.rows?.some(row => {
+          if (!row.deliveryDate) return false;
+          const deliveryDate = new Date(row.deliveryDate);
+          return deliveryDate.toISOString().split('T')[0] === todayStr;
+        });
+        
+        // Include if NO delivery today
+        return !hasDeliveryToday;
+      });
+    } else if (filterType === 'completed') {
+      // COMPLETED PAYMENTS
+      filteredOrders = filteredOrders.filter(order => order.balance <= 0);
+    }
+
+    // Apply search term filter
+    if (searchTerm && searchTerm.trim() !== '') {
+      const term = searchTerm.toLowerCase();
+      filteredOrders = filteredOrders.filter(order => {
+        return (
+          (order.executive && order.executive.toLowerCase().includes(term)) ||
+          (order.business && order.business.toLowerCase().includes(term)) ||
+          (order.contactPerson && order.contactPerson.toLowerCase().includes(term)) ||
+          (order.phone && order.phone.includes(term)) ||
+          (order.orderNo && order.orderNo.toLowerCase().includes(term)) ||
+          (order.followUps && order.followUps.some(f => 
+            f.description && f.description.toLowerCase().includes(term)
+          ))
+        );
+      });
+    }
+
+    console.log(`After filters: ${filteredOrders.length} orders`);
+    res.json(filteredOrders);
+    
+  } catch (err) {
+    console.error("Error fetching payments dashboard data:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 // ============================
 // POST: Create new order (auto-generate orderNo)
 // ============================
