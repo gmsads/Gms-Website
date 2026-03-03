@@ -21,7 +21,6 @@ function OrderForm({
   const [targetChanged, setTargetChanged] = useState(false);
   const [requirements, setRequirements] = useState([]);
   const [sortedExecutives, setSortedExecutives] = useState([]);
-  const [saleClosedByExecutives, setSaleClosedByExecutives] = useState([]);
   const [selectedExecutive, setSelectedExecutive] = useState(
     existingData?.executive ||
     (isAdmin ? "" : localStorage.getItem("userName") || "")
@@ -29,7 +28,6 @@ function OrderForm({
   const [business, setBusiness] = useState(routerLocation.state?.businessName || "");
   const [contactPerson, setContactPerson] = useState(routerLocation.state?.customerName || "");
   const [clientLocation, setClientLocation] = useState(existingData?.location || "");
-  const [saleClosedBy, setSaleClosedBy] = useState(existingData?.saleClosedBy || "");
   
   // Lead Source states
   const [leadSources] = useState([
@@ -76,8 +74,6 @@ function OrderForm({
   const [poNumber, setPoNumber] = useState("");
   const [, setPoDocument] = useState(null);
   const [showInvoice, setShowInvoice] = useState(false);
-  const [splitCommission, setSplitCommission] = useState(false);
-  const [commissionSplitInfo, setCommissionSplitInfo] = useState(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [advanceError, setAdvanceError] = useState("");
   const [createdBy, setCreatedBy] = useState("");
@@ -105,7 +101,7 @@ function OrderForm({
       endDate: delivery.toISOString().split("T")[0],
       total: "0.00",
       deliveryDate: delivery.toISOString().split("T")[0],
-      gstIncluded: true, // UPDATED: GST automatically selected by default
+      gstIncluded: true,
     };
   }
 
@@ -265,7 +261,6 @@ Global Marketing Solutions Team`;
     const days = isTimeBasedRequirement(row.requirement) ? parseInt(row.days) || 1 : 1;
 
     let baseAmount = isTimeBasedRequirement(row.requirement) ? qty * rate * days : qty * rate;
-    // UPDATED: GST is applied based on checkbox state (default true)
     return row.gstIncluded ? (baseAmount * 1.18).toFixed(2) : baseAmount.toFixed(2);
   };
 
@@ -385,7 +380,6 @@ Global Marketing Solutions Team`;
         case "Renewal-Agent":
         case "Corporate":
         case "Walk-In":
-          // Keep as is for renewal types
           newClientType = existingData.clientType;
           break;
         default:
@@ -400,7 +394,6 @@ Global Marketing Solutions Team`;
     setBusiness(existingBusiness);
     setContactPerson("");
     setClientLocation("");
-    setSaleClosedBy("");
     setLeadSource(""); // Reset lead source
     setOtherLeadSource(""); // Reset other lead source
     setOrderDate(new Date().toISOString().split("T")[0]);
@@ -410,7 +403,7 @@ Global Marketing Solutions Team`;
     setDiscount(0);
     setRows([{
       ...getEmptyRow(),
-      gstIncluded: true // UPDATED: Ensure GST is selected by default for new orders
+      gstIncluded: true
     }]);
     setTotal(0);
     setDiscountedTotal(0);
@@ -426,8 +419,6 @@ Global Marketing Solutions Team`;
     setOtherMethod("");
     setPoNumber("");
     setPoDocument(null);
-    setSplitCommission(false);
-    setCommissionSplitInfo(null);
     setAdvanceError("");
     setWhatsappSent(false);
     setHasAdvanceApproval(false);
@@ -467,7 +458,6 @@ Global Marketing Solutions Team`;
         reason: approvalReason,
         orderData: {
           clientLocation,
-          saleClosedBy,
           orderDate,
           clientType,
           target,
@@ -477,7 +467,7 @@ Global Marketing Solutions Team`;
             quantity: row.quantity,
             rate: row.rate,
             total: row.total,
-            gstIncluded: row.gstIncluded // UPDATED: Include GST status
+            gstIncluded: row.gstIncluded
           })),
           discount,
           paymentMethods
@@ -526,7 +516,6 @@ Global Marketing Solutions Team`;
         ).sort((a, b) => a.name.localeCompare(b.name));
 
         setSortedExecutives(allExecutives);
-        setSaleClosedByExecutives(allExecutives);
 
         if (isAdmin) {
           setSortedExecutives(allExecutives);
@@ -567,7 +556,6 @@ Global Marketing Solutions Team`;
       setBusiness((existingData.business || "").toUpperCase());
       setContactPerson(existingData.contactPerson || "");
       setClientLocation(existingData.location || "");
-      setSaleClosedBy(existingData.saleClosedBy || "");
       setLeadSource(existingData.leadSource || ''); // Set lead source
       setOtherLeadSource(existingData.otherLeadSource || ''); // Set other lead source
       setContactNumber(`${existingData.contactCode || "+91"} ${existingData.phone || ""}`);
@@ -589,7 +577,7 @@ Global Marketing Solutions Team`;
           endDate: row.endDate || calculateDeliveryDate(row.deliveryDate),
           total: row.total.toString(),
           deliveryDate: row.deliveryDate,
-          gstIncluded: row.gstIncluded !== undefined ? row.gstIncluded : true, // UPDATED: Default to true if not set
+          gstIncluded: row.gstIncluded !== undefined ? row.gstIncluded : true,
         })));
         setTotal(existingData.total || 0);
         setDiscountedTotal(existingData.total - (existingData.discount || 0));
@@ -611,27 +599,9 @@ Global Marketing Solutions Team`;
     }
 
     fetchInitialData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingData, orderNumber, isAdmin, executives, routerLocation.state, isCreatingNew]);
 
-  useEffect(() => {
-    if (selectedExecutive && saleClosedBy) {
-      const shouldSplit = selectedExecutive !== saleClosedBy;
-      setSplitCommission(shouldSplit);
-
-      if (shouldSplit) {
-        const halfAmount = (parseFloat(discountedTotal) / 2).toFixed(2);
-        setCommissionSplitInfo({
-          executive1: selectedExecutive,
-          executive2: saleClosedBy,
-          amount1: halfAmount,
-          amount2: halfAmount
-        });
-      } else {
-        setCommissionSplitInfo(null);
-      }
-    }
-  }, [selectedExecutive, saleClosedBy, discountedTotal]);
+  // REMOVED: useEffect for splitCommission that was using saleClosedBy
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -662,204 +632,187 @@ Global Marketing Solutions Team`;
     await submitOrder();
   };
 
-  const submitOrder = async () => {
-    setIsSubmitting(true);
-    try {
-      const phone = contactNumber.replace(/\D/g, "").slice(-10);
-      if (phone.length !== 10) throw new Error("Please enter a valid 10-digit phone number");
+ // In OrderForm.js - submitOrder function
 
-      const totalNum = parseFloat(total) || 0;
-      const advanceNum = parseFloat(advance) || 0;
+const submitOrder = async () => {
+  setIsSubmitting(true);
+  try {
+    const phone = contactNumber.replace(/\D/g, "").slice(-10);
+    if (phone.length !== 10) throw new Error("Please enter a valid 10-digit phone number");
 
-      // Determine final lead source value
-      const finalLeadSource = leadSource === 'Other Specify' 
-        ? otherLeadSource 
-        : leadSource;
+    const totalNum = parseFloat(total) || 0;
+    const advanceNum = parseFloat(advance) || 0;
 
-      const designRequestData = {
-        executive: selectedExecutive,
-        businessName: business,
-        contactPerson: contactPerson,
-        phoneNumber: phone,
-        requirements: rows
-          .filter((row) => row.requirement)
-          .map((row) => row.requirement === "other" ? row.customRequirement : row.requirement)
-          .join(", "),
-        status: "pending",
-        requestDate: new Date().toISOString(),
-      };
+    // Determine final lead source value
+    const finalLeadSource = leadSource === 'Other Specify' 
+      ? otherLeadSource 
+      : leadSource;
 
-      let paymentMethodStr = paymentMethods.includes("UPI") && selectedUpi
-        ? paymentMethods.map((m) => m === "UPI" ? `UPI - ${selectedUpi}` : m).join(" + ")
-        : paymentMethods.join(" + ");
-
-      const shouldSplitCommission = saleClosedBy && selectedExecutive !== saleClosedBy;
-
-      const finalTotal = shouldSplitCommission ? (totalNum / 2).toFixed(2) : totalNum.toFixed(2);
-      const finalDiscountedTotal = shouldSplitCommission ? (parseFloat(discountedTotal) / 2).toFixed(2) : parseFloat(discountedTotal).toFixed(2);
-      const finalAdvance = shouldSplitCommission ? (advanceNum / 2).toFixed(2) : advanceNum.toFixed(2);
-      const finalBalance = shouldSplitCommission ? (parseFloat(balance) / 2).toFixed(2) : parseFloat(balance).toFixed(2);
-      const finalDiscount = shouldSplitCommission ? (parseFloat(discount) / 2).toFixed(2) : parseFloat(discount).toFixed(2);
-
-      const finalCreatedBy = isAdmin ? createdBy : (existingData?.createdBy || selectedExecutive);
-
-      const requirementDetails = rows
+    const designRequestData = {
+      executive: selectedExecutive,
+      businessName: business,
+      contactPerson: contactPerson,
+      phoneNumber: phone,
+      requirements: rows
         .filter((row) => row.requirement)
-        .map((row) => {
-          const requirementName = row.requirement === "other" ? row.customRequirement : row.requirement;
-          const quantity = row.quantity ? parseFloat(row.quantity) : 0;
-          const rate = row.rate ? parseFloat(row.rate) : 0;
-          const rowTotal = row.total ? parseFloat(row.total) : 0;
+        .map((row) => row.requirement === "other" ? row.customRequirement : row.requirement)
+        .join(", "),
+      status: "pending",
+      requestDate: new Date().toISOString(),
+    };
 
-          return {
-            name: requirementName,
-            quantity: quantity,
-            rate: rate,
-            total: rowTotal,
-            description: row.description || "",
-            days: row.days || "",
-            deliveryDate: row.deliveryDate || "",
-            gstIncluded: row.gstIncluded // UPDATED: Include GST status
-          };
-        });
+    let paymentMethodStr = paymentMethods.includes("UPI") && selectedUpi
+      ? paymentMethods.map((m) => m === "UPI" ? `UPI - ${selectedUpi}` : m).join(" + ")
+      : paymentMethods.join(" + ");
 
-      const allRequirements = requirementDetails
-        .map(req => `${req.quantity} x ${req.name}`)
-        .join(", ");
+    const finalCreatedBy = isAdmin ? createdBy : (existingData?.createdBy || selectedExecutive);
 
-      const allDescriptions = requirementDetails
-        .map(req => `${req.description}${req.days ? ` (${req.days} days)` : ''}`)
-        .filter(desc => desc.trim())
-        .join(" | ");
+    // FIX: Create requirement details array for each row
+    const requirementDetails = rows
+      .filter((row) => row.requirement)
+      .map((row) => {
+        const requirementName = row.requirement === "other" ? row.customRequirement : row.requirement;
+        const quantity = row.quantity ? parseFloat(row.quantity) : 0;
+        const rate = row.rate ? parseFloat(row.rate) : 0;
+        const rowTotal = row.total ? parseFloat(row.total) : 0;
 
-      const mainOrderData = {
-        executive: selectedExecutive,
-        business,
-        contactPerson,
-        location: clientLocation,
-        saleClosedBy: saleClosedBy || selectedExecutive,
-        leadSource: finalLeadSource, // Add lead source to order data
-        contactCode: "+91",
-        phone,
-        orderDate,
-        target,
-        clientType: clientType || "New",
-        rows: [{
-          requirement: allRequirements,
-          description: allDescriptions || "Order Requirements",
-          quantity: 1,
-          rate: parseFloat(totalNum.toFixed(2)),
-          total: finalTotal,
-          deliveryDate: rows[0]?.deliveryDate || new Date().toISOString().split("T")[0],
-          customRequirement: allRequirements,
-          gstIncluded: rows.some(row => row.gstIncluded), // UPDATED: Include GST status
-          requirementDetails: requirementDetails
-        }],
-        advanceDate,
-        paymentDate,
-        paymentMethods: paymentMethodStr,
-        advance: finalAdvance,
-        balance: finalBalance,
-        total: finalTotal,
-        discount: finalDiscount,
-        discountedTotal: finalDiscountedTotal,
-        chequeNumber,
-        chequeImage,
-        designStatus: design === "no" ? "pending" : "provided",
-        createdBy: finalCreatedBy,
-        commissionSplit: shouldSplitCommission ? {
-          executive1: selectedExecutive,
-          executive2: saleClosedBy,
-          amount1: finalDiscountedTotal,
-          amount2: finalDiscountedTotal,
-          split: true
-        } : {
-          executive: selectedExecutive,
-          amount: parseFloat(discountedTotal),
-          split: false
-        },
-        originalRows: rows.map(row => ({
+        return {
+          name: requirementName,
+          quantity: quantity,
+          rate: rate,
+          total: rowTotal,
+          description: row.description || "",
+          days: row.days || "",
+          deliveryDate: row.deliveryDate || "",
+          gstIncluded: row.gstIncluded,
+          assignedExecutive: row.assignedExecutive || null,
+          status: row.status || "Pending",
+          remark: row.remark || ""
+        };
+      });
+
+    // Create a summary string for backward compatibility
+    const allRequirements = requirementDetails
+      .map(req => `${req.quantity} x ${req.name}`)
+      .join(", ");
+
+    const allDescriptions = requirementDetails
+      .map(req => `${req.description}${req.days ? ` (${req.days} days)` : ''}`)
+      .filter(desc => desc.trim())
+      .join(" | ");
+
+    // FIX: Store EACH ROW SEPARATELY in the rows array, not just one aggregated row
+    const mainOrderData = {
+      executive: selectedExecutive,
+      business,
+      contactPerson,
+      location: clientLocation,
+      leadSource: finalLeadSource,
+      otherLeadSource: otherLeadSource,
+      contactCode: "+91",
+      phone,
+      orderDate,
+      target,
+      clientType: clientType || "New",
+      
+      // FIX: Store each requirement as a separate row in the rows array
+      rows: rows
+        .filter((row) => row.requirement) // Only include rows with requirements
+        .map((row) => ({
           requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
-          description: row.description,
-          quantity: row.quantity,
-          rate: row.rate,
-          days: row.days,
-          total: row.total,
-          deliveryDate: row.deliveryDate,
-          gstIncluded: row.gstIncluded // UPDATED: Include GST status
-        }))
-      };
+          customRequirement: row.customRequirement || "",
+          description: row.description || "",
+          quantity: parseFloat(row.quantity) || 0,
+          rate: parseFloat(row.rate) || 0,
+          days: row.days ? parseInt(row.days) : 0,
+          startDate: row.startDate || null,
+          endDate: row.endDate || null,
+          total: parseFloat(row.total) || 0,
+          deliveryDate: row.deliveryDate || null,
+          gstIncluded: row.gstIncluded !== undefined ? row.gstIncluded : true,
+          assignedExecutive: row.assignedExecutive || null,
+          remark: row.remark || "",
+          isCompleted: row.isCompleted || false,
+          status: row.status || "Pending"
+        })),
+      
+      // Store requirement details for reference (optional)
+      requirementDetails: requirementDetails,
+      
+      advanceDate,
+      paymentDate,
+      paymentMethods: paymentMethodStr,
+      advance: advanceNum.toFixed(2),
+      balance: (totalNum - advanceNum - (parseFloat(discount) || 0)).toFixed(2),
+      total: totalNum.toFixed(2),
+      discount: (parseFloat(discount) || 0).toFixed(2),
+      discountedTotal: (totalNum - (parseFloat(discount) || 0)).toFixed(2),
+      chequeNumber,
+      chequeImage,
+      designStatus: design === "no" ? "pending" : "provided",
+      createdBy: finalCreatedBy,
+      
+      // Keep original rows for backward compatibility
+      originalRows: rows.map(row => ({
+        requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
+        description: row.description,
+        quantity: row.quantity,
+        rate: row.rate,
+        days: row.days,
+        total: row.total,
+        deliveryDate: row.deliveryDate,
+        gstIncluded: row.gstIncluded
+      }))
+    };
 
-      if (shouldSplitCommission) {
-        mainOrderData.isCommissionSplit = true;
-        mainOrderData.splitDetails = {
-          partnerExecutive: saleClosedBy,
-          splitPercentage: 50
-        };
-      }
+    console.log('Final order data being submitted:', mainOrderData);
+    console.log('Rows count:', mainOrderData.rows.length);
+    console.log('First row quantity:', mainOrderData.rows[0]?.quantity);
 
-      console.log('Final order data being submitted:', mainOrderData);
+    setIsSubmittingDesign(true);
+    await axios.post("/api/design-requests", designRequestData);
+    setIsSubmittingDesign(false);
 
-      setIsSubmittingDesign(true);
-      await axios.post("/api/design-requests", designRequestData);
-      setIsSubmittingDesign(false);
+    const orderResponse = (existingData && !isCreatingNew)
+      ? await axios.put(`/api/orders/${existingData._id}`, mainOrderData)
+      : await axios.post("/api/submit", mainOrderData);
 
-      const orderResponse = (existingData && !isCreatingNew)
-        ? await axios.put(`/api/orders/${existingData._id}`, mainOrderData)
-        : await axios.post("/api/submit", mainOrderData);
+    const orderDataForWhatsApp = {
+      business: business,
+      contactPerson: contactPerson,
+      orderNumber: orderResponse.data.orderNumber || `ORD-${Date.now()}`,
+      requirements: allRequirements,
+      requirementDetails: requirementDetails,
+      total: discountedTotal,
+      advance: advance,
+      balance: balance,
+      orderDate: orderDate,
+      location: clientLocation,
+      paymentMethods: paymentMethodStr,
+      advanceDate: advanceDate,
+      paymentDate: paymentDate,
+      chequeNumber: chequeNumber,
+      upiId: selectedUpi,
+      bankName: bankName,
+      transactionRef: transactionRef,
+      poNumber: poNumber
+    };
 
-      if (shouldSplitCommission) {
-        const duplicateOrderData = {
-          ...mainOrderData,
-          executive: saleClosedBy,
-          isCommissionSplit: true,
-          originalOrderId: orderResponse.data._id,
-          splitDetails: {
-            partnerExecutive: selectedExecutive,
-            splitPercentage: 50
-          }
-        };
+    sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
 
-        await axios.post("/api/submit", duplicateOrderData);
-      }
-
-      const orderDataForWhatsApp = {
-        business: business,
-        contactPerson: contactPerson,
-        orderNumber: orderResponse.data.orderNumber || `ORD-${Date.now()}`,
-        requirements: allRequirements,
-        requirementDetails: requirementDetails,
-        total: discountedTotal,
-        advance: advance,
-        balance: balance,
-        orderDate: orderDate,
-        location: clientLocation,
-        paymentMethods: paymentMethodStr,
-        advanceDate: advanceDate,
-        paymentDate: paymentDate,
-        chequeNumber: chequeNumber,
-        upiId: selectedUpi,
-        bankName: bankName,
-        transactionRef: transactionRef,
-        poNumber: poNumber
-      };
-
-      sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
-
-      setShowSuccessModal(true);
-      setTimeout(() => {
-        setShowSuccessModal(false);
-        setIsSubmitting(false);
-        setIsCreatingNew(false);
-        if (onSuccess) onSuccess(orderResponse.data);
-      }, 2000);
-    } catch (err) {
-      console.error("Submission error:", err);
-      alert(`Submission failed: ${err.response?.data?.message || err.message}`);
+    setShowSuccessModal(true);
+    setTimeout(() => {
+      setShowSuccessModal(false);
       setIsSubmitting(false);
-    }
-  };
-
+      setIsCreatingNew(false);
+      if (onSuccess) onSuccess(orderResponse.data);
+    }, 2000);
+  } catch (err) {
+    console.error("Submission error:", err);
+    alert(`Submission failed: ${err.response?.data?.message || err.message}`);
+    setIsSubmitting(false);
+  }
+};
   const fetchTargetForDate = async (dateString) => {
     if (!dateString || !selectedExecutive) return;
     setLoadingTarget(true);
@@ -900,7 +853,7 @@ Global Marketing Solutions Team`;
 
   const handleAddRow = () => setRows((prev) => [...prev, {
     ...getEmptyRow(),
-    gstIncluded: true // UPDATED: Ensure new rows have GST selected by default
+    gstIncluded: true
   }]);
 
   const handleRowChange = (index, field, value) => {
@@ -917,7 +870,7 @@ Global Marketing Solutions Team`;
       updatedRows[index][field] = value;
       if (isTimeBased) updatedRows[index].endDate = calculateDeliveryDate(value, parseInt(updatedRows[index].days) || 1);
     }
-    else if (field === "gstIncluded") updatedRows[index][field] = value; // UPDATED: Handle GST checkbox change
+    else if (field === "gstIncluded") updatedRows[index][field] = value;
     else updatedRows[index][field] = value;
 
     updatedRows[index].total = calculateRowTotal(updatedRows[index]);
@@ -1236,12 +1189,8 @@ Global Marketing Solutions Team`;
                 {existingData.executive}
               </div>
             </div>
-            <div>
-              <div style={{ color: '#666', fontSize: '12px' }}>Sale Closed By</div>
-              <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
-                {existingData.saleClosedBy || existingData.executive}
-              </div>
-            </div>
+            {/* REMOVED: Sale Closed By display section */}
+            
             {/* Lead Source display */}
             {existingData.leadSource && (
               <div>
@@ -1790,7 +1739,7 @@ Global Marketing Solutions Team`;
             />
           </label>
 
-          {/* UPDATED SECTION: Added Lead Source field */}
+          {/* UPDATED SECTION: Removed Sale Closed By field */}
           <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: '200px' }}>
               <label>
@@ -1822,20 +1771,6 @@ Global Marketing Solutions Team`;
                 />
               </label>
             </div>
-            <div style={{ flex: 1, minWidth: '200px' }}>
-              <label>
-                Sale Closed By:
-                <select
-                  value={saleClosedBy}
-                  onChange={(e) => setSaleClosedBy(e.target.value)}
-                >
-                  <option value="">Select Executive</option>
-                  {saleClosedByExecutives.map((exec) => (
-                    <option key={exec._id} value={exec.name}>{exec.name}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
             {/* Lead Source Field */}
             <div style={{ flex: 1, minWidth: '200px' }}>
               <label>
@@ -1863,25 +1798,7 @@ Global Marketing Solutions Team`;
             </div>
           </div>
 
-          {splitCommission && commissionSplitInfo && (
-            <div style={{
-              backgroundColor: '#e8f5e8',
-              border: '1px solid #4caf50',
-              borderRadius: '6px',
-              padding: '15px',
-              marginBottom: '15px'
-            }}>
-              <h4 style={{ margin: '0 0 10px 0', color: '#2e7d32' }}>Commission Split (50/50)</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div>
-                  <strong>{commissionSplitInfo.executive1}:</strong> ₹{commissionSplitInfo.amount1}
-                </div>
-                <div>
-                  <strong>{commissionSplitInfo.executive2}:</strong> ₹{commissionSplitInfo.amount2}
-                </div>
-              </div>
-            </div>
-          )}
+          {/* REMOVED: splitCommission and commissionSplitInfo display section */}
 
           <div className="design-status-container" style={{ marginBottom: "16px" }}>
             <fieldset style={{ border: "none", padding: 0, margin: 0 }}>

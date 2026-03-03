@@ -95,6 +95,53 @@ function ViewOrders() {
         z-index: auto !important;
       }
     }
+    
+    /* Print Styles */
+    @media print {
+      .no-print {
+        display: none !important;
+      }
+      .print-only {
+        display: block !important;
+      }
+      .print-header {
+        text-align: center;
+        margin-bottom: 20px;
+        padding: 10px;
+        border-bottom: 2px solid #000;
+      }
+      .print-footer {
+        margin-top: 30px;
+        text-align: center;
+        font-size: 12px;
+        color: #666;
+      }
+      .print-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+      }
+      .print-table th,
+      .print-table td {
+        border: 1px solid #000;
+        padding: 8px;
+        text-align: left;
+      }
+      .print-table th {
+        background-color: #f0f0f0;
+        font-weight: bold;
+      }
+      .print-summary {
+        margin: 20px 0;
+        padding: 10px;
+        border: 1px solid #000;
+      }
+      .print-signature {
+        margin-top: 50px;
+        display: flex;
+        justify-content: space-between;
+      }
+    }
   `;
 
   // Function to check if user should see summary cards
@@ -168,6 +215,638 @@ function ViewOrders() {
       // Return original string on error
       return dateString;
     }
+  };
+
+  // Function to format date in YYYY-MM-DD format for API
+  const formatDateForAPI = (dateString) => {
+    if (!dateString) return '';
+
+    try {
+      // If it's in DD-MM-YYYY format
+      if (typeof dateString === 'string' && dateString.includes('-')) {
+        const parts = dateString.split('-');
+        if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+          return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        // If it's already in YYYY-MM-DD format
+        if (parts[0].length === 4 && parts[1].length === 2 && parts[2].length === 2) {
+          return dateString;
+        }
+      }
+
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+
+      return `${year}-${month}-${day}`;
+    } catch {
+      return '';
+    }
+  };
+
+  // Function to print individual order directly
+  const handlePrintOrder = (order) => {
+    // Calculate order totals
+    const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+    const advancePaid = parseFloat(order.advance) || 0;
+    const paymentHistoryTotal = order.paymentHistory ?
+      order.paymentHistory.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0) : 0;
+    const totalPaid = advancePaid + paymentHistoryTotal;
+    const balanceDue = orderTotal - totalPaid;
+
+    // Create a hidden iframe for printing
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    iframe.style.top = '-9999px';
+    iframe.style.left = '-9999px';
+    document.body.appendChild(iframe);
+
+    // Get the iframe document
+    const iframeDoc = iframe.contentWindow.document;
+
+    // Write the print content to the iframe
+    iframeDoc.open();
+    iframeDoc.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Order #${order.orderNo}</title>
+        <style>
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+          }
+          
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #fff;
+          }
+          
+          /* Print Header */
+          .print-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #000;
+          }
+          
+          .print-header h1 {
+            font-size: 28px;
+            margin-bottom: 5px;
+            color: #000;
+          }
+          
+          .print-header h2 {
+            font-size: 20px;
+            color: #333;
+            font-weight: normal;
+          }
+          
+          .print-header .order-no {
+            font-size: 24px;
+            font-weight: bold;
+            color: #218c74;
+            margin-top: 10px;
+          }
+          
+          /* Company Info */
+          .company-info {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+          }
+          
+          .company-info h3 {
+            font-size: 22px;
+            margin-bottom: 5px;
+          }
+          
+          .company-info p {
+            font-size: 14px;
+            color: #666;
+          }
+          
+          /* Customer Details Section */
+          .customer-details {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #fff;
+            border: 2px solid #333;
+          }
+          
+          .customer-details h3 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #333;
+          }
+          
+          .details-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+          }
+          
+          .detail-item {
+            padding: 8px;
+          }
+          
+          .detail-item strong {
+            display: block;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 4px;
+          }
+          
+          .detail-item span {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+          }
+          
+          /* Order Items Table */
+          .order-items {
+            margin-bottom: 30px;
+          }
+          
+          .order-items h3 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #333;
+          }
+          
+          .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+          }
+          
+          .items-table th {
+            background: #333;
+            color: #fff;
+            font-weight: bold;
+            padding: 12px;
+            text-align: left;
+            font-size: 14px;
+          }
+          
+          .items-table td {
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+          }
+          
+          .items-table tr:nth-child(even) {
+            background: #f9f9f9;
+          }
+          
+          /* Financial Summary */
+          .financial-summary {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border: 2px solid #333;
+          }
+          
+          .financial-summary h3 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #333;
+          }
+          
+          .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+          }
+          
+          .summary-item {
+            padding: 12px;
+            background: #fff;
+            border: 1px solid #ddd;
+          }
+          
+          .summary-item.total {
+            background: #e8f5e9;
+            border: 2px solid #4caf50;
+          }
+          
+          .summary-item.balance {
+            background: #ffebee;
+            border: 2px solid #f44336;
+          }
+          
+          .summary-item strong {
+            display: block;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 8px;
+          }
+          
+          .summary-item .amount {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+          }
+          
+          .summary-item.total .amount {
+            color: #4caf50;
+          }
+          
+          .summary-item.balance .amount {
+            color: #f44336;
+          }
+          
+          /* Payment History */
+          .payment-history {
+            margin-bottom: 30px;
+          }
+          
+          .payment-history h3 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #333;
+          }
+          
+          .payment-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+          }
+          
+          .payment-table th {
+            background: #333;
+            color: #fff;
+            padding: 10px;
+            text-align: left;
+            font-size: 14px;
+          }
+          
+          .payment-table td {
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+          }
+          
+          .payment-table tr.total-row {
+            background: #f0f0f0;
+            font-weight: bold;
+          }
+          
+          /* Terms and Conditions */
+          .terms-section {
+            margin: 40px 0 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+          }
+          
+          .terms-section h3 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #333;
+          }
+          
+          .terms-section ul {
+            list-style-type: none;
+            padding-left: 0;
+          }
+          
+          .terms-section li {
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+            font-size: 14px;
+          }
+          
+          .terms-section li:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #333;
+            font-weight: bold;
+          }
+          
+          /* Signature Section */
+          .signature-section {
+            display: flex;
+            justify-content: space-between;
+            margin: 50px 0 30px;
+            padding: 20px 0;
+            border-top: 2px dashed #333;
+          }
+          
+          .signature-block {
+            text-align: center;
+            min-width: 200px;
+          }
+          
+          .signature-line {
+            margin-top: 40px;
+            padding-top: 10px;
+            border-top: 1px solid #333;
+          }
+          
+          .signature-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+          }
+          
+          /* Footer */
+          .print-footer {
+            margin-top: 30px;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #ddd;
+          }
+          
+          .print-footer p {
+            margin: 5px 0;
+          }
+          
+          /* Print Media Styles */
+          @media print {
+            body {
+              padding: 0;
+              margin: 0;
+            }
+            
+            .customer-details,
+            .financial-summary,
+            .terms-section {
+              break-inside: avoid;
+            }
+            
+            .items-table,
+            .payment-table {
+              break-inside: auto;
+            }
+            
+            .signature-section {
+              break-inside: avoid;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <!-- Print Header -->
+        <div class="print-header">
+          <h1>${order.business}</h1>
+          <h2>Order Invoice</h2>
+          <div class="order-no">Order #${order.orderNo}</div>
+        </div>
+        
+        <!-- Company Information -->
+        <div class="company-info">
+          <h3>Your Company Name</h3>
+          <p>123 Business Street, City, State - 123456</p>
+          <p>Phone: +91 9876543210 | Email: info@company.com</p>
+          <p>GST: 22AAAAA0000A1Z5</p>
+        </div>
+        
+        <!-- Customer Details -->
+        <div class="customer-details">
+          <h3>Customer Information</h3>
+          <div class="details-grid">
+            <div class="detail-item">
+              <strong>Contact Person:</strong>
+              <span>${order.contactPerson || 'N/A'}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Location:</strong>
+              <span>${order.location || 'N/A'}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Executive:</strong>
+              <span>${order.executive || 'N/A'}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Lead Source:</strong>
+              <span>${order.leadSource || 'Not specified'} ${order.otherLeadSource ? `(${order.otherLeadSource})` : ''}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Contact:</strong>
+              <span>${order.contactCode || ''} ${order.phone || ''}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Order Date:</strong>
+              <span>${formatDate(order.orderDate)}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Client Type:</strong>
+              <span>${order.clientType || 'N/A'}</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Order Items -->
+        <div class="order-items">
+          <h3>Order Items</h3>
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Description</th>
+                <th>Requirement</th>
+                <th>Qty</th>
+                <th>Rate (₹)</th>
+                <th>Total (₹)</th>
+                <th>Delivery Date</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${order.rows.map((row, index) => `
+                <tr>
+                  <td>${index + 1}</td>
+                  <td>${row.description || ''}</td>
+                  <td>${row.requirement || ''} ${row.customRequirement ? `(${row.customRequirement})` : ''}</td>
+                  <td style="text-align: right;">${row.quantity || 0}</td>
+                  <td style="text-align: right;">${parseFloat(row.rate || 0).toFixed(2)}</td>
+                  <td style="text-align: right; font-weight: bold;">${parseFloat(row.total || 0).toFixed(2)}</td>
+                  <td>${formatDate(row.deliveryDate)}</td>
+                  <td>
+                    <span style="
+                      display: inline-block;
+                      padding: 4px 8px;
+                      background: ${row.status === 'Completed' ? '#4caf50' : row.status === 'In Progress' ? '#ff9800' : '#f44336'};
+                      color: white;
+                      border-radius: 4px;
+                      font-size: 12px;
+                    ">${row.status || 'Pending'}</span>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- Financial Summary -->
+        <div class="financial-summary">
+          <h3>Financial Summary</h3>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <strong>Order Total:</strong>
+              <div class="amount">₹${orderTotal.toFixed(2)}</div>
+            </div>
+            <div class="summary-item">
+              <strong>Discount:</strong>
+              <div class="amount">₹${(parseFloat(order.discount) || 0).toFixed(2)}</div>
+            </div>
+            <div class="summary-item total">
+              <strong>Final Amount:</strong>
+              <div class="amount">₹${(parseFloat(order.discountedTotal) || orderTotal).toFixed(2)}</div>
+            </div>
+            <div class="summary-item">
+              <strong>Advance Paid:</strong>
+              <div class="amount">₹${(parseFloat(order.advance) || 0).toFixed(2)}</div>
+            </div>
+            <div class="summary-item balance">
+              <strong>Balance Due:</strong>
+              <div class="amount">₹${balanceDue.toFixed(2)}</div>
+            </div>
+            <div class="summary-item">
+              <strong>Total Paid:</strong>
+              <div class="amount">₹${totalPaid.toFixed(2)}</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Payment History -->
+        ${order.paymentHistory && order.paymentHistory.length > 0 ? `
+          <div class="payment-history">
+            <h3>Payment History</h3>
+            <table class="payment-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Amount (₹)</th>
+                  <th>Method</th>
+                  <th>Reference</th>
+                  <th>Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${order.paymentHistory.map(payment => `
+                  <tr>
+                    <td>${formatDate(payment.date)}</td>
+                    <td style="text-align: right;">${parseFloat(payment.amount || 0).toFixed(2)}</td>
+                    <td>${payment.method}</td>
+                    <td>${payment.reference || '-'}</td>
+                    <td>${payment.note || '-'}</td>
+                  </tr>
+                `).join('')}
+                <tr class="total-row">
+                  <td colspan="5" style="text-align: right; font-weight: bold;">
+                    Total Paid: ₹${paymentHistoryTotal.toFixed(2)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ` : ''}
+        
+        <!-- Service Details -->
+        <div class="customer-details">
+          <h3>Service Details</h3>
+          <div class="details-grid">
+            ${order.rows.map((row, index) => `
+              <div class="detail-item">
+                <strong>Item ${index + 1} - Service Executive:</strong>
+                <span>${row.assignedExecutive || 'Not Assigned'}</span>
+              </div>
+              <div class="detail-item">
+                <strong>Remark:</strong>
+                <span>${row.remark || 'No remarks'}</span>
+              </div>
+              <div class="detail-item">
+                <strong>Service Period:</strong>
+                <span>${formatDate(row.startDate) || 'N/A'} to ${formatDate(row.endDate) || 'N/A'}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        
+        <!-- Terms and Conditions -->
+        <div class="terms-section">
+          <h3>Terms and Conditions</h3>
+          <ul>
+            <li>This is a computer generated invoice, signature not required.</li>
+            <li>Payment is due within 30 days of invoice date.</li>
+            <li>All disputes are subject to local jurisdiction.</li>
+            <li>Goods sold are not returnable.</li>
+            <li>Interest @ 18% p.a. will be charged on overdue payments.</li>
+          </ul>
+        </div>
+        
+        <!-- Signature Section -->
+        <div class="signature-section">
+          <div class="signature-block">
+            <div class="signature-label">Customer Signature</div>
+            <div class="signature-line"></div>
+          </div>
+          <div class="signature-block">
+            <div class="signature-label">Authorized Signature</div>
+            <div class="signature-line"></div>
+          </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="print-footer">
+          <p>Thank you for your business!</p>
+          <p>Generated on: ${new Date().toLocaleString()}</p>
+          <p>Order #${order.orderNo}</p>
+        </div>
+        
+        <script>
+          // Auto trigger print when content is loaded
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 100);
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    iframeDoc.close();
+
+    // Remove the iframe after printing
+    iframe.contentWindow.onafterprint = function () {
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 100);
+    };
+
+    // Fallback for browsers that don't support onafterprint
+    setTimeout(() => {
+      if (document.body.contains(iframe)) {
+        document.body.removeChild(iframe);
+      }
+    }, 10000); // Remove after 10 seconds as fallback
   };
 
   // Function to navigate between months
@@ -578,6 +1257,7 @@ function ViewOrders() {
     fetchOrders(role, name, month, year, clientType, executive, executiveName, leadSource);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, location.state, yearFilter]);
+
   // useEffect to handle click outside lead source filter dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -1134,7 +1814,6 @@ function ViewOrders() {
         'Business': order.business,
         'Customer': order.contactPerson,
         'Location': order.location,
-        'Sale Closed By': order.saleClosedBy,
         'Lead Source': order.leadSource || '',
         'Other Lead Source': order.otherLeadSource || '',
         'Contact': `${order.contactCode} ${order.phone}`,
@@ -1221,7 +1900,6 @@ function ViewOrders() {
             business: item['Business'],
             contactPerson: item['Customer'],
             location: item['Location'],
-            saleClosedBy: item['Sale Closed By'],
             leadSource: item['Lead Source'] || '',
             otherLeadSource: item['Other Lead Source'] || '',
             contactCode: item['Contact']?.split(' ')[0] || '+91',
@@ -1301,7 +1979,6 @@ function ViewOrders() {
       order.business || '',
       order.contactPerson || '',
       order.location || '',
-      order.saleClosedBy || '',
       order.leadSource || '',
       order.otherLeadSource || '',
       `${order.contactCode || ''} ${order.phone || ''}`,
@@ -2170,7 +2847,6 @@ function ViewOrders() {
                       {/* Regular Headers */}
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Customer</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Location</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Sale Closed By</th>
                       {/* Lead Source Header */}
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Lead Source</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Contact</th>
@@ -2194,309 +2870,371 @@ function ViewOrders() {
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Payment Date</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Payment Method</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Cheque Number</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '150px' }}>Action</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '200px' }}>Action</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {group.orders.map((order, orderIndex) =>
-                      order.rows.filter(filterOrders(order)).map((row, rowIndex) => {
-                        // Calculate background color based on row index
-                        const rowBgColor = (orderIndex + rowIndex) % 2 === 0 ? '#fdfdfd' : '#f5f9fa';
+                 <tbody>
+  {group.orders.map((order, orderIndex) =>
+    order.rows.filter(filterOrders(order)).map((row, rowIndex) => {
+      // Calculate background color based on row index
+      const rowBgColor = (orderIndex + rowIndex) % 2 === 0 ? '#fdfdfd' : '#f5f9fa';
 
-                        return (
-                          <tr
-                            key={`${order._id}-${rowIndex}`}
-                            style={{
-                              backgroundColor: rowBgColor,
-                              borderBottom: '1px solid #eee'
-                            }}
-                          >
-                            {/* Sticky Cells - S.No, Executive, Business with responsive class */}
-                            <td className="sticky-column" style={{
-                              padding: '10px 8px',
-                              textAlign: 'center',
-                              position: 'sticky',
-                              left: 0,
-                              backgroundColor: rowBgColor,
-                              zIndex: 9,
-                              minWidth: '50px'
-                            }}>{orderIndex + 1}</td>
+      return (
+        <tr
+          key={`${order._id}-${rowIndex}`}
+          style={{
+            backgroundColor: rowBgColor,
+            borderBottom: '1px solid #eee'
+          }}
+        >
+          {/* Sticky Cells - S.No, Executive, Business with responsive class */}
+          <td className="sticky-column" style={{
+            padding: '10px 8px',
+            textAlign: 'center',
+            position: 'sticky',
+            left: 0,
+            backgroundColor: rowBgColor,
+            zIndex: 9,
+            minWidth: '50px'
+          }}>{orderIndex + 1}</td>
 
-                            <td className="sticky-column" style={{
-                              padding: '10px 8px',
-                              position: 'sticky',
-                              left: '50px',
-                              backgroundColor: rowBgColor,
-                              zIndex: 9,
-                              minWidth: '100px'
-                            }}>{order.executive}</td>
+          <td className="sticky-column" style={{
+            padding: '10px 8px',
+            position: 'sticky',
+            left: '50px',
+            backgroundColor: rowBgColor,
+            zIndex: 9,
+            minWidth: '100px'
+          }}>{order.executive}</td>
 
-{/* // In the business name cell where you have the button for Admin users */}
-                            <td className="sticky-column" style={{
-                              padding: '10px 8px',
-                              position: 'sticky',
-                              left: '150px',
-                              backgroundColor: rowBgColor,
-                              zIndex: 9,
-                              minWidth: '150px'
-                            }}>
-                              {userRole === 'Admin' ? (
-                                <button
-                                  onClick={() => navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(order.business)}`)}
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    color: '#003366',
-                                    cursor: 'pointer',
-                                    padding: '4px 8px',
-                                    fontSize: 'inherit',
-                                    fontFamily: 'inherit',
-                                    borderRadius: '4px',
-                                    transition: 'all 0.2s ease',
-                                    fontWeight: '500',
-                                    textAlign: 'left'
-                                  }}
-                                  onMouseOver={(e) => {
-                                    e.target.style.backgroundColor = '#e3f2fd';
-                                    e.target.style.color = '#003366';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.target.style.backgroundColor = 'transparent';
-                                    e.target.style.color = '#003366';
-                                  }}
-                                >
-                                  {order.business}
-                                </button>
-                              ) : (
-                                <span style={{ color: '#003366', fontWeight: '500' }}>
-                                  {order.business}
-                                </span>
-                              )}
-                            </td>
+          <td className="sticky-column" style={{
+            padding: '10px 8px',
+            position: 'sticky',
+            left: '150px',
+            backgroundColor: rowBgColor,
+            zIndex: 9,
+            minWidth: '150px'
+          }}>
+            {userRole === 'Admin' ? (
+              <button
+                onClick={() => navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(order.business)}`)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#003366',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  fontSize: 'inherit',
+                  fontFamily: 'inherit',
+                  borderRadius: '4px',
+                  transition: 'all 0.2s ease',
+                  fontWeight: '500',
+                  textAlign: 'left'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.backgroundColor = '#e3f2fd';
+                  e.target.style.color = '#003366';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = 'transparent';
+                  e.target.style.color = '#003366';
+                }}
+              >
+                {order.business}
+              </button>
+            ) : (
+              <span style={{ color: '#003366', fontWeight: '500' }}>
+                {order.business}
+              </span>
+            )}
+          </td>
 
-                            {/* Regular Cells */}
-                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactPerson}</td>
-                            <td style={{ padding: '10px 8px', minWidth: '100px' }}>{order.location}</td>
-                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.saleClosedBy}</td>
-                            {/* Lead Source Cell */}
-                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>
-                              <span style={{
-                                backgroundColor: order.leadSource ? '#e3f2fd' : '#f5f5f5',
-                                color: order.leadSource ? '#1976d2' : '#666',
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                fontSize: '12px',
-                                fontWeight: order.leadSource ? '500' : 'normal',
-                                display: 'inline-block',
-                                minWidth: '100px'
-                              }}>
-                                {order.leadSource || 'Not specified'}
-                                {order.otherLeadSource && order.leadSource === 'Other Specify' && (
-                                  <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
-                                    ({order.otherLeadSource})
-                                  </div>
-                                )}
-                              </span>
-                            </td>
-                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactCode} {order.phone}</td>
-                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.orderNo}</td>
-                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.orderDate)}</td>
-                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.clientType}</td>
-                            <td style={{ padding: '10px 8px', minWidth: '150px' }}>{row.description}</td>
-                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>{row.requirement}</td>
-                            <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '80px' }}>{row.quantity}</td>
-                            <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '100px' }}>{row.rate}</td>
-                            <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', minWidth: '100px' }}>{row.total}</td>
-                            <td style={{ padding: '10px 8px', textAlign: 'right', color: '#e67e22', minWidth: '80px' }}>{order.discount}</td>
-                            <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60', minWidth: '100px' }}>{order.discountedTotal}</td>
-                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(row.deliveryDate)}</td>
-                            <td style={{ padding: '10px 8px', textAlign: 'left', minWidth: '120px' }}>
-                              {row.assignedExecutive ? (
-                                <span style={{
-                                  backgroundColor: '#e3f2fd',
-                                  color: '#1565c0',
-                                  padding: '4px 8px',
-                                  borderRadius: '4px',
-                                  fontWeight: 'bold',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px'
-                                }}>
-                                  {row.assignedExecutive}
-                                </span>
-                              ) : (
-                                <span style={{
-                                  backgroundColor: '#fff3e0',
-                                  color: '#e65100',
-                                  padding: '4px 8px',
-                                  borderRadius: '4px',
-                                  fontWeight: 'bold',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px'
-                                }}>
-                                  Not Assigned
-                                </span>
-                              )}
-                            </td>
-                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>
-                              <span style={{
-                                backgroundColor: row.status === 'Completed' ? '#d4edda' :
-                                  row.status === 'In Progress' ? '#fff3cd' :
-                                    row.status === 'Pending' ? '#f8d7da' : '#e2e3e5',
-                                color: row.status === 'Completed' ? '#155724' :
-                                  row.status === 'In Progress' ? '#856404' :
-                                    row.status === 'Pending' ? '#721c24' : '#383d41',
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                fontWeight: 'bold',
-                                display: 'inline-block',
-                                minWidth: '80px'
-                              }}>
-                                {row.status || 'Not Set'}
-                              </span>
-                            </td>
-                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
-                              {order.createdBy && order.createdBy !== order.executive ? (
-                                <span style={{
-                                  backgroundColor: '#e8f5e8',
-                                  color: '#2e7d32',
-                                  padding: '4px 8px',
-                                  borderRadius: '4px',
-                                  fontWeight: 'bold',
-                                  fontSize: '12px',
-                                  display: 'inline-block'
-                                }}>
-                                  Admin: {order.createdBy}
-                                </span>
-                              ) : (
-                                <span style={{
-                                  color: '#666',
-                                  fontSize: '12px'
-                                }}>
-                                  {order.executive}
-                                </span>
-                              )}
-                            </td>
+          {/* Regular Cells */}
+          <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactPerson}</td>
+          <td style={{ padding: '10px 8px', minWidth: '100px' }}>{order.location}</td>
 
-                            <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '100px' }}>{order.advance}</td>
-                            <td style={{
-                              padding: '10px 8px',
-                              textAlign: 'right',
-                              fontWeight: 'bold',
-                              color: order.balance > 0 ? '#e74c3c' : '#2ecc71',
-                              minWidth: '100px'
-                            }}>
-                              {order.balance}
-                            </td>
-                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.advanceDate)}</td>
-                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.paymentDate)}</td>
-                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
-                              {order.paymentMethods && order.paymentMethods.length > 0
-                                ? order.paymentMethods.join(', ')
-                                : 'Not specified'}
-                            </td>
-                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>{order.chequeNumber}</td>
+          {/* Lead Source Cell */}
+          <td style={{ padding: '10px 8px', minWidth: '120px' }}>
+            <span style={{
+              backgroundColor: order.leadSource ? '#e3f2fd' : '#f5f5f5',
+              color: order.leadSource ? '#1976d2' : '#666',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              fontWeight: order.leadSource ? '500' : 'normal',
+              display: 'inline-block',
+              minWidth: '100px'
+            }}>
+              {order.leadSource || 'Not specified'}
+              {order.otherLeadSource && order.leadSource === 'Other Specify' && (
+                <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
+                  ({order.otherLeadSource})
+                </div>
+              )}
+            </span>
+          </td>
+          
+          <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactCode} {order.phone}</td>
+          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.orderNo}</td>
+          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.orderDate)}</td>
+          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.clientType}</td>
 
-                            {/* Action Buttons */}
-                            <td style={{
-                              padding: '10px 8px',
-                              display: 'flex',
-                              gap: '8px',
-                              justifyContent: 'center',
-                              flexWrap: 'wrap',
-                              minWidth: '150px'
-                            }}>
-                              {/* Always show View Payments button */}
-                              <button
-                                onClick={() => handleViewPayments(order)}
-                                disabled={paymentLoading}
-                                style={{
-                                  backgroundColor: '#3498db',
-                                  color: 'white',
-                                  padding: '6px 12px',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  fontSize: '12px',
-                                  cursor: paymentLoading ? 'not-allowed' : 'pointer',
-                                  whiteSpace: 'nowrap'
-                                }}
-                              >
-                                {paymentLoading ? 'Loading...' : 'View Payments'}
-                              </button>
+          {/* FIX: Show description properly - using rows array */}
+          <td style={{ padding: '10px 8px', minWidth: '150px' }}>
+            <div>
+              <div style={{
+                marginBottom: '0',
+                padding: '0'
+              }}>
+                {row.description || 'No description'}
+              </div>
+            </div>
+          </td>
 
-                              {order.balance <= 0 ? (
-                                <span style={{
-                                  backgroundColor: '#2ecc71',
-                                  color: 'white',
-                                  padding: '6px 12px',
-                                  borderRadius: '4px',
-                                  fontSize: '12px',
-                                  whiteSpace: 'nowrap'
-                                }}>
-                                  Paid
-                                </span>
-                              ) : (
-                                <>
-                                  <button
-                                    onClick={() => handleRecordPayment(order)}
-                                    disabled={paymentLoading}
-                                    style={{
-                                      backgroundColor: paymentLoading ? '#bdc3c7' : '#9b59b6',
-                                      color: 'white',
-                                      padding: '6px 12px',
-                                      border: 'none',
-                                      borderRadius: '4px',
-                                      fontSize: '12px',
-                                      cursor: paymentLoading ? 'not-allowed' : 'pointer',
-                                      whiteSpace: 'nowrap'
-                                    }}
-                                  >
-                                    {paymentLoading ? 'Loading...' : 'Record Payment'}
-                                  </button>
+          {/* FIX: Show requirement name properly - using current row */}
+          <td style={{ padding: '10px 8px', minWidth: '120px' }}>
+            <div>
+              <div style={{
+                marginBottom: '0',
+                padding: '0'
+              }}>
+                <strong>{row.customRequirement || row.requirement || ''}</strong>
+              </div>
+            </div>
+          </td>
 
-                                  <button
-                                    onClick={() => handleEdit(order)}
-                                    style={{
-                                      backgroundColor: '#f39c12',
-                                      color: 'white',
-                                      padding: '6px 12px',
-                                      border: 'none',
-                                      borderRadius: '4px',
-                                      fontSize: '12px',
-                                      cursor: 'pointer',
-                                      whiteSpace: 'nowrap'
-                                    }}
-                                  >
-                                    Edit
-                                  </button>
+          {/* FIX: Show quantity in its own column - using current row */}
+          <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '80px' }}>
+            {row.quantity || 0}
+          </td>
 
-                                  {/* DELETE BUTTON - ONLY SHOW FOR ADMIN USERS */}
-                                  {canDeleteOrders() && (
-                                    <button
-                                      onClick={() => confirmDelete(order._id)}
-                                      style={{
-                                        backgroundColor: '#e74c3c',
-                                        color: 'white',
-                                        padding: '6px 12px',
-                                        border: 'none',
-                                        borderRadius: '4px',
-                                        fontSize: '12px',
-                                        cursor: 'pointer',
-                                        whiteSpace: 'nowrap'
-                                      }}
-                                    >
-                                      Delete
-                                    </button>
-                                  )}
-                                </>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
+          {/* FIX: Show rate in its own column - using current row */}
+          <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '100px' }}>
+            ₹{row.rate?.toFixed(2) || '0.00'}
+          </td>
+
+          {/* FIX: Show total in its own column - using current row */}
+          <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', minWidth: '100px', color: '#27ae60' }}>
+            ₹{row.total?.toFixed(2) || '0.00'}
+          </td>
+
+          <td style={{ padding: '10px 8px', textAlign: 'right', color: '#e67e22', minWidth: '80px' }}>{order.discount}</td>
+          <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60', minWidth: '100px' }}>{order.discountedTotal}</td>
+
+          {/* Delivery Date - using current row */}
+          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>
+            {formatDate(row.deliveryDate)}
+          </td>
+
+          {/* Service Assigned - using current row */}
+          <td style={{ padding: '10px 8px', textAlign: 'left', minWidth: '120px' }}>
+            {row.assignedExecutive ? (
+              <span style={{
+                backgroundColor: '#e3f2fd',
+                color: '#1565c0',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontWeight: 'bold',
+                display: 'inline-block'
+              }}>
+                {row.assignedExecutive}
+              </span>
+            ) : (
+              <span style={{
+                backgroundColor: '#fff3e0',
+                color: '#e65100',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontWeight: 'bold',
+                display: 'inline-block'
+              }}>
+                Not Assigned
+              </span>
+            )}
+          </td>
+
+          {/* Status - using current row */}
+          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>
+            <span style={{
+              backgroundColor: row.status === 'Completed' ? '#d4edda' :
+                row.status === 'In Progress' ? '#fff3cd' :
+                row.status === 'Pending' ? '#f8d7da' : '#e2e3e5',
+              color: row.status === 'Completed' ? '#155724' :
+                row.status === 'In Progress' ? '#856404' :
+                row.status === 'Pending' ? '#721c24' : '#383d41',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              fontWeight: 'bold',
+              display: 'inline-block',
+              minWidth: '80px'
+            }}>
+              {row.status || 'Not Set'}
+            </span>
+          </td>
+
+          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
+            {order.createdBy && order.createdBy !== order.executive ? (
+              <span style={{
+                backgroundColor: '#e8f5e8',
+                color: '#2e7d32',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontWeight: 'bold',
+                fontSize: '12px',
+                display: 'inline-block'
+              }}>
+                Admin: {order.createdBy}
+              </span>
+            ) : (
+              <span style={{
+                color: '#666',
+                fontSize: '12px'
+              }}>
+                {order.executive}
+              </span>
+            )}
+          </td>
+
+          <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '100px' }}>{order.advance}</td>
+          <td style={{
+            padding: '10px 8px',
+            textAlign: 'right',
+            fontWeight: 'bold',
+            color: order.balance > 0 ? '#e74c3c' : '#2ecc71',
+            minWidth: '100px'
+          }}>
+            {order.balance}
+          </td>
+          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.advanceDate)}</td>
+          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.paymentDate)}</td>
+          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
+            {order.paymentMethods && order.paymentMethods.length > 0
+              ? order.paymentMethods.join(', ')
+              : 'Not specified'}
+          </td>
+          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>{order.chequeNumber}</td>
+
+          {/* Action Buttons */}
+          <td style={{
+            padding: '10px 8px',
+            display: 'flex',
+            gap: '8px',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            minWidth: '200px'
+          }}>
+            {/* Print Order Button - Direct print */}
+            <button
+              onClick={() => {
+                handlePrintOrder(order);
+              }}
+              style={{
+                backgroundColor: '#9c27b0',
+                color: 'white',
+                padding: '6px 12px',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '12px',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              🖨️ Print
+            </button>
+
+            {/* Always show View Payments button */}
+            <button
+              onClick={() => handleViewPayments(order)}
+              disabled={paymentLoading}
+              style={{
+                backgroundColor: '#3498db',
+                color: 'white',
+                padding: '6px 12px',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '12px',
+                cursor: paymentLoading ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {paymentLoading ? 'Loading...' : 'View Payments'}
+            </button>
+
+            {order.balance <= 0 ? (
+              <span style={{
+                backgroundColor: '#2ecc71',
+                color: 'white',
+                padding: '6px 12px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                whiteSpace: 'nowrap'
+              }}>
+                Paid
+              </span>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleRecordPayment(order)}
+                  disabled={paymentLoading}
+                  style={{
+                    backgroundColor: paymentLoading ? '#bdc3c7' : '#9b59b6',
+                    color: 'white',
+                    padding: '6px 12px',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    cursor: paymentLoading ? 'not-allowed' : 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {paymentLoading ? 'Loading...' : 'Record Payment'}
+                </button>
+
+                <button
+                  onClick={() => handleEdit(order)}
+                  style={{
+                    backgroundColor: '#f39c12',
+                    color: 'white',
+                    padding: '6px 12px',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  Edit
+                </button>
+
+                {/* DELETE BUTTON - ONLY SHOW FOR ADMIN USERS */}
+                {canDeleteOrders() && (
+                  <button
+                    onClick={() => confirmDelete(order._id)}
+                    style={{
+                      backgroundColor: '#e74c3c',
+                      color: 'white',
+                      padding: '6px 12px',
+                      border: 'none',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    Delete
+                  </button>
+                )}
+              </>
+            )}
+          </td>
+        </tr>
+      );
+    })
+  )}
+</tbody>
                 </table>
               </div>
             </div>
@@ -2566,9 +3304,6 @@ function ViewOrders() {
                 </div>
                 <div>
                   <strong>Location:</strong> {currentOrder.location}
-                </div>
-                <div>
-                  <strong>Sale Closed By:</strong> {currentOrder.saleClosedBy}
                 </div>
                 {/* Lead Source */}
                 <div>
@@ -2747,8 +3482,9 @@ function ViewOrders() {
                       <option value="">Select UPI ID</option>
                       <option value="9985330008@Chary">9985330008@Chary</option>
                       <option value="9985330004@Swathi">9985330004@Swathi</option>
-                      <option value="9553146376@Laxmipathi">9553146376@Laxmipathi</option>
-                      <option value="other">Other UPI</option>
+                      <option value="globalmarketingsolutions@idbi">globalmarketingsolutions@idbi</option>
+                      <option value="9985403636@Vinay">9985403636@Vinay</option>                     
+                       <option value="other">Other UPI</option>
                     </select>
                     {paymentData.reference === 'other' && (
                       <input
@@ -2980,16 +3716,7 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Sale Closed By Input */}
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px' }}>Sale Closed By</label>
-                <input
-                  name="saleClosedBy"
-                  value={editingOrder.saleClosedBy}
-                  onChange={handleEditChange}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                />
-              </div>
+              {/* REMOVED: Sale Closed By Input */}
 
               {/* Lead Source Input */}
               <div>

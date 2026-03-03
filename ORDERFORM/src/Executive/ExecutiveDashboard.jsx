@@ -184,7 +184,11 @@ const ProfileModal = ({ user, onClose, onSave }) => {
 };
 
 // Main Dashboard Component
-const ExecutiveDashboard = () => {
+const ExecutiveDashboard = ({ 
+  executiveName, 
+  onNavigateToPendingPayments, 
+  onNavigateToAppointments 
+}) => {
   const [hasNewAppointments, setHasNewAppointments] = useState(false);
   const [selectedExecutive, setSelectedExecutive] = useState('');
   const [target, setTarget] = useState(100);
@@ -272,13 +276,31 @@ const ExecutiveDashboard = () => {
   };
 
   const handleNewAppointmentsClick = () => {
-    localStorage.setItem('lastSeenAppointmentCount', appointmentCount.toString());
-    setHasNewAppointments(false);
-    navigate('/new-appointment');
+    if (onNavigateToAppointments) {
+      onNavigateToAppointments();
+    } else {
+      localStorage.setItem('lastSeenAppointmentCount', appointmentCount.toString());
+      setHasNewAppointments(false);
+      navigate('/new-appointment');
+    }
   };
 
   const handleFollowUpsClick = () => {
     navigate('/followup');
+  };
+
+  const handlePendingPaymentsClick = () => {
+    if (onNavigateToPendingPayments) {
+      onNavigateToPendingPayments();
+    } else {
+      navigate('/pending-payments', { 
+        state: { 
+          executiveFilter: selectedExecutive,
+          month: selectedDate.getMonth() + 1,
+          year: selectedDate.getFullYear()
+        } 
+      });
+    }
   };
 
   const handleFieldExecutivePage = () => {
@@ -676,6 +698,28 @@ const ExecutiveDashboard = () => {
         {buttonsLoaded && (
           <div className={`header-right ${mobileMenuOpen ? 'mobile-open' : ''}`}>
             <div className="action-buttons">
+              {/* Pending Payments Button - ORANGE COLOR */}
+              <button
+                onClick={handlePendingPaymentsClick}
+                className="pending-payments-btn"
+              >
+                Pending Payments
+              </button>
+
+              {/* Follow Ups Button - PURPLE COLOR */}
+              <button
+                onClick={handleFollowUpsClick}
+                className="follow-ups-btn"
+              >
+                Follow Ups
+                {followUpCount > 0 && (
+                  <span className="follow-up-count">
+                    {followUpCount}
+                  </span>
+                )}
+              </button>
+
+              {/* New Appointments Button - DEEP BLUE COLOR */}
               <button
                 onClick={handleNewAppointmentsClick}
                 className="appointments-btn"
@@ -688,27 +732,15 @@ const ExecutiveDashboard = () => {
                 )}
               </button>
 
-              {/* Field Executive Button - Show immediately based on current state */}
+              {/* Field Executive Button - TEAL COLOR */}
               {isFieldExec && (
                 <button
                   onClick={handleFieldExecutivePage}
                   className="field-executive-btn"
                 >
-                 Daily Report
+                  Daily Report
                 </button>
               )}
-
-              <button
-                onClick={handleFollowUpsClick}
-                className="follow-ups-btn"
-              >
-                Follow Ups
-                {followUpCount > 0 && (
-                  <span className="follow-up-count">
-                    {followUpCount}
-                  </span>
-                )}
-              </button>
             </div>
 
             {/* User Avatar positioned slightly lower */}
@@ -919,6 +951,8 @@ const ExecutiveDashboard = () => {
           --error: #F44336;
           --info: #2196F3;
           --warning: #FF9800;
+          --pending: #FF8C00;
+          --pending-dark: #E67E22;
           --text: #333;
           --text-light: #666;
           --border: #ddd;
@@ -1024,6 +1058,8 @@ const ExecutiveDashboard = () => {
           display: flex;
           gap: 0.75rem;
           align-items: center;
+          flex-wrap: wrap;
+          justify-content: flex-end;
         }
 
         /* User Avatar Container - Positioned slightly lower */
@@ -1033,8 +1069,8 @@ const ExecutiveDashboard = () => {
           margin-top: 0.5rem;
         }
 
-        /* New Appointments Button - DEEP BLUE COLOR */
-        .appointments-btn {
+        /* Pending Payments Button - ORANGE COLOR */
+        .pending-payments-btn {
           position: relative;
           padding: 0.75rem 1.5rem;
           border-radius: var(--radius);
@@ -1046,17 +1082,17 @@ const ExecutiveDashboard = () => {
           display: flex;
           align-items: center;
           white-space: nowrap;
-          background: linear-gradient(135deg, #1565C0, #0D47A1);
+          background: linear-gradient(135deg, #FF8C00, #E67E22);
           color: white;
-          box-shadow: 0 4px 15px rgba(21, 101, 192, 0.4);
+          box-shadow: 0 4px 15px rgba(255, 140, 0, 0.4);
           min-width: 160px;
           justify-content: center;
         }
 
-        .appointments-btn:hover {
-          background: linear-gradient(135deg, #0D47A1, #082E63);
+        .pending-payments-btn:hover {
+          background: linear-gradient(135deg, #E67E22, #D35400);
           transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(21, 101, 192, 0.5);
+          box-shadow: 0 6px 20px rgba(255, 140, 0, 0.5);
         }
 
         /* Follow Ups Button - PURPLE COLOR */
@@ -1083,6 +1119,32 @@ const ExecutiveDashboard = () => {
           background: linear-gradient(135deg, #6A1B9A, #38006B);
           transform: translateY(-2px);
           box-shadow: 0 6px 20px rgba(123, 31, 162, 0.5);
+        }
+
+        /* New Appointments Button - DEEP BLUE COLOR */
+        .appointments-btn {
+          position: relative;
+          padding: 0.75rem 1.5rem;
+          border-radius: var(--radius);
+          border: none;
+          font-size: 0.9rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: var(--transition);
+          display: flex;
+          align-items: center;
+          white-space: nowrap;
+          background: linear-gradient(135deg, #1565C0, #0D47A1);
+          color: white;
+          box-shadow: 0 4px 15px rgba(21, 101, 192, 0.4);
+          min-width: 160px;
+          justify-content: center;
+        }
+
+        .appointments-btn:hover {
+          background: linear-gradient(135deg, #0D47A1, #082E63);
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(21, 101, 192, 0.5);
         }
 
         /* Field Executive Button - TEAL COLOR */
@@ -1506,6 +1568,7 @@ const ExecutiveDashboard = () => {
             gap: 0.5rem;
           }
 
+          .pending-payments-btn,
           .appointments-btn, 
           .follow-ups-btn, 
           .field-executive-btn {
@@ -1593,6 +1656,7 @@ const ExecutiveDashboard = () => {
             height: 220px !important;
           }
 
+          .pending-payments-btn,
           .appointments-btn, 
           .follow-ups-btn, 
           .field-executive-btn {

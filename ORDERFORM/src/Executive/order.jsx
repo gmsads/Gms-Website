@@ -19,6 +19,7 @@ import WhatsAppDashboard from "../Admin/WhatsApp";
 import { FaWhatsapp } from "react-icons/fa";
 import LeaveRequest from './LeaveRequest';
 import ViewRequest from './ViewLeaveRequests'
+
 function Admin() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [activeTab, setActiveTab] = useState("executive-dashboard");
@@ -1279,9 +1280,12 @@ function Admin() {
       <div className={`main-content ${sidebarOpen ? "" : "expanded"}`}>
         <div className="form-container">
           {activeTab === "executive-dashboard" && (
-            <>
-              <ExecutiveDashboard executiveName={selectedExecutive} />
-            </>
+            <ExecutiveDashboard 
+              executiveName={selectedExecutive} 
+              onNavigateToPendingPayments={() => setActiveTab("pending-payments")}
+              onNavigateToFollowUps={() => setActiveTab("follow-ups")}
+              onNavigateToAppointments={() => setActiveTab("viewAppointments")}
+            />
           )}
 
           {activeTab === "record" && <Record executiveName={selectedExecutive} />}
