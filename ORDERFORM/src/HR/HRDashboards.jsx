@@ -658,6 +658,15 @@ function HRDashboard() {
           >
         Field Executive Report 
           </NavLink>
+           <NavLink
+            to="/hr-dashboard/advance-approvals"
+            style={linkStyle('advance-approvals')}
+            onMouseEnter={() => setHoveredItem('advance-approvals')}
+            onMouseLeave={() => setHoveredItem('')}
+            onClick={handleSidebarItemClick}
+          >
+          Advance-Approvals
+          </NavLink>
         </div>
 
         {/* Main Content Area - Now using Outlet for nested routes */}

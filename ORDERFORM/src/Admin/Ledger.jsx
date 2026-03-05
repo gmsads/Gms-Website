@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const Ledger = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -9,7 +11,7 @@ const Ledger = () => {
   const [newPayments, setNewPayments] = useState({});
   const [paymentSuccess, setPaymentSuccess] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activePaymentRow, setActivePaymentRow] = useState(null); // Track which order's payment row is open
+  const [activePaymentRow, setActivePaymentRow] = useState(null);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -98,7 +100,13 @@ const Ledger = () => {
     return date ? date.toLocaleDateString() : 'Invalid Date';
   };
 
-  // Calculate client summary totals (ALL orders for this client)
+  // Format date for filename
+  const formatDateForFilename = () => {
+    const date = new Date();
+    return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+  };
+
+  // Calculate client summary totals
   const calculateClientSummary = (orders) => {
     let totalOrderAmount = 0;
     let totalAdvance = 0;
@@ -138,16 +146,17 @@ const Ledger = () => {
             contactPerson: order.contactPerson,
             phone: order.phone,
             contactCode: order.contactCode,
-            clientType: order.clientType
+            clientType: order.clientType,
+            address: order.address || 'Hyd',
+            gstin: order.gstin || 'N/A'
           },
           timeline: [],
-          orders: [] // Store all orders for summary calculation
+          orders: []
         };
       }
 
       timeline[business].orders.push(order);
 
-      // Add order entry
       const orderTotal = calculateTotal(order);
       const orderAdvance = calculateTotalAdvance(order);
       const orderPaid = calculateTotalPaid(order);
@@ -162,10 +171,11 @@ const Ledger = () => {
         advance: orderAdvance,
         paid: orderPaid,
         balance: currentBalance,
-        orderId: order._id
+        orderId: order._id,
+        deliveryDate: order.deliveryDate,
+        status: order.status
       });
 
-      // Add advance payment entry
       if (order.advance > 0) {
         timeline[business].timeline.push({
           type: 'advance_payment',
@@ -177,7 +187,6 @@ const Ledger = () => {
         });
       }
 
-      // Add regular payments
       if (order.paymentHistory && order.paymentHistory.length > 0) {
         order.paymentHistory.forEach(payment => {
           timeline[business].timeline.push({
@@ -194,7 +203,6 @@ const Ledger = () => {
       }
     });
 
-    // Sort timeline by date (newest first)
     Object.keys(timeline).forEach(business => {
       timeline[business].timeline.sort((a, b) => {
         const dateA = safeParseDate(a.date) || new Date(0);
@@ -206,7 +214,7 @@ const Ledger = () => {
     return timeline;
   };
 
-  // Perform search with partial matching
+  // Perform search
   const performSearch = (orders, term) => {
     const searchTerm = term.trim().toLowerCase();
 
@@ -245,7 +253,7 @@ const Ledger = () => {
     navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(searchTerm)}`);
   };
 
-  // Handle real-time search as user types
+  // Handle real-time search
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchTerm(value);
@@ -270,7 +278,7 @@ const Ledger = () => {
     }));
   };
 
-  // Toggle payment form for specific order row
+  // Toggle payment form
   const togglePaymentRow = (orderId) => {
     if (activePaymentRow === orderId) {
       setActivePaymentRow(null);
@@ -292,7 +300,7 @@ const Ledger = () => {
     }
   };
 
-  // Apply payment to order
+  // Apply payment
   const applyPayment = async (orderId) => {
     const payment = newPayments[orderId];
     if (!payment?.amount || !payment.method) {
@@ -325,7 +333,6 @@ const Ledger = () => {
 
       setTimeout(() => setPaymentSuccess(null), 5000);
 
-      // Update orders in state
       const updateOrders = orders =>
         orders.map(order => (order._id === orderId ? updatedOrder : order));
 
@@ -336,7 +343,6 @@ const Ledger = () => {
       setAllOrders(updatedAllOrders);
       setClientTimeline(organizeClientTimeline(updatedFilteredOrders));
 
-      // Clear payment form and close the row
       setNewPayments(prev => ({ ...prev, [orderId]: {} }));
       setActivePaymentRow(null);
 
@@ -354,7 +360,7 @@ const Ledger = () => {
     navigate('/admin-dashboard/ledger');
   };
 
-  // Get date range for a client
+  // Get date range
   const getDateRange = (timeline) => {
     if (timeline.length === 0) return { start: 'N/A', end: 'N/A' };
 
@@ -367,16 +373,515 @@ const Ledger = () => {
     const startDate = new Date(Math.min(...validDates));
     const endDate = new Date(Math.max(...validDates));
 
-    const formatDateForDisplay = (date) => {
-      return date.toLocaleDateString('en-CA');
-    };
-
     return {
-      start: formatDateForDisplay(startDate),
-      end: formatDateForDisplay(endDate)
+      start: startDate.toLocaleDateString(),
+      end: endDate.toLocaleDateString()
     };
   };
 
+  // Format currency for PDF
+  const formatCurrency = (amount) => {
+    return '₹ ' + parseFloat(amount).toFixed(2).replace(/\d(?=(\d{3})+(?!\d))/g, '$&,');
+  };
+
+  // PRINT FUNCTION
+  const handlePrintClient = (business, clientData) => {
+    const summary = calculateClientSummary(clientData.orders);
+    const dateRange = getDateRange(clientData.timeline);
+
+    const printWindow = window.open('', '_blank');
+    
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${business} - Ledger</title>
+        <style>
+          body { 
+            font-family: Arial, sans-serif; 
+            margin: 40px; 
+            line-height: 1.5;
+          }
+          .header { 
+            text-align: center; 
+            margin-bottom: 30px; 
+            border-bottom: 2px solid #003366; 
+            padding-bottom: 20px; 
+          }
+          .header h1 { 
+            color: #003366; 
+            margin: 0; 
+            font-size: 28px;
+          }
+          .header p { 
+            color: #666; 
+            margin: 5px 0 0; 
+          }
+          .client-info { 
+            background: #f5f5f5; 
+            padding: 20px; 
+            border-radius: 5px; 
+            margin-bottom: 25px; 
+          }
+          .client-info h2 { 
+            color: #003366; 
+            margin: 0 0 15px 0; 
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 10px;
+          }
+          .info-grid { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 15px; 
+          }
+          .info-item { 
+            margin: 5px 0; 
+          }
+          .info-item strong { 
+            color: #003366; 
+            display: block;
+            margin-bottom: 3px;
+          }
+          .summary { 
+            background: #e3f2fd; 
+            padding: 20px; 
+            border-radius: 5px; 
+            margin-bottom: 25px; 
+            border: 1px solid #003366;
+          }
+          .summary h3 { 
+            color: #003366; 
+            margin: 0 0 15px 0; 
+          }
+          .summary-row { 
+            display: flex; 
+            justify-content: space-between; 
+            padding: 8px; 
+            border-bottom: 1px solid #ccc; 
+          }
+          .summary-row:last-child { 
+            border-bottom: none; 
+          }
+          .total { 
+            font-weight: bold; 
+            font-size: 18px; 
+          }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 20px; 
+            font-size: 14px;
+          }
+          th { 
+            background: #003366; 
+            color: white; 
+            padding: 12px; 
+            text-align: left; 
+          }
+          td { 
+            padding: 10px; 
+            border-bottom: 1px solid #ddd; 
+            vertical-align: top;
+          }
+          .order-row { 
+            background: #f8f9fa; 
+          }
+          .payment-row { 
+            background: #f0fff0; 
+          }
+          .advance-row { 
+            background: #fff3cd; 
+          }
+          .amount-positive { 
+            color: #27ae60; 
+            font-weight: bold; 
+          }
+          .amount-negative { 
+            color: #e74c3c; 
+            font-weight: bold; 
+          }
+          .footer { 
+            text-align: center; 
+            margin-top: 40px; 
+            padding-top: 20px; 
+            border-top: 2px solid #ccc; 
+            color: #666; 
+            font-size: 12px; 
+          }
+          .requirements-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+          }
+          .requirements-list li {
+            padding: 3px 0;
+            border-bottom: 1px dashed #eee;
+          }
+          .text-right {
+            text-align: right;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>COMPLETE SALES LEDGER</h1>
+          <p>Generated on: ${new Date().toLocaleString()}</p>
+        </div>
+
+        <div class="client-info">
+          <h2>${business}</h2>
+          <div class="info-grid">
+            <div class="info-item">
+              <strong>Contact Person:</strong>
+              ${clientData.clientInfo.contactPerson || 'N/A'}
+            </div>
+            <div class="info-item">
+              <strong>Phone:</strong>
+              ${clientData.clientInfo.contactCode || '+91'} ${clientData.clientInfo.phone || 'N/A'}
+            </div>
+            <div class="info-item">
+              <strong>Client Type:</strong>
+              ${clientData.clientInfo.clientType || 'N/A'}
+            </div>
+            <div class="info-item">
+              <strong>Address:</strong>
+              ${clientData.clientInfo.address || 'Hyd'}
+            </div>
+            <div class="info-item">
+              <strong>GSTIN:</strong>
+              ${clientData.clientInfo.gstin || 'N/A'}
+            </div>
+            <div class="info-item">
+              <strong>Total Orders:</strong>
+              ${clientData.orders.length}
+            </div>
+          </div>
+        </div>
+
+        <div class="summary">
+          <h3>FINANCIAL SUMMARY</h3>
+          <div class="summary-row">
+            <span>Total Order Amount:</span>
+            <span>${formatCurrency(summary.totalOrderAmount)}</span>
+          </div>
+          <div class="summary-row">
+            <span>Total Advance:</span>
+            <span style="color: #f39c12;">${formatCurrency(summary.totalAdvance)}</span>
+          </div>
+          <div class="summary-row">
+            <span>Total Paid:</span>
+            <span style="color: #27ae60;">${formatCurrency(summary.totalPaid)}</span>
+          </div>
+          <div class="summary-row total">
+            <span>Outstanding Balance:</span>
+            <span style="color: ${summary.totalBalance > 0 ? '#e74c3c' : '#27ae60'};">
+              ${formatCurrency(summary.totalBalance)}
+            </span>
+          </div>
+          <div class="summary-row">
+            <span>Transaction Period:</span>
+            <span>${dateRange.start} - ${dateRange.end}</span>
+          </div>
+        </div>
+
+        <h3 style="color: #003366; margin-bottom: 15px;">TRANSACTION HISTORY</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Order No</th>
+              <th>Description</th>
+              <th class="text-right">Amount (₹)</th>
+              <th>Method</th>
+              <th class="text-right">Balance (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    let tableRows = '';
+    clientData.timeline.forEach((entry) => {
+      const order = clientData.orders.find(o => o._id === entry.orderId);
+      const currentBalance = order ? calculateCurrentBalance(order) : 0;
+      
+      let description = '';
+      if (entry.type === 'order') {
+        description = '<ul class="requirements-list">';
+        entry.requirements.forEach(req => {
+          description += `<li>${req.requirement} - ${req.quantity} × ₹${req.rate} = ₹${req.total}</li>`;
+        });
+        description += '</ul>';
+      } else if (entry.type === 'advance_payment') {
+        description = 'Advance Payment';
+      } else {
+        description = 'Payment Received';
+        if (entry.upiNumber) description += ` (UPI: ${entry.upiNumber})`;
+        if (entry.chequeNumber) description += ` (Cheque: ${entry.chequeNumber})`;
+      }
+
+      const rowClass = entry.type === 'order' ? 'order-row' : 
+                      entry.type === 'advance_payment' ? 'advance-row' : 'payment-row';
+
+      tableRows += `
+        <tr class="${rowClass}">
+          <td>${formatDateSafe(entry.date)}</td>
+          <td><strong>${entry.orderNo}</strong></td>
+          <td>${description}</td>
+          <td class="text-right">${formatCurrency(entry.totalAmount || entry.amount || 0)}</td>
+          <td>${entry.method || '-'}</td>
+          <td class="text-right ${currentBalance > 0 ? 'amount-negative' : 'amount-positive'}">${formatCurrency(currentBalance)}</td>
+        </tr>
+      `;
+    });
+
+    const printFooter = `
+          </tbody>
+        </table>
+        <div class="footer">
+          <p>This is a computer generated statement - Valid without signature</p>
+          <p>Generated from Admin Dashboard on ${new Date().toLocaleString()}</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent + tableRows + printFooter);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
+ // PDF DOWNLOAD FUNCTION - FINAL FIXED VERSION
+const handleDownloadClientPDF = (business, clientData) => {
+
+  try {
+
+    // ===== SUMMARY DATA =====
+    const summary = calculateClientSummary(clientData.orders);
+    const dateRange = getDateRange(clientData.timeline);
+
+    // ===== CURRENCY FORMAT =====
+    const formatCurrency = (amount) => {
+      return `Rs. ${Number(amount || 0).toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })}`;
+    };
+
+    // ===== CREATE PDF =====
+    const doc = new jsPDF({
+      orientation: "landscape",
+      unit: "mm",
+      format: "a4"
+    });
+
+    // ===== TITLE =====
+    doc.setFontSize(18);
+    doc.setTextColor(0, 51, 102);
+    doc.setFont(undefined, "bold");
+    doc.text("COMPLETE SALES LEDGER", 148, 15, { align: "center" });
+
+    // ===== GENERATED DATE =====
+    doc.setFontSize(8);
+    doc.setTextColor(120);
+    doc.setFont(undefined, "normal");
+    doc.text(
+      `Generated on: ${new Date().toLocaleString()}`,
+      148,
+      22,
+      { align: "center" }
+    );
+
+    // ===== CLIENT NAME =====
+    doc.setFontSize(12);
+    doc.setTextColor(0, 51, 102);
+    doc.setFont(undefined, "bold");
+    doc.text(business, 14, 32);
+
+    // ===== CLIENT DETAILS =====
+    doc.setFontSize(8);
+    doc.setTextColor(80);
+    doc.setFont(undefined, "normal");
+
+    const leftDetails = [
+      `Contact: ${clientData.clientInfo.contactPerson || "N/A"}`,
+      `Phone: ${clientData.clientInfo.contactCode || "+91"} ${clientData.clientInfo.phone || "N/A"}`,
+      `Type: ${clientData.clientInfo.clientType || "N/A"}`
+    ];
+
+    const rightDetails = [
+      `Address: ${clientData.clientInfo.address || "Hyd"}`,
+      `GSTIN: ${clientData.clientInfo.gstin || "N/A"}`,
+      `Orders: ${clientData.orders.length}`
+    ];
+
+    let yStart = 38;
+
+    leftDetails.forEach((text, i) => {
+      doc.text(text, 14, yStart + (i * 5));
+    });
+
+    rightDetails.forEach((text, i) => {
+      doc.text(text, 140, yStart + (i * 5));
+    });
+
+    // ===== FINANCIAL SUMMARY BOX =====
+    let summaryY = 58;
+
+    doc.setFillColor(235, 242, 250);
+    doc.rect(14, summaryY - 6, 268, 34, "F");
+
+    doc.setFontSize(10);
+    doc.setTextColor(0, 51, 102);
+    doc.setFont(undefined, "bold");
+    doc.text("FINANCIAL SUMMARY", 14, summaryY);
+
+    doc.setFontSize(8);
+    doc.setTextColor(0);
+    doc.setFont(undefined, "normal");
+
+    const leftSummary = [
+      { label: "Total Order Amount:", value: formatCurrency(summary.totalOrderAmount) },
+      { label: "Total Advance:", value: formatCurrency(summary.totalAdvance) },
+      { label: "Total Paid:", value: formatCurrency(summary.totalPaid) }
+    ];
+
+    const rightSummary = [
+      { label: "Outstanding Balance:", value: formatCurrency(summary.totalBalance) },
+      { label: "Period:", value: `${dateRange.start} - ${dateRange.end}` }
+    ];
+
+    let sY = summaryY + 6;
+
+    leftSummary.forEach((item, i) => {
+      doc.text(item.label, 20, sY + (i * 6));
+      doc.text(item.value, 110, sY + (i * 6), { align: "right" });
+    });
+
+    rightSummary.forEach((item, i) => {
+      doc.text(item.label, 150, sY + (i * 6));
+      doc.text(item.value, 260, sY + (i * 6), { align: "right" });
+    });
+
+    // ===== TRANSACTION TITLE =====
+    let tableStart = 100;
+
+    doc.setFontSize(10);
+    doc.setTextColor(0, 51, 102);
+    doc.setFont(undefined, "bold");
+    doc.text("TRANSACTION HISTORY", 14, tableStart);
+
+    tableStart += 4;
+
+    // ===== PREPARE TABLE DATA =====
+    const tableData = clientData.timeline.map((entry) => {
+
+      const order = clientData.orders.find(o => o._id === entry.orderId);
+      const currentBalance = order ? calculateCurrentBalance(order) : 0;
+
+      let description = "";
+
+      if (entry.type === "order") {
+        description = entry.requirements
+          .map(req => `${req.quantity} x ${req.requirement}`)
+          .join(", ");
+      }
+      else if (entry.type === "advance_payment") {
+        description = "ADVANCE PAYMENT";
+      }
+      else {
+        description = "PAYMENT RECEIVED";
+      }
+
+      return [
+        formatDateSafe(entry.date),
+        entry.orderNo,
+        description,
+        formatCurrency(entry.totalAmount || entry.amount || 0),
+        entry.method ? entry.method.toUpperCase() : "-",
+        formatCurrency(currentBalance)
+      ];
+
+    });
+
+    // ===== CREATE TABLE =====
+    autoTable(doc, {
+
+      startY: tableStart,
+
+      head: [
+        ["DATE", "ORDER NO", "DESCRIPTION", "AMOUNT", "METHOD", "BALANCE"]
+      ],
+
+      body: tableData,
+
+      theme: "grid",
+
+      styles: {
+        fontSize: 8,
+        cellPadding: 3,
+        overflow: "linebreak"
+      },
+
+      headStyles: {
+        fillColor: [0, 51, 102],
+        textColor: 255,
+        fontStyle: "bold",
+        halign: "center"
+      },
+
+      columnStyles: {
+        0: { cellWidth: 28, halign: "center" }, // DATE
+        1: { cellWidth: 30, halign: "center" }, // ORDER
+        2: { cellWidth: 95, halign: "left" },   // DESCRIPTION
+        3: { cellWidth: 32, halign: "right" },  // AMOUNT
+        4: { cellWidth: 30, halign: "center" }, // METHOD
+        5: { cellWidth: 32, halign: "right" }   // BALANCE
+      },
+
+      margin: { left: 14, right: 14 },
+
+      didDrawPage: function () {
+
+        const pageCount = doc.internal.getNumberOfPages();
+
+        doc.setFontSize(7);
+        doc.setTextColor(120);
+
+        doc.text(
+          "This is a computer generated statement - Valid without signature",
+          148,
+          200,
+          { align: "center" }
+        );
+
+        doc.text(
+          `Page ${doc.internal.getCurrentPageInfo().pageNumber} of ${pageCount}`,
+          148,
+          205,
+          { align: "center" }
+        );
+
+      }
+
+    });
+
+    // ===== SAVE FILE =====
+    const filename =
+      `${business.replace(/[^a-zA-Z0-9]/g, "_")}_ledger_${Date.now()}.pdf`;
+
+    doc.save(filename);
+
+  }
+  catch (error) {
+
+    console.error("PDF generation error:", error);
+
+    alert("Failed to generate PDF: " + error.message);
+
+  }
+
+};
   if (loading) {
     return (
       <div style={styles.loadingContainer}>
@@ -392,8 +897,6 @@ const Ledger = () => {
         <button
           onClick={handleBackToViewOrders}
           style={styles.backButton}
-          onMouseOver={(e) => e.target.style.backgroundColor = '#5a6268'}
-          onMouseLeave={(e) => e.target.style.backgroundColor = '#6c757d'}
         >
           ← Back to Orders
         </button>
@@ -528,18 +1031,13 @@ const Ledger = () => {
 
                     return (
                       <React.Fragment key={index}>
-                        {/* Main Row */}
                         <tr style={
                           entry.type === 'order' ? styles.orderRow :
                           entry.type === 'advance_payment' ? styles.advanceRow :
                           styles.paymentRow
                         }>
-                          <td style={styles.tableCell}>
-                            {formatDateSafe(entry.date)}
-                          </td>
-                          <td style={styles.tableCell}>
-                            <strong>{entry.orderNo}</strong>
-                          </td>
+                          <td style={styles.tableCell}>{formatDateSafe(entry.date)}</td>
+                          <td style={styles.tableCell}><strong>{entry.orderNo}</strong></td>
                           <td style={styles.tableCell}>
                             {entry.type === 'order' ? (
                               <div style={styles.requirementsList}>
@@ -586,7 +1084,6 @@ const Ledger = () => {
                           </td>
                         </tr>
 
-                        {/* Payment Form Row - Shows directly below the order row when active */}
                         {isPaymentRowActive && (
                           <tr>
                             <td colSpan="7" style={styles.paymentFormCell}>
@@ -702,6 +1199,22 @@ const Ledger = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Download and Print Buttons */}
+            <div style={styles.exportButtonsContainer}>
+              <button
+                onClick={() => handlePrintClient(business, clientData)}
+                style={styles.printButton}
+              >
+                🖨️ Print Ledger
+              </button>
+              <button
+                onClick={() => handleDownloadClientPDF(business, clientData)}
+                style={styles.downloadButton}
+              >
+                📥 Download PDF
+              </button>
+            </div>
           </div>
         );
       })}
@@ -715,7 +1228,6 @@ const styles = {
     alignItems: 'center',
     gap: '20px',
     marginBottom: '30px',
-    position: 'relative',
   },
   backButton: {
     backgroundColor: '#6c757d',
@@ -726,7 +1238,48 @@ const styles = {
     cursor: 'pointer',
     fontSize: '14px',
     fontWeight: '500',
-    transition: 'background-color 0.2s',
+  },
+  title: {
+    textAlign: 'center',
+    color: '#003366',
+    fontSize: '28px',
+    fontWeight: 'bold',
+    margin: 0,
+    flex: 1,
+  },
+  exportButtonsContainer: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '15px',
+    padding: '20px',
+    backgroundColor: '#f8f9fa',
+    borderTop: '2px solid #dee2e6',
+  },
+  printButton: {
+    backgroundColor: '#17a2b8',
+    color: 'white',
+    border: 'none',
+    padding: '10px 20px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '600',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  downloadButton: {
+    backgroundColor: '#28a745',
+    color: 'white',
+    border: 'none',
+    padding: '10px 20px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '600',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
   },
   container: {
     maxWidth: '1400px',
@@ -736,14 +1289,6 @@ const styles = {
     borderRadius: '8px',
     boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
     fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
-  },
-  title: {
-    textAlign: 'center',
-    color: '#003366',
-    fontSize: '28px',
-    fontWeight: 'bold',
-    margin: 0,
-    flex: 1,
   },
   loadingContainer: {
     display: 'flex',
@@ -1045,10 +1590,6 @@ const styles = {
     fontWeight: '600',
     fontSize: '14px',
     minWidth: '120px',
-    ':disabled': {
-      backgroundColor: '#ccc',
-      cursor: 'not-allowed',
-    },
   },
   successMessage: {
     backgroundColor: '#d4edda',

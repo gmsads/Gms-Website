@@ -41,7 +41,6 @@ const PerformanceView = () => {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
-  const [chartLoading, setChartLoading] = useState(false);
   const [loadingExecutives, setLoadingExecutives] = useState(false);
   
   // Filters

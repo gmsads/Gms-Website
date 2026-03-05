@@ -155,6 +155,7 @@ function App() {
           <Route path="add-employee" element={<AddExecutiveAdmin />} />
           <Route path="view-performance" element={<ViewPerformance />} />
             <Route path="view-leaves" element={<ViewLeave />} />
+             <Route path="advance-approvals" element={<AdvanceApprovalPage/>}/>
           {/* HR specific components - NOW WITH EMPLOYEES PROP */}
           <Route path="salary" element={<SalaryComponent />} />
           <Route path="attendance" element={<AttendanceWithEmployees />} />
