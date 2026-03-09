@@ -620,7 +620,6 @@ router.post("/set-target", async (req, res) => {
 // ============================
 // POST: Record payment for order
 // ============================
-// Add debugging to see what's failing
 router.post("/orders/:id/record-payment", async (req, res) => {
   try {
     console.log("Payment request received:", req.body);
@@ -642,6 +641,12 @@ router.post("/orders/:id/record-payment", async (req, res) => {
     }
 
     const paymentAmount = parseFloat(amount);
+    
+    // Calculate new advance amount (add payment to existing advance)
+    const currentAdvance = parseFloat(existingOrder.advance || 0);
+    const newAdvance = currentAdvance + paymentAmount;
+    
+    // Calculate new balance
     const newBalance = parseFloat((existingOrder.balance - paymentAmount).toFixed(2));
 
     // Create payment record
@@ -654,11 +659,13 @@ router.post("/orders/:id/record-payment", async (req, res) => {
     };
 
     console.log("Payment record to be created:", paymentRecord);
+    console.log(`Updating: Advance: ${currentAdvance} → ${newAdvance}, Balance: ${existingOrder.balance} → ${newBalance}`);
 
-    // Build update object dynamically to avoid missing fields
+    // Build update object - NOW INCLUDES advance update
     const updateData = {
       $push: { paymentHistory: paymentRecord },
       $set: {
+        advance: newAdvance,        // Add payment amount to advance
         balance: newBalance,
         status: newBalance <= 0 ? "Paid" : "Partially Paid",
         updatedAt: new Date()
@@ -690,6 +697,8 @@ router.post("/orders/:id/record-payment", async (req, res) => {
     );
 
     console.log("Order updated successfully:", updatedOrder._id);
+    console.log("New advance amount:", updatedOrder.advance);
+    console.log("New balance:", updatedOrder.balance);
 
     res.json({
       success: true,

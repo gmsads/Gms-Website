@@ -43,12 +43,7 @@ const PerformanceView = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [loadingExecutives, setLoadingExecutives] = useState(false);
   
-  // Filters
-  const [chartFilters, setChartFilters] = useState({
-    executive: '',
-    year: new Date().getFullYear()
-  });
-
+  // Filters - only one year filter now
   const [yearlyFilter, setYearlyFilter] = useState({
     year: new Date().getFullYear()
   });
@@ -93,24 +88,31 @@ const PerformanceView = () => {
     return allExecutives.find(exec => exec.value === selectedExecutive);
   }, [allExecutives, selectedExecutive]);
 
-  // Get executive monthly data for chart
+  // Get executive monthly data for chart - using yearlyFilter.year
   const getExecutiveMonthlyData = useMemo(() => {
-    if (!performanceData?.detailedData?.byMonth || !chartFilters.executive || !chartFilters.year) {
+    if (!performanceData?.detailedData?.byMonth || !selectedExecutive) {
       return [];
     }
     
     const monthlyData = performanceData.detailedData.byMonth;
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
+    // Filter data for the selected year from the yearly filter
+    const filteredMonthlyData = monthlyData.filter(monthData => {
+      const [monthName, yearStr] = monthData.month.split(' ');
+      const year = parseInt(yearStr);
+      return year === yearlyFilter.year;
+    });
+    
     // Create array of all months for the selected year
     const allMonthsData = monthNames.map((month, index) => {
       const monthNum = index + 1;
       
-      // Find data for this month
-      const monthData = monthlyData.find(m => {
-        const [mName, mYear] = m.month.split(' ');
+      // Find data for this month from filtered data
+      const monthData = filteredMonthlyData.find(m => {
+        const [mName] = m.month.split(' ');
         const mMonthIndex = new Date(`${mName} 1, 2000`).getMonth();
-        return mMonthIndex === index && parseInt(mYear) === chartFilters.year;
+        return mMonthIndex === index;
       });
       
       return {
@@ -127,7 +129,7 @@ const PerformanceView = () => {
     });
     
     return allMonthsData;
-  }, [performanceData, chartFilters.executive, chartFilters.year]);
+  }, [performanceData, selectedExecutive, yearlyFilter.year]);
 
   const calculateYearlyData = useMemo(() => {
     if (!performanceData || !performanceData.detailedData?.byMonth) {
@@ -329,12 +331,6 @@ const PerformanceView = () => {
       const res = await axios.get('/api/performance', { params });
       setPerformanceData(res.data);
       
-      // Update chart filters with selected executive
-      setChartFilters(prev => ({
-        ...prev,
-        executive: executiveValue
-      }));
-      
     } catch (error) {
       console.error('Error fetching performance data:', error);
       alert('Failed to fetch performance data');
@@ -373,14 +369,6 @@ const PerformanceView = () => {
   useEffect(() => {
     fetchAllExecutives();
   }, []);
-
-  const handleChartFilterChange = (e) => {
-    const { name, value } = e.target;
-    setChartFilters(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
 
   const handleYearlyFilterChange = (e) => {
     const { name, value } = e.target;
@@ -810,18 +798,6 @@ const PerformanceView = () => {
       fontSize: '16px',
       fontStyle: 'italic'
     },
-    chartFilterContainer: {
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: '20px',
-      marginBottom: '25px',
-      justifyContent: 'center',
-      alignItems: 'flex-end'
-    },
-    chartFilterGroup: {
-      minWidth: '280px',
-      flex: '1'
-    },
     yearlyFilterContainer: {
       display: 'flex',
       flexWrap: 'wrap',
@@ -1060,17 +1036,20 @@ const PerformanceView = () => {
   };
 
   const getChartSubtitle = () => {
+    if (!selectedExecutiveObj?.name) {
+      return 'Select an executive to view monthly performance';
+    }
     const executiveName = selectedExecutiveObj?.name || 'Selected Executive';
-    const yearText = chartFilters.year ? chartFilters.year.toString() : 'All Years';
+    const yearText = yearlyFilter.year ? yearlyFilter.year.toString() : 'All Years';
     return `${executiveName} - Monthly Performance for ${yearText}`;
   };
 
-  // Render executive monthly performance chart
+  // Render executive monthly performance chart - NO FILTERS, JUST THE CHART
   const renderExecutiveMonthlyChart = () => {
     if (!selectedExecutive) {
       return (
         <div style={styles.noDataText}>
-          Please select an executive to view monthly performance
+          Please select an executive from the form below to view monthly performance
         </div>
       );
     }
@@ -1078,7 +1057,7 @@ const PerformanceView = () => {
     if (getExecutiveMonthlyData.length === 0) {
       return (
         <div style={styles.noDataText}>
-          No performance data available for the selected executive and year
+          No performance data available for the selected executive
         </div>
       );
     }
@@ -1503,44 +1482,9 @@ const PerformanceView = () => {
     <div style={styles.container}>
       <h1 style={styles.heading}>Executive Performance Dashboard</h1>
 
-      {/* Chart Filters - Select Executive and Year */}
+      {/* Chart Section - NO FILTERS, ONLY CHART */}
       <div style={styles.chartContainer}>
         <h2 style={styles.chartTitle}>Monthly Performance Chart</h2>
-        <div style={styles.chartFilterContainer}>
-          <div style={styles.chartFilterGroup}>
-            <label htmlFor="executive" style={styles.label}>Select Executive</label>
-            <select
-              name="executive"
-              value={chartFilters.executive}
-              onChange={handleChartFilterChange}
-              style={styles.select}
-            >
-              <option value="">-- Select Executive --</option>
-              {allExecutives.map(exec => (
-                <option key={exec.value} value={exec.value}>
-                  {exec.name} ({exec.type})
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          <div style={styles.chartFilterGroup}>
-            <label htmlFor="year" style={styles.label}>Select Year</label>
-            <select
-              name="year"
-              value={chartFilters.year}
-              onChange={handleChartFilterChange}
-              style={styles.select}
-            >
-              {yearOptions.filter(opt => opt.value !== '').map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        
         {renderExecutiveMonthlyChart()}
       </div>
 
@@ -1592,11 +1536,6 @@ const PerformanceView = () => {
                                 setSelectedExecutive(exec.value);
                                 setSearchTerm(exec.name);
                                 setShowDropdown(false);
-                                // Also update chart filter
-                                setChartFilters(prev => ({
-                                  ...prev,
-                                  executive: exec.value
-                                }));
                               }}
                             >
                               <span style={{ flex: 1, marginRight: '10px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{exec.name}</span>

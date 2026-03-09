@@ -29,9 +29,6 @@ const SalaryComponent = ({ employees }) => {
   
   // Available months that have payment records
   const [availableMonths, setAvailableMonths] = useState([]);
-  
-  // Flag to track if data has been loaded from API
-  const [dataLoaded, setDataLoaded] = useState(false);
 
   // State to control salary form visibility
   const [showSalaryForm, setShowSalaryForm] = useState(false);
@@ -54,125 +51,67 @@ const SalaryComponent = ({ employees }) => {
     setTimeout(() => setMessage({ show: false, text: '', type: '' }), 5000);
   };
 
-  // useEffect hook to load data from localStorage when component mounts
-  useEffect(() => {
-    const loadFromLocalStorage = () => {
-      console.log('Loading from localStorage...');
-      
-      try {
-        const savedSalaries = localStorage.getItem('salariesData');
-        const savedAvailableMonths = localStorage.getItem('availableMonths');
-        
-        if (savedSalaries && savedSalaries !== '{}' && savedSalaries !== 'null') {
-          const parsedSalaries = JSON.parse(savedSalaries);
-          if (Object.keys(parsedSalaries).length > 0) {
-            setSalaries(parsedSalaries);
-            console.log('Loaded salaries from localStorage:', parsedSalaries);
-          }
-        }
-        
-        if (savedAvailableMonths && savedAvailableMonths !== '[]' && savedAvailableMonths !== 'null') {
-          const parsedMonths = JSON.parse(savedAvailableMonths);
-          if (parsedMonths.length > 0) {
-            setAvailableMonths(parsedMonths);
-            console.log('Loaded months from localStorage:', parsedMonths);
-          }
-        }
-      } catch (error) {
-        console.error('Error parsing saved data:', error);
-      }
-      
-      setDataLoaded(true);
-    };
-    
-    loadFromLocalStorage();
-  }, []);
-
-  // useEffect hook to fetch from API only when employees are available and data not loaded
+  // Fetch all data when employees are available
   useEffect(() => {
     if (employees && employees.length > 0) {
-      const fetchData = async () => {
-        // Always fetch from API to ensure data is up to date
-        console.log('Fetching from API...');
-        await fetchSalaries();
-        await fetchAvailableMonths();
-      };
-      
-      fetchData();
+      fetchSalaries();
+      fetchAvailableMonths();
     }
   }, [employees]);
 
-  // useEffect hook to filter employees to show only active ones
+  // Filter employees to show only active ones
   useEffect(() => {
     if (employees) {
       setFilteredEmployees(employees.filter(emp => emp.active));
     }
   }, [employees]);
 
-  // useEffect hook to save salaries to localStorage whenever salaries state changes
-  useEffect(() => {
-    if (Object.keys(salaries).length > 0) {
-      localStorage.setItem('salariesData', JSON.stringify(salaries));
-      console.log('Saved salaries to localStorage');
-    }
-  }, [salaries]);
-
-  // useEffect hook to save available months to localStorage whenever availableMonths changes
-  useEffect(() => {
-    if (availableMonths.length > 0) {
-      localStorage.setItem('availableMonths', JSON.stringify(availableMonths));
-      console.log('Saved months to localStorage');
-    }
-  }, [availableMonths]);
-
   // Function to fetch all salary data from API
   const fetchSalaries = async () => {
     try {
       setLoading(true);
-      console.log('Making API call to /api/salaries');
+      console.log('Fetching salaries from API...');
       
       const response = await fetch('/api/salaries');
       
-      if (response.ok) {
-        const data = await response.json();
-        console.log('API response data:', data);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('API response data:', data);
+      
+      if (data && data.length > 0) {
+        const salaryMap = {};
         
-        if (data && data.length > 0) {
-          const salaryMap = {};
+        data.forEach(salary => {
+          // Handle different possible structures of employeeId
+          let employeeId = null;
           
-          data.forEach(salary => {
-            let employeeId = null;
-            
-            if (salary.employeeId && typeof salary.employeeId === 'object' && salary.employeeId._id) {
-              employeeId = salary.employeeId._id;
-            } else if (salary.employeeId && typeof salary.employeeId === 'string') {
-              employeeId = salary.employeeId;
-            }
-            
-            if (employeeId) {
-              salaryMap[employeeId] = {
-                ...salary,
-                employeeId: employeeId,
-                _id: salary._id
-              };
-            }
-          });
+          if (salary.employeeId && typeof salary.employeeId === 'object' && salary.employeeId._id) {
+            employeeId = salary.employeeId._id;
+          } else if (salary.employeeId && typeof salary.employeeId === 'string') {
+            employeeId = salary.employeeId;
+          }
           
-          setSalaries(prevSalaries => {
-            // Merge with existing salaries, API data takes precedence
-            const merged = { ...prevSalaries, ...salaryMap };
-            return merged;
-          });
-          
-          console.log('Salaries updated from API');
-        } else {
-          console.log('No salary data from API');
-        }
+          if (employeeId) {
+            salaryMap[employeeId] = {
+              ...salary,
+              employeeId: employeeId,
+              _id: salary._id
+            };
+          }
+        });
+        
+        setSalaries(salaryMap);
+        console.log('Salaries updated from API:', salaryMap);
       } else {
-        console.error('API response not OK:', response.status);
+        console.log('No salary data from API');
+        setSalaries({});
       }
     } catch (error) {
       console.error('Error fetching salaries:', error);
+      showMessage('Failed to load salary data. Please check your connection.', 'error');
     } finally {
       setLoading(false);
     }
@@ -181,17 +120,21 @@ const SalaryComponent = ({ employees }) => {
   // Function to fetch available months with payments from API
   const fetchAvailableMonths = async () => {
     try {
-      console.log('Making API call to /api/salaries/months/available');
+      console.log('Fetching available months from API...');
       
       const response = await fetch('/api/salaries/months/available');
       
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Available months from API:', data);
-        
-        if (data && data.length > 0) {
-          setAvailableMonths(data);
-        }
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Available months from API:', data);
+      
+      if (data && data.length > 0) {
+        setAvailableMonths(data);
+      } else {
+        setAvailableMonths([]);
       }
     } catch (error) {
       console.error('Error fetching available months:', error);
@@ -236,43 +179,27 @@ const SalaryComponent = ({ employees }) => {
         body: JSON.stringify(payload),
       });
 
-      if (response.ok) {
-        const savedSalary = await response.json();
-        console.log('Saved salary response:', savedSalary);
-        
-        const isUpdate = salaries[selectedEmp._id];
-        showMessage(
-          isUpdate ? 'Basic salary updated successfully' : 'Basic salary set successfully',
-          'success'
-        );
-
-        // Update salaries state
-        const updatedSalaries = {
-          ...salaries,
-          [selectedEmp._id]: {
-            ...savedSalary,
-            employeeId: selectedEmp._id,
-            employeeName: selectedEmp.name,
-            paymentHistory: savedSalary.paymentHistory || salaries[selectedEmp._id]?.paymentHistory || []
-          }
-        };
-        
-        setSalaries(updatedSalaries);
-        
-        // Clear form
-        setBasicSalary('');
-        setSelectedEmployee('');
-        setShowSalaryForm(false);
-        
-        // Force save to localStorage
-        localStorage.setItem('salariesData', JSON.stringify(updatedSalaries));
-      } else {
+      if (!response.ok) {
         const errorData = await response.json();
-        showMessage(errorData.message || 'Failed to save salary details', 'error');
+        throw new Error(errorData.message || 'Failed to save salary details');
       }
+
+      const savedSalary = await response.json();
+      console.log('Saved salary response:', savedSalary);
+      
+      showMessage('Basic salary saved successfully', 'success');
+
+      // Refresh salaries from API to get updated data
+      await fetchSalaries();
+      
+      // Clear form
+      setBasicSalary('');
+      setSelectedEmployee('');
+      setShowSalaryForm(false);
+      
     } catch (error) {
-      console.error('Network error saving salary:', error);
-      showMessage('Failed to save salary details. Please check your connection.', 'error');
+      console.error('Error saving salary:', error);
+      showMessage(error.message || 'Failed to save salary details. Please check your connection.', 'error');
     } finally {
       setLoading(false);
     }
@@ -304,40 +231,25 @@ const SalaryComponent = ({ employees }) => {
         }),
       });
 
-      if (response.ok) {
-        const updatedSalary = await response.json();
-        showMessage(`Payment of ₹${paymentAmount} recorded for ${getEmployeeName(employeeId)} - ${formatMonth(month)}`, 'success');
-        
-        // Update salaries state
-        const updatedSalaries = {
-          ...salaries,
-          [employeeId]: {
-            ...updatedSalary,
-            employeeId: employeeId
-          }
-        };
-        
-        setSalaries(updatedSalaries);
-        localStorage.setItem('salariesData', JSON.stringify(updatedSalaries));
-        
-        // Update available months if needed
-        if (!availableMonths.includes(month)) {
-          const newAvailableMonths = [...availableMonths, month].sort().reverse();
-          setAvailableMonths(newAvailableMonths);
-          localStorage.setItem('availableMonths', JSON.stringify(newAvailableMonths));
-        }
-        
-        // Close dialogs
-        setPaymentAmount('');
-        setPayingEmployee(null);
-        setSelectingMonthFor(null);
-      } else {
+      if (!response.ok) {
         const errorData = await response.json();
-        showMessage(errorData.message || 'Failed to record payment', 'error');
+        throw new Error(errorData.message || 'Failed to record payment');
       }
+
+      showMessage(`Payment of ₹${paymentAmount} recorded for ${getEmployeeName(employeeId)} - ${formatMonth(month)}`, 'success');
+      
+      // Refresh data from API
+      await fetchSalaries();
+      await fetchAvailableMonths();
+      
+      // Close dialogs
+      setPaymentAmount('');
+      setPayingEmployee(null);
+      setSelectingMonthFor(null);
+      
     } catch (error) {
       console.error('Error recording payment:', error);
-      showMessage('Failed to record payment', 'error');
+      showMessage(error.message || 'Failed to record payment', 'error');
     } finally {
       setLoading(false);
     }
@@ -827,7 +739,7 @@ const SalaryComponent = ({ employees }) => {
           </div>
         </div>
         <div className="card-body">
-          {loading && !dataLoaded ? (
+          {loading ? (
             <div className="loading-state">
               <div className="spinner"></div>
               <p>Loading salary data...</p>

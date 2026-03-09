@@ -5,12 +5,11 @@ import OrderForm from '../Executive/OrderForm';
 import DigitalMarketingOrderForm from '../Executive/Digitalform';
 import axios from 'axios';
 import GMSLogo from '../assets/GMS_LOGO_.png'
-import WhatsAppDashboard from './WhatsApp'; // Import WhatsApp dashboard component
+import WhatsAppDashboard from './WhatsApp';
 import { Chart as ChartJS, Title, Tooltip, LineElement, PointElement, Legend, ArcElement, BarElement, CategoryScale, LinearScale, RadialLinearScale, Filler } from 'chart.js';
-import { Bar, Doughnut, PolarArea, Line } from 'react-chartjs-2';
-import { FaWhatsapp } from 'react-icons/fa'; // Import WhatsApp icon
+import { Bar, Doughnut, PolarArea } from 'react-chartjs-2';
+import { FaWhatsapp } from 'react-icons/fa';
 
-// Register ChartJS components - ADDED Filler PLUGIN
 ChartJS.register(
   LineElement,
   PointElement,
@@ -26,7 +25,6 @@ ChartJS.register(
 );
 
 function AdminDashboard() {
-  // State management
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [hoveredItem, setHoveredItem] = useState('');
   const [openSections, setOpenSections] = useState({
@@ -37,7 +35,7 @@ function AdminDashboard() {
     events: false,
     manageUsers: false,
     accounts: false,
-    reports: false // Added missing reports section
+    reports: false
   });
   const location = useLocation();
   const navigate = useNavigate();
@@ -45,50 +43,43 @@ function AdminDashboard() {
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
-  const [year, setYear] = useState(2026); // Default to 2026
+  const [year, setYear] = useState(2026);
   const [selectedMonth, setSelectedMonth] = useState(null);
 
-  // WhatsApp dashboard state
   const [showWhatsAppDashboard, setShowWhatsAppDashboard] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Order search states
   const [orderNumber, setOrderNumber] = useState('');
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [existingOrderData, setExistingOrderData] = useState(null);
   const [searchError, setSearchError] = useState('');
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [selectedFormType, setSelectedFormType] = useState('order');
-  
-  // Month labels
+
   const monthLabels = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
 
-  // Generate year options with 'ALL' option
   const years = ['all', ...Array.from({ length: 11 }, (_, i) => {
     const currentYear = new Date().getFullYear();
     return currentYear - 5 + i;
   })];
 
-  // Helper function to get client type data in consistent format
   const getClientTypeData = () => {
-    const defaultTypes = { 
-      Retail: { count: 0, amount: 0 }, 
-      Renewal: { count: 0, amount: 0 }, 
-      Agent: { count: 0, amount: 0 }, 
-      'Renewal-Agent': { count: 0, amount: 0 } 
+    const defaultTypes = {
+      Retail: { count: 0, amount: 0 },
+      Renewal: { count: 0, amount: 0 },
+      Agent: { count: 0, amount: 0 },
+      'Renewal-Agent': { count: 0, amount: 0 }
     };
-    
+
     if (!chartData?.clientTypes) return defaultTypes;
-    
-    // If clientTypes is already in the new format, return it
+
     if (chartData.clientTypes.Retail && typeof chartData.clientTypes.Retail === 'object') {
       return chartData.clientTypes;
     }
-    
-    // If clientTypes is in the old format (just numbers), convert to new format
+
     return {
       Retail: { count: chartData.clientTypes.Retail || 0, amount: 0 },
       Renewal: { count: chartData.clientTypes.Renewal || 0, amount: 0 },
@@ -97,35 +88,27 @@ function AdminDashboard() {
     };
   };
 
-  // Get client types data
   const clientTypes = getClientTypeData();
 
-  // Amount formatting helper function
   const formatAmount = (amount) => {
     const numAmount = parseFloat(amount) || 0;
-    
+
     if (numAmount >= 10000000) {
-      // Crores
       return (numAmount / 10000000).toFixed(1) + 'Cr';
     } else if (numAmount >= 100000) {
-      // Lakhs
       return (numAmount / 100000).toFixed(1) + 'L';
     } else if (numAmount >= 1000) {
-      // Thousands
       return (numAmount / 1000).toFixed(1) + 'K';
     } else {
-      // Less than 1000
       return numAmount.toString();
     }
   };
 
-  // Format amount with full display
   const formatAmountFull = (amount) => {
     const numAmount = parseFloat(amount) || 0;
     return '₹' + numAmount.toLocaleString('en-IN');
   };
 
-  // Toggle sidebar section
   const toggleSection = (section) => {
     setOpenSections(prev => ({
       ...prev,
@@ -133,14 +116,12 @@ function AdminDashboard() {
     }));
   };
 
-  // Close sidebar on mobile when clicking a menu item
   const handleMenuItemClick = () => {
     if (window.innerWidth <= 768) {
       setSidebarOpen(false);
     }
   };
 
-  // Responsive sidebar effect
   useEffect(() => {
     const handleResize = () => {
       const isDesktop = window.innerWidth > 768;
@@ -151,19 +132,17 @@ function AdminDashboard() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Fetch dashboard data
   useEffect(() => {
     const fetchDashboardData = async () => {
       setLoading(true);
       setWeeklyLoading(true);
       try {
         const params = new URLSearchParams();
-        
-        // Only append year if it's not 'all'
+
         if (year !== 'all') {
           params.append('year', year);
         }
-        
+
         if (selectedMonth !== null) {
           params.append('month', selectedMonth + 1);
         }
@@ -203,7 +182,6 @@ function AdminDashboard() {
     fetchDashboardData();
   }, [year, selectedMonth]);
 
-  // Fetch unread WhatsApp messages count
   useEffect(() => {
     const fetchUnreadCount = async () => {
       try {
@@ -215,12 +193,10 @@ function AdminDashboard() {
     };
 
     fetchUnreadCount();
-    // Poll for new messages every 30 seconds
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // Handle order search
   const handleSearch = async () => {
     if (orderNumber.length !== 10) {
       setSearchError('Please enter exactly 10 digits');
@@ -254,29 +230,24 @@ function AdminDashboard() {
     }
   };
 
-  // Helper functions
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const showDashboardCards = location.pathname === '/admin-dashboard';
   const safeArray = (arr) => (Array.isArray(arr) ? arr : []);
 
-  // Calculate dashboard metrics
   const pendingPayments = safeArray(chartData?.pendingPayments);
   const pendingServices = safeArray(chartData?.pendingServices);
   const appointments = safeArray(chartData?.appointments);
 
-// You can either keep this function but update it, or remove it since we're calculating directly in the card
-const calculateTotalRevenue = () => {
-  if (!chartData) return 0;
-  
-  if (selectedMonth !== null) {
-    // For monthly view - use the amount for the selected month
-    return chartData.amountByMonth?.[selectedMonth] || 0;
-  } else {
-    // For yearly view or all years - sum all monthly amounts
-    return safeArray(chartData.amountByMonth).reduce((sum, amount) => sum + amount, 0);
-  }
-};
-  // Get total orders count
+  const calculateTotalRevenue = () => {
+    if (!chartData) return 0;
+
+    if (selectedMonth !== null) {
+      return chartData.amountByMonth?.[selectedMonth] || 0;
+    } else {
+      return safeArray(chartData.amountByMonth).reduce((sum, amount) => sum + amount, 0);
+    }
+  };
+
   const getTotalOrdersCount = () => {
     if (!chartData) return 0;
     if (selectedMonth !== null) {
@@ -285,20 +256,34 @@ const calculateTotalRevenue = () => {
     return safeArray(chartData?.totalOrdersByMonth).reduce((a, b) => a + b, 0);
   };
 
-  // Handle chart clicks
-  const handleChartClick = (chartType) => {
+  const handleChartClick = (chartType, elementIndex = null) => {
     if (chartType === 'pending-payment') {
-      // Prepare query parameters for month/year filtering
       const queryParams = new URLSearchParams();
-      
+
       if (year !== 'all') {
         queryParams.append('year', year);
       }
-      
+
       if (selectedMonth !== null) {
         queryParams.append('month', selectedMonth + 1);
       }
-      
+
+      queryParams.append('filterType', 'pending');
+
+      navigate(`/admin-dashboard/pending-payment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
+    } else if (chartType === 'completed-payment') {
+      const queryParams = new URLSearchParams();
+
+      if (year !== 'all') {
+        queryParams.append('year', year);
+      }
+
+      if (selectedMonth !== null) {
+        queryParams.append('month', selectedMonth + 1);
+      }
+
+      queryParams.append('filterType', 'completed');
+
       navigate(`/admin-dashboard/pending-payment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
     } else if (chartType === 'pending-service') {
       navigate('/admin-dashboard/pending-service');
@@ -317,13 +302,11 @@ const calculateTotalRevenue = () => {
     handleMenuItemClick();
   };
 
-  // Clear all filters
   const handleClearFilters = () => {
     setYear('all');
     setSelectedMonth(null);
   };
 
-  // Get time period text for display
   const getTimePeriodText = () => {
     if (selectedMonth !== null) {
       return `${monthLabels[selectedMonth]} ${year !== 'all' ? year : '(All Years)'}`;
@@ -331,7 +314,6 @@ const calculateTotalRevenue = () => {
     return year === 'all' ? 'All Years' : `Year ${year}`;
   };
 
-  // Styles - Added WhatsApp button styles
   const styles = {
     container: {
       display: 'flex',
@@ -364,8 +346,7 @@ const calculateTotalRevenue = () => {
       height: '100vh',
       position: 'relative',
     },
-    
-    // WhatsApp Floating Button
+
     whatsappButton: {
       position: 'fixed',
       bottom: '30px',
@@ -403,7 +384,7 @@ const calculateTotalRevenue = () => {
       fontWeight: 'bold',
       boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
     },
-    
+
     dashboardCards: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
@@ -430,6 +411,12 @@ const calculateTotalRevenue = () => {
       width: '100%',
       boxSizing: 'border-box',
       position: 'relative',
+      transition: 'transform 0.2s, box-shadow 0.2s',
+      cursor: 'pointer',
+    },
+    cardHover: {
+      transform: 'translateY(-2px)',
+      boxShadow: '0 6px 12px rgba(0,0,0,0.15)',
     },
     revenueCard: {
       backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -713,7 +700,6 @@ const calculateTotalRevenue = () => {
       color: '#666',
       fontSize: '14px'
     },
-    // NEW STYLES FOR DAILY ACTIVITIES CARD
     dailyActivitiesCard: {
       backgroundColor: 'rgba(255, 255, 255, 0.95)',
       borderRadius: '10px',
@@ -779,14 +765,12 @@ const calculateTotalRevenue = () => {
     ...(hoveredItem === name ? styles.hoverEffect : {}),
   });
 
-  // Sidebar Component
   const Sidebar = () => {
     return (
       <div style={{
         ...styles.sidebar,
         ...(window.innerWidth <= 768 && !sidebarOpen ? { display: 'none' } : {})
       }}>
-        {/* Logo Header */}
         <div
           style={{ ...styles.sidebarHeader, textAlign: 'center', cursor: 'pointer' }}
           onClick={() => {
@@ -807,7 +791,6 @@ const calculateTotalRevenue = () => {
           />
         </div>
 
-        {/* DASHBOARD Section */}
         <div style={styles.sidebarSection}>
           <div
             style={styles.sidebarSectionTitle}
@@ -834,12 +817,11 @@ const calculateTotalRevenue = () => {
               >
                 Dashboard
               </NavLink>
-              
+
             </>
           )}
         </div>
 
-        {/* SALES Section */}
         <div style={styles.sidebarSection}>
           <div
             style={styles.sidebarSectionTitle}
@@ -873,7 +855,7 @@ const calculateTotalRevenue = () => {
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
-              Advance-Approvals
+                Advance-Approvals
               </NavLink>
               <NavLink
                 to="view-orders"
@@ -891,7 +873,7 @@ const calculateTotalRevenue = () => {
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
-                View Leave Requests 
+                View Leave Requests
               </NavLink>
               <NavLink
                 to="parties"
@@ -909,7 +891,7 @@ const calculateTotalRevenue = () => {
                 onMouseLeave={() => setHoveredItem('')}
                 onClick={handleMenuItemClick}
               >
-                Quotation 
+                Quotation
               </NavLink>
               <NavLink
                 to="performance"
@@ -949,7 +931,7 @@ const calculateTotalRevenue = () => {
               >
                 Ledger
               </NavLink>
-               <NavLink
+              <NavLink
                 to="purchase"
                 style={linkStyle('purchase')}
                 onMouseEnter={() => setHoveredItem('purchase')}
@@ -962,8 +944,7 @@ const calculateTotalRevenue = () => {
           )}
         </div>
 
-      
-      {/* MANAGE USERS Section */}
+
         <div style={styles.sidebarSection}>
           <div
             style={styles.sidebarSectionTitle}
@@ -1060,14 +1041,13 @@ const calculateTotalRevenue = () => {
           )}
         </div>
 
-        
-        {/* Reports  Section */}
+
         <div style={styles.sidebarSection}>
           <div
             style={styles.sidebarSectionTitle}
             onClick={() => toggleSection('reports')}
           >
-        Reports
+            Reports
             <span
               style={{
                 ...styles.dropdownIcon,
@@ -1090,7 +1070,7 @@ const calculateTotalRevenue = () => {
               >
                 Daily Report
               </NavLink>
-                <NavLink
+              <NavLink
                 to="view-hrreport"
                 style={linkStyle('view-hrreport')}
                 onMouseEnter={() => setHoveredItem('view-hrreport')}
@@ -1111,7 +1091,6 @@ const calculateTotalRevenue = () => {
             </>
           )}
         </div>
-        {/* SERVICES Section */}
         <div style={styles.sidebarSection}>
           <div
             style={styles.sidebarSectionTitle}
@@ -1159,7 +1138,7 @@ const calculateTotalRevenue = () => {
                 View Design
               </NavLink>
 
-            
+
               <NavLink
                 to="design-report"
                 style={linkStyle('design-report')}
@@ -1182,7 +1161,6 @@ const calculateTotalRevenue = () => {
           )}
         </div>
 
-        {/* ACCOUNTS Section */}
         <div style={styles.sidebarSection}>
           <div
             style={styles.sidebarSectionTitle}
@@ -1233,7 +1211,6 @@ const calculateTotalRevenue = () => {
           )}
         </div>
 
-        {/* CLIENTS Section */}
         <div style={styles.sidebarSection}>
           <div
             style={styles.sidebarSectionTitle}
@@ -1274,7 +1251,6 @@ const calculateTotalRevenue = () => {
           )}
         </div>
 
-        {/* EVENTS Section */}
         <div style={styles.sidebarSection}>
           <div
             style={styles.sidebarSectionTitle}
@@ -1318,9 +1294,10 @@ const calculateTotalRevenue = () => {
     );
   };
 
+  const [hoveredCard, setHoveredCard] = useState(null);
+
   return (
     <div style={styles.container}>
-      {/* Mobile Menu Button - Only show on mobile */}
       {window.innerWidth <= 768 && (
         <div
           style={styles.mobileMenuButton}
@@ -1330,10 +1307,8 @@ const calculateTotalRevenue = () => {
         </div>
       )}
 
-      {/* Sidebar */}
       <Sidebar />
 
-      {/* Main Content Area */}
       <div style={styles.content}>
         {location.pathname.includes('create-order') ? (
           <>
@@ -1358,7 +1333,6 @@ const calculateTotalRevenue = () => {
                   style={styles.phoneInput}
                 />
 
-                {/* Form Type Selection */}
                 <div style={styles.formTypeContainer}>
                   <label style={styles.formTypeLabel}>
                     <input
@@ -1447,7 +1421,6 @@ const calculateTotalRevenue = () => {
             <Outlet />
             {showDashboardCards && (
               <>
-                {/* Year and Month Selector with User Controls */}
                 <div style={styles.yearSelectorWrapper}>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <label htmlFor="year-select" style={styles.yearSelectorLabel}>
@@ -1459,7 +1432,7 @@ const calculateTotalRevenue = () => {
                       onChange={(e) => {
                         const selectedValue = e.target.value;
                         setYear(selectedValue === 'all' ? 'all' : parseInt(selectedValue));
-                        setSelectedMonth(null); // Reset month when year changes
+                        setSelectedMonth(null);
                       }}
                       style={styles.yearSelector}
                     >
@@ -1536,269 +1509,245 @@ const calculateTotalRevenue = () => {
                   </div>
                 ) : (
                   <div style={styles.dashboardCards}>
-                   {/* Total Revenue Bar Chart - FIRST CARD */}
-<div style={styles.card}>
-  <div>Total Revenue {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : '(Monthly)'}</div>
-  <div style={styles.chartContainer}>
-    <Bar
-      data={{
-        labels: selectedMonth !== null
-          ? chartData?.weeklyOrders?.map((_, i) => `Week ${i + 1}`) || ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
-          : monthLabels,
-        datasets: [
-          {
-            label: 'Total Revenue',
-            data: selectedMonth !== null
-              ? chartData?.weeklyOrders?.map(w => w.amount || 0) || []
-              : safeArray(chartData?.amountByMonth),
-            backgroundColor: selectedMonth !== null
-              ? [
-                  'rgba(49, 122, 176, 0.8)',  // Blue Grotto - Week 1
-                  'rgba(49, 122, 176, 0.7)',  // Lighter - Week 2
-                  'rgba(49, 122, 176, 0.6)',  // Lighter - Week 3
-                  'rgba(49, 122, 176, 0.5)',  // Lighter - Week 4
-                  'rgba(49, 122, 176, 0.4)',  // Lightest - Week 5
-                ]
-              : [
-                  'rgba(49, 122, 176, 0.9)',   // Jan - Solid Blue Grotto
-                  'rgba(49, 122, 176, 0.85)',  // Feb
-                  'rgba(49, 122, 176, 0.8)',   // Mar
-                  'rgba(49, 122, 176, 0.75)',  // Apr
-                  'rgba(49, 122, 176, 0.7)',   // May
-                  'rgba(49, 122, 176, 0.65)',  // Jun
-                  'rgba(49, 122, 176, 0.6)',   // Jul
-                  'rgba(49, 122, 176, 0.65)',  // Aug
-                  'rgba(49, 122, 176, 0.7)',   // Sep
-                  'rgba(49, 122, 176, 0.75)',  // Oct
-                  'rgba(49, 122, 176, 0.8)',   // Nov
-                  'rgba(49, 122, 176, 0.85)',  // Dec
-                ],
-            borderColor: selectedMonth !== null
-              ? [
-                  'rgba(49, 122, 176, 1)',
-                  'rgba(49, 122, 176, 0.9)',
-                  'rgba(49, 122, 176, 0.8)',
-                  'rgba(49, 122, 176, 0.7)',
-                  'rgba(49, 122, 176, 0.6)',
-                ]
-              : [
-                  'rgba(49, 122, 176, 1)',
-                  'rgba(49, 122, 176, 0.95)',
-                  'rgba(49, 122, 176, 0.9)',
-                  'rgba(49, 122, 176, 0.85)',
-                  'rgba(49, 122, 176, 0.8)',
-                  'rgba(49, 122, 176, 0.75)',
-                  'rgba(49, 122, 176, 0.7)',
-                  'rgba(49, 122, 176, 0.75)',
-                  'rgba(49, 122, 176, 0.8)',
-                  'rgba(49, 122, 176, 0.85)',
-                  'rgba(49, 122, 176, 0.9)',
-                  'rgba(49, 122, 176, 0.95)',
-                ],
-            borderWidth: 1,
-            borderRadius: 8,
-            hoverBackgroundColor: selectedMonth !== null
-              ? [
-                  'rgba(49, 122, 176, 1)',
-                  'rgba(49, 122, 176, 0.9)',
-                  'rgba(49, 122, 176, 0.8)',
-                  'rgba(49, 122, 176, 0.7)',
-                  'rgba(49, 122, 176, 0.6)',
-                ]
-              : [
-                  'rgba(49, 122, 176, 1)',
-                  'rgba(49, 122, 176, 0.95)',
-                  'rgba(49, 122, 176, 0.9)',
-                  'rgba(49, 122, 176, 0.85)',
-                  'rgba(49, 122, 176, 0.8)',
-                  'rgba(49, 122, 176, 0.75)',
-                  'rgba(49, 122, 176, 0.7)',
-                  'rgba(49, 122, 176, 0.75)',
-                  'rgba(49, 122, 176, 0.8)',
-                  'rgba(49, 122, 176, 0.85)',
-                  'rgba(49, 122, 176, 0.9)',
-                  'rgba(49, 122, 176, 0.95)',
-                ],
-            hoverBorderColor: '#FFFFFF',
-            hoverBorderWidth: 2,
-            barPercentage: 0.7,
-            categoryPercentage: 0.8
-          }
-        ]
-      }}
-      options={{
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: 'rgba(49, 122, 176, 0.95)',
-            titleColor: '#FFFFFF',
-            bodyColor: '#FFFFFF',
-            borderColor: '#317ab0',
-            borderWidth: 1,
-            cornerRadius: 8,
-            padding: 12,
-            titleFont: {
-              size: 13,
-              weight: 'bold'
-            },
-            bodyFont: {
-              size: 12
-            },
-            callbacks: {
-              title: function(tooltipItems) {
-                const dataIndex = tooltipItems[0].dataIndex;
-                if (selectedMonth !== null) {
-                  return `Week ${dataIndex + 1}`;
-                } else {
-                  return monthLabels[dataIndex];
-                }
-              },
-              label: (context) => {
-                const amount = context.raw;
-                const formattedAmount = formatAmount(amount);
-                const fullAmount = formatAmountFull(amount);
-                return [
-                  `Revenue: ₹${formattedAmount}`,
-                  `Amount: ${fullAmount}`
-                ];
-              }
-            }
-          }
-        },
-        onClick: (_, elements) => {
-          if (elements.length > 0) {
-            const queryParams = new URLSearchParams();
+                    {/* Total Revenue Bar Chart */}
+                    <div
+                      style={{
+                        ...styles.card,
+                        ...(hoveredCard === 'revenue' ? styles.cardHover : {})
+                      }}
+                      onMouseEnter={() => setHoveredCard('revenue')}
+                      onMouseLeave={() => setHoveredCard(null)}
+                      onClick={(e) => {
+                        if (e.target.tagName !== 'BUTTON') {
+                          const queryParams = new URLSearchParams();
+                          if (selectedMonth !== null) {
+                            queryParams.append('month', selectedMonth + 1);
+                          }
+                          if (year !== 'all') {
+                            queryParams.append('year', year);
+                          }
+                          navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                        }
+                      }}
+                    >
+                      <div>Total Revenue {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : '(Monthly)'}</div>
+                      <div style={styles.chartContainer}>
+                        <Bar
+                          data={{
+                            labels: selectedMonth !== null
+                              ? chartData?.weeklyOrders?.map((_, i) => `Week ${i + 1}`) || ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
+                              : monthLabels,
+                            datasets: [
+                              {
+                                label: 'Total Revenue',
+                                data: selectedMonth !== null
+                                  ? chartData?.weeklyOrders?.map(w => w.amount || 0) || []
+                                  : safeArray(chartData?.amountByMonth),
+                                backgroundColor: selectedMonth !== null
+                                  ? [
+                                    'rgba(49, 122, 176, 0.8)',
+                                    'rgba(49, 122, 176, 0.7)',
+                                    'rgba(49, 122, 176, 0.6)',
+                                    'rgba(49, 122, 176, 0.5)',
+                                    'rgba(49, 122, 176, 0.4)',
+                                  ]
+                                  : [
+                                    'rgba(49, 122, 176, 0.9)',
+                                    'rgba(49, 122, 176, 0.85)',
+                                    'rgba(49, 122, 176, 0.8)',
+                                    'rgba(49, 122, 176, 0.75)',
+                                    'rgba(49, 122, 176, 0.7)',
+                                    'rgba(49, 122, 176, 0.65)',
+                                    'rgba(49, 122, 176, 0.6)',
+                                    'rgba(49, 122, 176, 0.65)',
+                                    'rgba(49, 122, 176, 0.7)',
+                                    'rgba(49, 122, 176, 0.75)',
+                                    'rgba(49, 122, 176, 0.8)',
+                                    'rgba(49, 122, 176, 0.85)',
+                                  ],
+                                borderColor: selectedMonth !== null
+                                  ? [
+                                    'rgba(49, 122, 176, 1)',
+                                    'rgba(49, 122, 176, 0.9)',
+                                    'rgba(49, 122, 176, 0.8)',
+                                    'rgba(49, 122, 176, 0.7)',
+                                    'rgba(49, 122, 176, 0.6)',
+                                  ]
+                                  : [
+                                    'rgba(49, 122, 176, 1)',
+                                    'rgba(49, 122, 176, 0.95)',
+                                    'rgba(49, 122, 176, 0.9)',
+                                    'rgba(49, 122, 176, 0.85)',
+                                    'rgba(49, 122, 176, 0.8)',
+                                    'rgba(49, 122, 176, 0.75)',
+                                    'rgba(49, 122, 176, 0.7)',
+                                    'rgba(49, 122, 176, 0.75)',
+                                    'rgba(49, 122, 176, 0.8)',
+                                    'rgba(49, 122, 176, 0.85)',
+                                    'rgba(49, 122, 176, 0.9)',
+                                    'rgba(49, 122, 176, 0.95)',
+                                  ],
+                                borderWidth: 1,
+                                borderRadius: 8,
+                              }
+                            ]
+                          }}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                              legend: { display: false },
+                              tooltip: {
+                                backgroundColor: 'rgba(49, 122, 176, 0.95)',
+                                titleColor: '#FFFFFF',
+                                bodyColor: '#FFFFFF',
+                                borderColor: '#317ab0',
+                                borderWidth: 1,
+                                cornerRadius: 8,
+                                padding: 12,
+                                callbacks: {
+                                  title: function (tooltipItems) {
+                                    const dataIndex = tooltipItems[0].dataIndex;
+                                    if (selectedMonth !== null) {
+                                      return `Week ${dataIndex + 1}`;
+                                    } else {
+                                      return monthLabels[dataIndex];
+                                    }
+                                  },
+                                  label: (context) => {
+                                    const amount = context.raw;
+                                    if (amount >= 10000000) {
+                                      return `Revenue: ₹${(amount / 10000000).toFixed(2)} Cr`;
+                                    } else if (amount >= 100000) {
+                                      return `Revenue: ₹${(amount / 100000).toFixed(2)} L`;
+                                    } else {
+                                      return `Revenue: ₹${amount.toLocaleString('en-IN')}`;
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            onClick: (_, elements) => {
+                              if (elements.length > 0) {
+                                const queryParams = new URLSearchParams();
+                                if (selectedMonth === null) {
+                                  const clickedMonth = elements[0].index + 1;
+                                  queryParams.append('month', clickedMonth);
+                                  if (year !== 'all') {
+                                    queryParams.append('year', year);
+                                  }
+                                } else {
+                                  queryParams.append('month', selectedMonth + 1);
+                                  if (year !== 'all') {
+                                    queryParams.append('year', year);
+                                  }
+                                }
+                                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                              }
+                            },
+                            scales: {
+                              x: {
+                                grid: { display: true, color: 'rgba(49, 122, 176, 0.1)' },
+                                ticks: { autoSkip: false, color: '#317ab0' }
+                              },
+                              y: {
+                                beginAtZero: true,
+                                grid: { color: 'rgba(49, 122, 176, 0.1)' },
+                                ticks: {
+                                  callback: function (value) {
+                                    if (value >= 10000000) {
+                                      return (value / 10000000).toFixed(1) + 'Cr';
+                                    } else if (value >= 100000) {
+                                      return (value / 100000).toFixed(1) + 'L';
+                                    } else if (value >= 1000) {
+                                      return (value / 1000).toFixed(1) + 'K';
+                                    }
+                                    return value;
+                                  },
+                                  color: '#317ab0'
+                                }
+                              }
+                            }
+                          }}
+                        />
+                      </div>
 
-            if (selectedMonth === null) {
-              const clickedMonth = elements[0].index + 1;
-              queryParams.append('month', clickedMonth);
-              if (year !== 'all') {
-                queryParams.append('year', year);
-              }
+                      <div style={styles.number}>
+                        {selectedMonth !== null
+                          ? (() => {
+                            const amount = chartData?.amountByMonth?.[selectedMonth] || 0;
+                            if (amount >= 10000000) {
+                              return (amount / 10000000).toFixed(2) + 'Cr';
+                            } else if (amount >= 100000) {
+                              return (amount / 100000).toFixed(2) + 'L';
+                            } else {
+                              return amount.toLocaleString('en-IN');
+                            }
+                          })()
+                          : (() => {
+                            const total = safeArray(chartData?.amountByMonth).reduce((sum, amount) => sum + amount, 0);
+                            if (total >= 10000000) {
+                              return (total / 10000000).toFixed(2) + 'Cr';
+                            } else if (total >= 100000) {
+                              return (total / 100000).toFixed(2) + 'L';
+                            } else {
+                              return total.toLocaleString('en-IN');
+                            }
+                          })()
+                        }
+                      </div>
 
-              const monthAmount = safeArray(chartData?.amountByMonth)[elements[0].index] || 0;
-              queryParams.append('monthAmount', monthAmount);
-              queryParams.append('monthName', monthLabels[elements[0].index]);
-            } else {
-              const weekNumber = elements[0].index + 1;
-              queryParams.append('month', selectedMonth + 1);
-              if (year !== 'all') {
-                queryParams.append('year', year);
-              }
-              queryParams.append('week', weekNumber);
+                      <div style={styles.revenueSubtext}>
+                        {selectedMonth !== null
+                          ? `₹${(chartData?.amountByMonth?.[selectedMonth] || 0).toLocaleString('en-IN')}`
+                          : `₹${safeArray(chartData?.amountByMonth).reduce((sum, amount) => sum + amount, 0).toLocaleString('en-IN')}`
+                        }
+                      </div>
 
-              const weekAmount = chartData?.weeklyOrders?.[elements[0].index]?.amount || 0;
-              queryParams.append('weekAmount', weekAmount);
-              queryParams.append('monthName', monthLabels[selectedMonth]);
-            }
+                      {selectedMonth !== null && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedMonth(null);
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            backgroundColor: '#317ab0',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            marginTop: '10px',
+                            fontWeight: 'bold',
+                            fontSize: '12px'
+                          }}
+                        >
+                          View All Months
+                        </button>
+                      )}
+                    </div>
 
-            navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-          }
-        },
-        scales: {
-          x: {
-            grid: { 
-              display: true,
-              color: 'rgba(49, 122, 176, 0.1)',
-              drawBorder: false
-            },
-            ticks: { 
-              autoSkip: false,
-              color: '#317ab0',
-              font: {
-                size: 11,
-                weight: '500'
-              }
-            }
-          },
-          y: {
-            beginAtZero: true,
-            grid: { 
-              color: 'rgba(49, 122, 176, 0.1)',
-              drawBorder: false
-            },
-            ticks: {
-              callback: function(value) {
-                if (value >= 10000000) {
-                  return (value / 10000000).toFixed(1) + 'Cr';
-                } else if (value >= 100000) {
-                  return (value / 100000).toFixed(1) + 'L';
-                } else if (value >= 1000) {
-                  return (value / 1000).toFixed(1) + 'K';
-                }
-                return value;
-              },
-              color: '#317ab0',
-              font: {
-                size: 10
-              },
-              padding: 5
-            }
-          }
-        },
-        interaction: {
-          intersect: false,
-          mode: 'index'
-        },
-        animation: {
-          duration: 1000,
-          easing: 'easeOutQuart'
-        }
-      }}
-    />
-  </div>
-  
-  {/* FIXED: Display the correct amount based on selection */}
-  <div style={styles.number}>
-    {selectedMonth !== null 
-      ? formatAmount(chartData?.amountByMonth?.[selectedMonth] || 0)
-      : formatAmount(safeArray(chartData?.amountByMonth).reduce((sum, amount) => sum + amount, 0))
-    }
-  </div>
-  
-  <div style={styles.revenueSubtext}>
-    {selectedMonth !== null 
-      ? formatAmountFull(chartData?.amountByMonth?.[selectedMonth] || 0)
-      : formatAmountFull(safeArray(chartData?.amountByMonth).reduce((sum, amount) => sum + amount, 0))
-    }
-  </div>
-  
-  {selectedMonth !== null && (
-    <button
-      onClick={() => setSelectedMonth(null)}
-      style={{
-        padding: '6px 12px',
-        backgroundColor: '#317ab0',
-        color: 'white',
-        border: 'none',
-        borderRadius: '6px',
-        cursor: 'pointer',
-        marginTop: '10px',
-        fontWeight: 'bold',
-        fontSize: '12px',
-        transition: 'all 0.3s',
-        boxShadow: '0 2px 4px rgba(49, 122, 176, 0.3)'
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = '#2a6a9d';
-        e.currentTarget.style.transform = 'translateY(-1px)';
-        e.currentTarget.style.boxShadow = '0 4px 8px rgba(49, 122, 176, 0.4)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = '#317ab0';
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = '0 2px 4px rgba(49, 122, 176, 0.3)';
-      }}
-    >
-      View All Months
-    </button>
-  )}
-</div>
-
-                    {/* Total Orders Bar Chart - WITH AMOUNT TOOLTIP */}
-                    <div style={styles.card}>
+                    {/* Total Orders Bar Chart */}
+                    <div
+                      style={{
+                        ...styles.card,
+                        ...(hoveredCard === 'orders' ? styles.cardHover : {})
+                      }}
+                      onMouseEnter={() => setHoveredCard('orders')}
+                      onMouseLeave={() => setHoveredCard(null)}
+                      onClick={(e) => {
+                        if (e.target.tagName !== 'BUTTON') {
+                          const queryParams = new URLSearchParams();
+                          if (selectedMonth !== null) {
+                            queryParams.append('month', selectedMonth + 1);
+                          }
+                          if (year !== 'all') {
+                            queryParams.append('year', year);
+                          }
+                          navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                        }
+                      }}
+                    >
                       <div>Total Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : '(Monthly)'}</div>
                       <div style={styles.chartContainer}>
                         {selectedMonth !== null && weeklyLoading ? (
@@ -1820,8 +1769,6 @@ const calculateTotalRevenue = () => {
                                   backgroundColor: 'rgba(54, 162, 235, 0.7)',
                                   borderColor: 'rgba(54, 162, 235, 1)',
                                   borderWidth: 1,
-                                  barPercentage: 0.8,
-                                  categoryPercentage: 0.9
                                 }
                               ]
                             }}
@@ -1832,34 +1779,9 @@ const calculateTotalRevenue = () => {
                                 legend: { display: false },
                                 tooltip: {
                                   callbacks: {
-                                    title: function(tooltipItems) {
-                                      const dataIndex = tooltipItems[0].dataIndex;
-                                      if (selectedMonth !== null) {
-                                        return `Week ${dataIndex + 1}`;
-                                      } else {
-                                        return monthLabels[dataIndex];
-                                      }
-                                    },
                                     label: (context) => {
                                       const orders = context.raw;
-                                      let amount = 0;
-                                      
-                                      if (selectedMonth === null) {
-                                        const monthIndex = context.dataIndex;
-                                        amount = safeArray(chartData?.amountByMonth)[monthIndex] || 0;
-                                      } else {
-                                        const weekIndex = context.dataIndex;
-                                        amount = chartData?.weeklyOrders?.[weekIndex]?.amount || 0;
-                                      }
-                                      
-                                      const formattedAmount = formatAmount(amount);
-                                      const fullAmount = formatAmountFull(amount);
-                                      
-                                      return [
-                                        `Orders: ${orders}`,
-                                        `Revenue: ₹${formattedAmount}`,
-                                        `Amount: ${fullAmount}`
-                                      ];
+                                      return `Orders: ${orders}`;
                                     }
                                   }
                                 }
@@ -1867,42 +1789,19 @@ const calculateTotalRevenue = () => {
                               onClick: (_, elements) => {
                                 if (elements.length > 0) {
                                   const queryParams = new URLSearchParams();
-
                                   if (selectedMonth === null) {
                                     const clickedMonth = elements[0].index + 1;
                                     queryParams.append('month', clickedMonth);
                                     if (year !== 'all') {
                                       queryParams.append('year', year);
                                     }
-
-                                    const monthCount = safeArray(chartData?.totalOrdersByMonth)[elements[0].index] || 0;
-                                    queryParams.append('monthCount', monthCount);
-                                    queryParams.append('monthName', monthLabels[elements[0].index]);
                                   } else {
-                                    const weekNumber = elements[0].index + 1;
                                     queryParams.append('month', selectedMonth + 1);
                                     if (year !== 'all') {
                                       queryParams.append('year', year);
                                     }
-                                    queryParams.append('week', weekNumber);
-
-                                    const weekCount = chartData?.weeklyOrders?.[elements[0].index]?.count || 0;
-                                    queryParams.append('weekCount', weekCount);
-                                    queryParams.append('monthName', monthLabels[selectedMonth]);
                                   }
-
                                   navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-                                }
-                              },
-                              scales: {
-                                x: {
-                                  grid: { display: false },
-                                  ticks: { autoSkip: false }
-                                },
-                                y: {
-                                  beginAtZero: true,
-                                  ticks: { precision: 0, stepSize: 1 },
-                                  grid: { color: 'rgba(0,0,0,0.05)' }
                                 }
                               }
                             }}
@@ -1914,7 +1813,10 @@ const calculateTotalRevenue = () => {
                       </div>
                       {selectedMonth !== null && (
                         <button
-                          onClick={() => setSelectedMonth(null)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedMonth(null);
+                          }}
                           style={{
                             padding: '5px 10px',
                             backgroundColor: '#003366',
@@ -1930,8 +1832,15 @@ const calculateTotalRevenue = () => {
                       )}
                     </div>
 
-                    {/* Pending Payment - SHOW ONLY PENDING AMOUNT */}
-                    <div style={styles.card}>
+                    {/* Payment Status Chart */}
+                    <div
+                      style={{
+                        ...styles.card,
+                        ...(hoveredCard === 'payment' ? styles.cardHover : {})
+                      }}
+                      onMouseEnter={() => setHoveredCard('payment')}
+                      onMouseLeave={() => setHoveredCard(null)}
+                    >
                       <div>Payment Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}</div>
                       <div style={styles.pieChart}>
                         <Doughnut
@@ -1940,123 +1849,181 @@ const calculateTotalRevenue = () => {
                             datasets: [
                               {
                                 data: pendingPayments.length === 2 ? pendingPayments : [0, 0],
-                                backgroundColor: ['green', 'red'],
+                                backgroundColor: ['#27ae60', '#e74c3c'],
                               },
                             ],
                           }}
                           options={{
                             onClick: (e, elements) => {
-                              if (elements.length > 0 && elements[0].index === 1) {
-                                handleChartClick('pending-payment');
+                              if (elements.length > 0) {
+                                if (elements[0].index === 1) {
+                                  handleChartClick('pending-payment');
+                                } else if (elements[0].index === 0) {
+                                  handleChartClick('completed-payment');
+                                }
                               }
                             },
                           }}
                         />
-                        <div
-                          style={{
-                            ...styles.clickableSection,
-                            pointerEvents: pendingPayments[1] > 0 ? 'auto' : 'none'
-                          }}
-                          onClick={() => pendingPayments[1] > 0 && handleChartClick('pending-payment')}
-                        />
                       </div>
-                      <div style={styles.number}>{pendingPayments[1] || 0}</div>
-                      <div style={{ fontSize: '16px', color: 'red', marginTop: '5px', fontWeight: 'bold' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-around', width: '100%', marginTop: '10px' }}>
+                        <div
+                          style={{ textAlign: 'center', cursor: 'pointer' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleChartClick('completed-payment');
+                          }}
+                        >
+                          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#27ae60' }}>{pendingPayments[0] || 0}</div>
+                          <div style={{ fontSize: '12px', color: '#666' }}>Paid</div>
+                        </div>
+                        <div
+                          style={{ textAlign: 'center', cursor: 'pointer' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleChartClick('pending-payment');
+                          }}
+                        >
+                          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#e74c3c' }}>{pendingPayments[1] || 0}</div>
+                          <div style={{ fontSize: '12px', color: '#666' }}>Pending</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '14px', color: '#e74c3c', marginTop: '5px', fontWeight: 'bold' }}>
                         Pending Amount: ₹{(chartData?.pendingAmount || 0).toLocaleString('en-IN')}
                       </div>
                     </div>
 
-{/* Service Status Chart */}
-<div 
-  style={{ ...styles.card, cursor: 'pointer' }}
-  onClick={() => handleChartClick('pending-service')}
->
-  <div>
-    Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}
-  </div>
+                    {/* Service Status Chart */}
+                    <div
+                      style={{
+                        ...styles.card,
+                        ...(hoveredCard === 'service' ? styles.cardHover : {})
+                      }}
+                      onMouseEnter={() => setHoveredCard('service')}
+                      onMouseLeave={() => setHoveredCard(null)}
+                      onClick={() => handleChartClick('pending-service')}
+                    >
+                      <div>
+                        Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}
+                      </div>
+                      <div style={styles.pieChart}>
+                        {(() => {
+                          const serviceData = [
+                            chartData?.serviceStatus?.pending || 0,
+                            chartData?.serviceStatus?.assigned || 0,
+                            chartData?.serviceStatus?.updated || 0,
+                            chartData?.serviceStatus?.completed || 0,
+                            chartData?.serviceStatus?.designPending || 0,
+                            chartData?.serviceStatus?.printing || 0,
+                            chartData?.serviceStatus?.installationPending || 0,
+                            chartData?.serviceStatus?.onboarding || 0
+                          ];
 
-  <div style={styles.pieChart}>
-    <Doughnut
-      data={{
-        labels: [
-          'Pending',
-          'Assigned',
-          'Updated',
-          'Completed',
-          'Design Pending',
-          'Printing',
-          'Installation Pending',
-          'Onboarding'
-        ],
-        datasets: [
-          {
-            data: [
-              chartData?.serviceStatus?.pending || 0,
-              chartData?.serviceStatus?.assigned || 0,
-              chartData?.serviceStatus?.updated || 0,
-              chartData?.serviceStatus?.completed || 0,
-              chartData?.serviceStatus?.designPending || 0,
-              chartData?.serviceStatus?.printing || 0,
-              chartData?.serviceStatus?.installationPending || 0,
-              chartData?.serviceStatus?.onboarding || 0
-            ],
-            backgroundColor: [
-              ' #e74c3c', // Pending - Orange
-              '#3498db', // Assigned - Blue
-              '#9b59b6', // Updated - Purple
-              '#2ecc71', // Completed - Green
-              '#e67e22', // Design Pending - Orange
-              '#f39c12', // Printing - Red
-              '#34495e', // Installation Pending - Dark Gray
-              '#1abc9c'  // Onboarding - Teal
-            ],
-            borderColor: '#fff',
-            borderWidth: 2,
-          },
-        ],
-      }}
-      options={{
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            display: false
-          },
-          tooltip: {
-            callbacks: {
-              label: (context) => {
-                const label = context.label || '';
-                const value = context.raw || 0;
-                return `${label}: ${value}`;
-              }
-            },
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            titleColor: '#fff',
-            bodyColor: '#fff',
-            padding: 10
-          }
-        }
-      }}
-    />
-  </div>
+                          const totalServices = serviceData.reduce((a, b) => a + b, 0);
 
-  {/* Total Services Count (Completed removed) */}
-  <div style={styles.number}>
-    {Object.entries(chartData?.serviceStatus || {})
-      .filter(([key]) => key !== 'completed')
-      .reduce((sum, [, value]) => sum + value, 0)}
-  </div>
+                          return (
+                            <Doughnut
+                              data={{
+                                labels: [
+                                  'Pending',
+                                  'Assigned',
+                                  'Updated',
+                                  'Completed',
+                                  'Design Pending',
+                                  'Printing',
+                                  'Installation Pending',
+                                  'Onboarding'
+                                ],
+                                datasets: [
+                                  {
+                                    data: serviceData,
+                                    backgroundColor: [
+                                      '#e74c3c',
+                                      '#3498db',
+                                      '#9b59b6',
+                                      '#2ecc71',
+                                      '#e67e22',
+                                      '#f39c12',
+                                      '#34495e',
+                                      '#1abc9c'
+                                    ],
+                                    borderColor: '#ffffff',
+                                    borderWidth: 2,
+                                  },
+                                ],
+                              }}
+                              options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                cutout: '70%',
+                                plugins: {
+                                  legend: { display: false },
+                                  tooltip: {
+                                    callbacks: {
+                                      label: function (context) {
+                                        const value = context.raw || 0;
+                                        const percentage = totalServices > 0 ? ((value / totalServices) * 100).toFixed(1) : 0;
+                                        return `${context.label}: ${value} (${percentage}%)`;
+                                      }
+                                    }
+                                  },
+                                  // Custom plugin to show percentage in center
+                                  afterDraw: function (chart) {
+                                    const width = chart.width;
+                                    const height = chart.height;
+                                    const ctx = chart.ctx;
 
-  <div style={{ 
-    fontSize: '14px', 
-    color: '#666',
-    marginTop: '5px'
-  }}>
-    Total Services
-  </div>
-</div>
+                                    ctx.restore();
+
+                                    if (totalServices > 0) {
+                                      // Calculate completed percentage
+                                      const completedCount = serviceData[3] + serviceData[1] + serviceData[2] + serviceData[7];
+                                      const completedPercentage = ((completedCount / totalServices) * 100).toFixed(1);
+
+                                      ctx.font = 'bold 20px Arial';
+                                      ctx.textBaseline = 'middle';
+                                      ctx.textAlign = 'center';
+                                      ctx.fillStyle = '#2c3e50';
+                                      ctx.fillText(`${completedPercentage}%`, width / 2, height / 2);
+                                    }
+
+                                    ctx.save();
+                                  }
+                                }
+                              }}
+                            />
+                          );
+                        })()}
+                      </div>
+                      <div style={styles.number}>
+                        {Object.entries(chartData?.serviceStatus || {})
+                          .filter(([key]) => key !== 'completed')
+                          .reduce((sum, [, value]) => sum + value, 0)}
+                      </div>
+                      <div style={{ fontSize: '14px', color: '#666', marginTop: '5px' }}>
+                        Total Services
+                      </div>
+                    </div>
+
                     {/* Appointments PolarArea */}
-                    <div style={styles.card}>
+                    <div
+                      style={{
+                        ...styles.card,
+                        ...(hoveredCard === 'appointments' ? styles.cardHover : {})
+                      }}
+                      onMouseEnter={() => setHoveredCard('appointments')}
+                      onMouseLeave={() => setHoveredCard(null)}
+                      onClick={() => {
+                        const queryParams = new URLSearchParams();
+                        if (selectedMonth !== null) {
+                          queryParams.append('month', selectedMonth + 1);
+                        }
+                        if (year !== 'all') {
+                          queryParams.append('year', year);
+                        }
+                        navigate(`/admin-dashboard/select-appointment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
+                      }}
+                    >
                       <div>Appointments {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}</div>
                       <div style={styles.pieChart}>
                         <PolarArea
@@ -2065,7 +2032,7 @@ const calculateTotalRevenue = () => {
                             datasets: [
                               {
                                 data: appointments.length === 2 ? appointments : [0, 0],
-                                backgroundColor: ['red', 'green'],
+                                backgroundColor: ['#e74c3c', '#27ae60'],
                               },
                             ],
                           }}
@@ -2082,35 +2049,36 @@ const calculateTotalRevenue = () => {
                                 if (year !== 'all') {
                                   queryParams.append('year', year);
                                 }
-                                navigate(`/admin-dashboard/appointment-status${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
+                                navigate(`/admin-dashboard/select-appointment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
                               }
                             },
-                          }}
-                        />
-                        <div
-                          style={{
-                            ...styles.clickableSection,
-                            pointerEvents: appointments[1] > 0 ? 'auto' : 'none'
-                          }}
-                          onClick={() => {
-                            if (appointments[1] > 0) {
-                              const queryParams = new URLSearchParams();
-                              if (selectedMonth !== null) {
-                                queryParams.append('month', selectedMonth + 1);
-                              }
-                              if (year !== 'all') {
-                                queryParams.append('year', year);
-                              }
-                              navigate(`/admin-dashboard/appointment-status${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
-                            }
                           }}
                         />
                       </div>
                       <div style={styles.number}>{appointments[1] || 0}</div>
                     </div>
 
-                    {/* Client Types Bar Chart - FIXED VERSION */}
-                    <div style={styles.card}>
+                    {/* Client Types Bar Chart - FIXED */}
+                    <div
+                      style={{
+                        ...styles.card,
+                        ...(hoveredCard === 'clientTypes' ? styles.cardHover : {})
+                      }}
+                      onMouseEnter={() => setHoveredCard('clientTypes')}
+                      onMouseLeave={() => setHoveredCard(null)}
+                      onClick={(e) => {
+                        if (e.target.tagName !== 'BUTTON') {
+                          const queryParams = new URLSearchParams();
+                          if (selectedMonth !== null) {
+                            queryParams.append('month', selectedMonth + 1);
+                          }
+                          if (year !== 'all') {
+                            queryParams.append('year', year);
+                          }
+                          navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                        }
+                      }}
+                    >
                       <div>Client Overview {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}</div>
                       <div style={styles.chartContainer}>
                         <Bar
@@ -2124,61 +2092,15 @@ const calculateTotalRevenue = () => {
                                 clientTypes.Agent?.count !== undefined ? clientTypes.Agent.count : (clientTypes.Agent || 0),
                                 clientTypes['Renewal-Agent']?.count !== undefined ? clientTypes['Renewal-Agent'].count : (clientTypes['Renewal-Agent'] || 0),
                               ],
-                              backgroundColor: [
-                                '#36A2EB',
-                                '#4BC0C0',
-                                '#FFCE56',
-                                '#9966FF',
-                              ],
-                              borderColor: [
-                                '#2a8fcc',
-                                '#3ba8a8',
-                                '#e6b949',
-                                '#7d5bbe'
-                              ],
-                              borderWidth: 1
+                              backgroundColor: ['#36A2EB', '#4BC0C0', '#FFCE56', '#9966FF'],
                             }],
                           }}
                           options={{
                             responsive: true,
                             maintainAspectRatio: false,
-                            plugins: {
-                              legend: { display: false },
-                              tooltip: {
-                                callbacks: {
-                                  label: function (context) {
-                                    const clientType = context.label;
-                                    const count = context.raw;
-                                    
-                                    let amount = 0;
-                                    if (clientTypes[clientType]?.amount !== undefined) {
-                                      amount = clientTypes[clientType].amount;
-                                    } else if (clientTypes[clientType]?.count !== undefined) {
-                                      amount = clientTypes[clientType].amount || 0;
-                                    }
-                                    
-                                    const formattedAmount = formatAmount(amount);
-                                    const fullAmount = formatAmountFull(amount);
-                                    return [
-                                      `Orders: ${count}`,
-                                      `Revenue: ₹${formattedAmount}`,
-                                      `Amount: ${fullAmount}`
-                                    ];
-                                  }
-                                }
-                              }
-                            },
-                            scales: {
-                              y: {
-                                beginAtZero: true,
-                                grid: { color: 'rgba(0,0,0,0.05)' }
-                              },
-                              x: {
-                                grid: { display: false }
-                              }
-                            },
+                            plugins: { legend: { display: false } },
                             onClick: (event, elements) => {
-                              if (elements.length > 0) {
+                              if (elements && elements.length > 0) {
                                 const clientTypesList = ['Retail', 'Renewal', 'Agent', 'Renewal-Agent'];
                                 const selectedType = clientTypesList[elements[0].index];
 
@@ -2209,14 +2131,30 @@ const calculateTotalRevenue = () => {
                     </div>
 
                     {/* Agent Orders Chart */}
-                    <div style={styles.card}>
+                    <div
+                      style={{
+                        ...styles.card,
+                        ...(hoveredCard === 'agentOrders' ? styles.cardHover : {})
+                      }}
+                      onMouseEnter={() => setHoveredCard('agentOrders')}
+                      onMouseLeave={() => setHoveredCard(null)}
+                      onClick={(e) => {
+                        if (e.target.tagName !== 'BUTTON') {
+                          const queryParams = new URLSearchParams();
+                          queryParams.append('clientType', 'Agent');
+                          if (selectedMonth !== null) {
+                            queryParams.append('month', selectedMonth + 1);
+                          }
+                          if (year !== 'all') {
+                            queryParams.append('year', year);
+                          }
+                          navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                        }
+                      }}
+                    >
                       <div>Agent Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : '(Monthly)'}</div>
                       {loading ? (
                         <div style={styles.noDataMessage}>Loading agent data...</div>
-                      ) : selectedMonth !== null && weeklyLoading ? (
-                        <div style={styles.noDataMessage}>Loading weekly data...</div>
-                      ) : selectedMonth !== null && (!chartData?.weeklyAgentOrders || chartData.weeklyAgentOrders.length === 0) ? (
-                        <div style={styles.noDataMessage}>No weekly agent data available</div>
                       ) : (
                         <>
                           <div style={styles.chartContainer}>
@@ -2234,52 +2172,13 @@ const calculateTotalRevenue = () => {
                                       Array(5).fill(0)
                                       : safeArray(chartData?.agentOrdersByMonth || Array(12).fill(0)),
                                     backgroundColor: 'rgba(255, 206, 86, 0.7)',
-                                    borderColor: 'rgba(255, 206, 86, 1)',
-                                    borderWidth: 1,
-                                    barPercentage: 0.8,
-                                    categoryPercentage: 0.9
                                   }
                                 ]
                               }}
                               options={{
                                 responsive: true,
                                 maintainAspectRatio: false,
-                                plugins: {
-                                  legend: { display: false },
-                                  tooltip: {
-                                    callbacks: {
-                                      title: function(tooltipItems) {
-                                        const dataIndex = tooltipItems[0].dataIndex;
-                                        if (selectedMonth !== null) {
-                                          return `Week ${dataIndex + 1}`;
-                                        } else {
-                                          return monthLabels[dataIndex];
-                                        }
-                                      },
-                                      label: (context) => {
-                                        const orders = context.raw;
-                                        let amount = 0;
-                                        
-                                        if (selectedMonth === null) {
-                                          const monthIndex = context.dataIndex;
-                                          amount = safeArray(chartData?.amountByMonth)[monthIndex] || 0;
-                                        } else {
-                                          const weekIndex = context.dataIndex;
-                                          amount = chartData?.weeklyAgentOrders?.[weekIndex]?.amount || 0;
-                                        }
-                                        
-                                        const formattedAmount = formatAmount(amount);
-                                        const fullAmount = formatAmountFull(amount);
-                                        
-                                        return [
-                                          `Agent Orders: ${orders}`,
-                                          `Revenue: ₹${formattedAmount}`,
-                                          `Amount: ${fullAmount}`
-                                        ];
-                                      }
-                                    }
-                                  }
-                                },
+                                plugins: { legend: { display: false } },
                                 onClick: (_, elements) => {
                                   if (elements && elements.length > 0) {
                                     const queryParams = new URLSearchParams();
@@ -2298,17 +2197,6 @@ const calculateTotalRevenue = () => {
 
                                     navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                                   }
-                                },
-                                scales: {
-                                  x: {
-                                    grid: { display: false },
-                                    ticks: { autoSkip: false }
-                                  },
-                                  y: {
-                                    beginAtZero: true,
-                                    ticks: { precision: 0, stepSize: 1 },
-                                    grid: { color: 'rgba(0,0,0,0.05)' }
-                                  }
                                 }
                               }}
                             />
@@ -2318,28 +2206,38 @@ const calculateTotalRevenue = () => {
                               ? (chartData?.weeklyAgentOrders?.reduce((sum, w) => sum + (w?.count || 0), 0) || 0)
                               : safeArray(chartData?.agentOrdersByMonth).reduce((a, b) => a + b, 0)}
                           </div>
-                          {selectedMonth !== null && (
-                            <button
-                              onClick={() => setSelectedMonth(null)}
-                              style={{
-                                padding: '5px 10px',
-                                backgroundColor: '#003366',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                marginTop: '10px'
-                              }}
-                            >
-                              View All Months
-                            </button>
-                          )}
                         </>
+                      )}
+                      {selectedMonth !== null && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedMonth(null);
+                          }}
+                          style={{
+                            padding: '5px 10px',
+                            backgroundColor: '#003366',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            marginTop: '10px'
+                          }}
+                        >
+                          View All Months
+                        </button>
                       )}
                     </div>
 
                     {/* Prospective Clients Doughnut */}
-                    <div style={styles.card}>
+                    <div
+                      style={{
+                        ...styles.card,
+                        ...(hoveredCard === 'prospective' ? styles.cardHover : {})
+                      }}
+                      onMouseEnter={() => setHoveredCard('prospective')}
+                      onMouseLeave={() => setHoveredCard(null)}
+                    >
                       <div>Prospective Clients {getTimePeriodText()}</div>
                       <div style={styles.pieChart}>
                         {prospectiveData ? (
@@ -2350,32 +2248,13 @@ const calculateTotalRevenue = () => {
                                 data: Object.entries(prospectiveData)
                                   .filter(([key]) => key !== 'timePeriod')
                                   .map(([, value]) => value),
-                                backgroundColor: [
-                                  '#FF6384',
-                                  '#36A2EB',
-                                  '#FFCE56',
-                                  '#4BC0C0',
-                                  '#9966FF',
-                                ],
+                                backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'],
                               }],
                             }}
                             options={{
                               responsive: true,
                               maintainAspectRatio: false,
-                              plugins: {
-                                legend: { position: 'right' },
-                                tooltip: {
-                                  callbacks: {
-                                    label: function (context) {
-                                      const label = context.label || '';
-                                      const value = context.raw || 0;
-                                      const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                      const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
-                                      return `${label}: ${value} (${percentage}%)`;
-                                    }
-                                  }
-                                }
-                              },
+                              plugins: { legend: { position: 'right' } },
                               onClick: (event, elements) => {
                                 if (elements.length > 0) {
                                   const index = elements[0].index;
@@ -2402,15 +2281,6 @@ const calculateTotalRevenue = () => {
                             .reduce((sum, [, value]) => sum + value, 0)
                           : 0}
                       </div>
-                      <div style={styles.timePeriodText}>
-                        {prospectiveData?.timePeriod ? (
-                          prospectiveData.timePeriod.month ? (
-                            `${monthLabels[prospectiveData.timePeriod.month - 1]} ${prospectiveData.timePeriod.year || year}`
-                          ) : prospectiveData.timePeriod.year ? (
-                            `Year ${prospectiveData.timePeriod.year}`
-                          ) : 'All Years'
-                        ) : year === 'all' ? 'All Years' : `Year ${year}`}
-                      </div>
                     </div>
                   </div>
                 )}
@@ -2420,18 +2290,9 @@ const calculateTotalRevenue = () => {
         )}
       </div>
 
-      {/* WhatsApp Floating Button */}
       <button
         style={styles.whatsappButton}
         onClick={() => setShowWhatsAppDashboard(true)}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.1)';
-          e.currentTarget.style.boxShadow = '0 6px 16px rgba(37, 211, 102, 0.5)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 211, 102, 0.4)';
-        }}
       >
         <FaWhatsapp style={styles.whatsappIcon} />
         {unreadCount > 0 && (
@@ -2441,7 +2302,6 @@ const calculateTotalRevenue = () => {
         )}
       </button>
 
-      {/* WhatsApp Dashboard Modal */}
       {showWhatsAppDashboard && (
         <WhatsAppDashboard
           onClose={() => setShowWhatsAppDashboard(false)}

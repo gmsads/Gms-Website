@@ -179,8 +179,10 @@ function ViewOrders() {
     const rolesThatCanImport = ['Admin', 'Account', 'Service Executive', 'Executive'];
     return rolesThatCanImport.includes(userRole);
   };
-// Company GST Number
-const COMPANY_GST = '36AAQFG7654Q2ZB'; // Replace with your actual GST number
+
+  // Company GST Number
+  const COMPANY_GST = '36AAQFG7654Q2ZB'; // Replace with your actual GST number
+
   // Function to format date to DD-MM-YYYY format
   const formatDate = (dateString) => {
     // Return empty string if no date provided
@@ -248,449 +250,449 @@ const COMPANY_GST = '36AAQFG7654Q2ZB'; // Replace with your actual GST number
     }
   };
 
-// Function to print individual order directly
-const handlePrintOrder = (order) => {
-  // Calculate order totals
-  const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-  const advancePaid = parseFloat(order.advance) || 0;
-  const paymentHistoryTotal = order.paymentHistory ?
-    order.paymentHistory.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0) : 0;
-  const totalPaid = advancePaid + paymentHistoryTotal;
-  const balanceDue = orderTotal - totalPaid;
+  // Function to print individual order directly
+  const handlePrintOrder = (order) => {
+    // Calculate order totals
+    const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+    const advancePaid = parseFloat(order.advance) || 0;
+    const paymentHistoryTotal = order.paymentHistory ?
+      order.paymentHistory.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0) : 0;
+    const totalPaid = advancePaid + paymentHistoryTotal;
+    const balanceDue = orderTotal - totalPaid;
 
-  // Create a hidden iframe for printing
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'absolute';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = 'none';
-  iframe.style.top = '-9999px';
-  iframe.style.left = '-9999px';
-  document.body.appendChild(iframe);
+    // Create a hidden iframe for printing
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    iframe.style.top = '-9999px';
+    iframe.style.left = '-9999px';
+    document.body.appendChild(iframe);
 
-  // Get the iframe document
-  const iframeDoc = iframe.contentWindow.document;
+    // Get the iframe document
+    const iframeDoc = iframe.contentWindow.document;
 
-  // Get the base URL for assets
-  const baseUrl = window.location.origin;
-  const logoPath = `${baseUrl}/assets/logo1.png`; // Update this path to your actual logo path
-  const signaturePath = `${baseUrl}/assets/sign.png`; // Update this path to your actual signature path
+    // Get the base URL for assets
+    const baseUrl = window.location.origin;
+    const logoPath = `${baseUrl}/assets/logo1.png`; // Update this path to your actual logo path
+    const signaturePath = `${baseUrl}/assets/sign.png`; // Update this path to your actual signature path
 
-  // Write the print content to the iframe
-  iframeDoc.open();
-  iframeDoc.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Order #${order.orderNo}</title>
-      <style>
-        * {
-          box-sizing: border-box;
-          margin: 0;
-          padding: 0;
-        }
-        
-        body {
-          font-family: Arial, sans-serif;
-          font-size: 12px;
-          line-height: 1.3;
-          color: #333;
-          max-width: 800px;
-          margin: 0 auto;
-          padding: 15px;
-          background: #fff;
-        }
-        
-     /* Header Section with Logo on Left and Company Name on Right */
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  border-bottom: 2px solid #333;
-  padding-bottom: 10px;
-}
-
-.logo {
-  width: 70px;
-  height: 70px;
-}
-
-.logo img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.company-info {
-  text-align: right;
-}
-
-.company-name {
-  font-size: 22px;
-  font-weight: bold;
-  color: #000;
-  margin-bottom: 3px;
-}
-
-.gst-info {
-  font-size: 11px;
-  color: #555;
-}
-
-.order-number {
-  font-size: 10px;
-  color: #666;
-  margin-top: 2px;
-}
-        /* Customer Details Section - Compact Grid */
-        .customer-details {
-          margin-bottom: 12px;
-          padding: 8px;
-          background: #f9f9f9;
-          border: 1px solid #ddd;
-        }
-        
-        .details-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 6px;
-        }
-        
-        .detail-item {
-          font-size: 11px;
-        }
-        
-        .detail-item strong {
-          display: block;
-          color: #666;
-          font-size: 9px;
-          text-transform: uppercase;
-          margin-bottom: 2px;
-        }
-        
-        .detail-item span {
-          font-size: 11px;
-          font-weight: 500;
-        }
-        
-        /* Order Items Table */
-        .order-items {
-          margin-bottom: 12px;
-        }
-        
-        .items-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 10px;
-        }
-        
-        .items-table th {
-          background: #333;
-          color: #fff;
-          font-weight: bold;
-          padding: 6px 4px;
-          text-align: left;
-          font-size: 10px;
-        }
-        
-        .items-table td {
-          padding: 5px 4px;
-          border: 1px solid #ddd;
-          font-size: 10px;
-        }
-        
-        .items-table tr:nth-child(even) {
-          background: #f9f9f9;
-        }
-        
-        /* Financial Section - Two Column Layout */
-        .financial-section {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-          margin-bottom: 12px;
-        }
-        
-        .summary-box, .payment-box {
-          border: 1px solid #ddd;
-          padding: 8px;
-        }
-        
-        .summary-box h3, .payment-box h3 {
-          font-size: 12px;
-          margin-bottom: 8px;
-          padding-bottom: 3px;
-          border-bottom: 1px solid #333;
-        }
-        
-        .summary-row {
-          display: flex;
-          justify-content: space-between;
-          padding: 3px 0;
-          font-size: 11px;
-        }
-        
-        .summary-row.total {
-          font-weight: bold;
-          border-top: 1px solid #333;
-          margin-top: 5px;
-          padding-top: 5px;
-        }
-        
-        .summary-row.balance {
-          font-weight: bold;
-          color: #d32f2f;
-        }
-        
-        /* Payment History Table */
-        .payment-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 10px;
-        }
-        
-        .payment-table th {
-          background: #f0f0f0;
-          padding: 4px;
-          text-align: left;
-          font-size: 9px;
-        }
-        
-        .payment-table td {
-          padding: 3px 4px;
-          border: 1px solid #eee;
-        }
-        
-        
-        .signature-section {
-          display: flex;
-          justify-content: space-between;
-          margin-top: 15px;
-          padding-top: 8px;
-        }
-        
-        .signature-block {
-          text-align: center;
-          width: 200px;
-        }
-        
-        .signature-image {
-          height: 35px;
-          margin-bottom: 3px;
-        }
-        
-        .signature-image img {
-          height: 100%;
-          width: auto;
-        }
-        
-        .signature-line {
-          margin-top: 3px;
-          border-top: 1px solid #333;
-          padding-top: 3px;
-        }
-        
-        .signature-label {
-          font-size: 9px;
-          color: #666;
-        }
-        
-        /* Footer */
-        .print-footer {
-          margin-top: 10px;
-          text-align: center;
-          font-size: 8px;
-          color: #999;
-        }
-        
-        /* Print specific styles */
-        @media print {
-          body {
-            padding: 10px;
+    // Write the print content to the iframe
+    iframeDoc.open();
+    iframeDoc.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Order #${order.orderNo}</title>
+        <style>
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
           }
           
-          .no-print {
-            display: none;
+          body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.3;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 15px;
+            background: #fff;
           }
-        }
-      </style>
-    </head>
-    <body>
-      <!-- Header with Logo, Company Name and GST -->
-      <div class="header">
-        <div class="logo">
-          <img src="${logoPath}" alt="Global Marketing Solution Logo" onerror="this.style.display='none'">
-        </div>
-        <div class="company-info">
-          <div class="company-name">GLOBAL MARKETING SOLUTION</div>
-          <div class="gst-info">GST: 22AAAAA0000A1Z5</div>
-          <div style="font-size: 10px; color: #666;">Order #${order.orderNo}</div>
-        </div>
-      </div>
-      
-      <!-- Customer Details -->
-      <div class="customer-details">
-        <div class="details-grid">
-          <div class="detail-item">
-            <strong>Client Type:</strong>
-            <span>${order.clientType === 'Renewal' ? 'Renewal Client' : 'New Client'}</span>
+          
+          /* Header Section with Logo on Left and Company Name on Right */
+          .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+          }
+
+          .logo {
+            width: 70px;
+            height: 70px;
+          }
+
+          .logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+          }
+
+          .company-info {
+            text-align: right;
+          }
+
+          .company-name {
+            font-size: 22px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 3px;
+          }
+
+          .gst-info {
+            font-size: 11px;
+            color: #555;
+          }
+
+          .order-number {
+            font-size: 10px;
+            color: #666;
+            margin-top: 2px;
+          }
+          
+          /* Customer Details Section - Compact Grid */
+          .customer-details {
+            margin-bottom: 12px;
+            padding: 8px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+          }
+          
+          .details-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+          }
+          
+          .detail-item {
+            font-size: 11px;
+          }
+          
+          .detail-item strong {
+            display: block;
+            color: #666;
+            font-size: 9px;
+            text-transform: uppercase;
+            margin-bottom: 2px;
+          }
+          
+          .detail-item span {
+            font-size: 11px;
+            font-weight: 500;
+          }
+          
+          /* Order Items Table */
+          .order-items {
+            margin-bottom: 12px;
+          }
+          
+          .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+          }
+          
+          .items-table th {
+            background: #333;
+            color: #fff;
+            font-weight: bold;
+            padding: 6px 4px;
+            text-align: left;
+            font-size: 10px;
+          }
+          
+          .items-table td {
+            padding: 5px 4px;
+            border: 1px solid #ddd;
+            font-size: 10px;
+          }
+          
+          .items-table tr:nth-child(even) {
+            background: #f9f9f9;
+          }
+          
+          /* Financial Section - Two Column Layout */
+          .financial-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+          }
+          
+          .summary-box, .payment-box {
+            border: 1px solid #ddd;
+            padding: 8px;
+          }
+          
+          .summary-box h3, .payment-box h3 {
+            font-size: 12px;
+            margin-bottom: 8px;
+            padding-bottom: 3px;
+            border-bottom: 1px solid #333;
+          }
+          
+          .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+            font-size: 11px;
+          }
+          
+          .summary-row.total {
+            font-weight: bold;
+            border-top: 1px solid #333;
+            margin-top: 5px;
+            padding-top: 5px;
+          }
+          
+          .summary-row.balance {
+            font-weight: bold;
+            color: #d32f2f;
+          }
+          
+          /* Payment History Table */
+          .payment-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+          }
+          
+          .payment-table th {
+            background: #f0f0f0;
+            padding: 4px;
+            text-align: left;
+            font-size: 9px;
+          }
+          
+          .payment-table td {
+            padding: 3px 4px;
+            border: 1px solid #eee;
+          }
+          
+          
+          .signature-section {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            padding-top: 8px;
+          }
+          
+          .signature-block {
+            text-align: center;
+            width: 200px;
+          }
+          
+          .signature-image {
+            height: 35px;
+            margin-bottom: 3px;
+          }
+          
+          .signature-image img {
+            height: 100%;
+            width: auto;
+          }
+          
+          .signature-line {
+            margin-top: 3px;
+            border-top: 1px solid #333;
+            padding-top: 3px;
+          }
+          
+          .signature-label {
+            font-size: 9px;
+            color: #666;
+          }
+          
+          /* Footer */
+          .print-footer {
+            margin-top: 10px;
+            text-align: center;
+            font-size: 8px;
+            color: #999;
+          }
+          
+          /* Print specific styles */
+          @media print {
+            body {
+              padding: 10px;
+            }
+            
+            .no-print {
+              display: none;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <!-- Header with Logo, Company Name and GST -->
+        <div class="header">
+          <div class="logo">
+            <img src="${logoPath}" alt="Global Marketing Solution Logo" onerror="this.style.display='none'">
           </div>
-          <div class="detail-item">
-            <strong>Business Name:</strong>
-            <span>${order.business || 'N/A'}</span>
-          </div>
-          <div class="detail-item">
-            <strong>Contact Person:</strong>
-            <span>${order.contactPerson || 'N/A'}</span>
-          </div>
-          <div class="detail-item">
-            <strong>Address:</strong>
-            <span>${order.location || 'N/A'}</span>
-          </div>
-          <div class="detail-item">
-            <strong>Ph No:</strong>
-            <span>${order.contactCode || ''} ${order.phone || ''}</span>
-          </div>
-          <div class="detail-item">
-            <strong>Alt. Ph No:</strong>
-            <span>${order.alternatePhone || 'N/A'}</span>
-          </div>
-          <div class="detail-item">
-            <strong>Email:</strong>
-            <span>${order.email || 'N/A'}</span>
-          </div>
-          <div class="detail-item">
-            <strong>Executive:</strong>
-            <span>${order.executive || 'N/A'}</span>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Order Details Grid -->
-      <div class="customer-details" style="margin-bottom: 10px;">
-        <div class="details-grid">
-          <div class="detail-item">
-            <strong>Order No:</strong>
-            <span>${order.orderNo}</span>
-          </div>
-          <div class="detail-item">
-            <strong>Order Date:</strong>
-            <span>${formatDate(order.orderDate)}</span>
-          </div>
-          <div class="detail-item">
-            <strong>Advance Date:</strong>
-            <span>${formatDate(order.advanceDate) || 'N/A'}</span>
-          </div>
-          <div class="detail-item">
-            <strong>Advance Amt:</strong>
-            <span>₹${(parseFloat(order.advance) || 0).toFixed(2)}</span>
-          </div>
-          <div class="detail-item">
-            <strong>Payment Mode:</strong>
-            <span>${order.paymentMethods ? order.paymentMethods.join(', ') : 'N/A'}</span>
-          </div>
-          <div class="detail-item">
-            <strong>Delivery Date:</strong>
-            <span>${formatDate(order.rows[0]?.deliveryDate) || 'N/A'}</span>
-          </div>
-          <div class="detail-item">
-            <strong>Balance Amt:</strong>
-            <span>₹${balanceDue.toFixed(2)}</span>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Order Items Table -->
-      <div class="order-items">
-        <table class="items-table">
-          <thead>
-            <tr>
-              <th>S.No</th>
-              <th>Product Description</th>
-              <th>Quantity</th>
-              <th>Price / Piece</th>
-              <th>Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${order.rows.map((row, index) => `
-              <tr>
-                <td>${index + 1}</td>
-                <td>${row.description || ''} ${row.requirement ? `(${row.requirement})` : ''}</td>
-                <td style="text-align: right;">${row.quantity || 0}</td>
-                <td style="text-align: right;">${parseFloat(row.rate || 0).toFixed(2)}</td>
-                <td style="text-align: right;">${parseFloat(row.total || 0).toFixed(2)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-      
-      <!-- Design Note -->
-      <div style="margin-bottom: 10px; font-size: 10px;">
-        <strong>Design:</strong> Y / N
-      </div>
-      
-      <!-- Financial Section - Two Column -->
-      <div class="financial-section">
-        <!-- Summary Box -->
-        <div class="summary-box">
-          <h3>Summary</h3>
-          <div class="summary-row">
-            <span>Order Total:</span>
-            <span>₹${orderTotal.toFixed(2)}</span>
-          </div>
-          <div class="summary-row">
-            <span>Discount:</span>
-            <span>₹${(parseFloat(order.discount) || 0).toFixed(2)}</span>
-          </div>
-          <div class="summary-row total">
-            <span>Final Amount:</span>
-            <span>₹${(parseFloat(order.discountedTotal) || orderTotal).toFixed(2)}</span>
-          </div>
-          <div class="summary-row">
-            <span>Advance Paid:</span>
-            <span>₹${(parseFloat(order.advance) || 0).toFixed(2)}</span>
-          </div>
-          <div class="summary-row balance">
-            <span>Balance Due:</span>
-            <span>₹${balanceDue.toFixed(2)}</span>
+          <div class="company-info">
+            <div class="company-name">GLOBAL MARKETING SOLUTION</div>
+            <div class="gst-info">GST: 22AAAAA0000A1Z5</div>
+            <div style="font-size: 10px; color: #666;">Order #${order.orderNo}</div>
           </div>
         </div>
         
-        <!-- Payment Box -->
-        <div class="payment-box">
-          <h3>Payment History</h3>
-          ${order.paymentHistory && order.paymentHistory.length > 0 ? `
-            <table class="payment-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Amount</th>
-                  <th>Method</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${order.paymentHistory.map(payment => `
-                  <tr>
-                    <td>${formatDate(payment.date)}</td>
-                    <td style="text-align: right;">${parseFloat(payment.amount || 0).toFixed(2)}</td>
-                    <td>${payment.method}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          ` : '<p style="font-size: 10px; color: #999;">No payment history</p>'}
+        <!-- Customer Details -->
+        <div class="customer-details">
+          <div class="details-grid">
+            <div class="detail-item">
+              <strong>Client Type:</strong>
+              <span>${order.clientType === 'Renewal' ? 'Renewal Client' : 'New Client'}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Business Name:</strong>
+              <span>${order.business || 'N/A'}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Contact Person:</strong>
+              <span>${order.contactPerson || 'N/A'}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Address:</strong>
+              <span>${order.location || 'N/A'}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Ph No:</strong>
+              <span>${order.contactCode || ''} ${order.phone || ''}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Alt. Ph No:</strong>
+              <span>${order.alternatePhone || 'N/A'}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Email:</strong>
+              <span>${order.email || 'N/A'}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Executive:</strong>
+              <span>${order.executive || 'N/A'}</span>
+            </div>
+          </div>
         </div>
-      </div>
-      
-      <!-- Note -->
-      <div style="margin-bottom: 10px; font-size: 10px; color: #666;">
-        <strong>Note:</strong> Delivery date minimum 3 working from Advance Date.
-      </div>
-      
-    
+        
+        <!-- Order Details Grid -->
+        <div class="customer-details" style="margin-bottom: 10px;">
+          <div class="details-grid">
+            <div class="detail-item">
+              <strong>Order No:</strong>
+              <span>${order.orderNo}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Order Date:</strong>
+              <span>${formatDate(order.orderDate)}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Advance Date:</strong>
+              <span>${formatDate(order.advanceDate) || 'N/A'}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Advance Amt:</strong>
+              <span>₹${(parseFloat(order.advance) || 0).toFixed(2)}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Payment Mode:</strong>
+              <span>${order.paymentMethods ? order.paymentMethods.join(', ') : 'N/A'}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Delivery Date:</strong>
+              <span>${formatDate(order.rows[0]?.deliveryDate) || 'N/A'}</span>
+            </div>
+            <div class="detail-item">
+              <strong>Balance Amt:</strong>
+              <span>₹${balanceDue.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Order Items Table -->
+        <div class="order-items">
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th>S.No</th>
+                <th>Product Description</th>
+                <th>Quantity</th>
+                <th>Price / Piece</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${order.rows.map((row, index) => `
+                <tr>
+                  <td>${index + 1}</td>
+                  <td>${row.description || ''} ${row.requirement ? `(${row.requirement})` : ''}</td>
+                  <td style="text-align: right;">${row.quantity || 0}</td>
+                  <td style="text-align: right;">${parseFloat(row.rate || 0).toFixed(2)}</td>
+                  <td style="text-align: right;">${parseFloat(row.total || 0).toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- Design Note -->
+        <div style="margin-bottom: 10px; font-size: 10px;">
+          <strong>Design:</strong> Y / N
+        </div>
+        
+        <!-- Financial Section - Two Column -->
+        <div class="financial-section">
+          <!-- Summary Box -->
+          <div class="summary-box">
+            <h3>Summary</h3>
+            <div class="summary-row">
+              <span>Order Total:</span>
+              <span>₹${orderTotal.toFixed(2)}</span>
+            </div>
+            <div class="summary-row">
+              <span>Discount:</span>
+              <span>₹${(parseFloat(order.discount) || 0).toFixed(2)}</span>
+            </div>
+            <div class="summary-row total">
+              <span>Final Amount:</span>
+              <span>₹${(parseFloat(order.discountedTotal) || orderTotal).toFixed(2)}</span>
+            </div>
+            <div class="summary-row">
+              <span>Advance Paid:</span>
+              <span>₹${(parseFloat(order.advance) || 0).toFixed(2)}</span>
+            </div>
+            <div class="summary-row balance">
+              <span>Balance Due:</span>
+              <span>₹${balanceDue.toFixed(2)}</span>
+            </div>
+          </div>
+          
+          <!-- Payment Box -->
+          <div class="payment-box">
+            <h3>Payment History</h3>
+            ${order.paymentHistory && order.paymentHistory.length > 0 ? `
+              <table class="payment-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Method</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${order.paymentHistory.map(payment => `
+                    <tr>
+                      <td>${formatDate(payment.date)}</td>
+                      <td style="text-align: right;">${parseFloat(payment.amount || 0).toFixed(2)}</td>
+                      <td>${payment.method}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : '<p style="font-size: 10px; color: #999;">No payment history</p>'}
+          </div>
+        </div>
+        
+        <!-- Note -->
+        <div style="margin-bottom: 10px; font-size: 10px; color: #666;">
+          <strong>Note:</strong> Delivery date minimum 3 working from Advance Date.
+        </div>
+        
         <div class="signature-section">
           <div class="signature-block">
             <div class="signature-image">
@@ -707,42 +709,42 @@ const handlePrintOrder = (order) => {
             <div class="signature-label">Authorized Signature</div>
           </div>
         </div>
-      </div>
-      
-      <!-- Footer -->
-      <div class="print-footer">
-        Generated on: ${new Date().toLocaleDateString()}
-      </div>
-      
-      <script>
-        // Auto trigger print when content is loaded
-        window.onload = function() {
-          setTimeout(function() {
-            window.print();
-          }, 100);
-        };
-      </script>
-    </body>
-    </html>
-  `);
-  iframeDoc.close();
+        
+        <!-- Footer -->
+        <div class="print-footer">
+          Generated on: ${new Date().toLocaleDateString()}
+        </div>
+        
+        <script>
+          // Auto trigger print when content is loaded
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 100);
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    iframeDoc.close();
 
-  // Remove the iframe after printing
-  iframe.contentWindow.onafterprint = function () {
+    // Remove the iframe after printing
+    iframe.contentWindow.onafterprint = function () {
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 100);
+    };
+
+    // Fallback for browsers that don't support onafterprint
     setTimeout(() => {
       if (document.body.contains(iframe)) {
         document.body.removeChild(iframe);
       }
-    }, 100);
+    }, 10000);
   };
 
-  // Fallback for browsers that don't support onafterprint
-  setTimeout(() => {
-    if (document.body.contains(iframe)) {
-      document.body.removeChild(iframe);
-    }
-  }, 10000);
-};
   // Function to navigate between months
   const navigateToMonth = (direction) => {
     let newMonth = currentViewMonth;
@@ -1591,7 +1593,7 @@ const handlePrintOrder = (order) => {
             </tr>
           </thead>
           <tbody>
-            ${paymentHistory.map((payment,) => `
+            ${paymentHistory.map((payment) => `
               <tr>
                 <td>${formatDate(payment.date)}</td>
                 <td>${parseFloat(payment.amount || 0).toLocaleString('en-IN')}</td>
@@ -2387,7 +2389,7 @@ const handlePrintOrder = (order) => {
               <strong>
                 {appliedExecutiveFilters.executiveType === 'executive' ? '🎯 Sales Executive' :
                   appliedExecutiveFilters.executiveType === 'service' ? '🔧 Service Executive' :
-                    appliedExecutiveFilters.executiveType === 'account' ? '📊 Account Executive' : '👤 Executive'}:
+                  appliedExecutiveFilters.executiveType === 'account' ? '📊 Account Executive' : '👤 Executive'}:
               </strong> {appliedExecutiveFilters.executiveName}
             </span>
             <button
@@ -2747,10 +2749,9 @@ const handlePrintOrder = (order) => {
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Order No</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Order Date</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Client Type</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '150px' }}>Description</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Requirement</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '80px' }}>Qty</th>
-                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Rate</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '250px' }}>Requirement</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Quantity</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '150px' }}>Rate</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Total</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '80px' }}>Discount</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Final Amount</th>
@@ -2767,368 +2768,770 @@ const handlePrintOrder = (order) => {
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '200px' }}>Action</th>
                     </tr>
                   </thead>
-                 <tbody>
-  {group.orders.map((order, orderIndex) =>
-    order.rows.filter(filterOrders(order)).map((row, rowIndex) => {
-      // Calculate background color based on row index
-      const rowBgColor = (orderIndex + rowIndex) % 2 === 0 ? '#fdfdfd' : '#f5f9fa';
+                  <tbody>
+                    {group.orders.map((order, orderIndex) => {
+                      // Check if this order has multiple rows
+                      const hasMultipleRows = order.rows && order.rows.length > 1;
+                      
+                      if (hasMultipleRows) {
+                        // COMBINE MULTIPLE ROWS INTO ONE DISPLAY ROW
+                        
+                        // Combine requirements with commas
+                        const combinedRequirements = order.rows
+                          .map(row => {
+                            // Use customRequirement if it exists (for "other" selections)
+                            // Otherwise use the requirement field
+                            const req = row.customRequirement || row.requirement || '';
+                            // If it's a time-based requirement, add "(Time Based)" indicator
+                            const isTimeBased = row.days && row.days > 0;
+                            return isTimeBased ? `${req} (${row.days} days)` : req;
+                          })
+                          .filter(req => req) // Remove empty
+                          .join(', ');
+                        
+                        // Combine quantities with commas
+                        const combinedQuantities = order.rows
+                          .map(row => {
+                            const qty = row.quantity || 0;
+                            // Add unit if available (pieces, etc.)
+                            return qty;
+                          })
+                          .join(', ');
+                        
+                        // Combine rates with commas (including currency symbol)
+                        const combinedRates = order.rows
+                          .map(row => {
+                            const rate = parseFloat(row.rate || 0).toFixed(2);
+                            return `₹${rate}`;
+                          })
+                          .join(', ');
+                        
+                        // Calculate total (sum of all rows)
+                        const combinedTotal = order.rows
+                          .reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0)
+                          .toFixed(2);
+                        
+                        // Get all delivery dates (take the earliest or latest? Let's take the earliest)
+                        const deliveryDates = order.rows
+                          .filter(row => row.deliveryDate)
+                          .map(row => new Date(row.deliveryDate))
+                          .sort((a, b) => a - b);
+                        
+                        const earliestDeliveryDate = deliveryDates.length > 0 
+                          ? formatDate(deliveryDates[0].toISOString().split('T')[0])
+                          : 'N/A';
+                        
+                        // Get all assigned executives (unique)
+                        const assignedExecutives = [...new Set(
+                          order.rows
+                            .map(row => row.assignedExecutive)
+                            .filter(exec => exec)
+                        )].join(', ');
+                        
+                        // Get statuses (show unique or combined)
+                        const statuses = [...new Set(
+                          order.rows
+                            .map(row => row.status)
+                            .filter(status => status)
+                        )].join(', ');
+                        
+                        // Calculate row background color
+                        const rowBgColor = orderIndex % 2 === 0 ? '#fdfdfd' : '#f5f9fa';
+                        
+                        return (
+                          <tr key={order._id} style={{ backgroundColor: rowBgColor, borderBottom: '1px solid #eee' }}>
+                            {/* Sticky Cells - S.No, Executive, Business */}
+                            <td className="sticky-column" style={{
+                              padding: '10px 8px',
+                              textAlign: 'center',
+                              position: 'sticky',
+                              left: 0,
+                              backgroundColor: rowBgColor,
+                              zIndex: 9,
+                              minWidth: '50px'
+                            }}>{orderIndex + 1}</td>
 
-      return (
-        <tr
-          key={`${order._id}-${rowIndex}`}
-          style={{
-            backgroundColor: rowBgColor,
-            borderBottom: '1px solid #eee'
-          }}
-        >
-          {/* Sticky Cells - S.No, Executive, Business with responsive class */}
-          <td className="sticky-column" style={{
-            padding: '10px 8px',
-            textAlign: 'center',
-            position: 'sticky',
-            left: 0,
-            backgroundColor: rowBgColor,
-            zIndex: 9,
-            minWidth: '50px'
-          }}>{orderIndex + 1}</td>
+                            <td className="sticky-column" style={{
+                              padding: '10px 8px',
+                              position: 'sticky',
+                              left: '50px',
+                              backgroundColor: rowBgColor,
+                              zIndex: 9,
+                              minWidth: '100px'
+                            }}>{order.executive}</td>
 
-          <td className="sticky-column" style={{
-            padding: '10px 8px',
-            position: 'sticky',
-            left: '50px',
-            backgroundColor: rowBgColor,
-            zIndex: 9,
-            minWidth: '100px'
-          }}>{order.executive}</td>
+                            <td className="sticky-column" style={{
+                              padding: '10px 8px',
+                              position: 'sticky',
+                              left: '150px',
+                              backgroundColor: rowBgColor,
+                              zIndex: 9,
+                              minWidth: '150px'
+                            }}>
+                              {userRole === 'Admin' ? (
+                                <button
+                                  onClick={() => navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(order.business)}`)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#003366',
+                                    cursor: 'pointer',
+                                    padding: '4px 8px',
+                                    fontSize: 'inherit',
+                                    fontFamily: 'inherit',
+                                    borderRadius: '4px',
+                                    transition: 'all 0.2s ease',
+                                    fontWeight: '500',
+                                    textAlign: 'left'
+                                  }}
+                                  onMouseOver={(e) => {
+                                    e.target.style.backgroundColor = '#e3f2fd';
+                                    e.target.style.color = '#003366';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.target.style.backgroundColor = 'transparent';
+                                    e.target.style.color = '#003366';
+                                  }}
+                                >
+                                  {order.business}
+                                </button>
+                              ) : (
+                                <span style={{ color: '#003366', fontWeight: '500' }}>
+                                  {order.business}
+                                </span>
+                              )}
+                            </td>
 
-          <td className="sticky-column" style={{
-            padding: '10px 8px',
-            position: 'sticky',
-            left: '150px',
-            backgroundColor: rowBgColor,
-            zIndex: 9,
-            minWidth: '150px'
-          }}>
-            {userRole === 'Admin' ? (
-              <button
-                onClick={() => navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(order.business)}`)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#003366',
-                  cursor: 'pointer',
-                  padding: '4px 8px',
-                  fontSize: 'inherit',
-                  fontFamily: 'inherit',
-                  borderRadius: '4px',
-                  transition: 'all 0.2s ease',
-                  fontWeight: '500',
-                  textAlign: 'left'
-                }}
-                onMouseOver={(e) => {
-                  e.target.style.backgroundColor = '#e3f2fd';
-                  e.target.style.color = '#003366';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = 'transparent';
-                  e.target.style.color = '#003366';
-                }}
-              >
-                {order.business}
-              </button>
-            ) : (
-              <span style={{ color: '#003366', fontWeight: '500' }}>
-                {order.business}
-              </span>
-            )}
-          </td>
+                            {/* Regular Cells */}
+                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactPerson}</td>
+                            <td style={{ padding: '10px 8px', minWidth: '100px' }}>{order.location}</td>
 
-          {/* Regular Cells */}
-          <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactPerson}</td>
-          <td style={{ padding: '10px 8px', minWidth: '100px' }}>{order.location}</td>
+                            {/* Lead Source Cell */}
+                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>
+                              <span style={{
+                                backgroundColor: order.leadSource ? '#e3f2fd' : '#f5f5f5',
+                                color: order.leadSource ? '#1976d2' : '#666',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                fontWeight: order.leadSource ? '500' : 'normal',
+                                display: 'inline-block',
+                                minWidth: '100px'
+                              }}>
+                                {order.leadSource || 'Not specified'}
+                                {order.otherLeadSource && order.leadSource === 'Other Specify' && (
+                                  <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
+                                    ({order.otherLeadSource})
+                                  </div>
+                                )}
+                              </span>
+                            </td>
+                            
+                            <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactCode} {order.phone}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.orderNo}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.orderDate)}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.clientType}</td>
 
-          {/* Lead Source Cell */}
-          <td style={{ padding: '10px 8px', minWidth: '120px' }}>
-            <span style={{
-              backgroundColor: order.leadSource ? '#e3f2fd' : '#f5f5f5',
-              color: order.leadSource ? '#1976d2' : '#666',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              fontSize: '12px',
-              fontWeight: order.leadSource ? '500' : 'normal',
-              display: 'inline-block',
-              minWidth: '100px'
-            }}>
-              {order.leadSource || 'Not specified'}
-              {order.otherLeadSource && order.leadSource === 'Other Specify' && (
-                <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
-                  ({order.otherLeadSource})
-                </div>
-              )}
-            </span>
-          </td>
-          
-          <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactCode} {order.phone}</td>
-          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.orderNo}</td>
-          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.orderDate)}</td>
-          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.clientType}</td>
+                            {/* COMBINED REQUIREMENTS CELL */}
+                            <td style={{ padding: '10px 8px', minWidth: '250px', fontWeight: '500', color: '#1976d2' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <span>{combinedRequirements}</span>
+                                {order.rows.some(row => row.description) && (
+                                  <small style={{ color: '#666', fontSize: '11px', fontStyle: 'italic' }}>
+                                    {order.rows.map(row => row.description).filter(d => d).join(' | ')}
+                                  </small>
+                                )}
+                              </div>
+                            </td>
 
-          {/* FIX: Show description properly - using rows array */}
-          <td style={{ padding: '10px 8px', minWidth: '150px' }}>
-            <div>
-              <div style={{
-                marginBottom: '0',
-                padding: '0'
-              }}>
-                {row.description || 'No description'}
-              </div>
-            </div>
-          </td>
+                            {/* COMBINED QUANTITY CELL */}
+                            <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '120px', fontWeight: '500' }}>
+                              {combinedQuantities}
+                            </td>
 
-          {/* FIX: Show requirement name properly - using current row */}
-          <td style={{ padding: '10px 8px', minWidth: '120px' }}>
-            <div>
-              <div style={{
-                marginBottom: '0',
-                padding: '0'
-              }}>
-                <strong>{row.customRequirement || row.requirement || ''}</strong>
-              </div>
-            </div>
-          </td>
+                            {/* COMBINED RATE CELL */}
+                            <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '150px' }}>
+                              {combinedRates}
+                            </td>
 
-          {/* FIX: Show quantity in its own column - using current row */}
-          <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '80px' }}>
-            {row.quantity || 0}
-          </td>
+                            {/* COMBINED TOTAL CELL */}
+                            <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', minWidth: '100px', color: '#27ae60' }}>
+                              ₹{combinedTotal}
+                            </td>
 
-          {/* FIX: Show rate in its own column - using current row */}
-          <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '100px' }}>
-            ₹{row.rate?.toFixed(2) || '0.00'}
-          </td>
+                            <td style={{ padding: '10px 8px', textAlign: 'right', color: '#e67e22', minWidth: '80px' }}>{order.discount}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60', minWidth: '100px' }}>{order.discountedTotal}</td>
 
-          {/* FIX: Show total in its own column - using current row */}
-          <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', minWidth: '100px', color: '#27ae60' }}>
-            ₹{row.total?.toFixed(2) || '0.00'}
-          </td>
+                            {/* Delivery Date - using earliest delivery date */}
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>
+                              {earliestDeliveryDate}
+                              {deliveryDates.length > 1 && (
+                                <span style={{ fontSize: '10px', color: '#666', display: 'block' }}>
+                                  +{deliveryDates.length - 1} more
+                                </span>
+                              )}
+                            </td>
 
-          <td style={{ padding: '10px 8px', textAlign: 'right', color: '#e67e22', minWidth: '80px' }}>{order.discount}</td>
-          <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60', minWidth: '100px' }}>{order.discountedTotal}</td>
+                            {/* Service Assigned - using combined assigned executives */}
+                            <td style={{ padding: '10px 8px', textAlign: 'left', minWidth: '120px' }}>
+                              {assignedExecutives ? (
+                                <span style={{
+                                  backgroundColor: '#e3f2fd',
+                                  color: '#1565c0',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontWeight: 'bold',
+                                  display: 'inline-block'
+                                }}>
+                                  {assignedExecutives}
+                                </span>
+                              ) : (
+                                <span style={{
+                                  backgroundColor: '#fff3e0',
+                                  color: '#e65100',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontWeight: 'bold',
+                                  display: 'inline-block'
+                                }}>
+                                  Not Assigned
+                                </span>
+                              )}
+                            </td>
 
-          {/* Delivery Date - using current row */}
-          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>
-            {formatDate(row.deliveryDate)}
-          </td>
+                            {/* Status - using combined statuses */}
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>
+                              <span style={{
+                                backgroundColor: statuses.includes('Completed') ? '#d4edda' :
+                                  statuses.includes('In Progress') ? '#fff3cd' :
+                                  statuses.includes('Pending') ? '#f8d7da' : '#e2e3e5',
+                                color: statuses.includes('Completed') ? '#155724' :
+                                  statuses.includes('In Progress') ? '#856404' :
+                                  statuses.includes('Pending') ? '#721c24' : '#383d41',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontWeight: 'bold',
+                                display: 'inline-block',
+                                minWidth: '80px'
+                              }}>
+                                {statuses || 'Not Set'}
+                              </span>
+                            </td>
 
-          {/* Service Assigned - using current row */}
-          <td style={{ padding: '10px 8px', textAlign: 'left', minWidth: '120px' }}>
-            {row.assignedExecutive ? (
-              <span style={{
-                backgroundColor: '#e3f2fd',
-                color: '#1565c0',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                fontWeight: 'bold',
-                display: 'inline-block'
-              }}>
-                {row.assignedExecutive}
-              </span>
-            ) : (
-              <span style={{
-                backgroundColor: '#fff3e0',
-                color: '#e65100',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                fontWeight: 'bold',
-                display: 'inline-block'
-              }}>
-                Not Assigned
-              </span>
-            )}
-          </td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
+                              {order.createdBy && order.createdBy !== order.executive ? (
+                                <span style={{
+                                  backgroundColor: '#e8f5e8',
+                                  color: '#2e7d32',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontWeight: 'bold',
+                                  fontSize: '12px',
+                                  display: 'inline-block'
+                                }}>
+                                  Admin: {order.createdBy}
+                                </span>
+                              ) : (
+                                <span style={{
+                                  color: '#666',
+                                  fontSize: '12px'
+                                }}>
+                                  {order.executive}
+                                </span>
+                              )}
+                            </td>
 
-          {/* Status - using current row */}
-          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>
-            <span style={{
-              backgroundColor: row.status === 'Completed' ? '#d4edda' :
-                row.status === 'In Progress' ? '#fff3cd' :
-                row.status === 'Pending' ? '#f8d7da' : '#e2e3e5',
-              color: row.status === 'Completed' ? '#155724' :
-                row.status === 'In Progress' ? '#856404' :
-                row.status === 'Pending' ? '#721c24' : '#383d41',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              fontWeight: 'bold',
-              display: 'inline-block',
-              minWidth: '80px'
-            }}>
-              {row.status || 'Not Set'}
-            </span>
-          </td>
+                            <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '100px' }}>{order.advance}</td>
+                            <td style={{
+                              padding: '10px 8px',
+                              textAlign: 'right',
+                              fontWeight: 'bold',
+                              color: order.balance > 0 ? '#e74c3c' : '#2ecc71',
+                              minWidth: '100px'
+                            }}>
+                              {order.balance}
+                            </td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.advanceDate)}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.paymentDate)}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
+                              {order.paymentMethods && order.paymentMethods.length > 0
+                                ? order.paymentMethods.join(', ')
+                                : 'Not specified'}
+                            </td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>{order.chequeNumber}</td>
 
-          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
-            {order.createdBy && order.createdBy !== order.executive ? (
-              <span style={{
-                backgroundColor: '#e8f5e8',
-                color: '#2e7d32',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                fontWeight: 'bold',
-                fontSize: '12px',
-                display: 'inline-block'
-              }}>
-                Admin: {order.createdBy}
-              </span>
-            ) : (
-              <span style={{
-                color: '#666',
-                fontSize: '12px'
-              }}>
-                {order.executive}
-              </span>
-            )}
-          </td>
+                            {/* Action Buttons */}
+                            <td style={{
+                              padding: '10px 8px',
+                              display: 'flex',
+                              gap: '8px',
+                              justifyContent: 'center',
+                              flexWrap: 'wrap',
+                              minWidth: '200px'
+                            }}>
+                              {/* Print Order Button - Direct print */}
+                              <button
+                                onClick={() => {
+                                  handlePrintOrder(order);
+                                }}
+                                style={{
+                                  backgroundColor: '#9c27b0',
+                                  color: 'white',
+                                  padding: '6px 12px',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
+                                  cursor: 'pointer',
+                                  whiteSpace: 'nowrap',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                              >
+                                🖨️ Print
+                              </button>
 
-          <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '100px' }}>{order.advance}</td>
-          <td style={{
-            padding: '10px 8px',
-            textAlign: 'right',
-            fontWeight: 'bold',
-            color: order.balance > 0 ? '#e74c3c' : '#2ecc71',
-            minWidth: '100px'
-          }}>
-            {order.balance}
-          </td>
-          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.advanceDate)}</td>
-          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.paymentDate)}</td>
-          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
-            {order.paymentMethods && order.paymentMethods.length > 0
-              ? order.paymentMethods.join(', ')
-              : 'Not specified'}
-          </td>
-          <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>{order.chequeNumber}</td>
+                              {/* Always show View Payments button */}
+                              <button
+                                onClick={() => handleViewPayments(order)}
+                                disabled={paymentLoading}
+                                style={{
+                                  backgroundColor: '#3498db',
+                                  color: 'white',
+                                  padding: '6px 12px',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
+                                  cursor: paymentLoading ? 'not-allowed' : 'pointer',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                {paymentLoading ? 'Loading...' : 'View Payments'}
+                              </button>
 
-          {/* Action Buttons */}
-          <td style={{
-            padding: '10px 8px',
-            display: 'flex',
-            gap: '8px',
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-            minWidth: '200px'
-          }}>
-            {/* Print Order Button - Direct print */}
-            <button
-              onClick={() => {
-                handlePrintOrder(order);
-              }}
-              style={{
-                backgroundColor: '#9c27b0',
-                color: 'white',
-                padding: '6px 12px',
-                border: 'none',
-                borderRadius: '4px',
-                fontSize: '12px',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}
-            >
-              🖨️ Print
-            </button>
+                              {order.balance <= 0 ? (
+                                <span style={{
+                                  backgroundColor: '#2ecc71',
+                                  color: 'white',
+                                  padding: '6px 12px',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  Paid
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => handleRecordPayment(order)}
+                                    disabled={paymentLoading}
+                                    style={{
+                                      backgroundColor: paymentLoading ? '#bdc3c7' : '#9b59b6',
+                                      color: 'white',
+                                      padding: '6px 12px',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '12px',
+                                      cursor: paymentLoading ? 'not-allowed' : 'pointer',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    {paymentLoading ? 'Loading...' : 'Record Payment'}
+                                  </button>
 
-            {/* Always show View Payments button */}
-            <button
-              onClick={() => handleViewPayments(order)}
-              disabled={paymentLoading}
-              style={{
-                backgroundColor: '#3498db',
-                color: 'white',
-                padding: '6px 12px',
-                border: 'none',
-                borderRadius: '4px',
-                fontSize: '12px',
-                cursor: paymentLoading ? 'not-allowed' : 'pointer',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {paymentLoading ? 'Loading...' : 'View Payments'}
-            </button>
+                                  <button
+                                    onClick={() => handleEdit(order)}
+                                    style={{
+                                      backgroundColor: '#f39c12',
+                                      color: 'white',
+                                      padding: '6px 12px',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '12px',
+                                      cursor: 'pointer',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    Edit
+                                  </button>
 
-            {order.balance <= 0 ? (
-              <span style={{
-                backgroundColor: '#2ecc71',
-                color: 'white',
-                padding: '6px 12px',
-                borderRadius: '4px',
-                fontSize: '12px',
-                whiteSpace: 'nowrap'
-              }}>
-                Paid
-              </span>
-            ) : (
-              <>
-                <button
-                  onClick={() => handleRecordPayment(order)}
-                  disabled={paymentLoading}
-                  style={{
-                    backgroundColor: paymentLoading ? '#bdc3c7' : '#9b59b6',
-                    color: 'white',
-                    padding: '6px 12px',
-                    border: 'none',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    cursor: paymentLoading ? 'not-allowed' : 'pointer',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {paymentLoading ? 'Loading...' : 'Record Payment'}
-                </button>
+                                  {/* DELETE BUTTON - ONLY SHOW FOR ADMIN USERS */}
+                                  {canDeleteOrders() && (
+                                    <button
+                                      onClick={() => confirmDelete(order._id)}
+                                      style={{
+                                        backgroundColor: '#e74c3c',
+                                        color: 'white',
+                                        padding: '6px 12px',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        fontSize: '12px',
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      Delete
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      } else {
+                        // SINGLE ROW - Render normally (original code for single row orders)
+                        return order.rows.filter(filterOrders(order)).map((row, rowIndex) => {
+                          // Calculate background color based on row index
+                          const rowBgColor = (orderIndex + rowIndex) % 2 === 0 ? '#fdfdfd' : '#f5f9fa';
 
-                <button
-                  onClick={() => handleEdit(order)}
-                  style={{
-                    backgroundColor: '#f39c12',
-                    color: 'white',
-                    padding: '6px 12px',
-                    border: 'none',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  Edit
-                </button>
+                          return (
+                            <tr
+                              key={`${order._id}-${rowIndex}`}
+                              style={{
+                                backgroundColor: rowBgColor,
+                                borderBottom: '1px solid #eee'
+                              }}
+                            >
+                              {/* Sticky Cells - S.No, Executive, Business with responsive class */}
+                              <td className="sticky-column" style={{
+                                padding: '10px 8px',
+                                textAlign: 'center',
+                                position: 'sticky',
+                                left: 0,
+                                backgroundColor: rowBgColor,
+                                zIndex: 9,
+                                minWidth: '50px'
+                              }}>{orderIndex + 1}</td>
 
-                {/* DELETE BUTTON - ONLY SHOW FOR ADMIN USERS */}
-                {canDeleteOrders() && (
-                  <button
-                    onClick={() => confirmDelete(order._id)}
-                    style={{
-                      backgroundColor: '#e74c3c',
-                      color: 'white',
-                      padding: '6px 12px',
-                      border: 'none',
-                      borderRadius: '4px',
-                      fontSize: '12px',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    Delete
-                  </button>
-                )}
-              </>
-            )}
-          </td>
-        </tr>
-      );
-    })
-  )}
-</tbody>
+                              <td className="sticky-column" style={{
+                                padding: '10px 8px',
+                                position: 'sticky',
+                                left: '50px',
+                                backgroundColor: rowBgColor,
+                                zIndex: 9,
+                                minWidth: '100px'
+                              }}>{order.executive}</td>
+
+                              <td className="sticky-column" style={{
+                                padding: '10px 8px',
+                                position: 'sticky',
+                                left: '150px',
+                                backgroundColor: rowBgColor,
+                                zIndex: 9,
+                                minWidth: '150px'
+                              }}>
+                                {userRole === 'Admin' ? (
+                                  <button
+                                    onClick={() => navigate(`/admin-dashboard/ledger?business=${encodeURIComponent(order.business)}`)}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      color: '#003366',
+                                      cursor: 'pointer',
+                                      padding: '4px 8px',
+                                      fontSize: 'inherit',
+                                      fontFamily: 'inherit',
+                                      borderRadius: '4px',
+                                      transition: 'all 0.2s ease',
+                                      fontWeight: '500',
+                                      textAlign: 'left'
+                                    }}
+                                    onMouseOver={(e) => {
+                                      e.target.style.backgroundColor = '#e3f2fd';
+                                      e.target.style.color = '#003366';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.target.style.backgroundColor = 'transparent';
+                                      e.target.style.color = '#003366';
+                                    }}
+                                  >
+                                    {order.business}
+                                  </button>
+                                ) : (
+                                  <span style={{ color: '#003366', fontWeight: '500' }}>
+                                    {order.business}
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Regular Cells */}
+                              <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactPerson}</td>
+                              <td style={{ padding: '10px 8px', minWidth: '100px' }}>{order.location}</td>
+
+                              {/* Lead Source Cell */}
+                              <td style={{ padding: '10px 8px', minWidth: '120px' }}>
+                                <span style={{
+                                  backgroundColor: order.leadSource ? '#e3f2fd' : '#f5f5f5',
+                                  color: order.leadSource ? '#1976d2' : '#666',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
+                                  fontWeight: order.leadSource ? '500' : 'normal',
+                                  display: 'inline-block',
+                                  minWidth: '100px'
+                                }}>
+                                  {order.leadSource || 'Not specified'}
+                                  {order.otherLeadSource && order.leadSource === 'Other Specify' && (
+                                    <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
+                                      ({order.otherLeadSource})
+                                    </div>
+                                  )}
+                                </span>
+                              </td>
+                              
+                              <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactCode} {order.phone}</td>
+                              <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.orderNo}</td>
+                              <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.orderDate)}</td>
+                              <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.clientType}</td>
+
+                              {/* Requirement Cell - using current row */}
+                              <td style={{ padding: '10px 8px', minWidth: '250px' }}>
+                                <div>
+                                  <div style={{ marginBottom: '0', padding: '0', fontWeight: '500', color: '#1976d2' }}>
+                                    {row.customRequirement || row.requirement || ''}
+                                    {row.days && row.days > 0 && <span style={{ fontSize: '11px', color: '#666', marginLeft: '4px' }}>({row.days} days)</span>}
+                                  </div>
+                                  {row.description && (
+                                    <small style={{ color: '#666', fontSize: '11px', fontStyle: 'italic' }}>
+                                      {row.description}
+                                    </small>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Quantity Cell - using current row */}
+                              <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '120px', fontWeight: '500' }}>
+                                {row.quantity || 0}
+                              </td>
+
+                              {/* Rate Cell - using current row */}
+                              <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '150px' }}>
+                                ₹{parseFloat(row.rate || 0).toFixed(2)}
+                              </td>
+
+                              {/* Total Cell - using current row */}
+                              <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', minWidth: '100px', color: '#27ae60' }}>
+                                ₹{parseFloat(row.total || 0).toFixed(2)}
+                              </td>
+
+                              <td style={{ padding: '10px 8px', textAlign: 'right', color: '#e67e22', minWidth: '80px' }}>{order.discount}</td>
+                              <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60', minWidth: '100px' }}>{order.discountedTotal}</td>
+
+                              {/* Delivery Date - using current row */}
+                              <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>
+                                {formatDate(row.deliveryDate)}
+                              </td>
+
+                              {/* Service Assigned - using current row */}
+                              <td style={{ padding: '10px 8px', textAlign: 'left', minWidth: '120px' }}>
+                                {row.assignedExecutive ? (
+                                  <span style={{
+                                    backgroundColor: '#e3f2fd',
+                                    color: '#1565c0',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    fontWeight: 'bold',
+                                    display: 'inline-block'
+                                  }}>
+                                    {row.assignedExecutive}
+                                  </span>
+                                ) : (
+                                  <span style={{
+                                    backgroundColor: '#fff3e0',
+                                    color: '#e65100',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    fontWeight: 'bold',
+                                    display: 'inline-block'
+                                  }}>
+                                    Not Assigned
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Status - using current row */}
+                              <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>
+                                <span style={{
+                                  backgroundColor: row.status === 'Completed' ? '#d4edda' :
+                                    row.status === 'In Progress' ? '#fff3cd' :
+                                    row.status === 'Pending' ? '#f8d7da' : '#e2e3e5',
+                                  color: row.status === 'Completed' ? '#155724' :
+                                    row.status === 'In Progress' ? '#856404' :
+                                    row.status === 'Pending' ? '#721c24' : '#383d41',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontWeight: 'bold',
+                                  display: 'inline-block',
+                                  minWidth: '80px'
+                                }}>
+                                  {row.status || 'Not Set'}
+                                </span>
+                              </td>
+
+                              <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
+                                {order.createdBy && order.createdBy !== order.executive ? (
+                                  <span style={{
+                                    backgroundColor: '#e8f5e8',
+                                    color: '#2e7d32',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    fontWeight: 'bold',
+                                    fontSize: '12px',
+                                    display: 'inline-block'
+                                  }}>
+                                    Admin: {order.createdBy}
+                                  </span>
+                                ) : (
+                                  <span style={{
+                                    color: '#666',
+                                    fontSize: '12px'
+                                  }}>
+                                    {order.executive}
+                                  </span>
+                                )}
+                              </td>
+
+                              <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '100px' }}>{order.advance}</td>
+                              <td style={{
+                                padding: '10px 8px',
+                                textAlign: 'right',
+                                fontWeight: 'bold',
+                                color: order.balance > 0 ? '#e74c3c' : '#2ecc71',
+                                minWidth: '100px'
+                              }}>
+                                {order.balance}
+                              </td>
+                              <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.advanceDate)}</td>
+                              <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.paymentDate)}</td>
+                              <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
+                                {order.paymentMethods && order.paymentMethods.length > 0
+                                  ? order.paymentMethods.join(', ')
+                                  : 'Not specified'}
+                              </td>
+                              <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>{order.chequeNumber}</td>
+
+                              {/* Action Buttons */}
+                              <td style={{
+                                padding: '10px 8px',
+                                display: 'flex',
+                                gap: '8px',
+                                justifyContent: 'center',
+                                flexWrap: 'wrap',
+                                minWidth: '200px'
+                              }}>
+                                {/* Print Order Button - Direct print */}
+                                <button
+                                  onClick={() => {
+                                    handlePrintOrder(order);
+                                  }}
+                                  style={{
+                                    backgroundColor: '#9c27b0',
+                                    color: 'white',
+                                    padding: '6px 12px',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    fontSize: '12px',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                >
+                                  🖨️ Print
+                                </button>
+
+                                {/* Always show View Payments button */}
+                                <button
+                                  onClick={() => handleViewPayments(order)}
+                                  disabled={paymentLoading}
+                                  style={{
+                                    backgroundColor: '#3498db',
+                                    color: 'white',
+                                    padding: '6px 12px',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    fontSize: '12px',
+                                    cursor: paymentLoading ? 'not-allowed' : 'pointer',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  {paymentLoading ? 'Loading...' : 'View Payments'}
+                                </button>
+
+                                {order.balance <= 0 ? (
+                                  <span style={{
+                                    backgroundColor: '#2ecc71',
+                                    color: 'white',
+                                    padding: '6px 12px',
+                                    borderRadius: '4px',
+                                    fontSize: '12px',
+                                    whiteSpace: 'nowrap'
+                                  }}>
+                                    Paid
+                                  </span>
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={() => handleRecordPayment(order)}
+                                      disabled={paymentLoading}
+                                      style={{
+                                        backgroundColor: paymentLoading ? '#bdc3c7' : '#9b59b6',
+                                        color: 'white',
+                                        padding: '6px 12px',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        fontSize: '12px',
+                                        cursor: paymentLoading ? 'not-allowed' : 'pointer',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      {paymentLoading ? 'Loading...' : 'Record Payment'}
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleEdit(order)}
+                                      style={{
+                                        backgroundColor: '#f39c12',
+                                        color: 'white',
+                                        padding: '6px 12px',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        fontSize: '12px',
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      Edit
+                                    </button>
+
+                                    {/* DELETE BUTTON - ONLY SHOW FOR ADMIN USERS */}
+                                    {canDeleteOrders() && (
+                                      <button
+                                        onClick={() => confirmDelete(order._id)}
+                                        style={{
+                                          backgroundColor: '#e74c3c',
+                                          color: 'white',
+                                          padding: '6px 12px',
+                                          border: 'none',
+                                          borderRadius: '4px',
+                                          fontSize: '12px',
+                                          cursor: 'pointer',
+                                          whiteSpace: 'nowrap'
+                                        }}
+                                      >
+                                        Delete
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        });
+                      }
+                    })}
+                  </tbody>
                 </table>
               </div>
             </div>
@@ -3610,8 +4013,6 @@ const handlePrintOrder = (order) => {
                 />
               </div>
 
-              {/* REMOVED: Sale Closed By Input */}
-
               {/* Lead Source Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Lead Source</label>
@@ -4085,4 +4486,5 @@ const handlePrintOrder = (order) => {
     </div>
   );
 }
+
 export default ViewOrders;
