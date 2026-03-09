@@ -90,24 +90,7 @@ function AdminDashboard() {
 
   const clientTypes = getClientTypeData();
 
-  const formatAmount = (amount) => {
-    const numAmount = parseFloat(amount) || 0;
 
-    if (numAmount >= 10000000) {
-      return (numAmount / 10000000).toFixed(1) + 'Cr';
-    } else if (numAmount >= 100000) {
-      return (numAmount / 100000).toFixed(1) + 'L';
-    } else if (numAmount >= 1000) {
-      return (numAmount / 1000).toFixed(1) + 'K';
-    } else {
-      return numAmount.toString();
-    }
-  };
-
-  const formatAmountFull = (amount) => {
-    const numAmount = parseFloat(amount) || 0;
-    return '₹' + numAmount.toLocaleString('en-IN');
-  };
 
   const toggleSection = (section) => {
     setOpenSections(prev => ({
@@ -235,18 +218,9 @@ function AdminDashboard() {
   const safeArray = (arr) => (Array.isArray(arr) ? arr : []);
 
   const pendingPayments = safeArray(chartData?.pendingPayments);
-  const pendingServices = safeArray(chartData?.pendingServices);
+
   const appointments = safeArray(chartData?.appointments);
 
-  const calculateTotalRevenue = () => {
-    if (!chartData) return 0;
-
-    if (selectedMonth !== null) {
-      return chartData.amountByMonth?.[selectedMonth] || 0;
-    } else {
-      return safeArray(chartData.amountByMonth).reduce((sum, amount) => sum + amount, 0);
-    }
-  };
 
   const getTotalOrdersCount = () => {
     if (!chartData) return 0;
@@ -256,7 +230,7 @@ function AdminDashboard() {
     return safeArray(chartData?.totalOrdersByMonth).reduce((a, b) => a + b, 0);
   };
 
-  const handleChartClick = (chartType, elementIndex = null) => {
+  const handleChartClick = (chartType) => {
     if (chartType === 'pending-payment') {
       const queryParams = new URLSearchParams();
 
@@ -1901,7 +1875,6 @@ function AdminDashboard() {
                       }}
                       onMouseEnter={() => setHoveredCard('service')}
                       onMouseLeave={() => setHoveredCard(null)}
-                      onClick={() => handleChartClick('pending-service')}
                     >
                       <div>
                         Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}
@@ -1920,6 +1893,18 @@ function AdminDashboard() {
                           ];
 
                           const totalServices = serviceData.reduce((a, b) => a + b, 0);
+
+                          // Status mapping for navigation
+                          const statusMap = [
+                            { value: 'pending', label: 'Pending' },
+                            { value: 'assigned to', label: 'Assigned' },
+                            { value: 'updated', label: 'Updated' },
+                            { value: 'completed', label: 'Completed' },
+                            { value: 'design pending', label: 'Design Pending' },
+                            { value: 'printing', label: 'Printing' },
+                            { value: 'installation pending', label: 'Installation Pending' },
+                            { value: 'onboarding', label: 'Onboarding' }
+                          ];
 
                           return (
                             <Doughnut
@@ -1967,7 +1952,6 @@ function AdminDashboard() {
                                       }
                                     }
                                   },
-                                  // Custom plugin to show percentage in center
                                   afterDraw: function (chart) {
                                     const width = chart.width;
                                     const height = chart.height;
@@ -1989,6 +1973,31 @@ function AdminDashboard() {
 
                                     ctx.save();
                                   }
+                                },
+                                onClick: (event, elements) => {
+                                  if (elements && elements.length > 0) {
+                                    const clickedIndex = elements[0].index;
+                                    const clickedStatus = statusMap[clickedIndex];
+
+                                    // Build query parameters
+                                    const queryParams = new URLSearchParams();
+
+                                    // Add status filter
+                                    queryParams.append('status', clickedStatus.value);
+
+                                    // Add year filter if not 'all'
+                                    if (year !== 'all') {
+                                      queryParams.append('year', year.toString());
+                                    }
+
+                                    // Add month filter if selected
+                                    if (selectedMonth !== null) {
+                                      queryParams.append('month', (selectedMonth + 1).toString());
+                                    }
+
+                                    // Navigate to pending-service with filters
+                                    navigate(`/admin-dashboard/pending-service?${queryParams.toString()}`);
+                                  }
                                 }
                               }}
                             />
@@ -2004,7 +2013,6 @@ function AdminDashboard() {
                         Total Services
                       </div>
                     </div>
-
                     {/* Appointments PolarArea */}
                     <div
                       style={{

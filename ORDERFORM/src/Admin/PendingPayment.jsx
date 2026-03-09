@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
@@ -990,6 +991,15 @@ function PendingPayment({ executiveFilter = null }) {
       fontWeight: '600',
       transition: 'all 0.2s',
     },
+    completedBadge: {
+      backgroundColor: '#2ecc71',
+      color: 'white',
+      padding: '6px 12px',
+      borderRadius: '4px',
+      fontSize: '12px',
+      fontWeight: '600',
+      display: 'inline-block',
+    },
     footerButtons: {
       display: 'flex',
       justifyContent: 'center',
@@ -1355,8 +1365,93 @@ function PendingPayment({ executiveFilter = null }) {
         </div>
       </div>
 
-      {/* Filter Container - Keep the rest of your existing filter UI */}
-      {/* ... (rest of your existing JSX) ... */}
+      {/* Filter Container */}
+      <div style={styles.filterContainer}>
+        <div style={styles.searchContainer}>
+          <input
+            type="text"
+            placeholder="Search orders..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={styles.searchInput}
+          />
+        </div>
+        
+        <div style={styles.filterModeContainer}>
+          <button
+            onClick={() => handleFilterModeChange(false)}
+            style={{
+              ...styles.filterModeButton,
+              backgroundColor: !useDateFilter ? '#3498db' : '#ecf0f1',
+              color: !useDateFilter ? 'white' : '#2c3e50',
+            }}
+          >
+            Month/Year Filter
+          </button>
+          <button
+            onClick={() => handleFilterModeChange(true)}
+            style={{
+              ...styles.filterModeButton,
+              backgroundColor: useDateFilter ? '#3498db' : '#ecf0f1',
+              color: useDateFilter ? 'white' : '#2c3e50',
+            }}
+          >
+            Date Filter
+          </button>
+        </div>
+
+        {useDateFilter ? (
+          <div style={styles.dateFilterContainer}>
+            <div style={styles.dateInputWrapper}>
+              <span style={styles.calendarIcon}>📅</span>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                style={styles.dateInput}
+              />
+            </div>
+            <button onClick={clearDateFilter} style={styles.clearFilterButton}>
+              Clear Date
+            </button>
+          </div>
+        ) : (
+          <div style={styles.yearMonthContainer}>
+            <div style={styles.selectWrapper}>
+              <label htmlFor="year-select" style={styles.filterLabel}>Year:</label>
+              <select
+                id="year-select"
+                value={year}
+                onChange={(e) => setYear(parseInt(e.target.value))}
+                style={styles.filterSelect}
+              >
+                {years.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div style={styles.selectWrapper}>
+              <label htmlFor="month-select" style={styles.filterLabel}>Month:</label>
+              <select
+                id="month-select"
+                value={selectedMonth !== null ? selectedMonth + 1 : ''}
+                onChange={(e) => setSelectedMonth(e.target.value ? parseInt(e.target.value) - 1 : null)}
+                style={styles.filterSelect}
+              >
+                <option value="">All Months</option>
+                {monthLabels.map((month, index) => (
+                  <option key={month} value={index + 1}>{month}</option>
+                ))}
+              </select>
+            </div>
+            
+            <button onClick={clearMonthYearFilter} style={styles.clearFilterButton}>
+              Clear Month/Year
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Table */}
       <div 
@@ -1391,6 +1486,7 @@ function PendingPayment({ executiveFilter = null }) {
               filteredOrders.map((order, index) => {
                 const latestFollowUp = getLatestFollowUp(order);
                 const followUpCount = order.followUps?.length || 0;
+                const isCompleted = order.balance <= 0;
 
                 return (
                   <tr key={order?._id || index} style={index % 2 === 0 ? styles.evenRow : styles.oddRow}>
@@ -1428,31 +1524,36 @@ function PendingPayment({ executiveFilter = null }) {
                     </td>
                     <td style={styles.td}>
                       <div style={styles.actionButtons}>
-                        {/* Only show Pay button for pending orders */}
-                        {filterType === 'pending' && order.balance > 0 && (
-                          <button
-                            onClick={() => handleRecordPayment(order)}
-                            style={styles.payButton}
-                            title="Record Payment"
-                          >
-                            Pay
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleFollowUp(order)}
-                          style={styles.followUpButton}
-                          title="Add Follow-up"
-                        >
-                          Follow-up
-                        </button>
-                        {followUpCount > 0 && (
-                          <button
-                            onClick={() => handleViewFollowUps(order)}
-                            style={styles.viewButton}
-                            title="View Follow-ups"
-                          >
-                            View
-                          </button>
+                        {isCompleted ? (
+                          <span style={styles.completedBadge}>Completed</span>
+                        ) : (
+                          <>
+                            {filterType === 'pending' && order.balance > 0 && (
+                              <button
+                                onClick={() => handleRecordPayment(order)}
+                                style={styles.payButton}
+                                title="Record Payment"
+                              >
+                                Pay
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleFollowUp(order)}
+                              style={styles.followUpButton}
+                              title="Add Follow-up"
+                            >
+                              Follow-up
+                            </button>
+                            {followUpCount > 0 && (
+                              <button
+                                onClick={() => handleViewFollowUps(order)}
+                                style={styles.viewButton}
+                                title="View Follow-ups"
+                              >
+                                View
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>

@@ -15,23 +15,26 @@ function PendingService() {
   const navigate = useNavigate();
   
   const [searchParams, setSearchParams] = useSearchParams();
-  useEffect(() => {
-  const statusFromUrl = searchParams.get('status');
-  if (statusFromUrl) {
-    setStatusFilter(statusFromUrl);
-  }
-}, [searchParams]);
+  const currentDate = new Date();
+  
+  // Initialize filters from URL or defaults (default to current month/year)
   const [year, setYear] = useState(() => {
     const urlYear = searchParams.get('year');
-    return urlYear ? parseInt(urlYear) : new Date().getFullYear();
+    // If URL has a year, use it, otherwise use current year
+    return urlYear ? urlYear : currentDate.getFullYear().toString();
   });
   
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const urlMonth = searchParams.get('month');
-    return urlMonth ? parseInt(urlMonth) - 1 : new Date().getMonth();
+    // If URL has a month, use it, otherwise use current month
+    return urlMonth ? urlMonth : (currentDate.getMonth() + 1).toString();
   });
   
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const urlStatus = searchParams.get('status');
+    return urlStatus || 'all';
+  });
+  
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const tableContainerRef = useRef(null);
@@ -53,11 +56,10 @@ function PendingService() {
     { value: 'completed', label: 'Completed' }
   ];
 
-  const years = [];
-  const currentYear = new Date().getFullYear();
-  for (let y = currentYear - 5; y <= currentYear + 5; y++) {
-    years.push(y);
-  }
+  const years = ['all', ...Array.from({ length: 11 }, (_, i) => {
+    const currentYear = new Date().getFullYear();
+    return currentYear - 5 + i;
+  })];
 
   // Check if screen is mobile
   useEffect(() => {
@@ -72,6 +74,13 @@ function PendingService() {
   }, []);
 
   useEffect(() => {
+    const statusFromUrl = searchParams.get('status');
+    if (statusFromUrl) {
+      setStatusFilter(statusFromUrl);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     fetchOrders();
   }, []);
 
@@ -82,19 +91,23 @@ function PendingService() {
   useEffect(() => {
     const params = new URLSearchParams();
     
-    if (year) {
+    if (year && year !== 'all') {
       params.set('year', year.toString());
     }
     
-    if (selectedMonth !== null) {
-      params.set('month', (selectedMonth + 1).toString());
+    if (selectedMonth && selectedMonth !== 'all') {
+      params.set('month', selectedMonth.toString());
+    }
+    
+    if (statusFilter && statusFilter !== 'all') {
+      params.set('status', statusFilter);
     }
     
     const currentParams = new URLSearchParams(window.location.search);
     if (params.toString() !== currentParams.toString()) {
       setSearchParams(params);
     }
-  }, [year, selectedMonth, setSearchParams]);
+  }, [year, selectedMonth, statusFilter, setSearchParams]);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -128,6 +141,7 @@ function PendingService() {
 
     let result = [...orders];
 
+    // Apply year and month filters
     result = result.map(order => {
       const filteredRows = order.rows.filter(row => {
         try {
@@ -135,12 +149,20 @@ function PendingService() {
           
           if (isNaN(deliveryDate.getTime())) return false;
           
-          if (deliveryDate.getFullYear() !== year) {
-            return false;
+          // Apply year filter (if not 'all')
+          if (year !== 'all') {
+            const yearNum = parseInt(year);
+            if (deliveryDate.getFullYear() !== yearNum) {
+              return false;
+            }
           }
           
-          if (selectedMonth !== null && deliveryDate.getMonth() !== selectedMonth) {
-            return false;
+          // Apply month filter (if not 'all')
+          if (selectedMonth !== 'all') {
+            const monthNum = parseInt(selectedMonth) - 1; // Convert to 0-based
+            if (deliveryDate.getMonth() !== monthNum) {
+              return false;
+            }
           }
           
           return true;
@@ -153,34 +175,36 @@ function PendingService() {
       return { ...order, rows: filteredRows };
     }).filter(order => order.rows.length > 0);
 
+    // Apply status filter
     if (statusFilter !== 'all') {
       result = result.map(order => {
         const filteredRows = order.rows.filter(row => {
-          const currentRemark = row.remark || 'pending';
+          const currentRemark = row.remark ? row.remark.toLowerCase() : 'pending';
           
           if (statusFilter === 'pending') {
-            return currentRemark === 'Pending' || currentRemark === 'pending' || !currentRemark;
+            return currentRemark === 'pending' || currentRemark === '' || !currentRemark;
           }
           
           if (statusFilter === 'assigned to') {
-            return currentRemark.toLowerCase().includes('assigned to');
+            return currentRemark.includes('assigned to');
           }
           
           if (statusFilter === 'updated') {
-            return currentRemark.toLowerCase().includes('updated:');
+            return currentRemark.includes('updated:');
           }
           
           if (statusFilter === 'completed') {
-            return row.isCompleted === true || currentRemark.toLowerCase() === 'completed';
+            return currentRemark === 'completed';
           }
           
-          return currentRemark.toLowerCase() === statusFilter.toLowerCase();
+          return currentRemark === statusFilter.toLowerCase();
         });
         
         return { ...order, rows: filteredRows };
       }).filter(order => order.rows.length > 0);
     }
 
+    // Apply search filter
     if (searchTerm) {
       result = result.map(order => {
         const filteredRows = order.rows.filter(row => {
@@ -303,14 +327,6 @@ function PendingService() {
   };
 
   const startEditingRemark = (orderId, rowIndex, currentRemark) => {
-    const isRowCompleted = currentRemark === 'completed' || 
-                          (orders.find(order => order._id === orderId)?.rows[rowIndex]?.isCompleted === true);
-    
-    if (isRowCompleted) {
-      alert('This service is already completed and cannot be edited.');
-      return;
-    }
-    
     setEditingRemark({ orderId, rowIndex });
     
     if (currentRemark && currentRemark.includes('assigned to')) {
@@ -357,7 +373,20 @@ function PendingService() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'PendingServices');
     
-    XLSX.writeFile(workbook, `pending_services_${monthLabels[selectedMonth]}_${year}.xlsx`);
+    let filename = 'pending_services';
+    if (selectedMonth !== 'all') {
+      filename += `_${monthLabels[parseInt(selectedMonth) - 1]}`;
+    } else {
+      filename += `_AllMonths`;
+    }
+    if (year !== 'all') {
+      filename += `_${year}`;
+    } else {
+      filename += `_AllYears`;
+    }
+    filename += '.xlsx';
+    
+    XLSX.writeFile(workbook, filename);
   };
 
   const formatDate = (dateString) => {
@@ -400,7 +429,36 @@ function PendingService() {
     }
   };
 
-  const getRemarkStyle = (remark, isCompletedFlag = false) => {
+  const getFilterDisplayText = () => {
+    let text = '';
+    
+    if (year === 'all' && selectedMonth === 'all') {
+      text = 'All Time';
+    } else if (year === 'all') {
+      text = `All Years, ${monthLabels[parseInt(selectedMonth) - 1]}`;
+    } else if (selectedMonth === 'all') {
+      text = `${year} - All Months`;
+    } else {
+      text = `${monthLabels[parseInt(selectedMonth) - 1]} ${year}`;
+    }
+    
+    return text;
+  };
+
+  const resetToCurrentMonth = () => {
+    const currentDate = new Date();
+    setYear(currentDate.getFullYear().toString());
+    setSelectedMonth((currentDate.getMonth() + 1).toString());
+  };
+
+  const clearAllFilters = () => {
+    setYear('all');
+    setSelectedMonth('all');
+    setStatusFilter('all');
+    setSearchTerm('');
+  };
+
+  const getRemarkStyle = (remark = false) => {
     const baseStyle = {
       padding: '4px 8px',
       borderRadius: '4px',
@@ -409,88 +467,74 @@ function PendingService() {
       textAlign: 'center',
       color: 'white',
       fontWeight: 'bold',
-      fontSize: isMobile ? '12px' : '14px'
+      fontSize: isMobile ? '12px' : '14px',
+      cursor: 'pointer', // Always pointer cursor
     };
 
-    if (isCompletedFlag || remark === 'completed') {
+    // Check for specific statuses - convert to lowercase for comparison
+    const remarkLower = remark ? remark.toLowerCase() : '';
+    
+    if (remarkLower === 'completed') {
       return {
         ...baseStyle,
         backgroundColor: '#2ecc71',
-        cursor: 'default',
       };
     }
 
-    if (!remark || remark === 'Pending' || remark === 'pending') {
+    if (!remark || remarkLower === 'pending' || remarkLower === '') {
       return {
         ...baseStyle,
         backgroundColor: '#f39c12',
-        cursor: 'pointer',
       };
     }
 
-    if (remark.includes('assigned to')) {
+    if (remarkLower.includes('assigned to')) {
       return {
         ...baseStyle,
         backgroundColor: '#3498db',
-        cursor: 'pointer',
       };
     }
 
-    if (remark.includes('updated:')) {
+    if (remarkLower.includes('updated:')) {
       return {
         ...baseStyle,
         backgroundColor: '#9b59b6',
-        cursor: 'pointer',
       };
     }
 
-    if (remark === 'design pending') {
+    if (remarkLower === 'design pending') {
       return {
         ...baseStyle,
         backgroundColor: '#e67e22',
-        cursor: 'pointer',
       };
     }
 
-    if (remark === 'printing') {
+    if (remarkLower === 'printing') {
       return {
         ...baseStyle,
         backgroundColor: '#e74c3c',
-        cursor: 'pointer',
       };
     }
 
-    if (remark === 'installation pending') {
+    if (remarkLower === 'installation pending') {
       return {
         ...baseStyle,
         backgroundColor: '#34495e',
-        cursor: 'pointer',
       };
     }
 
-    if (remark === 'onboarding') {
+    if (remarkLower === 'onboarding') {
       return {
         ...baseStyle,
         backgroundColor: '#1abc9c',
-        cursor: 'pointer',
       };
     }
 
+    // Default style for unknown statuses
     return {
       ...baseStyle,
       backgroundColor: '#95a5a6',
-      cursor: 'pointer',
     };
-  };
-
-  const isRowCompleted = (row) => {
-    return row.isCompleted === true || row.remark === 'completed';
-  };
-
-  const resetToCurrentMonth = () => {
-    const currentDate = new Date();
-    setYear(currentDate.getFullYear());
-    setSelectedMonth(currentDate.getMonth());
   };
 
   // Responsive column widths
@@ -659,6 +703,21 @@ function PendingService() {
         backgroundColor: '#2980b9',
       }
     },
+    clearAllButton: {
+      padding: isMobile ? '6px 10px' : '8px 12px',
+      backgroundColor: '#6c757d',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: isMobile ? '14px' : '14px',
+      fontWeight: '600',
+      transition: 'all 0.2s',
+      width: isMobile ? '100%' : 'auto',
+      ':hover': {
+        backgroundColor: '#5a6268',
+      }
+    },
     currentFilterInfo: {
       textAlign: 'center',
       padding: '8px',
@@ -666,6 +725,19 @@ function PendingService() {
       borderRadius: '4px',
       color: '#2c3e50',
       fontSize: isMobile ? '13px' : '14px',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: '10px',
+    },
+    filterBadge: {
+      backgroundColor: '#3498db',
+      color: 'white',
+      padding: '2px 8px',
+      borderRadius: '12px',
+      fontSize: '12px',
+      marginLeft: '5px',
     },
     loading: {
       textAlign: 'center',
@@ -784,6 +856,7 @@ function PendingService() {
       justifyContent: 'center',
       gap: isMobile ? '10px' : '15px',
       marginTop: '20px',
+      flexWrap: 'wrap',
     },
     excelButton: {
       backgroundColor: '#16a085',
@@ -907,7 +980,7 @@ function PendingService() {
     <div style={styles.container}>
       <h2 style={styles.title}>
         Service Management
-        {selectedMonth !== null && ` - ${monthLabels[selectedMonth]} ${year}`}
+        {year !== 'all' || selectedMonth !== 'all' ? ` - ${getFilterDisplayText()}` : ''}
       </h2>
 
       <div style={styles.filterContainer}>
@@ -930,12 +1003,12 @@ function PendingService() {
               <select
                 id="year-select"
                 value={year}
-                onChange={(e) => setYear(parseInt(e.target.value))}
+                onChange={(e) => setYear(e.target.value)}
                 style={styles.filterSelect}
               >
                 {years.map((y) => (
                   <option key={y} value={y}>
-                    {y}
+                    {y === 'all' ? 'ALL YEARS' : y}
                   </option>
                 ))}
               </select>
@@ -947,10 +1020,11 @@ function PendingService() {
               </label>
               <select
                 id="month-select"
-                value={selectedMonth + 1}
-                onChange={(e) => setSelectedMonth(parseInt(e.target.value) - 1)}
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
                 style={styles.filterSelect}
               >
+                <option value="all">ALL MONTHS</option>
                 {monthLabels.map((month, index) => (
                   <option key={month} value={index + 1}>
                     {month}
@@ -995,14 +1069,31 @@ function PendingService() {
                 Clear Status
               </button>
             )}
+            
+            {(year !== 'all' || selectedMonth !== 'all' || statusFilter !== 'all' || searchTerm) && (
+              <button 
+                onClick={clearAllFilters}
+                style={styles.clearAllButton}
+              >
+                Clear All Filters
+              </button>
+            )}
           </div>
         </div>
 
         <div style={styles.currentFilterInfo}>
-          Currently showing: <strong>{monthLabels[selectedMonth]} {year}</strong>
-          {statusFilter !== 'all' && (
-            <span> | Status: <strong>{statusOptions.find(opt => opt.value === statusFilter)?.label}</strong></span>
-          )}
+          <span>
+            Currently showing: <strong>{getFilterDisplayText()}</strong>
+            {statusFilter !== 'all' && (
+              <span> | Status: <strong>{statusOptions.find(opt => opt.value === statusFilter)?.label}</strong></span>
+            )}
+            {searchTerm && (
+              <span> | Search: <strong>"{searchTerm}"</strong></span>
+            )}
+          </span>
+          <span style={styles.filterBadge}>
+            {filteredOrders.reduce((total, order) => total + order.rows.length, 0)} services
+          </span>
         </div>
       </div>
 
@@ -1036,15 +1127,15 @@ function PendingService() {
                 {filteredOrders.length === 0 ? (
                   <tr>
                     <td colSpan="13" style={styles.noData}>
-                      No services found for {monthLabels[selectedMonth]} {year}
+                      No services found for {getFilterDisplayText()}
                       {statusFilter !== 'all' ? ` with status "${statusOptions.find(opt => opt.value === statusFilter)?.label}"` : ''}
                     </td>
                   </tr>
                 ) : (
                   filteredOrders.map((order, orderIndex) =>
                     order.rows.map((row, rowIndex) => {
-                      const isCompleted = isRowCompleted(row);
                       const rowBgColor = (orderIndex + rowIndex) % 2 === 0 ? '#ffffff' : '#f8f9fa';
+                      const isCompleted = row.remark === 'completed';
                       const completedBgColor = '#d4edda';
                       const backgroundColor = isCompleted ? completedBgColor : rowBgColor;
                       
@@ -1202,12 +1293,12 @@ function PendingService() {
                               </div>
                             ) : (
                               <div 
-                                onClick={() => !isCompleted && startEditingRemark(order._id, rowIndex, row.remark || 'Pending')}
-                                style={getRemarkStyle(row.remark || 'Pending', isCompleted)}
-                                title={isCompleted ? "Completed - Cannot edit" : "Click to edit remark"}
+                                onClick={() => startEditingRemark(order._id, rowIndex, row.remark || 'Pending')}
+                                style={getRemarkStyle(row.remark || 'Pending')}
+                                title="Click to edit remark"
                               >
                                 {row.remark || 'Pending'}
-                                {isCompleted && ' ✓'}
+                                {row.remark === 'completed' && ' ✓'}
                               </div>
                             )}
                           </td>
@@ -1237,8 +1328,13 @@ function PendingService() {
           Refresh Data
         </button>
         <button onClick={resetToCurrentMonth} style={styles.currentMonthButton}>
-          Show Current Month
+          Current Month
         </button>
+        {(year !== 'all' || selectedMonth !== 'all' || statusFilter !== 'all' || searchTerm) && (
+          <button onClick={clearAllFilters} style={styles.clearAllButton}>
+            Clear All
+          </button>
+        )}
       </div>
     </div>
   );
