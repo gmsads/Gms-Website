@@ -20,7 +20,7 @@ const parseDate = (dateValue) => {
 // Dashboard chart data endpoint
 router.get('/chart-data', async (req, res) => {
   try {
-    const { year, month } = req.query;
+    const { year, month, startDate, endDate } = req.query;
     
     // Parse year - handle 'all' case
     let selectedYear = null;
@@ -30,29 +30,47 @@ router.get('/chart-data', async (req, res) => {
     
     const selectedMonth = month && month !== 'undefined' && month !== 'null' ? parseInt(month) - 1 : null; // 0-11
     
-    // Create date range based on year and month
-    let startDate, endDate;
+    // Parse date range if provided
+    let rangeStartDate = null;
+    let rangeEndDate = null;
     
-    if (selectedYear && selectedMonth !== null) {
+    if (startDate && endDate && startDate !== 'undefined' && endDate !== 'undefined') {
+      rangeStartDate = new Date(startDate);
+      rangeStartDate.setHours(0, 0, 0, 0);
+      
+      rangeEndDate = new Date(endDate);
+      rangeEndDate.setHours(23, 59, 59, 999);
+      
+      console.log(`Filtering by date range: ${rangeStartDate} to ${rangeEndDate}`);
+    }
+    
+    // Create date range based on year/month or date range
+    let startDateTime, endDateTime;
+    
+    if (rangeStartDate && rangeEndDate) {
+      // Use date range if provided
+      startDateTime = rangeStartDate;
+      endDateTime = rangeEndDate;
+    } else if (selectedYear && selectedMonth !== null) {
       // Specific month and year
-      startDate = new Date(selectedYear, selectedMonth, 1);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(selectedYear, selectedMonth + 1, 1);
-      endDate.setHours(0, 0, 0, 0);
-      console.log(`Filtering for: ${selectedYear}-${selectedMonth + 1}`, { startDate, endDate });
+      startDateTime = new Date(selectedYear, selectedMonth, 1);
+      startDateTime.setHours(0, 0, 0, 0);
+      endDateTime = new Date(selectedYear, selectedMonth + 1, 1);
+      endDateTime.setHours(0, 0, 0, 0);
+      console.log(`Filtering for: ${selectedYear}-${selectedMonth + 1}`, { startDateTime, endDateTime });
     } else if (selectedYear) {
       // Whole year
-      startDate = new Date(selectedYear, 0, 1);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(selectedYear + 1, 0, 1);
-      endDate.setHours(0, 0, 0, 0);
-      console.log(`Filtering for year: ${selectedYear}`, { startDate, endDate });
+      startDateTime = new Date(selectedYear, 0, 1);
+      startDateTime.setHours(0, 0, 0, 0);
+      endDateTime = new Date(selectedYear + 1, 0, 1);
+      endDateTime.setHours(0, 0, 0, 0);
+      console.log(`Filtering for year: ${selectedYear}`, { startDateTime, endDateTime });
     } else {
       // ALL YEARS - fetch everything
-      startDate = new Date('2000-01-01');
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date('2100-01-01');
-      endDate.setHours(0, 0, 0, 0);
+      startDateTime = new Date('2000-01-01');
+      startDateTime.setHours(0, 0, 0, 0);
+      endDateTime = new Date('2100-01-01');
+      endDateTime.setHours(0, 0, 0, 0);
       console.log('Filtering for ALL years');
     }
 
@@ -106,9 +124,9 @@ router.get('/chart-data', async (req, res) => {
         if (!orderDate || isNaN(orderDate.getTime())) return false;
         
         // If ALL years selected, include all orders regardless of date
-        if (!selectedYear) return true;
+        if (!selectedYear && !rangeStartDate && !rangeEndDate) return true;
         
-        return orderDate >= startDate && orderDate < endDate;
+        return orderDate >= startDateTime && orderDate < endDateTime;
       } catch (e) {
         console.error('Error parsing date for order:', order._id, e);
         return false;
@@ -147,12 +165,14 @@ router.get('/chart-data', async (req, res) => {
       },
       timePeriod: {
         year: selectedYear || 'all',
-        month: selectedMonth !== null ? selectedMonth + 1 : null
+        month: selectedMonth !== null ? selectedMonth + 1 : null,
+        startDate: rangeStartDate,
+        endDate: rangeEndDate
       }
     };
 
-    // If a specific month is selected, calculate weekly data
-    if (selectedYear && selectedMonth !== null) {
+    // If a specific month is selected (not date range), calculate weekly data
+    if (!rangeStartDate && !rangeEndDate && selectedYear && selectedMonth !== null) {
       // Get the first day of the month
       const firstDayOfMonth = new Date(selectedYear, selectedMonth, 1);
       const lastDayOfMonth = new Date(selectedYear, selectedMonth + 1, 0);
@@ -236,8 +256,9 @@ router.get('/chart-data', async (req, res) => {
           result.agentOrdersByMonth[month]++;
         }
 
-        // If a specific month is selected, update weekly data
-        if (selectedYear && selectedMonth !== null && orderDate.getMonth() === selectedMonth && orderDate.getFullYear() === selectedYear) {
+        // If a specific month is selected (not date range), update weekly data
+        if (!rangeStartDate && !rangeEndDate && selectedYear && selectedMonth !== null && 
+            orderDate.getMonth() === selectedMonth && orderDate.getFullYear() === selectedYear) {
           const dayOfMonth = orderDate.getDate();
           const weekIndex = Math.floor((dayOfMonth - 1) / 7);
           
@@ -312,7 +333,7 @@ router.get('/chart-data', async (req, res) => {
     console.log('=== FINAL RESULTS ===');
     console.log('Total Orders by Month:', result.totalOrdersByMonth);
     console.log('Amount by Month:', result.amountByMonth);
-    if (selectedYear && selectedMonth !== null) {
+    if (selectedYear && selectedMonth !== null && !rangeStartDate && !rangeEndDate) {
       console.log('Weekly Orders:', result.weeklyOrders);
     }
 
@@ -332,7 +353,7 @@ router.get('/chart-data', async (req, res) => {
 // View orders endpoint with filtering
 router.get('/view-orders', async (req, res) => {
   try {
-    const { month, year, week, clientType } = req.query;
+    const { month, year, week, clientType, startDate, endDate } = req.query;
     
     // Parse year - handle 'all' case
     let selectedYear = null;
@@ -352,10 +373,26 @@ router.get('/view-orders', async (req, res) => {
       selectedWeek = parseInt(week);
     }
     
-    // Create date range
-    let startDate, endDate;
+    // Parse date range
+    let startDateTime = null;
+    let endDateTime = null;
     
-    if (selectedWeek && selectedYear && selectedMonth) {
+    if (startDate && endDate && startDate !== 'undefined' && endDate !== 'undefined') {
+      startDateTime = new Date(startDate);
+      startDateTime.setHours(0, 0, 0, 0);
+      
+      endDateTime = new Date(endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+    }
+    
+    // Create date range
+    let queryStartDate, queryEndDate;
+    
+    if (startDateTime && endDateTime) {
+      // Date range filter
+      queryStartDate = startDateTime;
+      queryEndDate = endDateTime;
+    } else if (selectedWeek && selectedYear && selectedMonth) {
       // Weekly view
       const monthStart = new Date(selectedYear, selectedMonth - 1, 1);
       const firstDay = monthStart.getDay(); // 0-6 (Sun-Sat)
@@ -364,27 +401,27 @@ router.get('/view-orders', async (req, res) => {
       const weekStart = new Date(selectedYear, selectedMonth - 1, 
         (selectedWeek - 1) * 7 - firstDay + 1 + (firstDay === 0 ? 1 : 0));
       
-      startDate = new Date(weekStart);
-      endDate = new Date(weekStart);
-      endDate.setDate(weekStart.getDate() + 7);
+      queryStartDate = new Date(weekStart);
+      queryEndDate = new Date(weekStart);
+      queryEndDate.setDate(weekStart.getDate() + 7);
     } else if (selectedMonth && selectedYear) {
       // Monthly view
-      startDate = new Date(selectedYear, selectedMonth - 1, 1);
-      endDate = new Date(selectedYear, selectedMonth, 1);
+      queryStartDate = new Date(selectedYear, selectedMonth - 1, 1);
+      queryEndDate = new Date(selectedYear, selectedMonth, 1);
     } else if (selectedYear) {
       // Yearly view
-      startDate = new Date(selectedYear, 0, 1);
-      endDate = new Date(selectedYear + 1, 0, 1);
+      queryStartDate = new Date(selectedYear, 0, 1);
+      queryEndDate = new Date(selectedYear + 1, 0, 1);
     } else {
       // ALL YEARS - no date filter
-      startDate = null;
-      endDate = null;
+      queryStartDate = null;
+      queryEndDate = null;
     }
 
     // Build query
     const query = {};
-    if (startDate && endDate) {
-      query.orderDate = { $gte: startDate, $lt: endDate };
+    if (queryStartDate && queryEndDate) {
+      query.orderDate = { $gte: queryStartDate, $lt: queryEndDate };
     }
     if (clientType && clientType !== 'undefined' && clientType !== 'null') {
       query.clientType = clientType;
@@ -421,7 +458,7 @@ router.get('/view-orders', async (req, res) => {
 // Prospective clients stats endpoint
 router.get('/prospective-clients/stats', async (req, res) => {
   try {
-    const { year, month } = req.query;
+    const { year, month, startDate, endDate } = req.query;
     
     // Parse year - handle 'all' case
     let selectedYear = null;
@@ -431,26 +468,41 @@ router.get('/prospective-clients/stats', async (req, res) => {
     
     const selectedMonth = month && month !== 'undefined' && month !== 'null' ? parseInt(month) : null;
     
-    // Build date filter
-    let startDate, endDate;
+    // Parse date range
+    let startDateTime = null;
+    let endDateTime = null;
     
-    if (selectedYear && selectedMonth) {
-      startDate = new Date(selectedYear, selectedMonth - 1, 1);
-      endDate = new Date(selectedYear, selectedMonth, 1);
+    if (startDate && endDate && startDate !== 'undefined' && endDate !== 'undefined') {
+      startDateTime = new Date(startDate);
+      startDateTime.setHours(0, 0, 0, 0);
+      
+      endDateTime = new Date(endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+    }
+    
+    // Build date filter
+    let queryStartDate, queryEndDate;
+    
+    if (startDateTime && endDateTime) {
+      queryStartDate = startDateTime;
+      queryEndDate = endDateTime;
+    } else if (selectedYear && selectedMonth) {
+      queryStartDate = new Date(selectedYear, selectedMonth - 1, 1);
+      queryEndDate = new Date(selectedYear, selectedMonth, 1);
     } else if (selectedYear) {
-      startDate = new Date(selectedYear, 0, 1);
-      endDate = new Date(selectedYear + 1, 0, 1);
+      queryStartDate = new Date(selectedYear, 0, 1);
+      queryEndDate = new Date(selectedYear + 1, 0, 1);
     } else {
       // ALL YEARS - fetch everything
-      startDate = new Date('2000-01-01');
-      endDate = new Date('2100-01-01');
+      queryStartDate = new Date('2000-01-01');
+      queryEndDate = new Date('2100-01-01');
     }
 
     // Import ProspectiveClient model
     const ProspectiveClient = require('../models/ProspectiveClient');
     
     const prospects = await ProspectiveClient.find({
-      createdAt: { $gte: startDate, $lt: endDate }
+      createdAt: { $gte: queryStartDate, $lt: queryEndDate }
     }).lean();
     
     // Count by status
@@ -462,7 +514,9 @@ router.get('/prospective-clients/stats', async (req, res) => {
       Lost: 0,
       timePeriod: {
         year: selectedYear || 'all',
-        month: selectedMonth || null
+        month: selectedMonth || null,
+        startDate: startDateTime,
+        endDate: endDateTime
       }
     };
 

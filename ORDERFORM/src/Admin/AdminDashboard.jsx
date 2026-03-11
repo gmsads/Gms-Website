@@ -43,8 +43,16 @@ function AdminDashboard() {
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
-  const [year, setYear] = useState(2026);
+const [year, setYear] = useState(() => {
+  const currentYear = new Date().getFullYear();
+  return currentYear;
+});
   const [selectedMonth, setSelectedMonth] = useState(null);
+
+  // Date range filter states
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [useDateRange, setUseDateRange] = useState(false);
 
   const [showWhatsAppDashboard, setShowWhatsAppDashboard] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -122,12 +130,19 @@ function AdminDashboard() {
       try {
         const params = new URLSearchParams();
 
-        if (year !== 'all') {
-          params.append('year', year);
-        }
+        // If date range is active, use start and end dates
+        if (useDateRange && startDate && endDate) {
+          params.append('startDate', startDate);
+          params.append('endDate', endDate);
+        } else {
+          // Otherwise use year/month filters
+          if (year !== 'all') {
+            params.append('year', year);
+          }
 
-        if (selectedMonth !== null) {
-          params.append('month', selectedMonth + 1);
+          if (selectedMonth !== null) {
+            params.append('month', selectedMonth + 1);
+          }
         }
 
         const [chartRes, prospectRes] = await Promise.all([
@@ -163,7 +178,7 @@ function AdminDashboard() {
       }
     };
     fetchDashboardData();
-  }, [year, selectedMonth]);
+  }, [year, selectedMonth, startDate, endDate, useDateRange]);
 
   useEffect(() => {
     const fetchUnreadCount = async () => {
@@ -218,7 +233,7 @@ function AdminDashboard() {
   const safeArray = (arr) => (Array.isArray(arr) ? arr : []);
 
   const pendingPayments = safeArray(chartData?.pendingPayments);
-
+  
   const appointments = safeArray(chartData?.appointments);
 
 
@@ -279,9 +294,25 @@ function AdminDashboard() {
   const handleClearFilters = () => {
     setYear('all');
     setSelectedMonth(null);
+    setStartDate('');
+    setEndDate('');
+    setUseDateRange(false);
+  };
+
+  const handleApplyDateRange = () => {
+    if (startDate && endDate) {
+      setUseDateRange(true);
+      setYear('all');
+      setSelectedMonth(null);
+    } else {
+      alert('Please select both start and end dates');
+    }
   };
 
   const getTimePeriodText = () => {
+    if (useDateRange && startDate && endDate) {
+      return `${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}`;
+    }
     if (selectedMonth !== null) {
       return `${monthLabels[selectedMonth]} ${year !== 'all' ? year : '(All Years)'}`;
     }
@@ -545,6 +576,25 @@ function AdminDashboard() {
       border: '1px solid #d9d9d9',
       borderRadius: '4px'
     },
+    dateInput: {
+      padding: '5px',
+      fontSize: '14px',
+      width: '130px',
+      border: '1px solid #d9d9d9',
+      borderRadius: '4px',
+      marginRight: '5px'
+    },
+    applyDateButton: {
+      padding: '5px 10px',
+      backgroundColor: '#28a745',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: '12px',
+      fontWeight: 'bold',
+      marginRight: '5px'
+    },
     chartContainer: {
       width: '100%',
       height: '220px',
@@ -654,7 +704,11 @@ function AdminDashboard() {
       fontSize: '14px',
       color: '#666',
       marginTop: '5px',
-      fontStyle: 'italic'
+      fontStyle: 'italic',
+      backgroundColor: '#f0f7ff',
+      padding: '8px',
+      borderRadius: '4px',
+      marginBottom: '15px'
     },
     clearButton: {
       padding: '5px 10px',
@@ -663,7 +717,6 @@ function AdminDashboard() {
       borderRadius: '4px',
       cursor: 'pointer',
       fontSize: '12px',
-      marginLeft: '10px',
       color: '#003366'
     },
     noDataMessage: {
@@ -1395,10 +1448,12 @@ function AdminDashboard() {
             <Outlet />
             {showDashboardCards && (
               <>
+                {/* Filter Section - All in one line */}
                 <div style={styles.yearSelectorWrapper}>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Year Filter */}
                     <label htmlFor="year-select" style={styles.yearSelectorLabel}>
-                      Select Year:
+                      Year:
                     </label>
                     <select
                       id="year-select"
@@ -1407,8 +1462,10 @@ function AdminDashboard() {
                         const selectedValue = e.target.value;
                         setYear(selectedValue === 'all' ? 'all' : parseInt(selectedValue));
                         setSelectedMonth(null);
+                        setUseDateRange(false);
                       }}
                       style={styles.yearSelector}
+                      disabled={useDateRange}
                     >
                       {years.map((y) => (
                         <option key={y} value={y}>
@@ -1417,8 +1474,9 @@ function AdminDashboard() {
                       ))}
                     </select>
 
+                    {/* Month Filter */}
                     <label htmlFor="month-select" style={styles.yearSelectorLabel}>
-                      Select Month:
+                      Month:
                     </label>
                     <select
                       id="month-select"
@@ -1426,8 +1484,10 @@ function AdminDashboard() {
                       onChange={(e) => {
                         const value = e.target.value;
                         setSelectedMonth(value ? parseInt(value) - 1 : null);
+                        setUseDateRange(false);
                       }}
                       style={styles.monthSelector}
+                      disabled={useDateRange}
                     >
                       <option value="">All Months</option>
                       {monthLabels.map((month, index) => (
@@ -1437,20 +1497,57 @@ function AdminDashboard() {
                       ))}
                     </select>
 
-                    <button
-                      onClick={handleClearFilters}
-                      style={styles.clearButton}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#e0e0e0';
+                    {/* Date Range Filter */}
+                    <label style={styles.yearSelectorLabel}>From:</label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => {
+                        setStartDate(e.target.value);
+                        if (e.target.value && endDate) {
+                          setUseDateRange(true);
+                          setYear('all');
+                          setSelectedMonth(null);
+                        }
                       }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#f0f0f0';
+                      style={styles.dateInput}
+                    />
+                    
+                    <label style={styles.yearSelectorLabel}>To:</label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => {
+                        setEndDate(e.target.value);
+                        if (startDate && e.target.value) {
+                          setUseDateRange(true);
+                          setYear('all');
+                          setSelectedMonth(null);
+                        }
                       }}
-                    >
-                      Clear Filters
-                    </button>
+                      style={styles.dateInput}
+                    />
+
+                    {/* Clear Filters Button */}
+                    {/* Clear Filters Button */}
+<button
+  onClick={handleClearFilters}
+  style={{
+    ...styles.clearButton,
+    marginTop: '-10px' // Add this line to align it properly
+  }}
+  onMouseEnter={(e) => {
+    e.currentTarget.style.backgroundColor = '#e0e0e0';
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.backgroundColor = '#f0f0f0';
+  }}
+>
+  Clear Filters
+</button>
                   </div>
 
+                  {/* Profile and Logout - on the right */}
                   <div style={styles.userControls}>
                     <div
                       style={styles.profileBadge}
@@ -1461,16 +1558,24 @@ function AdminDashboard() {
                         .map((w) => w[0]?.toUpperCase())
                         .join('')}
                     </div>
-                    <button
-                      style={styles.logoutButton}
-                      onClick={() => {
-                        localStorage.clear();
-                        window.location.replace('/');
-                      }}
-                    >
-                      Logout
-                    </button>
+                   <button
+  style={{
+    ...styles.logoutButton,
+    marginTop: '2px' // Add this line to align it properly
+  }}
+  onClick={() => {
+    localStorage.clear();
+    window.location.replace('/');
+  }}
+>
+  Logout
+</button>
                   </div>
+                </div>
+
+                {/* Active Filter Display */}
+                <div style={styles.timePeriodText}>
+                  Currently viewing: <strong>{getTimePeriodText()}</strong>
                 </div>
 
                 {loading ? (
@@ -1483,8 +1588,9 @@ function AdminDashboard() {
                   </div>
                 ) : (
                   <div style={styles.dashboardCards}>
+                    {/* All your existing chart components remain exactly the same */}
                     {/* Total Revenue Bar Chart */}
-                    <div
+                    <div 
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'revenue' ? styles.cardHover : {})
@@ -1519,48 +1625,48 @@ function AdminDashboard() {
                                   : safeArray(chartData?.amountByMonth),
                                 backgroundColor: selectedMonth !== null
                                   ? [
-                                    'rgba(49, 122, 176, 0.8)',
-                                    'rgba(49, 122, 176, 0.7)',
-                                    'rgba(49, 122, 176, 0.6)',
-                                    'rgba(49, 122, 176, 0.5)',
-                                    'rgba(49, 122, 176, 0.4)',
-                                  ]
+                                      'rgba(49, 122, 176, 0.8)',
+                                      'rgba(49, 122, 176, 0.7)',
+                                      'rgba(49, 122, 176, 0.6)',
+                                      'rgba(49, 122, 176, 0.5)',
+                                      'rgba(49, 122, 176, 0.4)',
+                                    ]
                                   : [
-                                    'rgba(49, 122, 176, 0.9)',
-                                    'rgba(49, 122, 176, 0.85)',
-                                    'rgba(49, 122, 176, 0.8)',
-                                    'rgba(49, 122, 176, 0.75)',
-                                    'rgba(49, 122, 176, 0.7)',
-                                    'rgba(49, 122, 176, 0.65)',
-                                    'rgba(49, 122, 176, 0.6)',
-                                    'rgba(49, 122, 176, 0.65)',
-                                    'rgba(49, 122, 176, 0.7)',
-                                    'rgba(49, 122, 176, 0.75)',
-                                    'rgba(49, 122, 176, 0.8)',
-                                    'rgba(49, 122, 176, 0.85)',
-                                  ],
+                                      'rgba(49, 122, 176, 0.9)',
+                                      'rgba(49, 122, 176, 0.85)',
+                                      'rgba(49, 122, 176, 0.8)',
+                                      'rgba(49, 122, 176, 0.75)',
+                                      'rgba(49, 122, 176, 0.7)',
+                                      'rgba(49, 122, 176, 0.65)',
+                                      'rgba(49, 122, 176, 0.6)',
+                                      'rgba(49, 122, 176, 0.65)',
+                                      'rgba(49, 122, 176, 0.7)',
+                                      'rgba(49, 122, 176, 0.75)',
+                                      'rgba(49, 122, 176, 0.8)',
+                                      'rgba(49, 122, 176, 0.85)',
+                                    ],
                                 borderColor: selectedMonth !== null
                                   ? [
-                                    'rgba(49, 122, 176, 1)',
-                                    'rgba(49, 122, 176, 0.9)',
-                                    'rgba(49, 122, 176, 0.8)',
-                                    'rgba(49, 122, 176, 0.7)',
-                                    'rgba(49, 122, 176, 0.6)',
-                                  ]
+                                      'rgba(49, 122, 176, 1)',
+                                      'rgba(49, 122, 176, 0.9)',
+                                      'rgba(49, 122, 176, 0.8)',
+                                      'rgba(49, 122, 176, 0.7)',
+                                      'rgba(49, 122, 176, 0.6)',
+                                    ]
                                   : [
-                                    'rgba(49, 122, 176, 1)',
-                                    'rgba(49, 122, 176, 0.95)',
-                                    'rgba(49, 122, 176, 0.9)',
-                                    'rgba(49, 122, 176, 0.85)',
-                                    'rgba(49, 122, 176, 0.8)',
-                                    'rgba(49, 122, 176, 0.75)',
-                                    'rgba(49, 122, 176, 0.7)',
-                                    'rgba(49, 122, 176, 0.75)',
-                                    'rgba(49, 122, 176, 0.8)',
-                                    'rgba(49, 122, 176, 0.85)',
-                                    'rgba(49, 122, 176, 0.9)',
-                                    'rgba(49, 122, 176, 0.95)',
-                                  ],
+                                      'rgba(49, 122, 176, 1)',
+                                      'rgba(49, 122, 176, 0.95)',
+                                      'rgba(49, 122, 176, 0.9)',
+                                      'rgba(49, 122, 176, 0.85)',
+                                      'rgba(49, 122, 176, 0.8)',
+                                      'rgba(49, 122, 176, 0.75)',
+                                      'rgba(49, 122, 176, 0.7)',
+                                      'rgba(49, 122, 176, 0.75)',
+                                      'rgba(49, 122, 176, 0.8)',
+                                      'rgba(49, 122, 176, 0.85)',
+                                      'rgba(49, 122, 176, 0.9)',
+                                      'rgba(49, 122, 176, 0.95)',
+                                    ],
                                 borderWidth: 1,
                                 borderRadius: 8,
                               }
@@ -1580,7 +1686,7 @@ function AdminDashboard() {
                                 cornerRadius: 8,
                                 padding: 12,
                                 callbacks: {
-                                  title: function (tooltipItems) {
+                                  title: function(tooltipItems) {
                                     const dataIndex = tooltipItems[0].dataIndex;
                                     if (selectedMonth !== null) {
                                       return `Week ${dataIndex + 1}`;
@@ -1628,7 +1734,7 @@ function AdminDashboard() {
                                 beginAtZero: true,
                                 grid: { color: 'rgba(49, 122, 176, 0.1)' },
                                 ticks: {
-                                  callback: function (value) {
+                                  callback: function(value) {
                                     if (value >= 10000000) {
                                       return (value / 10000000).toFixed(1) + 'Cr';
                                     } else if (value >= 100000) {
@@ -1645,39 +1751,39 @@ function AdminDashboard() {
                           }}
                         />
                       </div>
-
+                      
                       <div style={styles.number}>
-                        {selectedMonth !== null
+                        {selectedMonth !== null 
                           ? (() => {
-                            const amount = chartData?.amountByMonth?.[selectedMonth] || 0;
-                            if (amount >= 10000000) {
-                              return (amount / 10000000).toFixed(2) + 'Cr';
-                            } else if (amount >= 100000) {
-                              return (amount / 100000).toFixed(2) + 'L';
-                            } else {
-                              return amount.toLocaleString('en-IN');
-                            }
-                          })()
+                              const amount = chartData?.amountByMonth?.[selectedMonth] || 0;
+                              if (amount >= 10000000) {
+                                return (amount / 10000000).toFixed(2) + 'Cr';
+                              } else if (amount >= 100000) {
+                                return (amount / 100000).toFixed(2) + 'L';
+                              } else {
+                                return amount.toLocaleString('en-IN');
+                              }
+                            })()
                           : (() => {
-                            const total = safeArray(chartData?.amountByMonth).reduce((sum, amount) => sum + amount, 0);
-                            if (total >= 10000000) {
-                              return (total / 10000000).toFixed(2) + 'Cr';
-                            } else if (total >= 100000) {
-                              return (total / 100000).toFixed(2) + 'L';
-                            } else {
-                              return total.toLocaleString('en-IN');
-                            }
-                          })()
+                              const total = safeArray(chartData?.amountByMonth).reduce((sum, amount) => sum + amount, 0);
+                              if (total >= 10000000) {
+                                return (total / 10000000).toFixed(2) + 'Cr';
+                              } else if (total >= 100000) {
+                                return (total / 100000).toFixed(2) + 'L';
+                              } else {
+                                return total.toLocaleString('en-IN');
+                              }
+                            })()
                         }
                       </div>
-
+                      
                       <div style={styles.revenueSubtext}>
-                        {selectedMonth !== null
+                        {selectedMonth !== null 
                           ? `₹${(chartData?.amountByMonth?.[selectedMonth] || 0).toLocaleString('en-IN')}`
                           : `₹${safeArray(chartData?.amountByMonth).reduce((sum, amount) => sum + amount, 0).toLocaleString('en-IN')}`
                         }
                       </div>
-
+                      
                       {selectedMonth !== null && (
                         <button
                           onClick={(e) => {
@@ -1702,7 +1808,7 @@ function AdminDashboard() {
                     </div>
 
                     {/* Total Orders Bar Chart */}
-                    <div
+                    <div 
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'orders' ? styles.cardHover : {})
@@ -1807,7 +1913,7 @@ function AdminDashboard() {
                     </div>
 
                     {/* Payment Status Chart */}
-                    <div
+                    <div 
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'payment' ? styles.cardHover : {})
@@ -1841,8 +1947,8 @@ function AdminDashboard() {
                         />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-around', width: '100%', marginTop: '10px' }}>
-                        <div
-                          style={{ textAlign: 'center', cursor: 'pointer' }}
+                        <div 
+                          style={{ textAlign: 'center', cursor: 'pointer' }} 
                           onClick={(e) => {
                             e.stopPropagation();
                             handleChartClick('completed-payment');
@@ -1851,8 +1957,8 @@ function AdminDashboard() {
                           <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#27ae60' }}>{pendingPayments[0] || 0}</div>
                           <div style={{ fontSize: '12px', color: '#666' }}>Paid</div>
                         </div>
-                        <div
-                          style={{ textAlign: 'center', cursor: 'pointer' }}
+                        <div 
+                          style={{ textAlign: 'center', cursor: 'pointer' }} 
                           onClick={(e) => {
                             e.stopPropagation();
                             handleChartClick('pending-payment');
@@ -1868,13 +1974,14 @@ function AdminDashboard() {
                     </div>
 
                     {/* Service Status Chart */}
-                    <div
+                    <div 
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'service' ? styles.cardHover : {})
                       }}
                       onMouseEnter={() => setHoveredCard('service')}
                       onMouseLeave={() => setHoveredCard(null)}
+                      onClick={() => handleChartClick('pending-service')}
                     >
                       <div>
                         Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}
@@ -1952,6 +2059,7 @@ function AdminDashboard() {
                                       }
                                     }
                                   },
+                                  // Custom plugin to show percentage in center
                                   afterDraw: function (chart) {
                                     const width = chart.width;
                                     const height = chart.height;
@@ -1978,23 +2086,23 @@ function AdminDashboard() {
                                   if (elements && elements.length > 0) {
                                     const clickedIndex = elements[0].index;
                                     const clickedStatus = statusMap[clickedIndex];
-
+                                    
                                     // Build query parameters
                                     const queryParams = new URLSearchParams();
-
+                                    
                                     // Add status filter
                                     queryParams.append('status', clickedStatus.value);
-
+                                    
                                     // Add year filter if not 'all'
                                     if (year !== 'all') {
                                       queryParams.append('year', year.toString());
                                     }
-
+                                    
                                     // Add month filter if selected
                                     if (selectedMonth !== null) {
                                       queryParams.append('month', (selectedMonth + 1).toString());
                                     }
-
+                                    
                                     // Navigate to pending-service with filters
                                     navigate(`/admin-dashboard/pending-service?${queryParams.toString()}`);
                                   }
@@ -2013,8 +2121,9 @@ function AdminDashboard() {
                         Total Services
                       </div>
                     </div>
+
                     {/* Appointments PolarArea */}
-                    <div
+                    <div 
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'appointments' ? styles.cardHover : {})
@@ -2067,7 +2176,7 @@ function AdminDashboard() {
                     </div>
 
                     {/* Client Types Bar Chart - FIXED */}
-                    <div
+                    <div 
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'clientTypes' ? styles.cardHover : {})
@@ -2139,7 +2248,7 @@ function AdminDashboard() {
                     </div>
 
                     {/* Agent Orders Chart */}
-                    <div
+                    <div 
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'agentOrders' ? styles.cardHover : {})
@@ -2238,7 +2347,7 @@ function AdminDashboard() {
                     </div>
 
                     {/* Prospective Clients Doughnut */}
-                    <div
+                    <div 
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'prospective' ? styles.cardHover : {})

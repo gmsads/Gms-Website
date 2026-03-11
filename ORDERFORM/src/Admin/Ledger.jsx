@@ -12,6 +12,7 @@ const Ledger = () => {
   const [paymentSuccess, setPaymentSuccess] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activePaymentRow, setActivePaymentRow] = useState(null);
+  const [error, setError] = useState(null);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -36,12 +37,24 @@ const Ledger = () => {
     const fetchOrders = async () => {
       try {
         setLoading(true);
+        setError(null);
         const response = await fetch('/api/orders');
         if (!response.ok) {
           throw new Error('Failed to fetch orders');
         }
         const data = await response.json();
-        setAllOrders(data);
+        console.log('Fetched orders:', data.length);
+        
+        // Process orders to ensure they have all required fields
+        const processedOrders = data.map(order => ({
+          ...order,
+          advance: order.advance || 0,
+          balance: order.balance || 0,
+          paymentHistory: order.paymentHistory || [],
+          rows: order.rows || []
+        }));
+        
+        setAllOrders(processedOrders);
 
         const urlParams = new URLSearchParams(location.search);
         const businessFromUrl = urlParams.get('business');
@@ -49,11 +62,12 @@ const Ledger = () => {
         if (businessFromUrl) {
           const decodedBusiness = decodeURIComponent(businessFromUrl);
           setSearchTerm(decodedBusiness);
-          performSearch(data, decodedBusiness);
+          performSearch(processedOrders, decodedBusiness);
         }
       } catch (err) {
         console.error('Fetch error:', err);
-        alert('Failed to load orders');
+        setError(err.message);
+        alert('Failed to load orders: ' + err.message);
       } finally {
         setLoading(false);
       }
@@ -67,17 +81,9 @@ const Ledger = () => {
     return order.rows?.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0) || 0;
   };
 
-  // Calculate total advance for an order
-  const calculateTotalAdvance = (order) => {
-    return parseFloat(order.advance) || 0;
-  };
-
-  // Calculate total paid (advance + payment history)
+  // Calculate total paid (advance is the total paid amount)
   const calculateTotalPaid = (order) => {
-    const advance = parseFloat(order.advance) || 0;
-    const paymentHistoryTotal = order.paymentHistory?.reduce((sum, payment) => 
-      sum + (parseFloat(payment.amount) || 0), 0) || 0;
-    return advance + paymentHistoryTotal;
+    return parseFloat(order.advance) || 0;
   };
 
   // Calculate current balance for an order
@@ -109,24 +115,20 @@ const Ledger = () => {
   // Calculate client summary totals
   const calculateClientSummary = (orders) => {
     let totalOrderAmount = 0;
-    let totalAdvance = 0;
     let totalPaid = 0;
     let totalBalance = 0;
 
     orders.forEach(order => {
       const orderTotal = calculateTotal(order);
-      const orderAdvance = calculateTotalAdvance(order);
       const orderPaid = calculateTotalPaid(order);
       
       totalOrderAmount += orderTotal;
-      totalAdvance += orderAdvance;
       totalPaid += orderPaid;
       totalBalance += (orderTotal - orderPaid);
     });
 
     return {
       totalOrderAmount,
-      totalAdvance,
       totalPaid,
       totalBalance
     };
@@ -158,7 +160,6 @@ const Ledger = () => {
       timeline[business].orders.push(order);
 
       const orderTotal = calculateTotal(order);
-      const orderAdvance = calculateTotalAdvance(order);
       const orderPaid = calculateTotalPaid(order);
       const currentBalance = orderTotal - orderPaid;
 
@@ -168,24 +169,12 @@ const Ledger = () => {
         orderNo: order.orderNo,
         requirements: order.rows || [],
         totalAmount: orderTotal,
-        advance: orderAdvance,
         paid: orderPaid,
         balance: currentBalance,
         orderId: order._id,
         deliveryDate: order.deliveryDate,
         status: order.status
       });
-
-      if (order.advance > 0) {
-        timeline[business].timeline.push({
-          type: 'advance_payment',
-          date: order.advanceDate || order.orderDate,
-          orderNo: order.orderNo,
-          amount: order.advance,
-          method: 'Advance',
-          orderId: order._id
-        });
-      }
 
       if (order.paymentHistory && order.paymentHistory.length > 0) {
         order.paymentHistory.forEach(payment => {
@@ -280,18 +269,24 @@ const Ledger = () => {
 
   // Toggle payment form
   const togglePaymentRow = (orderId) => {
+    console.log('Toggling payment row for order:', orderId);
+    
     if (activePaymentRow === orderId) {
       setActivePaymentRow(null);
       setNewPayments(prev => ({ ...prev, [orderId]: {} }));
     } else {
       setActivePaymentRow(orderId);
-      const order = allOrders.find(o => o._id === orderId);
+      const order = allOrders.find(o => o._id === orderId) || 
+                   filteredOrders.find(o => o._id === orderId);
+      
       if (order) {
         const currentBalance = calculateCurrentBalance(order);
+        console.log('Setting payment data for order:', orderId, 'Balance:', currentBalance);
+        
         setNewPayments(prev => ({
           ...prev,
           [orderId]: {
-            amount: currentBalance,
+            amount: currentBalance > 0 ? currentBalance.toString() : '',
             method: '',
             date: new Date().toISOString().split('T')[0]
           }
@@ -300,55 +295,134 @@ const Ledger = () => {
     }
   };
 
-  // Apply payment
+  // FIXED: Apply payment with better error handling
   const applyPayment = async (orderId) => {
+    console.log('Applying payment for order:', orderId);
+    
     const payment = newPayments[orderId];
-    if (!payment?.amount || !payment.method) {
+    console.log('Payment data:', payment);
+    
+    if (!payment?.amount || !payment?.method) {
       alert("Please enter amount and select payment method");
       return;
     }
 
+    // Validate amount
+    const amount = parseFloat(payment.amount);
+    if (isNaN(amount) || amount <= 0) {
+      alert("Please enter a valid amount");
+      return;
+    }
+
+    // Find the current order to check balance
+    const currentOrder = allOrders.find(o => o._id === orderId) || 
+                         filteredOrders.find(o => o._id === orderId);
+    
+    if (!currentOrder) {
+      alert("Order not found");
+      return;
+    }
+
+    // Calculate current balance for validation
+    const currentBalance = calculateCurrentBalance(currentOrder);
+
+    // Validate payment amount doesn't exceed balance
+    if (amount > currentBalance + 0.01) { // Allow small floating point difference
+      alert(`Payment amount (₹${amount}) exceeds remaining balance (₹${currentBalance.toFixed(2)})`);
+      return;
+    }
+
     try {
-      const res = await fetch(`/api/orders/${orderId}/add-payment`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+      console.log('Sending payment request to:', `/api/orders/${orderId}/record-payment`);
+      console.log('Request payload:', {
+        amount: amount,
+        method: payment.method,
+        upiNumber: payment.upiNumber || '',
+        chequeNumber: payment.chequeNumber || '',
+        date: payment.date || new Date().toISOString().split('T')[0],
+        note: `Payment recorded from Ledger on ${new Date().toLocaleString()}`
+      });
+      
+      const res = await fetch(`/api/orders/${orderId}/record-payment`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          amount: parseFloat(payment.amount),
+          amount: amount,
           method: payment.method,
-          upiNumber: payment.upiNumber || undefined,
-          chequeNumber: payment.chequeNumber || undefined,
-          date: payment.date || new Date().toISOString()
+          upiNumber: payment.upiNumber || '',
+          chequeNumber: payment.chequeNumber || '',
+          date: payment.date || new Date().toISOString().split('T')[0],
+          note: `Payment recorded from Ledger on ${new Date().toLocaleString()}`
         })
       });
 
-      if (!res.ok) throw new Error('Failed to update payment');
+      // Get the response text first
+      const responseText = await res.text();
+      console.log('Raw response:', responseText);
 
-      const updatedOrder = await res.json();
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Failed to parse JSON response:', responseText);
+        throw new Error(`Server returned invalid response: ${responseText.substring(0, 100)}`);
+      }
 
+      console.log('Server response status:', res.status);
+      console.log('Server response data:', responseData);
+
+      if (!res.ok) {
+        throw new Error(responseData.error || responseData.message || `Server returned ${res.status}`);
+      }
+
+      if (!responseData.success) {
+        throw new Error(responseData.error || 'Failed to record payment');
+      }
+
+      // Get the updated order from response
+      const updatedOrder = responseData.order;
+      console.log('Payment added successfully, updated order:', updatedOrder);
+
+      // Create the full updated order object
+      const fullUpdatedOrder = {
+        ...currentOrder,
+        advance: updatedOrder.advance,
+        balance: updatedOrder.balance,
+        paymentHistory: updatedOrder.paymentHistory,
+        paymentDate: updatedOrder.paymentDate
+      };
+
+      // Show success message
       setPaymentSuccess({
         orderId,
-        message: `Payment of ₹${payment.amount} added successfully!`,
+        message: `Payment of ₹${amount} added successfully!`,
         balance: updatedOrder.balance
       });
 
       setTimeout(() => setPaymentSuccess(null), 5000);
 
-      const updateOrders = orders =>
-        orders.map(order => (order._id === orderId ? updatedOrder : order));
+      // Update orders in state
+      const updateOrders = (orders) =>
+        orders.map(order => order._id === orderId ? fullUpdatedOrder : order);
 
       const updatedAllOrders = updateOrders(allOrders);
       const updatedFilteredOrders = updateOrders(filteredOrders);
 
-      setFilteredOrders(updatedFilteredOrders);
       setAllOrders(updatedAllOrders);
+      setFilteredOrders(updatedFilteredOrders);
+      
+      // Update client timeline with new data
       setClientTimeline(organizeClientTimeline(updatedFilteredOrders));
 
+      // Clear payment form and close it
       setNewPayments(prev => ({ ...prev, [orderId]: {} }));
       setActivePaymentRow(null);
 
     } catch (err) {
       console.error('Payment update failed:', err);
-      alert('Failed to update payment. Please try again later.');
+      alert(`Failed to record payment: ${err.message}`);
     }
   };
 
@@ -489,9 +563,6 @@ const Ledger = () => {
           .payment-row { 
             background: #f0fff0; 
           }
-          .advance-row { 
-            background: #fff3cd; 
-          }
           .amount-positive { 
             color: #27ae60; 
             font-weight: bold; 
@@ -565,10 +636,6 @@ const Ledger = () => {
             <span>${formatCurrency(summary.totalOrderAmount)}</span>
           </div>
           <div class="summary-row">
-            <span>Total Advance:</span>
-            <span style="color: #f39c12;">${formatCurrency(summary.totalAdvance)}</span>
-          </div>
-          <div class="summary-row">
             <span>Total Paid:</span>
             <span style="color: #27ae60;">${formatCurrency(summary.totalPaid)}</span>
           </div>
@@ -600,9 +667,10 @@ const Ledger = () => {
     `;
 
     let tableRows = '';
+    let runningBalance = 0;
+    
     clientData.timeline.forEach((entry) => {
       const order = clientData.orders.find(o => o._id === entry.orderId);
-      const currentBalance = order ? calculateCurrentBalance(order) : 0;
       
       let description = '';
       if (entry.type === 'order') {
@@ -611,16 +679,15 @@ const Ledger = () => {
           description += `<li>${req.requirement} - ${req.quantity} × ₹${req.rate} = ₹${req.total}</li>`;
         });
         description += '</ul>';
-      } else if (entry.type === 'advance_payment') {
-        description = 'Advance Payment';
+        runningBalance = entry.balance;
       } else {
         description = 'Payment Received';
         if (entry.upiNumber) description += ` (UPI: ${entry.upiNumber})`;
         if (entry.chequeNumber) description += ` (Cheque: ${entry.chequeNumber})`;
+        runningBalance -= entry.amount;
       }
 
-      const rowClass = entry.type === 'order' ? 'order-row' : 
-                      entry.type === 'advance_payment' ? 'advance-row' : 'payment-row';
+      const rowClass = entry.type === 'order' ? 'order-row' : 'payment-row';
 
       tableRows += `
         <tr class="${rowClass}">
@@ -629,7 +696,7 @@ const Ledger = () => {
           <td>${description}</td>
           <td class="text-right">${formatCurrency(entry.totalAmount || entry.amount || 0)}</td>
           <td>${entry.method || '-'}</td>
-          <td class="text-right ${currentBalance > 0 ? 'amount-negative' : 'amount-positive'}">${formatCurrency(currentBalance)}</td>
+          <td class="text-right ${runningBalance > 0 ? 'amount-negative' : 'amount-positive'}">${formatCurrency(runningBalance)}</td>
         </tr>
       `;
     });
@@ -651,241 +718,200 @@ const Ledger = () => {
     printWindow.print();
   };
 
- // PDF DOWNLOAD FUNCTION - FINAL FIXED VERSION
-const handleDownloadClientPDF = (business, clientData) => {
+  // PDF DOWNLOAD FUNCTION
+  const handleDownloadClientPDF = (business, clientData) => {
+    try {
+      const summary = calculateClientSummary(clientData.orders);
+      const dateRange = getDateRange(clientData.timeline);
 
-  try {
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      doc.setFontSize(18);
+      doc.setTextColor(0, 51, 102);
+      doc.text('COMPLETE SALES LEDGER', 148, 15, { align: 'center' });
+      
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, 148, 22, { align: 'center' });
 
-    // ===== SUMMARY DATA =====
-    const summary = calculateClientSummary(clientData.orders);
-    const dateRange = getDateRange(clientData.timeline);
-
-    // ===== CURRENCY FORMAT =====
-    const formatCurrency = (amount) => {
-      return `Rs. ${Number(amount || 0).toLocaleString("en-IN", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      })}`;
-    };
-
-    // ===== CREATE PDF =====
-    const doc = new jsPDF({
-      orientation: "landscape",
-      unit: "mm",
-      format: "a4"
-    });
-
-    // ===== TITLE =====
-    doc.setFontSize(18);
-    doc.setTextColor(0, 51, 102);
-    doc.setFont(undefined, "bold");
-    doc.text("COMPLETE SALES LEDGER", 148, 15, { align: "center" });
-
-    // ===== GENERATED DATE =====
-    doc.setFontSize(8);
-    doc.setTextColor(120);
-    doc.setFont(undefined, "normal");
-    doc.text(
-      `Generated on: ${new Date().toLocaleString()}`,
-      148,
-      22,
-      { align: "center" }
-    );
-
-    // ===== CLIENT NAME =====
-    doc.setFontSize(12);
-    doc.setTextColor(0, 51, 102);
-    doc.setFont(undefined, "bold");
-    doc.text(business, 14, 32);
-
-    // ===== CLIENT DETAILS =====
-    doc.setFontSize(8);
-    doc.setTextColor(80);
-    doc.setFont(undefined, "normal");
-
-    const leftDetails = [
-      `Contact: ${clientData.clientInfo.contactPerson || "N/A"}`,
-      `Phone: ${clientData.clientInfo.contactCode || "+91"} ${clientData.clientInfo.phone || "N/A"}`,
-      `Type: ${clientData.clientInfo.clientType || "N/A"}`
-    ];
-
-    const rightDetails = [
-      `Address: ${clientData.clientInfo.address || "Hyd"}`,
-      `GSTIN: ${clientData.clientInfo.gstin || "N/A"}`,
-      `Orders: ${clientData.orders.length}`
-    ];
-
-    let yStart = 38;
-
-    leftDetails.forEach((text, i) => {
-      doc.text(text, 14, yStart + (i * 5));
-    });
-
-    rightDetails.forEach((text, i) => {
-      doc.text(text, 140, yStart + (i * 5));
-    });
-
-    // ===== FINANCIAL SUMMARY BOX =====
-    let summaryY = 58;
-
-    doc.setFillColor(235, 242, 250);
-    doc.rect(14, summaryY - 6, 268, 34, "F");
-
-    doc.setFontSize(10);
-    doc.setTextColor(0, 51, 102);
-    doc.setFont(undefined, "bold");
-    doc.text("FINANCIAL SUMMARY", 14, summaryY);
-
-    doc.setFontSize(8);
-    doc.setTextColor(0);
-    doc.setFont(undefined, "normal");
-
-    const leftSummary = [
-      { label: "Total Order Amount:", value: formatCurrency(summary.totalOrderAmount) },
-      { label: "Total Advance:", value: formatCurrency(summary.totalAdvance) },
-      { label: "Total Paid:", value: formatCurrency(summary.totalPaid) }
-    ];
-
-    const rightSummary = [
-      { label: "Outstanding Balance:", value: formatCurrency(summary.totalBalance) },
-      { label: "Period:", value: `${dateRange.start} - ${dateRange.end}` }
-    ];
-
-    let sY = summaryY + 6;
-
-    leftSummary.forEach((item, i) => {
-      doc.text(item.label, 20, sY + (i * 6));
-      doc.text(item.value, 110, sY + (i * 6), { align: "right" });
-    });
-
-    rightSummary.forEach((item, i) => {
-      doc.text(item.label, 150, sY + (i * 6));
-      doc.text(item.value, 260, sY + (i * 6), { align: "right" });
-    });
-
-    // ===== TRANSACTION TITLE =====
-    let tableStart = 100;
-
-    doc.setFontSize(10);
-    doc.setTextColor(0, 51, 102);
-    doc.setFont(undefined, "bold");
-    doc.text("TRANSACTION HISTORY", 14, tableStart);
-
-    tableStart += 4;
-
-    // ===== PREPARE TABLE DATA =====
-    const tableData = clientData.timeline.map((entry) => {
-
-      const order = clientData.orders.find(o => o._id === entry.orderId);
-      const currentBalance = order ? calculateCurrentBalance(order) : 0;
-
-      let description = "";
-
-      if (entry.type === "order") {
-        description = entry.requirements
-          .map(req => `${req.quantity} x ${req.requirement}`)
-          .join(", ");
-      }
-      else if (entry.type === "advance_payment") {
-        description = "ADVANCE PAYMENT";
-      }
-      else {
-        description = "PAYMENT RECEIVED";
-      }
-
-      return [
-        formatDateSafe(entry.date),
-        entry.orderNo,
-        description,
-        formatCurrency(entry.totalAmount || entry.amount || 0),
-        entry.method ? entry.method.toUpperCase() : "-",
-        formatCurrency(currentBalance)
+      doc.setFontSize(12);
+      doc.setTextColor(0, 51, 102);
+      doc.setFont(undefined, 'bold');
+      doc.text(business, 14, 30);
+      
+      doc.setFontSize(8);
+      doc.setTextColor(80, 80, 80);
+      doc.setFont(undefined, 'normal');
+      
+      let yPos = 35;
+      const clientDetails = [
+        `Contact: ${clientData.clientInfo.contactPerson || 'N/A'}`,
+        `Phone: ${clientData.clientInfo.contactCode || '+91'} ${clientData.clientInfo.phone || 'N/A'}`,
+        `Type: ${clientData.clientInfo.clientType || 'N/A'}`,
+        `Address: ${clientData.clientInfo.address || 'Hyd'}`,
+        `GSTIN: ${clientData.clientInfo.gstin || 'N/A'}`,
+        `Orders: ${clientData.orders.length}`
       ];
+      
+      const leftCol = clientDetails.slice(0, 3);
+      const rightCol = clientDetails.slice(3);
+      
+      leftCol.forEach((detail, index) => {
+        doc.text(detail, 14, yPos + (index * 4));
+      });
+      
+      rightCol.forEach((detail, index) => {
+        doc.text(detail, 100, yPos + (index * 4));
+      });
 
-    });
+      yPos = 55;
+      doc.setFillColor(240, 248, 255);
+      doc.rect(14, yPos - 4, 268, 35, 'F');
+      
+      doc.setFontSize(10);
+      doc.setTextColor(0, 51, 102);
+      doc.setFont(undefined, 'bold');
+      doc.text('FINANCIAL SUMMARY', 14, yPos);
+      
+      yPos += 6;
+      doc.setFontSize(8);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont(undefined, 'normal');
+      
+      const summaryItems = [
+        { label: 'Total Order Amount:', value: formatCurrency(summary.totalOrderAmount) },
+        { label: 'Total Paid:', value: formatCurrency(summary.totalPaid) },
+        { label: 'Outstanding Balance:', value: formatCurrency(summary.totalBalance) },
+        { label: 'Period:', value: `${dateRange.start} - ${dateRange.end}` }
+      ];
+      
+      const leftSummary = summaryItems.slice(0, 2);
+      const rightSummary = summaryItems.slice(2);
+      
+      leftSummary.forEach((item, index) => {
+        doc.text(item.label, 20, yPos + (index * 5));
+        doc.text(item.value, 80, yPos + (index * 5), { align: 'right' });
+      });
+      
+      rightSummary.forEach((item, index) => {
+        doc.text(item.label, 160, yPos + (index * 5));
+        doc.text(item.value, 240, yPos + (index * 5), { align: 'right' });
+      });
 
-    // ===== CREATE TABLE =====
-    autoTable(doc, {
+      yPos = 98;
+      doc.setFontSize(10);
+      doc.setTextColor(0, 51, 102);
+      doc.setFont(undefined, 'bold');
+      doc.text('TRANSACTION HISTORY', 14, yPos);
+      
+      yPos += 4;
 
-      startY: tableStart,
+      const tableData = clientData.timeline.map(entry => {
+        const order = clientData.orders.find(o => o._id === entry.orderId);
+        const currentBalance = order ? calculateCurrentBalance(order) : 0;
+        
+        let description = '';
+        if (entry.type === 'order') {
+          description = entry.requirements.map(req => 
+            `${req.quantity}×${req.requirement}`
+          ).join(', ');
+          if (description.length > 60) {
+            description = description.substring(0, 57) + '...';
+          }
+        } else {
+          description = 'PAYMENT RECEIVED';
+          if (entry.upiNumber) description += ` (UPI: ${entry.upiNumber})`;
+          if (entry.chequeNumber) description += ` (CHQ: ${entry.chequeNumber})`;
+        }
 
-      head: [
-        ["DATE", "ORDER NO", "DESCRIPTION", "AMOUNT", "METHOD", "BALANCE"]
-      ],
+        return [
+          formatDateSafe(entry.date),
+          entry.orderNo,
+          description,
+          formatCurrency(entry.totalAmount || entry.amount || 0),
+          entry.method?.toUpperCase() || '-',
+          formatCurrency(currentBalance)
+        ];
+      });
 
-      body: tableData,
+      autoTable(doc, {
+        startY: yPos,
+        head: [['DATE', 'ORDER NO', 'DESCRIPTION', 'AMOUNT', 'METHOD', 'BALANCE']],
+        body: tableData,
+        theme: 'grid',
+        styles: { 
+          fontSize: 7,
+          cellPadding: 2,
+          font: 'helvetica',
+          lineColor: [200, 200, 200],
+          lineWidth: 0.1,
+        },
+        headStyles: { 
+          fillColor: [0, 51, 102],
+          textColor: 255,
+          fontSize: 8,
+          fontStyle: 'bold',
+          halign: 'center',
+        },
+        columnStyles: {
+          0: { cellWidth: 30, halign: 'center' },
+          1: { cellWidth: 28, halign: 'center' },
+          2: { cellWidth: 95, halign: 'left' },
+          3: { cellWidth: 35, halign: 'right' },
+          4: { cellWidth: 30, halign: 'center' },
+          5: { cellWidth: 35, halign: 'right' }
+        },
+        margin: { left: 14, right: 14 },
+        didDrawPage: (data) => {
+          const pageCount = doc.internal.getNumberOfPages();
+          for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(6);
+            doc.setTextColor(128, 128, 128);
+            doc.text(
+              'This is a computer generated statement - Valid without signature',
+              148,
+              200,
+              { align: 'center' }
+            );
+            doc.text(
+              `Generated on ${new Date().toLocaleString()} | Page ${i} of ${pageCount}`,
+              148,
+              205,
+              { align: 'center' }
+            );
+          }
+        }
+      });
 
-      theme: "grid",
+      const filename = `${business.replace(/[^a-zA-Z0-9]/g, '_')}_ledger_${formatDateForFilename()}.pdf`;
+      doc.save(filename);
+      
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      alert('Failed to generate PDF. Error: ' + error.message);
+    }
+  };
 
-      styles: {
-        fontSize: 8,
-        cellPadding: 3,
-        overflow: "linebreak"
-      },
-
-      headStyles: {
-        fillColor: [0, 51, 102],
-        textColor: 255,
-        fontStyle: "bold",
-        halign: "center"
-      },
-
-      columnStyles: {
-        0: { cellWidth: 28, halign: "center" }, // DATE
-        1: { cellWidth: 30, halign: "center" }, // ORDER
-        2: { cellWidth: 95, halign: "left" },   // DESCRIPTION
-        3: { cellWidth: 32, halign: "right" },  // AMOUNT
-        4: { cellWidth: 30, halign: "center" }, // METHOD
-        5: { cellWidth: 32, halign: "right" }   // BALANCE
-      },
-
-      margin: { left: 14, right: 14 },
-
-      didDrawPage: function () {
-
-        const pageCount = doc.internal.getNumberOfPages();
-
-        doc.setFontSize(7);
-        doc.setTextColor(120);
-
-        doc.text(
-          "This is a computer generated statement - Valid without signature",
-          148,
-          200,
-          { align: "center" }
-        );
-
-        doc.text(
-          `Page ${doc.internal.getCurrentPageInfo().pageNumber} of ${pageCount}`,
-          148,
-          205,
-          { align: "center" }
-        );
-
-      }
-
-    });
-
-    // ===== SAVE FILE =====
-    const filename =
-      `${business.replace(/[^a-zA-Z0-9]/g, "_")}_ledger_${Date.now()}.pdf`;
-
-    doc.save(filename);
-
-  }
-  catch (error) {
-
-    console.error("PDF generation error:", error);
-
-    alert("Failed to generate PDF: " + error.message);
-
-  }
-
-};
   if (loading) {
     return (
       <div style={styles.loadingContainer}>
         <div style={styles.loadingText}>Loading ledger data...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={styles.errorContainer}>
+        <div style={styles.errorText}>Error: {error}</div>
+        <button onClick={() => window.location.reload()} style={styles.retryButton}>
+          Retry
+        </button>
       </div>
     );
   }
@@ -987,10 +1013,6 @@ const handleDownloadClientPDF = (business, clientData) => {
                     <span style={styles.summaryValue}>₹{summary.totalOrderAmount.toFixed(2)}</span>
                   </div>
                   <div style={styles.summaryRow}>
-                    <span style={styles.summaryLabel}>Total Advance:</span>
-                    <span style={{...styles.summaryValue, color: '#f39c12'}}>₹{summary.totalAdvance.toFixed(2)}</span>
-                  </div>
-                  <div style={styles.summaryRow}>
                     <span style={styles.summaryLabel}>Total Paid:</span>
                     <span style={{...styles.summaryValue, color: '#27ae60'}}>₹{summary.totalPaid.toFixed(2)}</span>
                   </div>
@@ -1032,9 +1054,7 @@ const handleDownloadClientPDF = (business, clientData) => {
                     return (
                       <React.Fragment key={index}>
                         <tr style={
-                          entry.type === 'order' ? styles.orderRow :
-                          entry.type === 'advance_payment' ? styles.advanceRow :
-                          styles.paymentRow
+                          entry.type === 'order' ? styles.orderRow : styles.paymentRow
                         }>
                           <td style={styles.tableCell}>{formatDateSafe(entry.date)}</td>
                           <td style={styles.tableCell}><strong>{entry.orderNo}</strong></td>
@@ -1048,7 +1068,7 @@ const handleDownloadClientPDF = (business, clientData) => {
                                 ))}
                               </div>
                             ) : (
-                              entry.type === 'advance_payment' ? 'Advance Payment' : 'Payment Received'
+                              'Payment Received'
                             )}
                           </td>
                           <td style={styles.tableCell}>
@@ -1113,13 +1133,16 @@ const handleDownloadClientPDF = (business, clientData) => {
                                   <div style={styles.inputGroup}>
                                     <input
                                       type="number"
-                                      placeholder="Amount"
-                                      value={newPayments[entry.orderId]?.amount || currentBalance}
-                                      onChange={e => handlePaymentChange(entry.orderId, 'amount', e.target.value)}
-                                      style={styles.inputSmall}
-                                      min="0.01"
                                       step="0.01"
+                                      min="0.01"
                                       max={currentBalance}
+                                      placeholder="Amount"
+                                      value={newPayments[entry.orderId]?.amount || ''}
+                                      onChange={(e) => {
+                                        const value = e.target.value;
+                                        handlePaymentChange(entry.orderId, 'amount', value);
+                                      }}
+                                      style={styles.inputSmall}
                                     />
                                     <select
                                       value={newPayments[entry.orderId]?.method || ''}
@@ -1145,7 +1168,6 @@ const handleDownloadClientPDF = (business, clientData) => {
                                         value={newPayments[entry.orderId]?.upiNumber || ''}
                                         onChange={e => handlePaymentChange(entry.orderId, 'upiNumber', e.target.value)}
                                         style={styles.inputSmall}
-                                        required
                                       >
                                         <option value="">Select UPI Number</option>
                                         <option value="9985330008@Chary">9985330008@Chary</option>
@@ -1162,7 +1184,6 @@ const handleDownloadClientPDF = (business, clientData) => {
                                         value={newPayments[entry.orderId]?.chequeNumber || ''}
                                         onChange={e => handlePaymentChange(entry.orderId, 'chequeNumber', e.target.value)}
                                         style={styles.inputSmall}
-                                        required
                                       />
                                     )}
 
@@ -1238,6 +1259,9 @@ const styles = {
     cursor: 'pointer',
     fontSize: '14px',
     fontWeight: '500',
+    ':hover': {
+      backgroundColor: '#5a6268',
+    },
   },
   title: {
     textAlign: 'center',
@@ -1267,6 +1291,9 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
+    ':hover': {
+      backgroundColor: '#138496',
+    },
   },
   downloadButton: {
     backgroundColor: '#28a745',
@@ -1280,6 +1307,9 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
+    ':hover': {
+      backgroundColor: '#218838',
+    },
   },
   container: {
     maxWidth: '1400px',
@@ -1300,6 +1330,31 @@ const styles = {
     fontSize: '18px',
     color: '#666',
   },
+  errorContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '200px',
+    gap: '20px',
+  },
+  errorText: {
+    fontSize: '18px',
+    color: '#dc3545',
+  },
+  retryButton: {
+    backgroundColor: '#003366',
+    color: 'white',
+    border: 'none',
+    padding: '10px 20px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '600',
+    ':hover': {
+      backgroundColor: '#002244',
+    },
+  },
   searchForm: {
     marginBottom: '30px',
   },
@@ -1314,6 +1369,10 @@ const styles = {
     borderRadius: '6px',
     border: '1px solid #ccc',
     boxSizing: 'border-box',
+    ':focus': {
+      outline: 'none',
+      borderColor: '#003366',
+    },
   },
   clearButton: {
     position: 'absolute',
@@ -1330,6 +1389,9 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    ':hover': {
+      background: '#999',
+    },
   },
   searchButton: {
     width: '100%',
@@ -1341,6 +1403,9 @@ const styles = {
     cursor: 'pointer',
     fontWeight: '600',
     fontSize: '16px',
+    ':hover': {
+      backgroundColor: '#002244',
+    },
   },
   resultsCount: {
     backgroundColor: '#e3f2fd',
@@ -1363,6 +1428,9 @@ const styles = {
     borderRadius: '4px',
     cursor: 'pointer',
     marginTop: '10px',
+    ':hover': {
+      backgroundColor: '#5a6268',
+    },
   },
   initialMessage: {
     textAlign: 'center',
@@ -1490,10 +1558,6 @@ const styles = {
     backgroundColor: '#f0fff0',
     borderLeft: '4px solid #28a745',
   },
-  advanceRow: {
-    backgroundColor: '#fff3cd',
-    borderLeft: '4px solid #ffc107',
-  },
   requirementsList: {
     display: 'flex',
     flexDirection: 'column',
@@ -1513,6 +1577,13 @@ const styles = {
     cursor: 'pointer',
     fontSize: '12px',
     fontWeight: '600',
+    ':hover': {
+      backgroundColor: '#218838',
+    },
+    ':disabled': {
+      backgroundColor: '#6c757d',
+      cursor: 'not-allowed',
+    },
   },
   cancelButton: {
     backgroundColor: '#dc3545',
@@ -1523,6 +1594,9 @@ const styles = {
     cursor: 'pointer',
     fontSize: '12px',
     fontWeight: '600',
+    ':hover': {
+      backgroundColor: '#c82333',
+    },
   },
   paymentFormCell: {
     padding: '15px',
@@ -1553,6 +1627,9 @@ const styles = {
     cursor: 'pointer',
     color: '#666',
     padding: '0 5px',
+    ':hover': {
+      color: '#333',
+    },
   },
   paymentFormContent: {
     display: 'flex',
@@ -1579,6 +1656,10 @@ const styles = {
     borderRadius: '6px',
     border: '1px solid #ccc',
     minWidth: '120px',
+    ':focus': {
+      outline: 'none',
+      borderColor: '#003366',
+    },
   },
   addButton: {
     backgroundColor: '#28a745',
@@ -1590,6 +1671,13 @@ const styles = {
     fontWeight: '600',
     fontSize: '14px',
     minWidth: '120px',
+    ':hover': {
+      backgroundColor: '#218838',
+    },
+    ':disabled': {
+      backgroundColor: '#6c757d',
+      cursor: 'not-allowed',
+    },
   },
   successMessage: {
     backgroundColor: '#d4edda',
@@ -1610,6 +1698,9 @@ const styles = {
     fontSize: '20px',
     fontWeight: 'bold',
     padding: '0 5px',
+    ':hover': {
+      color: '#0b5e2e',
+    },
   },
 };
 

@@ -173,83 +173,120 @@ router.post('/', uploadEmployee.single('image'), async (req, res) => {
   }
 });
 
-// Upload documents for employee
-router.post('/upload-documents', uploadDocuments.fields([
-  { name: 'aadhar', maxCount: 1 },
-  { name: 'pan', maxCount: 1 },
-  { name: 'educational', maxCount: 1 },
-  { name: 'experience', maxCount: 1 }
-]), async (req, res) => {
-  try {
-    const { name } = req.body;
-    
-    console.log('Uploading documents for:', name);
-    console.log('Files received:', req.files ? Object.keys(req.files) : 'No files');
-
-    // Find which model contains this employee
-    let foundEmployee = null;
-    let Model = null;
-    let foundRole = null;
-
-    for (const [roleName, model] of Object.entries(modelMap)) {
-      const emp = await model.findOne({ name: name });
-      if (emp) {
-        foundEmployee = emp;
-        Model = model;
-        foundRole = roleName;
-        break;
+// Upload documents for employee - FIXED VERSION
+router.post('/upload-documents', (req, res) => {
+  // Use uploadDocuments middleware with error handling
+  uploadDocuments.fields([
+    { name: 'aadhar', maxCount: 1 },
+    { name: 'pan', maxCount: 1 },
+    { name: 'educational', maxCount: 1 },
+    { name: 'experience', maxCount: 1 }
+  ])(req, res, async (err) => {
+    try {
+      // Handle multer/cloudinary errors
+      if (err) {
+        console.error('Upload middleware error:', err);
+        return res.status(400).json({
+          success: false,
+          message: err.message || 'File upload failed',
+          error: err.toString()
+        });
       }
-    }
 
-    if (!foundEmployee) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Employee not found' 
+      const { name } = req.body;
+      
+      console.log('========== DOCUMENT UPLOAD START ==========');
+      console.log('Uploading documents for:', name);
+      console.log('Files received:', req.files ? Object.keys(req.files) : 'No files');
+      console.log('Request body:', req.body);
+
+      // Validate required fields
+      if (!name) {
+        return res.status(400).json({
+          success: false,
+          message: 'Employee name is required'
+        });
+      }
+
+      // Find which model contains this employee
+      let foundEmployee = null;
+      let Model = null;
+      let foundRole = null;
+
+      for (const [roleName, model] of Object.entries(modelMap)) {
+        const emp = await model.findOne({ name: name });
+        if (emp) {
+          foundEmployee = emp;
+          Model = model;
+          foundRole = roleName;
+          console.log(`Found employee in model: ${roleName}`);
+          break;
+        }
+      }
+
+      if (!foundEmployee) {
+        console.log('Employee not found:', name);
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Employee not found' 
+        });
+      }
+
+      // Initialize documents object if it doesn't exist
+      const documents = foundEmployee.documents || {};
+
+      // Update document URLs with uploaded files
+      if (req.files) {
+        if (req.files.aadhar) {
+          documents.aadhar = req.files.aadhar[0].path;
+          console.log('Aadhar uploaded:', req.files.aadhar[0].path);
+        }
+        if (req.files.pan) {
+          documents.pan = req.files.pan[0].path;
+          console.log('PAN uploaded:', req.files.pan[0].path);
+        }
+        if (req.files.educational) {
+          documents.educational = req.files.educational[0].path;
+          console.log('Educational uploaded:', req.files.educational[0].path);
+        }
+        if (req.files.experience) {
+          documents.experience = req.files.experience[0].path;
+          console.log('Experience uploaded:', req.files.experience[0].path);
+        }
+      }
+
+      // Update employee with new document URLs
+      const updatedEmployee = await Model.findOneAndUpdate(
+        { name: name },
+        { $set: { documents } },
+        { new: true }
+      );
+
+      console.log('Documents uploaded successfully');
+      console.log('Updated documents:', documents);
+      console.log('========== DOCUMENT UPLOAD END ==========');
+
+      res.json({
+        success: true,
+        message: 'Documents uploaded successfully',
+        documents: documents
+      });
+
+    } catch (error) {
+      console.error('========== DOCUMENT UPLOAD ERROR ==========');
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      console.error('========== ERROR END ==========');
+
+      res.status(500).json({
+        success: false,
+        message: 'Failed to upload documents',
+        error: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
     }
-
-    // Initialize documents object if it doesn't exist
-    const documents = foundEmployee.documents || {};
-
-    // Update document URLs with uploaded files
-    if (req.files) {
-      if (req.files.aadhar) {
-        documents.aadhar = req.files.aadhar[0].path;
-      }
-      if (req.files.pan) {
-        documents.pan = req.files.pan[0].path;
-      }
-      if (req.files.educational) {
-        documents.educational = req.files.educational[0].path;
-      }
-      if (req.files.experience) {
-        documents.experience = req.files.experience[0].path;
-      }
-    }
-
-    // Update employee with new document URLs
-    const updatedEmployee = await Model.findOneAndUpdate(
-      { name: name },
-      { $set: { documents } },
-      { new: true }
-    );
-
-    console.log('Documents uploaded successfully');
-
-    res.json({
-      success: true,
-      message: 'Documents uploaded successfully',
-      documents: documents
-    });
-
-  } catch (error) {
-    console.error('Document upload error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to upload documents',
-      error: error.message
-    });
-  }
+  });
 });
 
 // Update employee

@@ -616,105 +616,281 @@ router.post("/set-target", async (req, res) => {
     res.status(500).json({ error: "Failed to set target" });
   }
 });
-
 // ============================
-// POST: Record payment for order
+// POST: Add follow-up to order
 // ============================
-router.post("/orders/:id/record-payment", async (req, res) => {
+router.post("/orders/:id/follow-up", async (req, res) => {
   try {
-    console.log("Payment request received:", req.body);
+    console.log("Follow-up request received:", req.body);
     console.log("Order ID:", req.params.id);
 
     const orderId = req.params.id;
-    const { date, amount, method, reference, note } = req.body;
+    const { date, description, nextFollowUpDate, status } = req.body;
 
     // Validate required fields
-    if (!amount) {
-      return res.status(400).json({ message: "Payment amount is required" });
+    if (!date) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Follow-up date is required" 
+      });
+    }
+
+    if (!description) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Follow-up description is required" 
+      });
     }
 
     const existingOrder = await Order.findById(orderId);
-    console.log("Existing order:", existingOrder);
     
     if (!existingOrder) {
-      return res.status(404).json({ message: "Order not found" });
+      return res.status(404).json({ 
+        success: false, 
+        message: "Order not found" 
+      });
     }
 
-    const paymentAmount = parseFloat(amount);
-    
-    // Calculate new advance amount (add payment to existing advance)
-    const currentAdvance = parseFloat(existingOrder.advance || 0);
-    const newAdvance = currentAdvance + paymentAmount;
-    
-    // Calculate new balance
-    const newBalance = parseFloat((existingOrder.balance - paymentAmount).toFixed(2));
+    console.log("Existing order found:", existingOrder.orderNo);
 
-    // Create payment record
-    const paymentRecord = {
+    // Create follow-up record
+    const followUpRecord = {
       date: date ? new Date(date) : new Date(),
-      amount: paymentAmount,
-      method: method || "Cash",
-      reference: reference || "",
-      note: note || "",
+      description: description,
+      nextFollowUpDate: nextFollowUpDate ? new Date(nextFollowUpDate) : null,
+      status: status || "Pending",
+      createdBy: req.body.createdBy || existingOrder.executive || "System",
+      createdAt: new Date()
     };
 
-    console.log("Payment record to be created:", paymentRecord);
-    console.log(`Updating: Advance: ${currentAdvance} → ${newAdvance}, Balance: ${existingOrder.balance} → ${newBalance}`);
+    console.log("Follow-up record to be created:", followUpRecord);
 
-    // Build update object - NOW INCLUDES advance update
-    const updateData = {
-      $push: { paymentHistory: paymentRecord },
-      $set: {
-        advance: newAdvance,        // Add payment amount to advance
-        balance: newBalance,
-        status: newBalance <= 0 ? "Paid" : "Partially Paid",
-        updatedAt: new Date()
-      }
-    };
-
-    // Preserve all existing fields that might be required
-    const requiredFields = ['createdBy', 'executive', 'business', 'contactPerson', 'phone', 'orderNo', 'orderDate'];
-    requiredFields.forEach(field => {
-      if (existingOrder[field]) {
-        updateData.$set[field] = existingOrder[field];
-      }
-    });
-
-    // Add payment date if fully paid
-    if (newBalance <= 0) {
-      updateData.$set.paymentDate = new Date();
+    // Initialize followUps array if it doesn't exist
+    if (!existingOrder.followUps) {
+      existingOrder.followUps = [];
     }
 
-    console.log("Update data:", updateData);
+    // Add follow-up to array
+    existingOrder.followUps.push(followUpRecord);
+    
+    // Save the order
+    await existingOrder.save();
 
-    const updatedOrder = await Order.findByIdAndUpdate(
-      orderId,
-      updateData,
-      { 
-        new: true, 
-        runValidators: true 
-      }
-    );
-
-    console.log("Order updated successfully:", updatedOrder._id);
-    console.log("New advance amount:", updatedOrder.advance);
-    console.log("New balance:", updatedOrder.balance);
+    console.log("Follow-up added successfully");
 
     res.json({
       success: true,
-      message: "Payment recorded successfully",
-      order: updatedOrder,
+      message: "Follow-up added successfully",
+      followUp: followUpRecord
     });
 
   } catch (err) {
-    console.error("Payment error details:", err);
+    console.error("Error adding follow-up:", err);
     console.error("Error stack:", err.stack);
     
     res.status(500).json({
-      message: "Server error while recording payment",
-      error: err.message,
-      // Don't expose full error in production
-      ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+      success: false,
+      message: "Server error while adding follow-up",
+      error: err.message
+    });
+  }
+});
+
+// ============================
+// GET: Get follow-ups for an order
+// ============================
+router.get("/orders/:id/follow-ups", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+
+    const order = await Order.findById(orderId);
+    
+    if (!order) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Order not found" 
+      });
+    }
+
+    console.log(`Fetching follow-ups for order: ${order.orderNo}`);
+    console.log(`Found ${order.followUps?.length || 0} follow-ups`);
+
+    res.json({
+      success: true,
+      followUps: order.followUps || []
+    });
+
+  } catch (err) {
+    console.error("Error fetching follow-ups:", err);
+    
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching follow-ups",
+      error: err.message
+    });
+  }
+});
+// ============================
+// POST: Record payment for order
+// ============================
+// ============================
+// RECORD PAYMENT for an order (COMPLETELY FIXED VERSION)
+// ============================
+router.post("/orders/:id/record-payment", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount, method, upiNumber, chequeNumber, date, note } = req.body;
+
+    console.log("========== PAYMENT RECORDING START ==========");
+    console.log("Order ID:", id);
+    console.log("Payment data:", JSON.stringify(req.body, null, 2));
+
+    // Validate required fields
+    if (!amount || !method) {
+      console.log("Missing required fields");
+      return res.status(400).json({ 
+        success: false, 
+        error: "Amount and method are required" 
+      });
+    }
+
+    // Find the order
+    const order = await Order.findById(id);
+    if (!order) {
+      console.log("Order not found:", id);
+      return res.status(404).json({ 
+        success: false, 
+        error: "Order not found" 
+      });
+    }
+
+    console.log("Order found:", order.orderNo);
+    console.log("Order current state:", {
+      advance: order.advance,
+      balance: order.balance,
+      rows: order.rows ? order.rows.length : 0
+    });
+
+    // Calculate total order amount from rows
+    let totalOrderAmount = 0;
+    if (order.rows && Array.isArray(order.rows)) {
+      totalOrderAmount = order.rows.reduce((sum, row) => {
+        return sum + (parseFloat(row.total) || 0);
+      }, 0);
+    }
+    
+    console.log("Total order amount:", totalOrderAmount);
+    
+    // Get current advance (this is the total paid amount)
+    const currentAdvance = parseFloat(order.advance) || 0;
+    console.log("Current advance (total paid):", currentAdvance);
+    
+    // Calculate current balance
+    const currentBalance = totalOrderAmount - currentAdvance;
+    console.log("Current calculated balance:", currentBalance);
+    
+    // Validate payment amount
+    const paymentAmount = parseFloat(amount);
+    if (isNaN(paymentAmount) || paymentAmount <= 0) {
+      console.log("Invalid payment amount:", amount);
+      return res.status(400).json({ 
+        success: false, 
+        error: "Invalid payment amount. Must be a positive number." 
+      });
+    }
+    
+    if (paymentAmount > currentBalance + 0.01) {
+      console.log(`Payment amount ${paymentAmount} exceeds balance ${currentBalance}`);
+      return res.status(400).json({ 
+        success: false, 
+        error: `Payment amount (₹${paymentAmount}) exceeds balance (₹${currentBalance.toFixed(2)})` 
+      });
+    }
+
+    // Create payment record
+    const paymentRecord = {
+      amount: paymentAmount,
+      method: method,
+      date: date ? new Date(date) : new Date(),
+      note: note || 'Payment recorded from Ledger'
+    };
+
+    // Add UPI or cheque details if provided
+    if (method === 'UPI' && upiNumber) {
+      paymentRecord.upiNumber = upiNumber;
+    }
+    if (method === 'Cheque' && chequeNumber) {
+      paymentRecord.chequeNumber = chequeNumber;
+    }
+
+    console.log("Creating payment record:", paymentRecord);
+
+    // Initialize paymentHistory if it doesn't exist
+    if (!order.paymentHistory) {
+      order.paymentHistory = [];
+    }
+
+    // Add payment to history
+    order.paymentHistory.push(paymentRecord);
+    
+    // Update advance (total paid amount)
+    const newAdvance = currentAdvance + paymentAmount;
+    order.advance = newAdvance;
+    
+    // Calculate new balance
+    const newBalance = Math.max(0, totalOrderAmount - newAdvance);
+    order.balance = newBalance;
+    
+    // Update payment date
+    order.paymentDate = date ? new Date(date) : new Date();
+
+    console.log("Before save - new values:", {
+      newAdvance: order.advance,
+      newBalance: order.balance,
+      paymentDate: order.paymentDate,
+      paymentHistoryCount: order.paymentHistory.length
+    });
+
+    // Save the updated order
+    const savedOrder = await order.save();
+    console.log("Order saved successfully");
+
+    console.log("========== PAYMENT RECORDING END ==========");
+
+    // Return updated order
+    res.json({
+      success: true,
+      message: `Payment of ₹${paymentAmount} recorded successfully`,
+      order: {
+        _id: savedOrder._id,
+        orderNo: savedOrder.orderNo,
+        advance: savedOrder.advance,
+        balance: savedOrder.balance,
+        paymentHistory: savedOrder.paymentHistory,
+        paymentDate: savedOrder.paymentDate,
+        rows: savedOrder.rows,
+        business: savedOrder.business,
+        contactPerson: savedOrder.contactPerson,
+        phone: savedOrder.phone,
+        orderDate: savedOrder.orderDate
+      }
+    });
+
+  } catch (err) {
+    console.error("========== PAYMENT RECORDING ERROR ==========");
+    console.error("Error name:", err.name);
+    console.error("Error message:", err.message);
+    console.error("Error stack:", err.stack);
+    
+    // Send detailed error for debugging
+    res.status(500).json({ 
+      success: false, 
+      error: err.message || "Failed to record payment",
+      details: {
+        name: err.name,
+        message: err.message,
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+      }
     });
   }
 });

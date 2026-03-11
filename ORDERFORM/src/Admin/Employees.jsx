@@ -387,75 +387,91 @@ export default function Employees() {
     }
   }, []);
 
-  // New function to handle document upload
-  const handleDocumentUpload = useCallback(async () => {
-    try {
-      const { employee, category } = documentModal;
-      
-      if (!employee || !employee.name) {
-        showPopup('Employee information missing', 'error');
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('name', employee.name);
-      
-      // Append each selected file
-      Object.entries(selectedFiles).forEach(([docType, file]) => {
-        if (file) {
-          formData.append(docType, file);
-        }
-      });
-
-      const response = await fetch('/api/employees/upload-documents', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Document upload failed');
-      }
-
-      const result = await response.json();
-      
-      // Update local state with new document URLs
-      setEmployeeCategories(prev => {
-        const updated = { ...prev };
-        const employeeIndex = updated[category]?.findIndex(emp => emp.name === employee.name);
-        
-        if (employeeIndex !== -1) {
-          updated[category][employeeIndex] = {
-            ...updated[category][employeeIndex],
-            documents: {
-              ...updated[category][employeeIndex].documents,
-              ...result.documents
-            }
-          };
-        }
-        
-        return updated;
-      });
-
-      showPopup('Documents uploaded successfully!', 'success');
-      
-      // Refresh the document modal with updated documents
-      setDocumentModal(prev => ({
-        ...prev,
-        documents: {
-          ...prev.documents,
-          ...result.documents
-        }
-      }));
-      
-      setSelectedFiles({ aadhar: null, pan: null, educational: null, experience: null });
-      
-    } catch (err) {
-      console.error('Document upload error:', err);
-      showPopup(`Error: ${err.message}`, 'error');
+const handleDocumentUpload = useCallback(async () => {
+  try {
+    const { employee, category } = documentModal;
+    
+    if (!employee || !employee.name) {
+      showPopup('Employee information missing', 'error');
+      return;
     }
-  }, [documentModal, selectedFiles, employeeCategories, showPopup]);
 
+    // Check if any files are selected
+    const hasFiles = Object.values(selectedFiles).some(file => file !== null);
+    if (!hasFiles) {
+      showPopup('Please select at least one document to upload', 'error');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('name', employee.name);
+    
+    // Append each selected file
+    Object.entries(selectedFiles).forEach(([docType, file]) => {
+      if (file) {
+        formData.append(docType, file);
+        console.log(`Appending ${docType}:`, file.name, file.type, file.size);
+      }
+    });
+
+    console.log('Uploading documents for:', employee.name);
+    
+    const response = await fetch('/api/employees/upload-documents', {
+      method: 'POST',
+      body: formData
+    });
+
+    // Check if response is JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error('Non-JSON response:', text);
+      throw new Error('Server returned invalid response. Check server logs.');
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || errorData.error || 'Document upload failed');
+    }
+
+    const result = await response.json();
+    
+    // Update local state with new document URLs
+    setEmployeeCategories(prev => {
+      const updated = { ...prev };
+      const employeeIndex = updated[category]?.findIndex(emp => emp.name === employee.name);
+      
+      if (employeeIndex !== -1) {
+        updated[category][employeeIndex] = {
+          ...updated[category][employeeIndex],
+          documents: {
+            ...updated[category][employeeIndex].documents,
+            ...result.documents
+          }
+        };
+      }
+      
+      return updated;
+    });
+
+    showPopup('Documents uploaded successfully!', 'success');
+    
+    // Refresh the document modal with updated documents
+    setDocumentModal(prev => ({
+      ...prev,
+      documents: {
+        ...prev.documents,
+        ...result.documents
+      }
+    }));
+    
+    setSelectedFiles({ aadhar: null, pan: null, educational: null, experience: null });
+    
+  } catch (err) {
+    console.error('Document upload error:', err);
+    showPopup(`Error: ${err.message}`, 'error');
+  }
+}, [documentModal, selectedFiles, employeeCategories, showPopup]);
   // Function to open document upload modal
   const openDocumentModal = useCallback((employee, category) => {
     setDocumentModal({

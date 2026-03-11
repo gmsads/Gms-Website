@@ -370,34 +370,40 @@ function PendingPayment({ executiveFilter = null }) {
     }
   };
 
-  const handleFollowUpSubmit = async (e) => {
-    e.preventDefault();
-    if (!currentOrder) return;
+ const handleFollowUpSubmit = async (e) => {
+  e.preventDefault();
+  if (!currentOrder) return;
 
-    if (!followUpData.description.trim()) {
-      alert('Please enter a follow-up description');
-      return;
-    }
+  if (!followUpData.description.trim()) {
+    alert('Please enter a follow-up description');
+    return;
+  }
 
-    setFollowUpLoading(true);
-    try {
-      await axios.post(`/api/orders/${currentOrder._id}/follow-up`, followUpData);
+  setFollowUpLoading(true);
+  try {
+    const response = await axios.post(`/api/orders/${currentOrder._id}/follow-up`, followUpData);
+    
+    console.log('Follow-up response:', response.data);
 
-      setFollowUpResult({
-        orderNo: currentOrder.orderNo,
-        description: followUpData.description
-      });
-      setShowFollowUpSuccess(true);
-      setShowFollowUpModal(false);
-      await fetchOrders();
+    setFollowUpResult({
+      orderNo: currentOrder.orderNo,
+      description: followUpData.description
+    });
+    setShowFollowUpSuccess(true);
+    setShowFollowUpModal(false);
+    await fetchOrders();
 
-    } catch (err) {
-      console.error('Error adding follow-up:', err);
-      alert('Failed to add follow-up. Please try again.');
-    } finally {
-      setFollowUpLoading(false);
-    }
-  };
+  } catch (err) {
+    console.error('Error adding follow-up:', err);
+    console.error('Error response:', err.response?.data);
+    
+    // Show more specific error message if available
+    const errorMessage = err.response?.data?.message || err.message || 'Failed to add follow-up. Please try again.';
+    alert(`Failed to add follow-up: ${errorMessage}`);
+  } finally {
+    setFollowUpLoading(false);
+  }
+};
 
   const closeSuccessPopup = () => {
     setShowSuccessPopup(false);
