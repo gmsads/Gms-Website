@@ -175,17 +175,43 @@ router.post('/', uploadEmployee.single('image'), async (req, res) => {
 
 // Upload documents for employee - FIXED VERSION
 router.post('/upload-documents', (req, res) => {
-  // Use uploadDocuments middleware with error handling
-  uploadDocuments.fields([
-    { name: 'aadhar', maxCount: 1 },
-    { name: 'pan', maxCount: 1 },
-    { name: 'educational', maxCount: 1 },
-    { name: 'experience', maxCount: 1 }
-  ])(req, res, async (err) => {
+  console.log('========== DOCUMENT UPLOAD REQUEST ==========');
+  console.log('Headers:', req.headers['content-type']);
+  console.log('Body:', req.body);
+  
+  // Use the fixed uploadDocuments middleware
+  uploadDocuments(req, res, async (err) => {
     try {
       // Handle multer/cloudinary errors
       if (err) {
-        console.error('Upload middleware error:', err);
+        console.error('❌ Upload middleware error:', err);
+        
+        // Check for Cloudinary signature errors
+        if (err.message && err.message.includes('signature')) {
+          return res.status(400).json({
+            success: false,
+            message: 'Cloudinary configuration error. Please check your API keys.',
+            error: err.message,
+            hint: 'Make sure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET are set correctly in .env'
+          });
+        }
+        
+        // Check for file size errors
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({
+            success: false,
+            message: 'File too large. Maximum size is 10MB.'
+          });
+        }
+        
+        // Check for file type errors
+        if (err.message && err.message.includes('file type')) {
+          return res.status(400).json({
+            success: false,
+            message: err.message
+          });
+        }
+        
         return res.status(400).json({
           success: false,
           message: err.message || 'File upload failed',
@@ -195,10 +221,20 @@ router.post('/upload-documents', (req, res) => {
 
       const { name } = req.body;
       
-      console.log('========== DOCUMENT UPLOAD START ==========');
-      console.log('Uploading documents for:', name);
+      console.log('📤 Uploading documents for:', name);
       console.log('Files received:', req.files ? Object.keys(req.files) : 'No files');
-      console.log('Request body:', req.body);
+      
+      // Log uploaded file details
+      if (req.files) {
+        Object.keys(req.files).forEach(key => {
+          console.log(`${key}:`, {
+            originalname: req.files[key][0].originalname,
+            path: req.files[key][0].path,
+            size: req.files[key][0].size,
+            mimetype: req.files[key][0].mimetype
+          });
+        });
+      }
 
       // Validate required fields
       if (!name) {
@@ -214,18 +250,22 @@ router.post('/upload-documents', (req, res) => {
       let foundRole = null;
 
       for (const [roleName, model] of Object.entries(modelMap)) {
-        const emp = await model.findOne({ name: name });
-        if (emp) {
-          foundEmployee = emp;
-          Model = model;
-          foundRole = roleName;
-          console.log(`Found employee in model: ${roleName}`);
-          break;
+        try {
+          const emp = await model.findOne({ name: name });
+          if (emp) {
+            foundEmployee = emp;
+            Model = model;
+            foundRole = roleName;
+            console.log(`✅ Found employee in model: ${roleName}`);
+            break;
+          }
+        } catch (dbError) {
+          console.error(`❌ Error searching ${roleName} model:`, dbError.message);
         }
       }
 
       if (!foundEmployee) {
-        console.log('Employee not found:', name);
+        console.log('❌ Employee not found:', name);
         return res.status(404).json({ 
           success: false, 
           message: 'Employee not found' 
@@ -239,19 +279,19 @@ router.post('/upload-documents', (req, res) => {
       if (req.files) {
         if (req.files.aadhar) {
           documents.aadhar = req.files.aadhar[0].path;
-          console.log('Aadhar uploaded:', req.files.aadhar[0].path);
+          console.log('✅ Aadhar uploaded:', req.files.aadhar[0].path);
         }
         if (req.files.pan) {
           documents.pan = req.files.pan[0].path;
-          console.log('PAN uploaded:', req.files.pan[0].path);
+          console.log('✅ PAN uploaded:', req.files.pan[0].path);
         }
         if (req.files.educational) {
           documents.educational = req.files.educational[0].path;
-          console.log('Educational uploaded:', req.files.educational[0].path);
+          console.log('✅ Educational uploaded:', req.files.educational[0].path);
         }
         if (req.files.experience) {
           documents.experience = req.files.experience[0].path;
-          console.log('Experience uploaded:', req.files.experience[0].path);
+          console.log('✅ Experience uploaded:', req.files.experience[0].path);
         }
       }
 
@@ -262,22 +302,37 @@ router.post('/upload-documents', (req, res) => {
         { new: true }
       );
 
-      console.log('Documents uploaded successfully');
-      console.log('Updated documents:', documents);
-      console.log('========== DOCUMENT UPLOAD END ==========');
+      console.log('✅ Documents uploaded successfully');
+      console.log('📄 Updated documents:', documents);
+      console.log('========== DOCUMENT UPLOAD COMPLETE ==========');
 
       res.json({
         success: true,
         message: 'Documents uploaded successfully',
-        documents: documents
+        documents: documents,
+        uploadedFiles: Object.keys(req.files || {}).map(key => ({
+          type: key,
+          url: req.files[key][0].path,
+          filename: req.files[key][0].filename
+        }))
       });
 
     } catch (error) {
-      console.error('========== DOCUMENT UPLOAD ERROR ==========');
+      console.error('❌ DOCUMENT UPLOAD ERROR ==========');
       console.error('Error name:', error.name);
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
-      console.error('========== ERROR END ==========');
+      console.error('===================================');
+
+      // Check if it's a Cloudinary error
+      if (error.name === 'CloudinaryError' || error.http_code) {
+        return res.status(500).json({
+          success: false,
+          message: 'Cloudinary upload failed. Please check your Cloudinary configuration.',
+          error: error.message,
+          hint: 'Verify CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in .env'
+        });
+      }
 
       res.status(500).json({
         success: false,
@@ -289,6 +344,30 @@ router.post('/upload-documents', (req, res) => {
   });
 });
 
+// Add a test endpoint to verify Cloudinary connection
+router.get('/test-cloudinary', async (req, res) => {
+  try {
+    const { testCloudinaryConnection } = require('../middleware/upload');
+    const result = await testCloudinaryConnection();
+    
+    res.json({
+      success: result.success,
+      message: result.success ? 'Cloudinary is connected' : 'Cloudinary connection failed',
+      result: result,
+      env: {
+        CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ? '✓ Set' : '✗ Missing',
+        CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY ? '✓ Set' : '✗ Missing',
+        CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ? '✓ Set' : '✗ Missing'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Test failed',
+      error: error.message
+    });
+  }
+});
 // Update employee
 router.put('/update-profile', uploadEmployee.single('image'), async (req, res) => {
   try {

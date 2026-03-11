@@ -15,6 +15,11 @@ const isCloudinaryConfigured = () => {
 try {
   if (!isCloudinaryConfigured()) {
     console.error('❌ Cloudinary configuration missing! Please check your environment variables.');
+    console.error('Current env:', {
+      CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ? '✓ Set' : '✗ Missing',
+      CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY ? '✓ Set' : '✗ Missing',
+      CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ? '✓ Set' : '✗ Missing'
+    });
   } else {
     cloudinary.config({
       cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -22,12 +27,17 @@ try {
       api_secret: process.env.CLOUDINARY_API_SECRET
     });
     console.log('✅ Cloudinary configured successfully');
+    
+    // Test the configuration
+    cloudinary.api.ping()
+      .then(result => console.log('✅ Cloudinary connection test passed'))
+      .catch(err => console.error('❌ Cloudinary connection test failed:', err.message));
   }
 } catch (error) {
   console.error('❌ Cloudinary configuration error:', error);
 }
 
-// Helper to create storage with error handling
+// Helper to create storage with error handling - FIXED VERSION
 const createStorage = (folder, allowedFormats, transformation = []) => {
   if (!isCloudinaryConfigured()) {
     console.warn(`⚠️ Cloudinary not configured, ${folder} uploads will fail`);
@@ -39,10 +49,14 @@ const createStorage = (folder, allowedFormats, transformation = []) => {
       folder: folder,
       allowed_formats: allowedFormats,
       transformation: transformation,
+      // FIX: Don't set public_id - let Cloudinary generate it
+      // If you need custom naming, use a function that returns a string
       public_id: (req, file) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const fieldName = file.fieldname || 'document';
-        return `${fieldName}-${uniqueSuffix}`;
+        // Use a simpler naming convention without special characters
+        const timestamp = Date.now();
+        const random = Math.floor(Math.random() * 1000);
+        const fieldName = file.fieldname || 'doc';
+        return `${fieldName}-${timestamp}-${random}`;
       }
     }
   });
@@ -61,11 +75,22 @@ const employeeStorage = createStorage(
   [{ width: 500, height: 500, crop: 'limit' }]
 );
 
-const documentStorage = createStorage(
-  'employee-documents',
-  ['jpg', 'jpeg', 'png', 'gif', 'pdf'],
-  [] // No transformation for documents
-);
+// FIX: For document storage, use a simpler configuration
+const documentStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'employee-documents',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'pdf'],
+    resource_type: 'auto',
+    // FIX: Use a simpler public_id format
+    public_id: (req, file) => {
+      const timestamp = Date.now();
+      const random = Math.floor(Math.random() * 10000);
+      const fieldName = file.fieldname || 'doc';
+      return `${fieldName}-${timestamp}-${random}`;
+    }
+  }
+});
 
 const visitStorage = createStorage(
   'visits',
@@ -92,14 +117,6 @@ const documentFilter = (req, file, cb) => {
 };
 
 // Create multer upload instances with error handling
-const createUploader = (storage, fileFilter, maxSize, fieldName) => {
-  return multer({ 
-    storage: storage,
-    limits: { fileSize: maxSize },
-    fileFilter: fileFilter
-  }).fields(fieldName);
-};
-
 const uploadGreeting = multer({ 
   storage: greetingStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
@@ -112,17 +129,35 @@ const uploadEmployee = multer({
   fileFilter: imageFilter
 });
 
+// FIX: For documents, use fields() method properly
 const uploadDocuments = multer({ 
   storage: documentStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit for documents
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: documentFilter
-});
+}).fields([
+  { name: 'aadhar', maxCount: 1 },
+  { name: 'pan', maxCount: 1 },
+  { name: 'educational', maxCount: 1 },
+  { name: 'experience', maxCount: 1 }
+]);
 
 const uploadVisit = multer({ 
   storage: visitStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: imageFilter
 });
+
+// Add a test endpoint helper
+const testCloudinaryConnection = async () => {
+  try {
+    const result = await cloudinary.api.ping();
+    console.log('✅ Cloudinary connection test passed');
+    return { success: true, result };
+  } catch (error) {
+    console.error('❌ Cloudinary connection test failed:', error.message);
+    return { success: false, error: error.message };
+  }
+};
 
 module.exports = { 
   cloudinary, 
@@ -134,5 +169,6 @@ module.exports = {
   uploadEmployee,
   uploadDocuments,
   uploadVisit,
-  isCloudinaryConfigured // Export this helper
+  isCloudinaryConfigured,
+  testCloudinaryConnection
 };
