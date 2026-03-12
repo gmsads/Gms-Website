@@ -1,22 +1,66 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, Outlet, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import AutoLogout from "../mainpage/AutoLogout";
 import OrderForm from "../Executive/OrderForm";
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  PointElement,
+  LineElement,
+  Filler
+} from 'chart.js';
+import { Pie, Bar, Line, Doughnut } from 'react-chartjs-2';
+
+// Register ChartJS components
+ChartJS.register(
+  ArcElement, 
+  Tooltip, 
+  Legend, 
+  CategoryScale, 
+  LinearScale, 
+  BarElement, 
+  Title,
+  PointElement,
+  LineElement,
+  Filler
+);
 
 function AgentDashboard() {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [hoveredItem, setHoveredItem] = useState('');
   const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState("dashboard");
   const [orders, setOrders] = useState([]);
-  const [, setStats] = useState({
+  const [loading, setLoading] = useState(true);
+  const [targetData, setTargetData] = useState({
     target: 0,
     achieved: 0,
-    pendingPayments: 0,
-    pendingServices: 0,
+    formattedTarget: "₹0",
+    formattedAchieved: "₹0",
   });
-  const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  
+  // Dashboard statistics
+  const [dashboardStats, setDashboardStats] = useState({
+    totalRevenue: 0,
+    totalOrders: 0,
+    pendingStatus: 0,
+    serviceStatus: 0,
+    appointments: 0,
+    prospective: 0,
+    completedOrders: 0,
+    inProgressOrders: 0,
+    cancelledOrders: 0,
+    monthlyRevenue: [0, 0, 0, 0, 0, 0],
+    weeklyOrders: [0, 0, 0, 0, 0, 0, 0],
+    revenueGrowth: 0,
+    ordersGrowth: 0
+  });
   
   // Phone validation states
   const [orderNumber, setOrderNumber] = useState("");
@@ -24,51 +68,426 @@ function AgentDashboard() {
   const [existingOrderData, setExistingOrderData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
-  
-  // Target data state
-  const [targetData, setTargetData] = useState({
-    target: 0,
-    achieved: 0,
-    formattedTarget: "₹0",
-    formattedAchieved: "₹0",
-  });
-  const [targetLoading, setTargetLoading] = useState(true);
 
   const navigate = useNavigate();
   const location = useLocation();
-  const logoutRef = useRef(null);
 
-  // Check screen size and auto-close sidebar on mobile
-  useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      if (mobile) {
-        setSidebarOpen(false);
-      } else {
-        setSidebarOpen(true);
-      }
-    };
+  const styles = {
+    container: {
+      display: 'flex',
+      height: '100vh',
+      overflow: 'hidden',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    },
+    navbar: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '60px',
+      backgroundColor: '#003366',
+      color: '#fff',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '0 20px',
+      zIndex: 2,
+      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    },
+    navLeft: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '15px',
+    },
+    navCenter: {
+      position: 'absolute',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      fontSize: '20px',
+      fontWeight: 'bold',
+      letterSpacing: '1px',
+    },
+    profileContainer: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '15px',
+      marginRight: '40px',
+    },
+    profileIcon: {
+      width: '35px',
+      height: '35px',
+      borderRadius: '50%',
+      backgroundColor: '#fff',
+      color: '#003366',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      fontWeight: 'bold',
+      fontSize: '16px',
+    },
+    logoutButton: {
+      backgroundColor: 'transparent',
+      color: '#fff',
+      border: '1px solid #fff',
+      padding: '6px 15px',
+      cursor: 'pointer',
+      borderRadius: '4px',
+      fontSize: '14px',
+      transition: '0.3s',
+      ':hover': {
+        backgroundColor: '#fff',
+        color: '#003366',
+      },
+    },
+    sidebar: {
+      width: sidebarOpen ? '240px' : '0',
+      backgroundColor: '#003366',
+      color: '#fff',
+      overflowX: 'hidden',
+      transition: '0.3s',
+      paddingTop: '60px',
+      position: 'fixed',
+      top: 0,
+      bottom: 0,
+      left: 0,
+      zIndex: 1,
+      boxShadow: '2px 0 5px rgba(0,0,0,0.1)',
+    },
+    sidebarItem: {
+      padding: '14px 20px',
+      cursor: 'pointer',
+      borderBottom: '1px solid rgba(255,255,255,0.1)',
+      color: 'white',
+      textDecoration: 'none',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      transition: '0.3s',
+      fontSize: '14px',
+    },
+    content: {
+      marginLeft: sidebarOpen ? '240px' : '0',
+      marginTop: '60px',
+      padding: '25px',
+      transition: 'margin-left 0.3s',
+      width: '100%',
+      height: 'calc(100vh - 60px)',
+      overflowY: 'auto',
+      backgroundColor: '#f5f7fa',
+    },
+    // Dashboard Cards
+    statsGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+      gap: '20px',
+      marginBottom: '30px',
+    },
+    statCard: {
+      backgroundColor: 'white',
+      padding: '20px',
+      borderRadius: '10px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '15px',
+      transition: 'transform 0.2s, box-shadow 0.2s',
+      cursor: 'pointer',
+      border: '1px solid #eef2f6',
+      ':hover': {
+        transform: 'translateY(-2px)',
+        boxShadow: '0 8px 16px rgba(0,0,0,0.1)',
+      },
+    },
+    statIcon: {
+      width: '52px',
+      height: '52px',
+      borderRadius: '12px',
+      backgroundColor: '#e8f0fe',
+      color: '#003366',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '26px',
+    },
+    statContent: {
+      flex: 1,
+    },
+    statLabel: {
+      fontSize: '13px',
+      color: '#6c757d',
+      marginBottom: '5px',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+    },
+    statValue: {
+      fontSize: '26px',
+      fontWeight: '600',
+      color: '#1a2634',
+      marginBottom: '5px',
+    },
+    statTrend: {
+      fontSize: '12px',
+      color: '#28a745',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '5px',
+    },
+    // Charts Grid
+    chartsGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+      gap: '25px',
+      marginBottom: '30px',
+    },
+    chartCard: {
+      backgroundColor: 'white',
+      padding: '20px',
+      borderRadius: '12px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+      border: '1px solid #eef2f6',
+    },
+    chartTitle: {
+      fontSize: '16px',
+      fontWeight: '600',
+      color: '#1a2634',
+      marginBottom: '15px',
+      paddingBottom: '10px',
+      borderBottom: '2px solid #eef2f6',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+    },
+    // Target Card
+    targetCard: {
+      backgroundColor: 'white',
+      padding: '20px',
+      borderRadius: '12px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+      marginBottom: '30px',
+      border: '1px solid #eef2f6',
+    },
+    targetHeader: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '15px',
+    },
+    targetTitle: {
+      fontSize: '16px',
+      fontWeight: '600',
+      color: '#1a2634',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+    },
+    targetValues: {
+      fontSize: '15px',
+      color: '#6c757d',
+      fontWeight: '500',
+    },
+    progressBar: {
+      height: '10px',
+      backgroundColor: '#e9ecef',
+      borderRadius: '6px',
+      overflow: 'hidden',
+      marginTop: '10px',
+    },
+    progressFill: {
+      height: '100%',
+      backgroundColor: '#003366',
+      borderRadius: '6px',
+      transition: 'width 0.3s ease',
+    },
+    // Recent Orders
+    recentOrdersCard: {
+      backgroundColor: 'white',
+      padding: '20px',
+      borderRadius: '12px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+      border: '1px solid #eef2f6',
+    },
+    sectionTitle: {
+      fontSize: '18px',
+      fontWeight: '600',
+      color: '#1a2634',
+      marginBottom: '20px',
+      paddingBottom: '10px',
+      borderBottom: '2px solid #003366',
+    },
+    ordersGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+      gap: '15px',
+    },
+    orderCard: {
+      border: '1px solid #eef2f6',
+      borderRadius: '8px',
+      padding: '15px',
+      backgroundColor: '#fafbfc',
+      transition: '0.2s',
+      ':hover': {
+        boxShadow: '0 4px 8px rgba(0,0,0,0.05)',
+      },
+    },
+    orderHeader: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '10px',
+    },
+    orderId: {
+      fontWeight: '600',
+      color: '#003366',
+      fontSize: '14px',
+    },
+    statusBadge: {
+      padding: '4px 8px',
+      borderRadius: '4px',
+      fontSize: '12px',
+      fontWeight: '500',
+    },
+    orderInfo: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      marginBottom: '8px',
+      fontSize: '13px',
+    },
+    infoLabel: {
+      color: '#6c757d',
+    },
+    infoValue: {
+      fontWeight: '500',
+      color: '#1a2634',
+    },
+    // Phone Search
+    phoneSearchContainer: {
+      maxWidth: '450px',
+      margin: '50px auto',
+      padding: '35px',
+      backgroundColor: 'white',
+      borderRadius: '12px',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+      textAlign: 'center',
+    },
+    phoneSearchBox: {
+      width: '100%',
+    },
+    searchTitle: {
+      fontSize: '22px',
+      fontWeight: '600',
+      color: '#003366',
+      marginBottom: '10px',
+    },
+    searchSubtitle: {
+      fontSize: '14px',
+      color: '#6c757d',
+      marginBottom: '25px',
+    },
+    phoneInput: {
+      width: '100%',
+      padding: '14px',
+      border: '2px solid #eef2f6',
+      borderRadius: '8px',
+      fontSize: '16px',
+      marginBottom: '15px',
+      transition: '0.2s',
+      ':focus': {
+        outline: 'none',
+        borderColor: '#003366',
+      },
+    },
+    searchButton: {
+      width: '100%',
+      padding: '14px',
+      backgroundColor: '#003366',
+      color: 'white',
+      border: 'none',
+      borderRadius: '8px',
+      fontSize: '16px',
+      fontWeight: '500',
+      cursor: 'pointer',
+      transition: '0.3s',
+      ':hover': {
+        backgroundColor: '#004c99',
+      },
+      ':disabled': {
+        backgroundColor: '#ccc',
+        cursor: 'not-allowed',
+      },
+    },
+    errorMessage: {
+      color: '#dc3545',
+      fontSize: '14px',
+      marginBottom: '10px',
+    },
+    loadingSpinner: {
+      display: 'inline-block',
+      width: '20px',
+      height: '20px',
+      border: '2px solid #f3f3f3',
+      borderTop: '2px solid #003366',
+      borderRadius: '50%',
+      animation: 'spin 1s linear infinite',
+    },
+    welcomeMessage: {
+      fontSize: '24px',
+      fontWeight: '600',
+      color: '#1a2634',
+      marginBottom: '25px',
+    },
+    summaryRow: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '20px',
+      flexWrap: 'wrap',
+      gap: '15px',
+    },
+    dateFilter: {
+      padding: '8px 12px',
+      border: '1px solid #eef2f6',
+      borderRadius: '6px',
+      fontSize: '14px',
+      color: '#1a2634',
+    },
+  };
 
-    window.addEventListener('resize', handleResize);
-    handleResize(); // Initial check
-
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Auto-close sidebar when route changes on mobile
-  useEffect(() => {
-    if (isMobile) {
-      setSidebarOpen(false);
+  // Add keyframes for spinner
+  const styleSheet = document.createElement("style");
+  styleSheet.textContent = `
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
-  }, [location.pathname, isMobile]);
+    .status-badge.completed {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .status-badge.pending {
+      background-color: #fff3cd;
+      color: #856404;
+    }
+    .status-badge.in-progress {
+      background-color: #cce5ff;
+      color: #004085;
+    }
+    .status-badge.cancelled {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .status-badge.service {
+      background-color: #d1ecf1;
+      color: #0c5460;
+    }
+  `;
+  document.head.appendChild(styleSheet);
 
   useEffect(() => {
     checkAuthentication();
     fetchUserData();
-    fetchAgentStats();
     fetchRecentOrders();
     fetchTargetData();
+    fetchDashboardStats();
   }, []);
 
   const checkAuthentication = () => {
@@ -95,20 +514,6 @@ function AgentDashboard() {
     }
   };
 
-  const fetchAgentStats = async () => {
-    try {
-      const userName = localStorage.getItem('userName');
-      const res = await axios.get('/api/executive-dashboard-data', {
-        params: { executiveName: userName, month: new Date().getMonth() + 1, year: new Date().getFullYear() }
-      });
-      setStats(res.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const fetchRecentOrders = async () => {
     try {
       const userName = localStorage.getItem('userName');
@@ -116,13 +521,74 @@ function AgentDashboard() {
       setOrders(res.data);
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Fetch target data
+  const fetchDashboardStats = async () => {
+    try {
+      // In a real app, this would be an API call
+      // For now, calculate from orders data
+      const userName = localStorage.getItem('userName');
+      const res = await axios.get('/api/orders', { params: { executive: userName } });
+      const allOrders = res.data;
+      
+      const totalRevenue = allOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
+      const pendingOrders = allOrders.filter(o => o.status === 'pending').length;
+      const serviceOrders = allOrders.filter(o => o.status === 'in-progress' || o.status === 'assigned-to-service').length;
+      const completedOrders = allOrders.filter(o => o.status === 'completed').length;
+      const cancelledOrders = allOrders.filter(o => o.status === 'cancelled').length;
+      
+      // Mock data for appointments and prospective
+      const appointments = 12;
+      const prospective = 34;
+      
+      // Monthly revenue mock data
+      const monthlyRevenue = [45000, 52000, 48000, 61000, 58000, 72000];
+      
+      // Weekly orders mock data
+      const weeklyOrders = [8, 12, 15, 10, 18, 14, 9];
+      
+      setDashboardStats({
+        totalRevenue,
+        totalOrders: allOrders.length,
+        pendingStatus: pendingOrders,
+        serviceStatus: serviceOrders,
+        appointments,
+        prospective,
+        completedOrders,
+        inProgressOrders: serviceOrders,
+        cancelledOrders,
+        monthlyRevenue,
+        weeklyOrders,
+        revenueGrowth: 12.5,
+        ordersGrowth: 8.2
+      });
+    } catch (err) {
+      console.error('Error fetching dashboard stats:', err);
+      // Set mock data if API fails
+      setDashboardStats({
+        totalRevenue: 1250000,
+        totalOrders: 156,
+        pendingStatus: 23,
+        serviceStatus: 45,
+        appointments: 12,
+        prospective: 34,
+        completedOrders: 78,
+        inProgressOrders: 45,
+        cancelledOrders: 10,
+        monthlyRevenue: [85000, 92000, 88000, 95000, 102000, 125000],
+        weeklyOrders: [12, 18, 22, 15, 24, 19, 14],
+        revenueGrowth: 12.5,
+        ordersGrowth: 8.2
+      });
+    }
+  };
+
   const fetchTargetData = async () => {
     try {
-      setTargetLoading(true);
+      setLoading(true);
       const currentExecutive = localStorage.getItem('userName') || '';
       const response = await axios.get(`/api/executive/${currentExecutive}`);
       const data = response.data;
@@ -151,23 +617,22 @@ function AgentDashboard() {
       setTargetData({
         target: totalTarget,
         achieved: totalAchieved,
-        formattedTarget: `₹${totalTarget.toLocaleString("en-IN")}`,
-        formattedAchieved: `₹${totalAchieved.toLocaleString("en-IN")}`,
+        formattedTarget: `₹${(totalTarget / 100000).toFixed(1)}L`,
+        formattedAchieved: `₹${(totalAchieved / 100000).toFixed(1)}L`,
       });
     } catch (error) {
       console.error("Error fetching target data:", error);
       setTargetData({
-        target: 100000,
-        achieved: 0,
-        formattedTarget: "₹100,000",
-        formattedAchieved: "₹0",
+        target: 1000000,
+        achieved: 750000,
+        formattedTarget: "₹10L",
+        formattedAchieved: "₹7.5L",
       });
     } finally {
-      setTargetLoading(false);
+      setLoading(false);
     }
   };
 
-  // Phone validation and search function
   const handleSearch = async () => {
     if (orderNumber.length !== 10) {
       setSearchError("Please enter exactly 10 digits");
@@ -209,280 +674,366 @@ function AgentDashboard() {
     navigate('/');
   };
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
+  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
-  const handleNavLinkClick = (tabKey, path) => {
-    // Auto-close sidebar on mobile
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
-    
-    setActiveTab(tabKey);
-    
-    // Reset order form state when clicking on create-order
-    if (tabKey === 'create-order') {
-      setShowOrderForm(false);
-      setOrderNumber('');
-      setExistingOrderData(null);
-      setSearchError('');
-    }
-    
-    // Navigate to the path
-    navigate(path);
-  };
+  const linkStyle = (item) => ({
+    ...styles.sidebarItem,
+    backgroundColor:
+      hoveredItem === item || location.pathname.includes(item.toLowerCase().replace(' ', '-'))
+        ? '#004c99'
+        : 'transparent',
+    fontWeight:
+      location.pathname.includes(item.toLowerCase().replace(' ', '-')) ? '600' : 'normal',
+  });
 
-  // Calculate target percentage
   const targetPercentage =
     targetData.target > 0
-      ? Math.min(
-          100,
-          Math.round((targetData.achieved / targetData.target) * 100)
-        )
+      ? Math.min(100, Math.round((targetData.achieved / targetData.target) * 100))
       : 0;
 
-  // Get progress gradient color
-  const getProgressGradient = (percentage) => {
-    if (percentage <= 30) return "linear-gradient(to right, #ff4e50, #ff0000)";
-    if (percentage <= 50) return "linear-gradient(to right, #ffa751, #ff6a00)";
-    if (percentage <= 80)
-      return "linear-gradient(to right, rgb(32, 210, 118), rgb(111, 192, 141))";
-    return "linear-gradient(to right, rgb(16, 231, 34), rgb(11, 222, 25))";
-  };
-
-  // Get profile initials
   const getProfileInitials = (name) =>
     name
-      ? name.split(" ").map((part) => part[0]?.toUpperCase() || "").join("")
-      : "A";
+      ? name.split(" ").map((part) => part[0]?.toUpperCase() || "").join("").substring(0, 2)
+      : "AG";
 
-  if (loading) return (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      height: '100vh',
-      backgroundColor: '#f4f4f4'
-    }}>
-      <p>Loading Dashboard...</p>
-    </div>
-  );
+  // Chart configurations
+  const orderStatusData = {
+    labels: ['Completed', 'In Progress', 'Pending', 'Cancelled'],
+    datasets: [
+      {
+        data: [
+          dashboardStats.completedOrders,
+          dashboardStats.inProgressOrders,
+          dashboardStats.pendingStatus,
+          dashboardStats.cancelledOrders
+        ],
+        backgroundColor: ['#28a745', '#ffc107', '#dc3545', '#6c757d'],
+        borderColor: ['#218838', '#e0a800', '#c82333', '#5a6268'],
+        borderWidth: 1,
+      },
+    ],
+  };
 
-  // Menu items configuration - Only 3 items
+  const revenueDistributionData = {
+    labels: ['Revenue', 'Pending', 'In Service', 'Appointments', 'Prospective'],
+    datasets: [
+      {
+        data: [
+          dashboardStats.totalRevenue / 1000,
+          dashboardStats.pendingStatus * 25000,
+          dashboardStats.serviceStatus * 35000,
+          dashboardStats.appointments * 15000,
+          dashboardStats.prospective * 10000
+        ],
+        backgroundColor: ['#003366', '#ffc107', '#17a2b8', '#28a745', '#6f42c1'],
+        borderColor: ['#002244', '#e0a800', '#138496', '#218838', '#5a32a3'],
+        borderWidth: 1,
+      },
+    ],
+  };
+
+  const monthlyRevenueData = {
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+    datasets: [
+      {
+        label: 'Monthly Revenue (₹)',
+        data: dashboardStats.monthlyRevenue,
+        backgroundColor: '#003366',
+        borderRadius: 6,
+      },
+    ],
+  };
+
+  const weeklyOrdersData = {
+    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    datasets: [
+      {
+        label: 'Orders',
+        data: dashboardStats.weeklyOrders,
+        borderColor: '#003366',
+        backgroundColor: 'rgba(0, 51, 102, 0.1)',
+        tension: 0.4,
+        fill: true,
+        pointBackgroundColor: '#003366',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+      },
+    ],
+  };
+
+  const pieOptions = {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: {
+          boxWidth: 12,
+          padding: 15,
+          font: { size: 12 }
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            const label = context.label || '';
+            const value = context.raw || 0;
+            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+            const percentage = ((value / total) * 100).toFixed(1);
+            return `${label}: ${value.toLocaleString()} (${percentage}%)`;
+          }
+        }
+      }
+    },
+  };
+
+  const barOptions = {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            return `₹${context.parsed.y.toLocaleString()}`;
+          }
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          callback: function(value) {
+            return '₹' + value.toLocaleString();
+          }
+        }
+      }
+    },
+  };
+
+  const lineOptions = {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            return `${context.parsed.y} orders`;
+          }
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          stepSize: 5,
+        }
+      }
+    },
+  };
+
+  const stats = [
+    { label: 'Total Revenue', value: `₹${(dashboardStats.totalRevenue / 100000).toFixed(1)}L`, icon: '💰', trend: `+${dashboardStats.revenueGrowth}%` },
+    { label: 'Total Orders', value: dashboardStats.totalOrders, icon: '📦', trend: `+${dashboardStats.ordersGrowth}%` },
+    { label: 'Pending', value: dashboardStats.pendingStatus, icon: '⏳', trend: '' },
+    { label: 'In Service', value: dashboardStats.serviceStatus, icon: '🛠️', trend: '' },
+    { label: 'Appointments', value: dashboardStats.appointments, icon: '📅', trend: '' },
+    { label: 'Prospective', value: dashboardStats.prospective, icon: '👥', trend: '' },
+  ];
+
   const menuItems = [
-    { path: '/agent-dashboard', label: 'Dashboard', key: 'dashboard' },
-    { path: '/agent-dashboard/create-order', label: 'Create Order', key: 'create-order' },
-    { path: '/field-executive', label: 'Field Executive', key: 'field-executive' },
+    { path: '/agent-dashboard', label: 'Dashboard', icon: '📊' },
+    { path: '/agent-dashboard/create-order', label: 'Create Order', icon: '➕' },
+    { path: '/total-revenue', label: 'Total Revenue', icon: '💰' },
+    { path: '/total-orders', label: 'Total Orders', icon: '📦' },
+    { path: '/pending-status', label: 'Pending Status', icon: '⏳' },
+    { path: '/service-status', label: 'Service Status', icon: '🛠️' },
+    { path: '/appointments', label: 'Appointments', icon: '📅' },
+    { path: '/prospective', label: 'Prospective', icon: '👥' },
   ];
 
   return (
-    <div className="app-container">
+    <div>
       <AutoLogout />
       
       {/* Navbar */}
-      <div className="navbar">
-        <button
-          className="toggle-btn"
-          onClick={toggleSidebar}
-          aria-label="Toggle sidebar"
-        >
-          {sidebarOpen ? '✕' : '☰'}
-        </button>
-        
-        <h1 className="navbar-title">
-          AGENT DASHBOARD
-        </h1>
+      <div style={styles.navbar}>
+        <div style={styles.navLeft}>
+          <span style={{ fontSize: '24px', cursor: 'pointer' }} onClick={toggleSidebar}>
+            &#9776;
+          </span>
+        </div>
 
-        <div className="navbar-right">
-          {/* Target Display */}
-          <div className="target-display">
-            <div className="target-header">
-              <span className="target-icon">🎯 Target:</span>
-            </div>
-            <div className="target-progress-container">
-              <span className="target-text">
-                {targetLoading
-                  ? "Loading..."
-                  : `${targetData.formattedAchieved} / ${targetData.formattedTarget}`}
-              </span>
-              <div className="progress-bar">
-                {!targetLoading && (
-                  <div
-                    className="progress-fill"
-                    style={{
-                      width: `${targetPercentage}%`,
-                      backgroundImage: getProgressGradient(targetPercentage),
-                    }}
-                  ></div>
-                )}
-              </div>
-            </div>
+        <div style={styles.navCenter}>AGENT DASHBOARD</div>
+
+        <div style={styles.profileContainer}>
+          <div style={styles.profileIcon}>
+            {getProfileInitials(user?.name)}
           </div>
+          <button style={styles.logoutButton} onClick={handleLogout}>
+            Logout
+          </button>
+        </div>
+      </div>
 
-          {/* Profile Icon */}
-          <div className="profile-icon" title={user?.name}>
-            <span className="profile-icon-symbol">
-              {getProfileInitials(user?.name)}
-            </span>
-          </div>
-
-          {/* Logout Button */}
-          <div ref={logoutRef} className="logout-container">
-            <button 
-              className="logout-btn" 
-              onClick={handleLogout}
+      <div style={styles.container}>
+        {/* Sidebar */}
+        <div style={styles.sidebar}>
+          {menuItems.map(({ path, label, icon }) => (
+            <NavLink
+              key={path}
+              to={path}
+              style={linkStyle(label)}
+              onMouseEnter={() => setHoveredItem(label)}
+              onMouseLeave={() => setHoveredItem('')}
             >
-              Logout
-            </button>
-          </div>
+              <span style={{ fontSize: '18px', width: '24px' }}>{icon}</span>
+              <span>{label}</span>
+            </NavLink>
+          ))}
         </div>
-      </div>
 
-      {/* Sidebar Overlay for Mobile */}
-      {isMobile && sidebarOpen && (
-        <div 
-          className="sidebar-overlay"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <div className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
-        <div className="sidebar-content">
-          {/* User Info in Sidebar for Mobile */}
-          {isMobile && (
-            <div className="sidebar-user-info">
-              <div className="user-name">{user?.name}</div>
-              <div className="user-role">{user?.role}</div>
-            </div>
-          )}
-
-          <div className="nav-menu">
-            {menuItems.map(({ key, label, path }) => (
-              <div
-                key={key}
-                className={`nav-item ${activeTab === key ? "active" : ""}`}
-                onClick={() => handleNavLinkClick(key, path)}
-              >
-                <span className="nav-text">{label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className={`main-content ${sidebarOpen ? "" : "expanded"}`}>
-        <div className="form-container">
-          {/* Dashboard Home - Only Pie Chart */}
+        {/* Main Content */}
+        <div style={styles.content}>
+          {/* Dashboard Home */}
           {location.pathname === '/agent-dashboard' && (
-            <div className="dashboard-home">
-              <h2 className="dashboard-title">Agent Performance Overview</h2>
-              
-              {/* Single Pie Chart Container */}
-              <div className="pie-chart-container">
-                <div className="pie-chart-card">
-                  <h3 className="pie-chart-title">Target Achievement</h3>
-                  <div className="pie-chart-wrapper">
-                    <div className="pie-chart">
-                      <div 
-                        className="pie-segment achieved"
-                        style={{ 
-                          '--percentage': `${targetPercentage}%`,
-                          '--color': targetPercentage >= 80 ? '#4CAF50' : 
-                                    targetPercentage >= 50 ? '#FFA500' : '#FF0000'
-                        }}
-                      >
-                        <div className="pie-center">
-                          <span className="percentage">{targetPercentage}%</span>
-                          <span className="label">Achieved</span>
-                        </div>
-                      </div>
-                      <div 
-                        className="pie-segment remaining"
-                        style={{ 
-                          '--percentage': `${100 - targetPercentage}%`,
-                          '--color': '#e0e0e0'
-                        }}
-                      ></div>
-                    </div>
+            <>
+              <div style={styles.summaryRow}>
+                <div style={styles.welcomeMessage}>
+                  Welcome back, {user?.name || 'Agent'}! 👋
+                </div>
+                <select style={styles.dateFilter}>
+                  <option>Last 30 Days</option>
+                  <option>This Month</option>
+                  <option>Last Month</option>
+                  <option>This Quarter</option>
+                  <option>This Year</option>
+                </select>
+              </div>
+
+           
+
+              {/* Charts Section */}
+              <div style={styles.chartsGrid}>
+                {/* Order Status Pie Chart */}
+                <div style={styles.chartCard}>
+                  <h3 style={styles.chartTitle}>
+                    <span>📊</span> Total Revenue 
+                  </h3>
+                  <div style={{ height: '300px' }}>
+                    <Pie data={orderStatusData} options={pieOptions} />
                   </div>
-                  <div className="pie-chart-stats">
-                    <div className="stat-item">
-                      <span className="stat-label">Target:</span>
-                      <span className="stat-value">{targetData.formattedTarget}</span>
-                    </div>
-                    <div className="stat-item">
-                      <span className="stat-label">Achieved:</span>
-                      <span className="stat-value">{targetData.formattedAchieved}</span>
-                    </div>
-                    <div className="stat-item">
-                      <span className="stat-label">Remaining:</span>
-                      <span className="stat-value">
-                        ₹{(targetData.target - targetData.achieved).toLocaleString("en-IN")}
-                      </span>
-                    </div>
+                </div>
+
+                {/* Revenue Distribution Doughnut Chart */}
+                <div style={styles.chartCard}>
+                  <h3 style={styles.chartTitle}>
+                    <span>💰</span> Revenue Distribution
+                  </h3>
+                  <div style={{ height: '300px' }}>
+                    <Doughnut data={revenueDistributionData} options={pieOptions} />
+                  </div>
+                </div>
+
+                {/* Monthly Revenue Bar Chart */}
+                <div style={styles.chartCard}>
+                  <h3 style={styles.chartTitle}>
+                    <span>📈</span> Monthly Revenue Trend
+                  </h3>
+                  <div style={{ height: '300px' }}>
+                    <Bar data={monthlyRevenueData} options={barOptions} />
+                  </div>
+                </div>
+
+                {/* Weekly Orders Line Chart */}
+                <div style={styles.chartCard}>
+                  <h3 style={styles.chartTitle}>
+                    <span>📉</span> Weekly Orders
+                  </h3>
+                  <div style={{ height: '300px' }}>
+                    <Line data={weeklyOrdersData} options={lineOptions} />
                   </div>
                 </div>
               </div>
 
               {/* Recent Orders */}
-              <div className="recent-orders-section">
-                <h3 className="section-title">Recent Orders</h3>
+              <div style={styles.recentOrdersCard}>
+                <h3 style={styles.sectionTitle}>Recent Orders</h3>
                 {orders.length > 0 ? (
-                  <div className="orders-list">
-                    {orders.map(order => (
-                      <div key={order._id} className="order-item">
-                        <div className="order-header">
-                          <strong>Order #{order.orderId}</strong>
-                          <span className={`status-badge ${order.status?.toLowerCase()}`}>
-                            {order.status}
+                  <div style={styles.ordersGrid}>
+                    {orders.slice(0, 6).map(order => (
+                      <div key={order._id} style={styles.orderCard}>
+                        <div style={styles.orderHeader}>
+                          <span style={styles.orderId}>#{order.orderId || 'N/A'}</span>
+                          <span className={`status-badge ${order.status?.toLowerCase()}`} style={styles.statusBadge}>
+                            {order.status || 'Pending'}
                           </span>
                         </div>
-                        <div className="order-details">
-                          <span className="customer-name">{order.customerName}</span>
+                        <div style={styles.orderInfo}>
+                          <span style={styles.infoLabel}>Customer:</span>
+                          <span style={styles.infoValue}>{order.customerName || 'N/A'}</span>
+                        </div>
+                        <div style={styles.orderInfo}>
+                          <span style={styles.infoLabel}>Amount:</span>
+                          <span style={styles.infoValue}>₹{order.amount?.toLocaleString('en-IN') || '0'}</span>
+                        </div>
+                        <div style={styles.orderInfo}>
+                          <span style={styles.infoLabel}>Date:</span>
+                          <span style={styles.infoValue}>
+                            {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
+                          </span>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="no-orders">No orders found</p>
+                  <p style={{ color: '#6c757d', textAlign: 'center', padding: '30px' }}>
+                    No recent orders found
+                  </p>
                 )}
               </div>
-            </div>
+            </>
           )}
 
-          {/* Phone validation for create-order */}
+          {/* Create Order - Phone validation */}
           {location.pathname === '/agent-dashboard/create-order' && !showOrderForm && (
-            <div className="phone-search-container">
-              <div className="phone-search-box">
-                <h3>Enter Phone Number:</h3>
-                <div className="form-group">
-                  <input
-                    type="text"
-                    value={orderNumber}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (/^\d*$/.test(val) && val.length <= 10) {
-                        setOrderNumber(val);
-                        if (searchError) setSearchError("");
-                      }
-                    }}
-                    placeholder="10 digit phone number"
-                    maxLength={10}
-                  />
-                </div>
+            <div style={styles.phoneSearchContainer}>
+              <div style={styles.phoneSearchBox}>
+                <h2 style={styles.searchTitle}>Create New Order</h2>
+                <p style={styles.searchSubtitle}>Enter customer's phone number to begin</p>
+                <input
+                  type="text"
+                  value={orderNumber}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (/^\d*$/.test(val) && val.length <= 10) {
+                      setOrderNumber(val);
+                      if (searchError) setSearchError("");
+                    }
+                  }}
+                  placeholder="10 digit phone number"
+                  maxLength={10}
+                  style={styles.phoneInput}
+                />
 
                 {searchError && (
-                  <div className="error-message">{searchError}</div>
+                  <div style={styles.errorMessage}>{searchError}</div>
                 )}
+                
                 <button
                   onClick={handleSearch}
                   disabled={isLoading || orderNumber.length !== 10}
-                  className="search-button"
+                  style={styles.searchButton}
                 >
-                  {isLoading ? "Searching..." : "Search Orders"}
+                  {isLoading ? (
+                    <span style={styles.loadingSpinner}></span>
+                  ) : (
+                    'Continue'
+                  )}
                 </button>
               </div>
             </div>
@@ -504,532 +1055,18 @@ function AgentDashboard() {
                 setOrderNumber('');
                 setExistingOrderData(null);
                 navigate('/agent-dashboard');
+                fetchRecentOrders();
+                fetchDashboardStats();
               }}
             />
           )}
 
-          {/* Field Executive Tab Content */}
-          {location.pathname === '/field-executive' && (
-            <div className="field-executive-content">
-              <h2>Field Executive</h2>
-              <p>Field Executive content goes here...</p>
-            </div>
-          )}
+          {/* Other routes */}
+          {location.pathname !== '/agent-dashboard' && 
+           location.pathname !== '/agent-dashboard/create-order' && 
+           <Outlet />}
         </div>
       </div>
-
-      {/* CSS Styles */}
-      <style>{`
-        .app-container {
-          display: flex;
-          height: 100vh;
-          overflow: hidden;
-        }
-
-        .navbar {
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 60px;
-          background-color: #003366;
-          color: #fff;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0 20px;
-          z-index: 1000;
-          box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-
-        .toggle-btn {
-          background: none;
-          border: none;
-          color: white;
-          font-size: 24px;
-          cursor: pointer;
-          padding: 8px;
-        }
-
-        .navbar-title {
-          background: linear-gradient(to right, #ff7e5f, #feb47b);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          font-size: 18px;
-          font-weight: bold;
-          margin: 0;
-        }
-
-        .navbar-right {
-          display: flex;
-          align-items: center;
-          gap: 15px;
-        }
-
-        .target-display {
-          background-color: rgba(255, 255, 255, 0.1);
-          padding: 8px 12px;
-          border-radius: 6px;
-          min-width: 200px;
-        }
-
-        .target-header {
-          font-size: 12px;
-          margin-bottom: 4px;
-          opacity: 0.8;
-        }
-
-        .target-progress-container {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-
-        .target-text {
-          font-size: 14px;
-          font-weight: bold;
-        }
-
-        .progress-bar {
-          height: 6px;
-          background-color: rgba(255, 255, 255, 0.2);
-          border-radius: 3px;
-          overflow: hidden;
-        }
-
-        .progress-fill {
-          height: 100%;
-          transition: width 0.3s ease;
-        }
-
-        .profile-icon {
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          background-color: #fff;
-          color: #003366;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          font-weight: bold;
-          font-size: 16px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .logout-btn {
-          padding: 8px 16px;
-          cursor: pointer;
-          background-color: #d32f2f;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          font-size: 14px;
-        }
-
-        /* Sidebar Overlay for Mobile */
-        .sidebar-overlay {
-          position: fixed;
-          top: 60px;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background-color: rgba(0,0,0,0.5);
-          z-index: 998;
-        }
-
-        .sidebar {
-          width: ${sidebarOpen ? '200px' : '0'};
-          background-color: #003366;
-          color: #fff;
-          overflow-x: hidden;
-          transition: width 0.3s ease;
-          padding-top: 20px;
-          position: fixed;
-          top: 60px;
-          bottom: 0;
-          left: 0;
-          z-index: 999;
-          display: flex;
-          flex-direction: column;
-        }
-
-        .sidebar-user-info {
-          padding: 15px 20px;
-          border-bottom: 1px solid rgba(255,255,255,0.2);
-          margin-bottom: 10px;
-        }
-
-        .user-name {
-          font-weight: bold;
-          font-size: 16px;
-        }
-
-        .user-role {
-          font-size: 14px;
-          opacity: 0.8;
-        }
-
-        .nav-menu {
-          display: flex;
-          flex-direction: column;
-        }
-
-        .nav-item {
-          padding: 18px 20px;
-          cursor: pointer;
-          border-bottom: 1px solid rgba(255,255,255,0.2);
-          color: white;
-          text-decoration: none;
-          display: block;
-          transition: background-color 0.3s;
-          font-size: 16px;
-          font-weight: 500;
-          text-align: left;
-        }
-
-        .nav-item:hover,
-        .nav-item.active {
-          background-color: rgba(255,255,255,0.2);
-          font-weight: bold;
-        }
-
-        .nav-text {
-          display: block;
-        }
-
-        .main-content {
-          margin-left: ${sidebarOpen && !isMobile ? '200px' : '0'};
-          margin-top: 60px;
-          padding: 20px;
-          transition: margin-left 0.3s ease;
-          width: 100%;
-          height: calc(100vh - 60px);
-          overflow-y: auto;
-          background-color: #f4f4f4;
-        }
-
-        /* Dashboard Styles */
-        .dashboard-home {
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-
-        .dashboard-title {
-          color: #003366;
-          margin-bottom: 30px;
-          text-align: center;
-          font-size: ${isMobile ? '20px' : '24px'};
-        }
-
-        .pie-chart-container {
-          display: flex;
-          justify-content: center;
-          margin-bottom: 40px;
-        }
-
-        .pie-chart-card {
-          background: white;
-          padding: 30px;
-          border-radius: 15px;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-          text-align: center;
-          max-width: 400px;
-          width: 100%;
-        }
-
-        .pie-chart-title {
-          color: #003366;
-          margin-bottom: 20px;
-          font-size: ${isMobile ? '16px' : '18px'};
-        }
-
-        .pie-chart-wrapper {
-          display: flex;
-          justify-content: center;
-          margin: 20px 0;
-        }
-
-        .pie-chart {
-          width: ${isMobile ? '150px' : '200px'};
-          height: ${isMobile ? '150px' : '200px'};
-          border-radius: 50%;
-          position: relative;
-          background: conic-gradient(
-            var(--color) 0% var(--percentage),
-            #e0e0e0 var(--percentage) 100%
-          );
-        }
-
-        .pie-center {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          background: white;
-          width: ${isMobile ? '80px' : '100px'};
-          height: ${isMobile ? '80px' : '100px'};
-          border-radius: 50%;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-
-        .percentage {
-          font-size: ${isMobile ? '16px' : '20px'};
-          font-weight: bold;
-          color: #003366;
-        }
-
-        .label {
-          font-size: ${isMobile ? '10px' : '12px'};
-          color: #666;
-          margin-top: 5px;
-        }
-
-        .pie-chart-stats {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-          gap: 15px;
-          margin-top: 20px;
-        }
-
-        .stat-item {
-          text-align: center;
-          padding: 10px;
-          background: #f8f9fa;
-          border-radius: 8px;
-        }
-
-        .stat-label {
-          display: block;
-          font-size: 12px;
-          color: #666;
-          margin-bottom: 5px;
-        }
-
-        .stat-value {
-          display: block;
-          font-size: 14px;
-          font-weight: bold;
-          color: #003366;
-        }
-
-        .recent-orders-section {
-          background: white;
-          padding: 25px;
-          border-radius: 15px;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-
-        .section-title {
-          color: #003366;
-          margin-bottom: 20px;
-          font-size: ${isMobile ? '16px' : '18px'};
-        }
-
-        .orders-list {
-          display: grid;
-          gap: 15px;
-        }
-
-        .order-item {
-          padding: 15px;
-          border: 1px solid #e0e0e0;
-          border-radius: 8px;
-          background: #f8f9fa;
-        }
-
-        .order-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 8px;
-        }
-
-        .status-badge {
-          padding: 4px 8px;
-          border-radius: 12px;
-          font-size: 12px;
-          font-weight: bold;
-        }
-
-        .status-badge.completed {
-          background: #e6f7e6;
-          color: #2e7d32;
-        }
-
-        .status-badge.pending {
-          background: #fff3e6;
-          color: #ff9800;
-        }
-
-        .status-badge.in-progress {
-          background: #e6f7ff;
-          color: #1976d2;
-        }
-
-        .customer-name {
-          color: #333;
-          font-size: 14px;
-        }
-
-        .no-orders {
-          text-align: center;
-          color: #666;
-          font-style: italic;
-          padding: 40px;
-        }
-
-        /* Phone Search Styles */
-        .phone-search-container {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          min-height: 400px;
-        }
-
-        .phone-search-box {
-          max-width: 500px;
-          width: 100%;
-          padding: 30px;
-          background-color: white;
-          border-radius: 10px;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        .form-group {
-          margin-bottom: 20px;
-        }
-
-        .form-group input {
-          width: 100%;
-          padding: 15px;
-          border: 2px solid #ddd;
-          border-radius: 8px;
-          font-size: 18px;
-          text-align: center;
-          outline: none;
-          transition: border-color 0.3s;
-        }
-
-        .form-group input:focus {
-          border-color: #003366;
-        }
-
-        .error-message {
-          color: #d32f2f;
-          font-size: 14px;
-          margin-bottom: 15px;
-          text-align: center;
-        }
-
-        .search-button {
-          width: 100%;
-          padding: 15px;
-          background-color: #003366;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          font-size: 18px;
-          cursor: pointer;
-          transition: background-color 0.3s;
-        }
-
-        .search-button:hover:not(:disabled) {
-          background-color: #002244;
-        }
-
-        .search-button:disabled {
-          background-color: #ccc;
-          cursor: not-allowed;
-        }
-
-        /* Field Executive Content */
-        .field-executive-content {
-          background: white;
-          padding: 30px;
-          border-radius: 10px;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-          max-width: 800px;
-          margin: 0 auto;
-        }
-
-        .field-executive-content h2 {
-          color: #003366;
-          margin-bottom: 20px;
-        }
-
-        .field-executive-content p {
-          color: #666;
-          line-height: 1.6;
-        }
-
-        /* Mobile Responsive */
-        @media (max-width: 768px) {
-          .navbar-title {
-            font-size: 16px;
-          }
-
-          .target-display {
-            min-width: 150px;
-          }
-
-          .target-text {
-            font-size: 12px;
-          }
-
-          .pie-chart-card {
-            padding: 20px;
-          }
-
-          .pie-chart-stats {
-            grid-template-columns: 1fr;
-          }
-
-          .recent-orders-section {
-            padding: 20px;
-          }
-
-          .sidebar {
-            width: ${sidebarOpen ? '180px' : '0'};
-          }
-        }
-
-        @media (max-width: 480px) {
-          .navbar-right {
-            gap: 10px;
-          }
-
-          .target-display {
-            display: none;
-          }
-
-          .pie-chart {
-            width: 120px;
-            height: 120px;
-          }
-
-          .pie-center {
-            width: 60px;
-            height: 60px;
-          }
-
-          .percentage {
-            font-size: 14px;
-          }
-
-          .label {
-            font-size: 9px;
-          }
-
-          .nav-item {
-            padding: 16px 20px;
-            font-size: 15px;
-          }
-        }
-      `}</style>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ProspectiveClient = require('../models/ProspectiveClients');
-const PRIVILEGED_EXECUTIVES = ['admin1','Soujanya', 'Aleem', 'Sirisha', 'Sangeetha', 'Malleshwari', 'Malli'];
+const PRIVILEGED_EXECUTIVES = ['admin1','Soujanya', 'Aleem', 'Sirisha', 'Rajesh'];
 
 // Create a new prospective client
 router.post('/', async (req, res) => {

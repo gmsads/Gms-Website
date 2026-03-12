@@ -91,9 +91,9 @@ const styles = {
     color: '#008080',
     fontWeight: 'bold',
   },
-  executiveBadge: {
-    backgroundColor: '#e6f3ff',
-    color: '#003366',
+  createdByBadge: {
+    backgroundColor: '#f0e6ff',
+    color: '#5b21b6',
     padding: '4px 8px',
     borderRadius: '4px',
     fontWeight: '600',
@@ -150,6 +150,23 @@ const styles = {
     marginTop: '4px',
     textAlign: 'center',
   },
+  privilegeBanner: {
+    backgroundColor: '#d4edda',
+    padding: '10px 15px',
+    borderRadius: '6px',
+    marginBottom: '15px',
+    border: '1px solid #c3e6cb',
+    color: '#155724',
+    fontSize: '14px',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  infoTooltip: {
+    fontSize: '0.8rem',
+    color: '#666',
+    marginTop: '4px',
+    fontStyle: 'italic',
+  },
 };
 
 const ViewAppointments = () => {
@@ -161,7 +178,22 @@ const ViewAppointments = () => {
   const [updating, setUpdating] = useState({});
   const [updateSuccess, setUpdateSuccess] = useState({});
   const [updateError, setUpdateError] = useState({});
-  const currentUser = localStorage.getItem('userName');
+  const [userRole, setUserRole] = useState('');
+  const [userName, setUserName] = useState('');
+  
+  // Get user info from localStorage
+  useEffect(() => {
+    const role = localStorage.getItem('role');
+    const name = localStorage.getItem('userName');
+    setUserRole(role);
+    setUserName(name);
+  }, []);
+
+  // Define privileged users who can see all appointments
+  const isAdmin = userRole === 'Admin';
+  const privilegedExecutives = ['Soujanya', 'Aleem', 'Sirisha', 'Rajesh'];
+  const isPrivilegedExecutive = privilegedExecutives.includes(userName);
+  const canSeeAllAppointments = isAdmin || isPrivilegedExecutive;
 
   const statusOptions = [
     { value: 'pending', label: 'Pending' },
@@ -177,11 +209,24 @@ const ViewAppointments = () => {
   const fetchAppointments = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/appointments');
-      const filteredData = response.data
-        .filter(appt => appt.executiveName === currentUser)
-        .filter(appt => filter === 'all' || appt.status === filter)
-        .sort((a, b) => new Date(b.date) - new Date(a.date));
+      // Build query parameters based on user permissions
+      let params = {};
+      
+      // If user is NOT privileged, filter by their name
+      if (!canSeeAllAppointments) {
+        params = { executiveName: userName };
+      }
+      
+      const response = await axios.get('/api/appointments', { params });
+      
+      // Apply status filter
+      let filteredData = response.data;
+      if (filter !== 'all') {
+        filteredData = filteredData.filter(appt => appt.status === filter);
+      }
+      
+      // Sort by date (newest first)
+      filteredData = filteredData.sort((a, b) => new Date(b.date) - new Date(a.date));
       
       setAppointments(filteredData);
       
@@ -202,8 +247,11 @@ const ViewAppointments = () => {
   };
 
   useEffect(() => {
-    fetchAppointments();
-  }, [filter, currentUser]);
+    if (userName) { // Only fetch if we have the user name
+      fetchAppointments();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, userName, canSeeAllAppointments]);
 
   const handleStatusChange = (id, newStatus) => {
     setSelectedStatus(prev => ({ ...prev, [id]: newStatus }));
@@ -293,7 +341,9 @@ const ViewAppointments = () => {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h1 style={styles.title}>Your Appointments</h1>
+        <h1 style={styles.title}>
+          {canSeeAllAppointments ? 'All Appointments' : 'Your Appointments'}
+        </h1>
         <div style={styles.filterContainer}>
           <label style={styles.filterLabel}>Filter:</label>
           <select
@@ -314,6 +364,15 @@ const ViewAppointments = () => {
         </div>
       </div>
 
+      {canSeeAllAppointments && (
+        <div style={styles.privilegeBanner}>
+          <strong>Privileged Access:</strong> You are viewing all appointments across all executives
+          <div style={styles.infoTooltip}>
+            Showing who created each appointment
+          </div>
+        </div>
+      )}
+
       <div style={styles.tableContainer}>
         <table style={styles.table}>
           <thead>
@@ -324,7 +383,7 @@ const ViewAppointments = () => {
               <th style={styles.th}>Date</th>
               <th style={styles.th}>Time</th>
               <th style={styles.th}>Venue</th>
-              <th style={styles.th}>Executive</th>
+              {canSeeAllAppointments && <th style={styles.th}>Created By</th>}
               <th style={styles.th}>Status</th>
               <th style={styles.th}>Update Status</th>
             </tr>
@@ -339,11 +398,18 @@ const ViewAppointments = () => {
                   <td style={styles.td}>{formatDate(appt.date)}</td>
                   <td style={styles.td}>{appt.time}</td>
                   <td style={styles.td}>{appt.venue}</td>
-                  <td style={styles.td}>
-                    <span style={styles.executiveBadge}>
-                      {appt.executiveName}
-                    </span>
-                  </td>
+                  {canSeeAllAppointments && (
+                    <td style={styles.td}>
+                      <span style={styles.createdByBadge}>
+                        {appt.createdBy || appt.executiveName || 'N/A'}
+                      </span>
+                      {appt.createdAt && (
+                        <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '2px' }}>
+                          {formatDate(appt.createdAt)}
+                        </div>
+                      )}
+                    </td>
+                  )}
                   <td style={{
                     ...styles.td,
                     ...getStatusStyle(appt.status),
@@ -383,7 +449,7 @@ const ViewAppointments = () => {
               ))
             ) : (
               <tr>
-                <td colSpan="9" style={{ ...styles.td, textAlign: 'center' }}>
+                <td colSpan={canSeeAllAppointments ? 10 : 9} style={{ ...styles.td, textAlign: 'center' }}>
                   No appointments found
                 </td>
               </tr>
