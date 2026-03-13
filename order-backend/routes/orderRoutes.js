@@ -316,8 +316,22 @@ router.get("/orders", async (req, res) => {
 
     console.log('Query parameters:', req.query); // Debug log
 
+    // NEW: Handle date range filter
+    if (req.query.startDate && req.query.endDate) {
+      const startDate = new Date(req.query.startDate);
+      startDate.setHours(0, 0, 0, 0);
+      
+      const endDate = new Date(req.query.endDate);
+      endDate.setHours(23, 59, 59, 999);
+      
+      query.orderDate = {
+        $gte: startDate,
+        $lte: endDate
+      };
+      console.log('📅 Date range filter applied:', { startDate, endDate });
+    }
     // Filter by executive name if specified (for performance view)
-    if (req.query.executive) {
+    else if (req.query.executive) {
       query.executive = req.query.executive;
     }
 
@@ -336,13 +350,13 @@ router.get("/orders", async (req, res) => {
       query.clientType = req.query.clientType;
     }
 
-    // NEW: Filter by lead source if specified
+    // Filter by lead source if specified
     if (req.query.leadSource) {
       query.leadSource = req.query.leadSource;
     }
 
-    // Filter by month/year if specified
-    if (req.query.month && req.query.year) {
+    // Filter by month/year if specified (only if date range not applied)
+    if (!req.query.startDate && !req.query.endDate && req.query.month && req.query.year) {
       const month = parseInt(req.query.month);
       const year = parseInt(req.query.year);
       const startDate = new Date(year, month - 1, 1);
@@ -359,18 +373,12 @@ router.get("/orders", async (req, res) => {
     const orders = await Order.find(query);
     console.log('Found orders:', orders.length); // Debug log
     
-    // Debug: Log createdBy field for each order
-    orders.forEach(order => {
-      console.log(`Order ${order.orderNo}: leadSource=${order.leadSource}, otherLeadSource=${order.otherLeadSource}`);
-    });
-    
     res.json(orders);
   } catch (err) {
     console.error("Error fetching orders:", err);
     res.status(500).json({ error: "Failed to fetch orders" });
   }
 });
-
 // ============================
 // UPDATE an existing order
 // ============================

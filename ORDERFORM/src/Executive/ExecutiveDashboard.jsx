@@ -342,7 +342,7 @@ const ExecutiveDashboard = ({
     }
   };
 
-  // Data fetching functions - ALL FUNCTIONS NOW USE selectedDate
+  // ===== FIXED: fetchExecutiveData now only counts Retail/New orders for target =====
   const fetchExecutiveData = useCallback(async (executiveName) => {
     try {
       const month = selectedDate.getMonth() + 1;
@@ -361,19 +361,48 @@ const ExecutiveDashboard = ({
       let executiveTarget = 100;
       let completed = 0;
       let pending = 0;
+      let retailCount = 0;
+      let excludedCount = 0;
 
       orders.forEach(order => {
-        if (order.target) executiveTarget = order.target;
+        // Get target from first order (if present)
+        if (order.target) executiveTarget = parseFloat(order.target) || 100;
+        
+        // Check client type - ONLY count for target if Retail or New
+        const clientType = (order.clientType || '').toString().toLowerCase().trim();
+        
+        // Calculate order total
+        let orderTotal = 0;
         order.rows?.forEach(row => {
-          totalAchieved += parseFloat(row.total || 0);
+          const rowTotal = parseFloat(row.total || 0);
+          orderTotal += rowTotal;
+          
+          // Service tracking (for all orders, regardless of type)
           const deliveryDate = row.deliveryDate ? parseISO(row.deliveryDate) : null;
           const isExpired = deliveryDate && isBefore(deliveryDate, new Date());
           if (row.isCompleted || isExpired) completed++;
           else pending++;
         });
+        
+        // ONLY ADD TO ACHIEVED if client type is Retail or New
+        if (clientType === 'retail' || clientType === 'new') {
+          totalAchieved += orderTotal;
+          retailCount++;
+          console.log(`✅ RETAIL order ${order.orderNo}: ₹${orderTotal} (${order.clientType}) ADDED to target`);
+        } else {
+          excludedCount++;
+          console.log(`❌ EXCLUDED order ${order.orderNo}: ₹${orderTotal} (${order.clientType || 'No type'}) NOT counted in target`);
+        }
       });
 
-      console.log(`Target: ${executiveTarget}, Achieved: ${totalAchieved}`);
+      console.log(`📊 Target calculation:`, {
+        target: executiveTarget,
+        achieved: totalAchieved,
+        retailOrders: retailCount,
+        excludedOrders: excludedCount,
+        totalOrders: orders.length
+      });
+
       setTarget(executiveTarget);
       setAchieved(totalAchieved);
       setServiceData([{ name: 'Services', pending, completed, total: pending + completed }]);
@@ -782,7 +811,7 @@ const ExecutiveDashboard = ({
               <span className="value">₹{target.toLocaleString()}</span>
             </div>
             <div className="summary-item">
-              <span>Achieved:</span>
+              <span>Achieved (Retail Only):</span>
               <span className="value">₹{achieved.toLocaleString()}</span>
             </div>
             <div className="summary-item">

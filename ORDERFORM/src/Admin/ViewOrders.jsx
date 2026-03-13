@@ -7,7 +7,7 @@ import { toast } from 'react-toastify';
 
 // Main ViewOrders component function
 function ViewOrders() {
-  // State management for orders data
+  // ===== 1. ALL STATE VARIABLES FIRST =====
   const [orders, setOrders] = useState([]); // Stores all orders
   const [groupedOrders, setGroupedOrders] = useState({}); // Orders grouped by month
   const [searchTerm, setSearchTerm] = useState(''); // Search filter term
@@ -39,23 +39,20 @@ function ViewOrders() {
   });
   const [showDeleteModal, setShowDeleteModal] = useState(false); // Delete confirmation modal
   const [leadSourceFilter, setLeadSourceFilter] = useState(null); // Lead source filter
-
-  // NEW: Lead source filter dropdown visibility state
   const [showLeadSourceFilter, setShowLeadSourceFilter] = useState(false); // Lead source filter dropdown
   const leadSourceFilterRef = useRef(null); // Ref for click outside detection
-
-  // Month navigation states
+  const [startDate, setStartDate] = useState(''); // Date range filter start
+  const [endDate, setEndDate] = useState(''); // Date range filter end
+  const [useDateRange, setUseDateRange] = useState(false); // Whether date range is active
   const [currentViewMonth, setCurrentViewMonth] = useState(null); // Current month being viewed
   const [currentViewYear, setCurrentViewYear] = useState(new Date().getFullYear()); // Current year being viewed
-
-  // Month filter information state
-  const [monthFilterInfo, setMonthFilterInfo] = useState({
+  const [monthFilterInfo, setMonthFilterInfo] = useState({ // Month filter information
     monthCount: 0, // Number of orders in month
     monthName: '', // Month name
     weekCount: 0 // Number of orders in week
   });
 
-  // Lead source options
+  // ===== 2. CONSTANTS =====
   const leadSources = [
     'India Mart',
     'Just Dial',
@@ -67,26 +64,25 @@ function ViewOrders() {
     'Other Specify'
   ];
 
-  // React Router hooks for navigation and location
-  const location = useLocation(); // Get current route location
-  const navigate = useNavigate(); // Navigation function
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  // API configuration constants
-  const API_BASE_URL = '/api'; // Base API URL
-  const API_ENDPOINTS = { // API endpoint definitions
-    ORDERS: `${API_BASE_URL}/orders`, // Get all orders
-    GET_ORDER: (id) => `${API_BASE_URL}/orders/${id}`, // Get specific order
-    UPDATE_ORDER: (id) => `${API_BASE_URL}/orders/${id}`, // Update order
-    DELETE_ORDER: (id) => `${API_BASE_URL}/orders/${id}`, // Delete order
-    RECORD_PAYMENT: (id) => `${API_BASE_URL}/orders/${id}/record-payment`, // Record payment
-    GET_PAYMENTS: (id) => `${API_BASE_URL}/orders/${id}`, // Get payment history
-    IMPORT_ORDERS: `${API_BASE_URL}/orders/import`, // Import orders
-    TRASH_ORDERS: `${API_BASE_URL}/orders/trash`, // Get trashed orders
-    RESTORE_ORDER: (id) => `${API_BASE_URL}/orders/${id}/restore`, // Restore order
-    PERMANENT_DELETE_ORDER: (id) => `${API_BASE_URL}/orders/${id}/permanent` // Permanent delete
+  const API_BASE_URL = '/api';
+  const API_ENDPOINTS = {
+    ORDERS: `${API_BASE_URL}/orders`,
+    GET_ORDER: (id) => `${API_BASE_URL}/orders/${id}`,
+    UPDATE_ORDER: (id) => `${API_BASE_URL}/orders/${id}`,
+    DELETE_ORDER: (id) => `${API_BASE_URL}/orders/${id}`,
+    RECORD_PAYMENT: (id) => `${API_BASE_URL}/orders/${id}/record-payment`,
+    GET_PAYMENTS: (id) => `${API_BASE_URL}/orders/${id}`,
+    IMPORT_ORDERS: `${API_BASE_URL}/orders/import`,
+    TRASH_ORDERS: `${API_BASE_URL}/orders/trash`,
+    RESTORE_ORDER: (id) => `${API_BASE_URL}/orders/${id}/restore`,
+    PERMANENT_DELETE_ORDER: (id) => `${API_BASE_URL}/orders/${id}/permanent`
   };
 
-  // CSS for responsive sticky columns
+  const COMPANY_GST = '36AAQFG7654Q2ZB';
+
   const responsiveStyles = `
     @media (max-width: 1024px) {
       .sticky-column {
@@ -96,7 +92,6 @@ function ViewOrders() {
       }
     }
     
-    /* Print Styles */
     @media print {
       .no-print {
         display: none !important;
@@ -144,94 +139,68 @@ function ViewOrders() {
     }
   `;
 
-  // Function to check if user should see summary cards
+  // ===== 3. HELPER FUNCTIONS =====
   const shouldShowSummaryCards = () => {
-    // Define roles that can see summary cards
     const rolesThatCanSeeCards = ['Admin', 'Account', 'Service Executive'];
-    // Return true if current role is in allowed roles
     return rolesThatCanSeeCards.includes(userRole);
   };
 
-  // Function to check if user should see only their own orders
   const shouldSeeOnlyOwnOrders = () => {
-    // Define roles that can see all orders
     const rolesThatCanSeeAll = ['Admin', 'Account', 'Service Executive'];
-    // Return true if current role is NOT in privileged roles
     return !rolesThatCanSeeAll.includes(userRole);
   };
 
-  // Function to check if user can delete orders
   const canDeleteOrders = () => {
-    // Only Admin users can delete orders
     return userRole === 'Admin';
   };
 
-  // Function to check if user can export to Excel
   const canExportToExcel = () => {
-    // Define roles that can export data
     const rolesThatCanExport = ['Admin', 'Account', 'Service Executive', 'Executive'];
-    // Return true if current role can export
     return rolesThatCanExport.includes(userRole);
   };
 
-  // Function to check if user can import from Excel
   const canImportFromExcel = () => {
     const rolesThatCanImport = ['Admin', 'Account', 'Service Executive', 'Executive'];
     return rolesThatCanImport.includes(userRole);
   };
 
-  // Company GST Number
-  const COMPANY_GST = '36AAQFG7654Q2ZB'; // Replace with your actual GST number
-
-  // Function to format date to DD-MM-YYYY format
+  // ===== 4. DATE FORMATTING FUNCTIONS =====
   const formatDate = (dateString) => {
-    // Return empty string if no date provided
     if (!dateString) return '';
 
     try {
-      // Split date string by hyphens
       const parts = dateString.split('-');
-      // Check if already in DD-MM-YYYY format
       if (parts.length === 3) {
         if (parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
-          return dateString; // Return as-is if already correct format
+          return dateString;
         }
-        // Convert from YYYY-MM-DD to DD-MM-YYYY
         if (parts[0].length === 4 && parts[1].length === 2 && parts[2].length === 2) {
           return `${parts[2]}-${parts[1]}-${parts[0]}`;
         }
       }
 
-      // Create Date object from string
       const date = new Date(dateString);
-      // Return original string if invalid date
       if (isNaN(date.getTime())) return dateString;
 
-      // Extract day, month, year and format with leading zeros
       const day = date.getDate().toString().padStart(2, '0');
       const month = (date.getMonth() + 1).toString().padStart(2, '0');
       const year = date.getFullYear();
 
-      // Return formatted date string
       return `${day}-${month}-${year}`;
     } catch {
-      // Return original string on error
       return dateString;
     }
   };
 
-  // Function to format date in YYYY-MM-DD format for API
   const formatDateForAPI = (dateString) => {
     if (!dateString) return '';
 
     try {
-      // If it's in DD-MM-YYYY format
       if (typeof dateString === 'string' && dateString.includes('-')) {
         const parts = dateString.split('-');
         if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
           return `${parts[2]}-${parts[1]}-${parts[0]}`;
         }
-        // If it's already in YYYY-MM-DD format
         if (parts[0].length === 4 && parts[1].length === 2 && parts[2].length === 2) {
           return dateString;
         }
@@ -250,9 +219,36 @@ function ViewOrders() {
     }
   };
 
-  // Function to print individual order directly
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return '';
+
+    try {
+      if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return dateString;
+      }
+
+      if (typeof dateString === 'string' && dateString.includes('-')) {
+        const parts = dateString.split('-');
+        if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+          return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+      }
+
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+
+      return `${year}-${month}-${day}`;
+    } catch {
+      return '';
+    }
+  };
+
+  // ===== 5. PRINT FUNCTION =====
   const handlePrintOrder = (order) => {
-    // Calculate order totals
     const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
     const advancePaid = parseFloat(order.advance) || 0;
     const paymentHistoryTotal = order.paymentHistory ?
@@ -260,7 +256,6 @@ function ViewOrders() {
     const totalPaid = advancePaid + paymentHistoryTotal;
     const balanceDue = orderTotal - totalPaid;
 
-    // Create a hidden iframe for printing
     const iframe = document.createElement('iframe');
     iframe.style.position = 'absolute';
     iframe.style.width = '0';
@@ -270,15 +265,11 @@ function ViewOrders() {
     iframe.style.left = '-9999px';
     document.body.appendChild(iframe);
 
-    // Get the iframe document
     const iframeDoc = iframe.contentWindow.document;
-
-    // Get the base URL for assets
     const baseUrl = window.location.origin;
-    const logoPath = `${baseUrl}/assets/logo1.png`; // Update this path to your actual logo path
-    const signaturePath = `${baseUrl}/assets/sign.png`; // Update this path to your actual signature path
+    const logoPath = `${baseUrl}/assets/logo1.png`;
+    const signaturePath = `${baseUrl}/assets/sign.png`;
 
-    // Write the print content to the iframe
     iframeDoc.open();
     iframeDoc.write(`
       <!DOCTYPE html>
@@ -303,7 +294,6 @@ function ViewOrders() {
             background: #fff;
           }
           
-          /* Header Section with Logo on Left and Company Name on Right */
           .header {
             display: flex;
             align-items: center;
@@ -346,7 +336,6 @@ function ViewOrders() {
             margin-top: 2px;
           }
           
-          /* Customer Details Section - Compact Grid */
           .customer-details {
             margin-bottom: 12px;
             padding: 8px;
@@ -377,7 +366,6 @@ function ViewOrders() {
             font-weight: 500;
           }
           
-          /* Order Items Table */
           .order-items {
             margin-bottom: 12px;
           }
@@ -407,7 +395,6 @@ function ViewOrders() {
             background: #f9f9f9;
           }
           
-          /* Financial Section - Two Column Layout */
           .financial-section {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -446,7 +433,6 @@ function ViewOrders() {
             color: #d32f2f;
           }
           
-          /* Payment History Table */
           .payment-table {
             width: 100%;
             border-collapse: collapse;
@@ -464,7 +450,6 @@ function ViewOrders() {
             padding: 3px 4px;
             border: 1px solid #eee;
           }
-          
           
           .signature-section {
             display: flex;
@@ -499,7 +484,6 @@ function ViewOrders() {
             color: #666;
           }
           
-          /* Footer */
           .print-footer {
             margin-top: 10px;
             text-align: center;
@@ -507,12 +491,10 @@ function ViewOrders() {
             color: #999;
           }
           
-          /* Print specific styles */
           @media print {
             body {
               padding: 10px;
             }
-            
             .no-print {
               display: none;
             }
@@ -520,7 +502,6 @@ function ViewOrders() {
         </style>
       </head>
       <body>
-        <!-- Header with Logo, Company Name and GST -->
         <div class="header">
           <div class="logo">
             <img src="${logoPath}" alt="Global Marketing Solution Logo" onerror="this.style.display='none'">
@@ -532,7 +513,6 @@ function ViewOrders() {
           </div>
         </div>
         
-        <!-- Customer Details -->
         <div class="customer-details">
           <div class="details-grid">
             <div class="detail-item">
@@ -570,7 +550,6 @@ function ViewOrders() {
           </div>
         </div>
         
-        <!-- Order Details Grid -->
         <div class="customer-details" style="margin-bottom: 10px;">
           <div class="details-grid">
             <div class="detail-item">
@@ -604,7 +583,6 @@ function ViewOrders() {
           </div>
         </div>
         
-        <!-- Order Items Table -->
         <div class="order-items">
           <table class="items-table">
             <thead>
@@ -630,14 +608,11 @@ function ViewOrders() {
           </table>
         </div>
         
-        <!-- Design Note -->
         <div style="margin-bottom: 10px; font-size: 10px;">
           <strong>Design:</strong> Y / N
         </div>
         
-        <!-- Financial Section - Two Column -->
         <div class="financial-section">
-          <!-- Summary Box -->
           <div class="summary-box">
             <h3>Summary</h3>
             <div class="summary-row">
@@ -662,7 +637,6 @@ function ViewOrders() {
             </div>
           </div>
           
-          <!-- Payment Box -->
           <div class="payment-box">
             <h3>Payment History</h3>
             ${order.paymentHistory && order.paymentHistory.length > 0 ? `
@@ -688,7 +662,6 @@ function ViewOrders() {
           </div>
         </div>
         
-        <!-- Note -->
         <div style="margin-bottom: 10px; font-size: 10px; color: #666;">
           <strong>Note:</strong> Delivery date minimum 3 working from Advance Date.
         </div>
@@ -710,13 +683,11 @@ function ViewOrders() {
           </div>
         </div>
         
-        <!-- Footer -->
         <div class="print-footer">
           Generated on: ${new Date().toLocaleDateString()}
         </div>
         
         <script>
-          // Auto trigger print when content is loaded
           window.onload = function() {
             setTimeout(function() {
               window.print();
@@ -728,7 +699,6 @@ function ViewOrders() {
     `);
     iframeDoc.close();
 
-    // Remove the iframe after printing
     iframe.contentWindow.onafterprint = function () {
       setTimeout(() => {
         if (document.body.contains(iframe)) {
@@ -737,7 +707,6 @@ function ViewOrders() {
       }, 100);
     };
 
-    // Fallback for browsers that don't support onafterprint
     setTimeout(() => {
       if (document.body.contains(iframe)) {
         document.body.removeChild(iframe);
@@ -745,7 +714,7 @@ function ViewOrders() {
     }, 10000);
   };
 
-  // Function to navigate between months
+  // ===== 6. NAVIGATION FUNCTION =====
   const navigateToMonth = (direction) => {
     let newMonth = currentViewMonth;
     let newYear = currentViewYear;
@@ -762,7 +731,6 @@ function ViewOrders() {
     params.set('month', newMonth);
     params.set('year', newYear);
 
-    // Remove other filters when navigating months
     params.delete('clientType');
     params.delete('executive');
     params.delete('executiveType');
@@ -776,179 +744,136 @@ function ViewOrders() {
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
   };
 
-  // Function to group orders by month for selected year only
+  // ===== 7. GROUP ORDERS FUNCTION =====
   const groupOrdersByMonth = (orders) => {
-    // Initialize empty object for grouped orders
     const grouped = {};
 
-    // Iterate through each order
     orders.forEach(order => {
-      let date; // Variable to store parsed date
+      let date;
 
-      // Parse order date from string
       if (order.orderDate && typeof order.orderDate === 'string') {
         const parts = order.orderDate.split('-');
-        // Handle DD-MM-YYYY format
         if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
           date = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
         } else {
-          // Handle other date formats
           date = new Date(order.orderDate);
         }
       } else {
-        // Handle Date objects
         date = new Date(order.orderDate);
       }
 
-      // Skip if invalid date
       if (isNaN(date.getTime())) {
         console.warn('Invalid order date:', order.orderDate);
         return;
       }
 
-      // Extract month and year from date
       const month = date.getMonth() + 1;
       const year = date.getFullYear();
 
-      // Skip orders not from selected year
-      if (year !== yearFilter) return;
+      if (!useDateRange && year !== yearFilter) return;
 
-      // Create month key (e.g., "2026-03")
       const monthStr = month.toString().padStart(2, '0');
-      const monthYearKey = `${yearFilter}-${monthStr}`;
+      const monthYearKey = `${year}-${monthStr}`;
 
-      // Initialize month group if it doesn't exist
       if (!grouped[monthYearKey]) {
-        // Create formatted month name
-        const monthYearName = new Date(yearFilter, month - 1).toLocaleString('default', {
+        const monthYearName = new Date(year, month - 1).toLocaleString('default', {
           month: 'long',
           year: 'numeric'
         });
 
-        // Initialize group with name, orders array, and totals
         grouped[monthYearKey] = {
           name: monthYearName,
           orders: [],
           totals: {
-            amount: 0, // Total order amount
-            received: 0, // Total received payments
-            balance: 0 // Total balance due
+            amount: 0,
+            received: 0,
+            balance: 0
           }
         };
       }
 
-      // Calculate order total from rows
       let orderAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-
-      // Calculate total received (advance + payment history)
       const orderAdvance = parseFloat(order.advance) || 0;
       let paymentHistoryTotal = 0;
 
-      // Sum up payment history amounts
       if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
         paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) =>
           sum + (parseFloat(payment.amount) || 0), 0);
       }
 
-      // Calculate received amount and balance
       const orderReceived = orderAdvance + paymentHistoryTotal;
       const orderBalance = orderAmount - orderReceived;
 
-      // Update group totals
       grouped[monthYearKey].totals.amount += orderAmount;
       grouped[monthYearKey].totals.received += orderReceived;
       grouped[monthYearKey].totals.balance += orderBalance;
-
-      // Add order to group
       grouped[monthYearKey].orders.push(order);
     });
 
-    // Return grouped orders
     return grouped;
   };
 
-  // Function to calculate totals for summary cards
+  // ===== 8. CALCULATE TOTALS FUNCTION =====
   const calculateTotals = () => {
-    // Initialize total counters
     let totalAmount = 0;
     let totalReceived = 0;
     let totalBalance = 0;
 
-    // Iterate through all orders
     orders.forEach(order => {
       const orderDate = new Date(order.orderDate);
-      // Only process orders from selected year
-      if (orderDate.getFullYear() === yearFilter) {
-        // Calculate order total from rows
-        const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-        totalAmount += orderTotal;
+      
+      if (!useDateRange && orderDate.getFullYear() !== yearFilter) return;
 
-        // Calculate total received (advance + all payments)
-        const advanceReceived = parseFloat(order.advance) || 0;
-        let paymentHistoryTotal = 0;
+      const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+      totalAmount += orderTotal;
 
-        // Sum payment history
-        if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
-          paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) =>
-            sum + (parseFloat(payment.amount) || 0), 0);
-        }
+      const advanceReceived = parseFloat(order.advance) || 0;
+      let paymentHistoryTotal = 0;
 
-        // Update received total
-        totalReceived += advanceReceived + paymentHistoryTotal;
-
-        // Calculate balance for this order
-        const orderBalance = orderTotal - (advanceReceived + paymentHistoryTotal);
-        totalBalance += orderBalance;
+      if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
+        paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) =>
+          sum + (parseFloat(payment.amount) || 0), 0);
       }
+
+      totalReceived += advanceReceived + paymentHistoryTotal;
+      const orderBalance = orderTotal - (advanceReceived + paymentHistoryTotal);
+      totalBalance += orderBalance;
     });
 
-    // Return formatted totals
     return {
-      totalAmount: totalAmount.toFixed(2), // Format to 2 decimal places
+      totalAmount: totalAmount.toFixed(2),
       totalReceived: totalReceived.toFixed(2),
       totalBalance: totalBalance.toFixed(2)
     };
   };
 
-  // Calculate totals using the function
-  const {
-    totalAmount,
-    totalReceived,
-    totalBalance
-  } = calculateTotals();
+  const { totalAmount, totalReceived, totalBalance } = calculateTotals();
 
-  // Function to get user info from localStorage
+  // ===== 9. USER INFO FUNCTION =====
   const getUserInfo = () => {
     try {
-      // Get role and name from localStorage with fallbacks
       const role = localStorage.getItem('role') || '';
       const name = localStorage.getItem('name') || localStorage.getItem('userName') || '';
 
-      // Log user info for debugging
       console.log('User info from localStorage:', { role, name });
 
-      // Update state with user info
       setUserRole(role);
       setExecutiveName(name);
 
-      // Return user info
       return { role, name };
     } catch (error) {
-      // Log error and return empty values
       console.error('Error getting user info from localStorage:', error);
       return { role: '', name: '' };
     }
   };
 
-  // Function to fetch orders from API with proper role-based filtering
+  // ===== 10. FETCH ORDERS FUNCTION =====
   const fetchOrders = async (role, name, month = null, year = null, clientType = null, executive = null, executiveName = null, leadSource = null) => {
-    // Set loading state and clear errors
     setLoading(true);
     setError(null);
     try {
       let url = API_ENDPOINTS.ORDERS;
 
-      // Get URL parameters for executive filtering from performance view
       const searchParams = new URLSearchParams(location.search);
       const executiveFromUrl = searchParams.get('executive');
       const executiveTypeFromUrl = searchParams.get('executiveType');
@@ -966,20 +891,23 @@ function ViewOrders() {
         executiveFromUrl,
         executiveTypeFromUrl,
         executiveNameFromUrl,
-        leadSource: leadSourceFromUrl
+        leadSource: leadSourceFromUrl,
+        useDateRange,
+        startDate,
+        endDate
       });
 
-      // Build query parameters
       const queryParams = new URLSearchParams();
 
-      // CASE 1: If specific executive filtering is requested from performance view
-      if (executiveNameFromUrl) {
+      if (useDateRange && startDate && endDate) {
+        queryParams.append('startDate', startDate);
+        queryParams.append('endDate', endDate);
+        console.log('📅 Using date range filter:', { startDate, endDate });
+      } else if (executiveNameFromUrl) {
         console.log('🎯 Filtering by specific executive from performance view:', executiveNameFromUrl);
         queryParams.append('executive', executiveNameFromUrl);
         queryParams.append('filterByExecutive', 'true');
-      }
-      // CASE 2: Filter by current user if they're a regular executive
-      else {
+      } else {
         const rolesThatCanSeeAll = ['Admin', 'Account', 'Service Executive'];
         const shouldFilter = role && !rolesThatCanSeeAll.includes(role) && name;
 
@@ -991,66 +919,53 @@ function ViewOrders() {
         }
       }
 
-      // Add other filters to query parameters
-      if (month) queryParams.append('month', month);
-      if (year) queryParams.append('year', year);
+      if (!useDateRange) {
+        if (month) queryParams.append('month', month);
+        if (year) queryParams.append('year', year);
+      }
       if (clientType) queryParams.append('clientType', clientType);
       if (executive) queryParams.append('executive', executive);
       if (executiveName) queryParams.append('executiveName', executiveName);
       if (leadSource) queryParams.append('leadSource', leadSource);
 
-      // Log API call for debugging
       console.log('📡 API Call:', `${url}?${queryParams.toString()}`);
 
-      // Make API request
       const res = await axios.get(`${url}?${queryParams.toString()}`);
       console.log('📦 Total orders received from API:', res.data.length);
 
-      // Filter orders to only include selected year orders
-      let filteredOrders = res.data.filter(order => {
-        if (!order.orderDate) return false;
-        const orderDate = new Date(order.orderDate);
-        if (isNaN(orderDate.getTime())) return false;
-        return orderDate.getFullYear() === yearFilter;
-      });
-
-      console.log(`📊 Orders after ${yearFilter} filter:`, filteredOrders.length);
-
-      // Verify filtering for debugging
-      if (executiveNameFromUrl) {
-        const executiveOrders = filteredOrders.filter(order => order.executive === executiveNameFromUrl);
-        console.log('🔍 VERIFICATION: Executive orders count:', executiveOrders.length);
-        console.log('🔍 VERIFICATION: Executive orders:', executiveOrders.map(o => ({
-          orderNo: o.orderNo,
-          executive: o.executive,
-          match: o.executive === executiveNameFromUrl
-        })));
+      let filteredOrders = res.data;
+      if (!useDateRange && yearFilter) {
+        filteredOrders = res.data.filter(order => {
+          if (!order.orderDate) return false;
+          const orderDate = new Date(order.orderDate);
+          if (isNaN(orderDate.getTime())) return false;
+          return orderDate.getFullYear() === yearFilter;
+        });
+        console.log(`📊 Orders after ${yearFilter} filter:`, filteredOrders.length);
+      } else if (useDateRange) {
+        console.log('📊 Using date range filter from backend');
       }
 
-      // Sort orders by date (newest first)
       const sortedOrders = filteredOrders.sort((a, b) => {
         const dateA = new Date(a.orderDate || 0);
         const dateB = new Date(b.orderDate || 0);
         return dateB - dateA;
       });
 
-      // Update state with fetched and processed orders
       setOrders(sortedOrders);
       setGroupedOrders(groupOrdersByMonth(sortedOrders));
 
       console.log('✅ Final orders count:', sortedOrders.length);
     } catch (err) {
-      // Handle fetch errors
       console.error('❌ Error fetching orders:', err);
       setError('Failed to fetch orders. Please try again.');
       toast.error('Failed to fetch orders. Please try again.');
     } finally {
-      // Reset loading state
       setLoading(false);
     }
   };
 
-  // Function to handle lead source filter selection
+  // ===== 11. LEAD SOURCE FILTER HANDLER =====
   const handleLeadSourceFilterSelect = (source) => {
     const params = new URLSearchParams(location.search);
 
@@ -1062,7 +977,6 @@ function ViewOrders() {
       setLeadSourceFilter(null);
     }
 
-    // Remove other filters when selecting lead source
     params.delete('month');
     params.delete('year');
     params.delete('clientType');
@@ -1075,9 +989,8 @@ function ViewOrders() {
     params.delete('weekCount');
 
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
-    setShowLeadSourceFilter(false); // Close the dropdown
+    setShowLeadSourceFilter(false);
 
-    // Fetch orders with new filter
     const { role, name } = getUserInfo();
     const month = params.get('month');
     const year = params.get('year');
@@ -1087,97 +1000,16 @@ function ViewOrders() {
     fetchOrders(role, name, month, year, clientType, executive, executiveName, source);
   };
 
-  // useEffect hook to fetch orders on component mount or when filters change
-  useEffect(() => {
-    // Parse URL query parameters
-    const params = new URLSearchParams(location.search);
-    const month = params.get('month');
-    const year = params.get('year');
-    const clientType = params.get('clientType');
-    const executive = params.get('executive');
-    const executiveType = params.get('executiveType');
-    const executiveName = params.get('executiveName');
-    const leadSource = params.get('leadSource');
-
-    // Parse month filter info
-    const monthCount = params.get('monthCount');
-    const monthName = params.get('monthName');
-    const weekCount = params.get('weekCount');
-
-    // Update state with filter values
-    if (month) {
-      setMonthFilter(parseInt(month));
-      setCurrentViewMonth(parseInt(month));
-    }
-    if (year) {
-      setYearFilter(parseInt(year));
-      setCurrentViewYear(parseInt(year));
-    }
-    if (clientType) setClientTypeFilter(clientType);
-    if (leadSource) setLeadSourceFilter(leadSource);
-
-    // Update month filter info state
-    if (monthCount || monthName || weekCount) {
-      setMonthFilterInfo({
-        monthCount: monthCount ? parseInt(monthCount) : 0,
-        monthName: monthName || '',
-        weekCount: weekCount ? parseInt(weekCount) : 0
-      });
-    }
-
-    // Update executive filters state - prioritize performance view filters
-    const executiveNameFromUrl = params.get('executiveName');
-    if (executiveNameFromUrl) {
-      console.log('🎯 Setting executive filter from performance view:', executiveNameFromUrl);
-      setAppliedExecutiveFilters({
-        executive: executive || '',
-        executiveType: executiveType || '',
-        executiveName: executiveNameFromUrl ? decodeURIComponent(executiveNameFromUrl) : ''
-      });
-    } else if (executive || executiveType || executiveName) {
-      setAppliedExecutiveFilters({
-        executive,
-        executiveType,
-        executiveName: executiveName ? decodeURIComponent(executiveName) : ''
-      });
-    }
-
-    // Handle business filter from navigation state (from PendingPayment)
-    const businessFilter = location.state?.businessFilter;
-    if (businessFilter) {
-      setSearchTerm(businessFilter);
-    }
-
-    // Get user info and fetch orders
-    const { role, name } = getUserInfo();
-    fetchOrders(role, name, month, year, clientType, executive, executiveName, leadSource);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search, location.state, yearFilter]);
-
-  // useEffect to handle click outside lead source filter dropdown
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (leadSourceFilterRef.current && !leadSourceFilterRef.current.contains(event.target)) {
-        setShowLeadSourceFilter(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Function to handle year change
+  // ===== 12. YEAR CHANGE HANDLER =====
   const handleYearChange = (e) => {
     const newYear = parseInt(e.target.value);
     setYearFilter(newYear);
     setCurrentViewYear(newYear);
 
-    // Update URL with new year parameter
     const params = new URLSearchParams(location.search);
     params.set('year', newYear);
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
 
-    // Refresh orders with new year filter
     const { role, name } = getUserInfo();
     const month = params.get('month');
     const clientType = params.get('clientType');
@@ -1187,9 +1019,8 @@ function ViewOrders() {
     fetchOrders(role, name, month, newYear, clientType, executive, executiveName, leadSource);
   };
 
-  // Function to clear all filters
+  // ===== 13. CLEAR FILTERS FUNCTION =====
   const clearAllFilters = () => {
-    // Reset all filter states
     setMonthFilter(null);
     setYearFilter(new Date().getFullYear());
     setCurrentViewYear(new Date().getFullYear());
@@ -1201,108 +1032,70 @@ function ViewOrders() {
       executiveName: ''
     });
     setMonthFilterInfo({ monthCount: 0, monthName: '', weekCount: 0 });
-    setSearchTerm(''); // Clear search term
-    setCurrentViewMonth(null); // Clear current view month
-    setShowLeadSourceFilter(false); // Close lead source dropdown
-    navigate('/admin-dashboard/view-orders'); // Navigate to base URL
+    setSearchTerm('');
+    setCurrentViewMonth(null);
+    setShowLeadSourceFilter(false);
+    setStartDate('');
+    setEndDate('');
+    setUseDateRange(false);
+    
+    navigate('/admin-dashboard/view-orders');
   };
 
-  // Function to clear client type filter only
   const clearClientTypeFilter = () => {
     const params = new URLSearchParams(location.search);
-    params.delete('clientType'); // Remove client type from URL
-    navigate(`/admin-dashboard/view-orders?${params.toString()}`); // Update URL
+    params.delete('clientType');
+    navigate(`/admin-dashboard/view-orders?${params.toString()}`);
   };
 
-  // Function to clear month filter
   const clearMonthFilter = () => {
     const params = new URLSearchParams(location.search);
-    // Remove all month-related parameters
     params.delete('month');
     params.delete('year');
     params.delete('week');
     params.delete('monthCount');
     params.delete('monthName');
     params.delete('weekCount');
-    navigate(`/admin-dashboard/view-orders?${params.toString()}`); // Update URL
-    setMonthFilterInfo({ monthCount: 0, monthName: '', weekCount: 0 }); // Reset month info
-    setCurrentViewMonth(null); // Clear current view month
+    navigate(`/admin-dashboard/view-orders?${params.toString()}`);
+    setMonthFilterInfo({ monthCount: 0, monthName: '', weekCount: 0 });
+    setCurrentViewMonth(null);
   };
 
-  // Function to clear executive filter only
   const clearExecutiveFilter = () => {
     const params = new URLSearchParams(location.search);
-    // Remove executive-related parameters
     params.delete('executive');
     params.delete('executiveType');
     params.delete('executiveName');
-    navigate(`/admin-dashboard/view-orders?${params.toString()}`); // Update URL
-    setAppliedExecutiveFilters({ // Reset executive filters state
+    navigate(`/admin-dashboard/view-orders?${params.toString()}`);
+    setAppliedExecutiveFilters({
       executive: '',
       executiveType: '',
       executiveName: ''
     });
   };
 
-  // Function to clear lead source filter only
   const clearLeadSourceFilter = () => {
     const params = new URLSearchParams(location.search);
-    params.delete('leadSource'); // Remove lead source from URL
-    navigate(`/admin-dashboard/view-orders?${params.toString()}`); // Update URL
-    setLeadSourceFilter(null); // Reset lead source filter state
-    setShowLeadSourceFilter(false); // Close dropdown
+    params.delete('leadSource');
+    navigate(`/admin-dashboard/view-orders?${params.toString()}`);
+    setLeadSourceFilter(null);
+    setShowLeadSourceFilter(false);
 
-    // Refresh orders without lead source filter
     const { role, name } = getUserInfo();
     fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, null);
   };
 
-  // Function to clear search filter only
   const clearSearchFilter = () => {
-    setSearchTerm(''); // Clear search term
+    setSearchTerm('');
   };
 
-  // Function to format date for input fields (YYYY-MM-DD)
-  const formatDateForInput = (dateString) => {
-    if (!dateString) return ''; // Return empty for null dates
-
-    try {
-      // Check if already in YYYY-MM-DD format
-      if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        return dateString;
-      }
-
-      // Convert from DD-MM-YYYY to YYYY-MM-DD
-      if (typeof dateString === 'string' && dateString.includes('-')) {
-        const parts = dateString.split('-');
-        if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
-          return `${parts[2]}-${parts[1]}-${parts[0]}`;
-        }
-      }
-
-      // Create Date object and format to YYYY-MM-DD
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return '';
-
-      const year = date.getFullYear();
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const day = date.getDate().toString().padStart(2, '0');
-
-      return `${year}-${month}-${day}`;
-    } catch {
-      return ''; // Return empty on error
-    }
-  };
-
-  // Function to prepare order for editing
+  // ===== 14. EDIT FUNCTIONS =====
   const handleEdit = (order) => {
-    // Check if user can edit this order
     if (shouldSeeOnlyOwnOrders() && order.executive !== executiveName) {
       toast.error('You can only edit your own orders');
       return;
     }
 
-    // Set editing order with formatted dates
     setEditingOrder({
       ...order,
       orderDate: formatDateForInput(order.orderDate),
@@ -1315,81 +1108,68 @@ function ViewOrders() {
         endDate: formatDateForInput(row.endDate)
       }))
     });
-    setShowModal(true); // Show edit modal
+    setShowModal(true);
   };
 
-  // Function to handle edit form field changes
   const handleEditChange = (e) => {
-    const { name, value } = e.target; // Get field name and value
-    setEditingOrder(prev => ({ ...prev, [name]: value })); // Update editing order
+    const { name, value } = e.target;
+    setEditingOrder(prev => ({ ...prev, [name]: value }));
   };
 
-  // Function to handle changes in order row fields
   const handleEditRowChange = (index, field, value) => {
-    const updatedRows = [...editingOrder.rows]; // Create copy of rows
-    updatedRows[index] = { ...updatedRows[index], [field]: value }; // Update specific row
+    const updatedRows = [...editingOrder.rows];
+    updatedRows[index] = { ...updatedRows[index], [field]: value };
 
-    // Recalculate total if rate or quantity changes
     if (field === 'rate' || field === 'quantity') {
       const quantity = parseFloat(updatedRows[index].quantity) || 0;
       const rate = parseFloat(updatedRows[index].rate) || 0;
-      updatedRows[index].total = (quantity * rate).toFixed(2); // Calculate total
+      updatedRows[index].total = (quantity * rate).toFixed(2);
     }
 
-    // Recalculate discounted total if discount changes
     if (field === 'discount') {
       const discount = parseFloat(value) || 0;
       const total = parseFloat(editingOrder.total) || 0;
       setEditingOrder(prev => ({
         ...prev,
         discount,
-        discountedTotal: (total - discount).toFixed(2) // Calculate discounted total
+        discountedTotal: (total - discount).toFixed(2)
       }));
     }
 
-    // Update editing order with new rows
     setEditingOrder(prev => ({ ...prev, rows: updatedRows }));
   };
 
-  // Function to submit edited order
   const handleEditSubmit = async (e) => {
-    e.preventDefault(); // Prevent form submission
+    e.preventDefault();
     try {
-      // Send PUT request to update order
       await axios.put(API_ENDPOINTS.UPDATE_ORDER(editingOrder._id), editingOrder);
-      setShowModal(false); // Close modal
+      setShowModal(false);
 
-      // Refresh orders list
       const { role, name } = getUserInfo();
       fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, leadSourceFilter);
 
-      toast.success('Order updated successfully!'); // Show success message
+      toast.success('Order updated successfully!');
     } catch (err) {
-      // Handle update error
       console.error('Update failed:', err);
       toast.error(err.response?.data?.message || 'Failed to update order');
     }
   };
 
-  // Function to confirm delete order
+  // ===== 15. DELETE FUNCTIONS =====
   const confirmDelete = (orderId) => {
-    // Find order to delete
     const orderToDeleteObj = orders.find(order => order._id === orderId);
-    // Check if user can delete this order
     if (shouldSeeOnlyOwnOrders() && orderToDeleteObj && orderToDeleteObj.executive !== executiveName) {
       toast.error('You can only delete your own orders');
       return;
     }
 
     console.log('Confirming delete for order:', orderId);
-    setOrderToDelete(orderId); // Set order to delete
-    setShowDeleteModal(true); // Show delete confirmation modal
+    setOrderToDelete(orderId);
+    setShowDeleteModal(true);
   };
 
-  // Function to handle delete order
   const handleDelete = async () => {
     try {
-      // Validate order to delete
       if (!orderToDelete) {
         toast.error('No order selected for deletion');
         return;
@@ -1397,7 +1177,6 @@ function ViewOrders() {
 
       console.log('Attempting to delete order:', orderToDelete);
 
-      // Send DELETE request
       const response = await axios.delete(API_ENDPOINTS.DELETE_ORDER(orderToDelete), {
         data: {
           deletedBy: userRole === 'Admin' ? 'Admin' : executiveName,
@@ -1407,24 +1186,20 @@ function ViewOrders() {
 
       console.log('Delete successful:', response.data);
 
-      // Close modal and reset state
       setShowDeleteModal(false);
       setOrderToDelete(null);
 
-      // Refresh orders list
       const { role, name } = getUserInfo();
       fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, leadSourceFilter);
 
-      toast.success('Order moved to trash successfully!'); // Show success message
+      toast.success('Order moved to trash successfully!');
     } catch (err) {
-      // Handle delete error
       console.error('Delete error details:', {
         status: err.response?.status,
         data: err.response?.data,
         message: err.message
       });
 
-      // Determine error message
       let errorMessage = 'Failed to delete order';
       if (err.response?.status === 404) {
         errorMessage = 'Order not found or already deleted';
@@ -1436,26 +1211,23 @@ function ViewOrders() {
         errorMessage = err.message;
       }
 
-      toast.error(errorMessage); // Show error message
+      toast.error(errorMessage);
     }
   };
 
-  // Function to prepare payment form
+  // ===== 16. PAYMENT FUNCTIONS =====
   const handleRecordPayment = async (order) => {
-    // Check if user can record payment for this order
     if (shouldSeeOnlyOwnOrders() && order.executive !== executiveName) {
       toast.error('You can only record payments for your own orders');
       return;
     }
 
     try {
-      setPaymentLoading(true); // Set loading state
-      setCurrentOrder(order); // Set current order
+      setPaymentLoading(true);
+      setCurrentOrder(order);
 
-      // Create payment history that includes advance
       const payments = [];
 
-      // Add advance as first payment if it exists
       if (order.advance > 0) {
         payments.push({
           date: order.advanceDate || order.orderDate,
@@ -1466,14 +1238,12 @@ function ViewOrders() {
         });
       }
 
-      // Add regular payment history
       if (order.paymentHistory) {
         payments.push(...order.paymentHistory);
       }
 
-      setPaymentHistory(payments); // Set payment history
+      setPaymentHistory(payments);
 
-      // Initialize payment form data
       setPaymentData({
         date: new Date().toISOString().split('T')[0],
         amount: order.balance > 0 ? order.balance.toString() : '',
@@ -1482,26 +1252,22 @@ function ViewOrders() {
         note: ''
       });
 
-      setShowPaymentsModal(true); // Show payments modal
+      setShowPaymentsModal(true);
     } catch (err) {
-      // Handle payment loading error
       console.error('Error in handleRecordPayment:', err);
       toast.error('Failed to load payment details. Please try again.');
     } finally {
-      setPaymentLoading(false); // Reset loading state
+      setPaymentLoading(false);
     }
   };
 
-  // Function to handle viewing payments only
   const handleViewPayments = async (order) => {
     try {
-      setPaymentLoading(true); // Set loading state
-      setCurrentOrder(order); // Set current order
+      setPaymentLoading(true);
+      setCurrentOrder(order);
 
-      // Create payment history that includes advance
       const payments = [];
 
-      // Add advance as first payment if it exists
       if (order.advance > 0) {
         payments.push({
           date: order.advanceDate || order.orderDate,
@@ -1512,14 +1278,12 @@ function ViewOrders() {
         });
       }
 
-      // Add regular payment history
       if (order.paymentHistory) {
         payments.push(...order.paymentHistory);
       }
 
-      setPaymentHistory(payments); // Set payment history
+      setPaymentHistory(payments);
 
-      // Set payment data to empty since we're just viewing
       setPaymentData({
         date: new Date().toISOString().split('T')[0],
         amount: '',
@@ -1528,17 +1292,15 @@ function ViewOrders() {
         note: ''
       });
 
-      setShowPaymentsModal(true); // Show payments modal
+      setShowPaymentsModal(true);
     } catch (err) {
-      // Handle payment loading error
       console.error('Error in handleViewPayments:', err);
       toast.error('Failed to load payment details. Please try again.');
     } finally {
-      setPaymentLoading(false); // Reset loading state
+      setPaymentLoading(false);
     }
   };
 
-  // Print payment history
   const handlePrintPaymentHistory = () => {
     const printWindow = window.open('', '_blank');
     const printContent = `
@@ -1626,18 +1388,16 @@ function ViewOrders() {
     printWindow.document.close();
   };
 
-  // Function to submit payment
   const handlePaymentSubmit = async (e) => {
-    e.preventDefault(); // Prevent form submission
+    e.preventDefault();
     if (!currentOrder) {
       toast.error('No order selected for payment');
       return;
     }
 
     try {
-      const paymentAmount = parseFloat(paymentData.amount); // Parse payment amount
+      const paymentAmount = parseFloat(paymentData.amount);
 
-      // Validate payment amount
       if (!paymentAmount || isNaN(paymentAmount)) {
         toast.error('Please enter a valid payment amount');
         return;
@@ -1653,7 +1413,6 @@ function ViewOrders() {
         return;
       }
 
-      // Create payment payload
       const paymentPayload = {
         date: paymentData.date,
         amount: paymentAmount,
@@ -1662,47 +1421,40 @@ function ViewOrders() {
         note: paymentData.note
       };
 
-      // Send payment record request
       await axios.post(
         API_ENDPOINTS.RECORD_PAYMENT(currentOrder._id),
         paymentPayload
       );
 
-      toast.success('Payment recorded successfully!'); // Show success message
+      toast.success('Payment recorded successfully!');
 
-      // Refresh orders list
       const { role, name } = getUserInfo();
       fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, leadSourceFilter);
 
-      setShowPaymentsModal(false); // Close modal
+      setShowPaymentsModal(false);
     } catch (err) {
-      // Handle payment error
       console.error('Error recording payment:', err);
       toast.error(err.response?.data?.error || 'Failed to record payment');
     }
   };
 
-  // Function to handle payment form changes
   const handlePaymentChange = (e) => {
-    const { name, value } = e.target; // Get field name and value
-    setPaymentData(prev => ({ ...prev, [name]: value })); // Update payment data
+    const { name, value } = e.target;
+    setPaymentData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Export orders to Excel
+  // ===== 17. EXPORT/IMPORT FUNCTIONS =====
   const handleExportToExcel = () => {
     let ordersToExport = orders;
-    // Filter to user's orders only if applicable
     if (shouldSeeOnlyOwnOrders()) {
       ordersToExport = orders.filter(order => order.executive === executiveName);
     }
 
-    // Filter to selected year orders only
     const filteredOrders = ordersToExport.filter(order => {
       const orderDate = new Date(order.orderDate);
       return orderDate.getFullYear() === yearFilter;
     });
 
-    // Flatten orders for Excel export with lead source fields
     const flattenedOrders = filteredOrders.flatMap(order =>
       order.rows.map(row => ({
         'S.No': filteredOrders.indexOf(order) + 1,
@@ -1741,12 +1493,10 @@ function ViewOrders() {
       }))
     );
 
-    // Create Excel workbook and worksheet
     const worksheet = XLSX.utils.json_to_sheet(flattenedOrders);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
 
-    // Generate filename based on user role
     let filename;
     if (shouldSeeOnlyOwnOrders()) {
       filename = `my_orders_${yearFilter}_${executiveName}_export.xlsx`;
@@ -1754,12 +1504,10 @@ function ViewOrders() {
       filename = `orders_${yearFilter}_export.xlsx`;
     }
 
-    // Download Excel file
     XLSX.writeFile(workbook, filename);
     toast.success(`Excel file "${filename}" downloaded successfully!`);
   };
 
-  // Import orders from Excel
   const handleImportFromExcel = async (e) => {
     if (!canImportFromExcel()) {
       toast.error('You do not have permission to import orders');
@@ -1769,19 +1517,16 @@ function ViewOrders() {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Show confirmation for executives
     if (shouldSeeOnlyOwnOrders()) {
       const confirmed = window.confirm(
         `You are about to import orders. These orders will be assigned to you (${executiveName}). Continue?`
       );
       if (!confirmed) {
-        // Reset the file input
         e.target.value = '';
         return;
       }
     }
 
-    // Create file reader
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
@@ -1790,7 +1535,6 @@ function ViewOrders() {
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        // Map Excel data to order format with lead source fields
         const ordersToImport = jsonData.map(item => {
           const baseOrder = {
             business: item['Business'],
@@ -1827,16 +1571,14 @@ function ViewOrders() {
             createdBy: item['Created By'] || item['Executive']
           };
 
-          // For executives, override the executive field with their name
           if (shouldSeeOnlyOwnOrders()) {
             return {
               ...baseOrder,
-              executive: executiveName, // Force executive name
-              createdBy: executiveName  // Also set created by
+              executive: executiveName,
+              createdBy: executiveName
             };
           }
 
-          // For admins/service executives, use the executive from Excel or fallback
           return {
             ...baseOrder,
             executive: item['Executive'] || baseOrder.createdBy,
@@ -1844,32 +1586,25 @@ function ViewOrders() {
           };
         });
 
-        // Send import request
         await axios.post(API_ENDPOINTS.IMPORT_ORDERS, ordersToImport);
 
-        // Refresh orders list
         const { role, name } = getUserInfo();
         fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, leadSourceFilter);
 
         toast.success(`Successfully imported ${ordersToImport.length} orders!`);
 
-        // Reset the file input
         document.getElementById('importExcelInput').value = '';
       } catch (err) {
-        // Handle import error
         console.error('Error importing orders:', err);
         toast.error('Failed to import orders. Please check the file format.');
-
-        // Reset the file input on error too
         document.getElementById('importExcelInput').value = '';
       }
     };
-    reader.readAsArrayBuffer(file); // Read file as array buffer
+    reader.readAsArrayBuffer(file);
   };
 
-  // Function to filter orders for search functionality
+  // ===== 18. FILTER ORDERS FUNCTION =====
   const filterOrders = (order) => (row) => {
-    // Create array of all searchable values
     const valuesToSearch = [
       order.executive || '',
       order.business || '',
@@ -1902,13 +1637,89 @@ function ViewOrders() {
       order.createdBy || ''
     ];
 
-    // Check if any value contains search term
     return valuesToSearch.some((val) =>
       String(val).toLowerCase().includes(searchTerm.toLowerCase())
     );
   };
 
-  // Loading state component
+  // ===== 19. USE EFFECTS =====
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const month = params.get('month');
+    const year = params.get('year');
+    const clientType = params.get('clientType');
+    const executive = params.get('executive');
+    const executiveType = params.get('executiveType');
+    const executiveName = params.get('executiveName');
+    const leadSource = params.get('leadSource');
+    const startDateParam = params.get('startDate');
+    const endDateParam = params.get('endDate');
+    const monthCount = params.get('monthCount');
+    const monthName = params.get('monthName');
+    const weekCount = params.get('weekCount');
+
+    if (month) {
+      setMonthFilter(parseInt(month));
+      setCurrentViewMonth(parseInt(month));
+    }
+    if (year) {
+      setYearFilter(parseInt(year));
+      setCurrentViewYear(parseInt(year));
+    }
+    if (clientType) setClientTypeFilter(clientType);
+    if (leadSource) setLeadSourceFilter(leadSource);
+    
+    if (startDateParam && endDateParam) {
+      setStartDate(startDateParam);
+      setEndDate(endDateParam);
+      setUseDateRange(true);
+    }
+
+    if (monthCount || monthName || weekCount) {
+      setMonthFilterInfo({
+        monthCount: monthCount ? parseInt(monthCount) : 0,
+        monthName: monthName || '',
+        weekCount: weekCount ? parseInt(weekCount) : 0
+      });
+    }
+
+    if (executiveName) {
+      console.log('🎯 Setting executive filter from performance view:', executiveName);
+      setAppliedExecutiveFilters({
+        executive: executive || '',
+        executiveType: executiveType || '',
+        executiveName: executiveName ? decodeURIComponent(executiveName) : ''
+      });
+    } else if (executive || executiveType || executiveName) {
+      setAppliedExecutiveFilters({
+        executive,
+        executiveType,
+        executiveName: executiveName ? decodeURIComponent(executiveName) : ''
+      });
+    }
+
+    const businessFilter = location.state?.businessFilter;
+    if (businessFilter) {
+      setSearchTerm(businessFilter);
+    }
+
+    const { role, name } = getUserInfo();
+    fetchOrders(role, name, month, year, clientType, executive, executiveName, leadSource);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search, location.state, yearFilter, useDateRange, startDate, endDate]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (leadSourceFilterRef.current && !leadSourceFilterRef.current.contains(event.target)) {
+        setShowLeadSourceFilter(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // ===== 20. LOADING STATE =====
   if (loading) {
     return (
       <div style={{
@@ -1926,7 +1737,7 @@ function ViewOrders() {
     );
   }
 
-  // Error state component
+  // ===== 21. ERROR STATE =====
   if (error) {
     return (
       <div style={{
@@ -1948,7 +1759,6 @@ function ViewOrders() {
           <p style={{ margin: '15px 0', color: '#333' }}>{error}</p>
           <button
             onClick={() => {
-              // Retry fetching orders
               const { role, name } = getUserInfo();
               fetchOrders(role, name, monthFilter, yearFilter, clientTypeFilter, appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, leadSourceFilter);
             }}
@@ -1968,16 +1778,13 @@ function ViewOrders() {
     );
   }
 
-  // Main component render
+// ===== 22. MAIN RENDER =====
   return (
     <div style={{ padding: '20px', backgroundColor: '#f9f9f9', minHeight: '100vh' }}>
-      {/* Add responsive CSS styles */}
       <style>{responsiveStyles}</style>
 
-      {/* Toast container for notifications */}
       <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999 }} />
 
-      {/* User Role Info Banner */}
       <div style={{
         backgroundColor: appliedExecutiveFilters.executiveName ? '#fff3cd' :
           shouldSeeOnlyOwnOrders() ? '#e3f2fd' : '#f3e5f5',
@@ -1998,53 +1805,7 @@ function ViewOrders() {
         }
       </div>
 
-      {/* Year Selector */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: '20px',
-        backgroundColor: '#fff',
-        padding: '15px',
-        borderRadius: '8px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-      }}>
-        <label style={{ marginRight: '10px', fontWeight: 'bold', fontSize: '16px' }}>
-          Select Year:
-        </label>
-        <select
-          value={yearFilter}
-          onChange={handleYearChange}
-          style={{
-            padding: '10px 15px',
-            borderRadius: '6px',
-            border: '2px solid #218c74',
-            backgroundColor: 'white',
-            fontSize: '16px',
-            fontWeight: 'bold',
-            color: '#218c74',
-            minWidth: '120px'
-          }}
-        >
-          <option value={2023}>2023</option>
-          <option value={2024}>2024</option>
-          <option value={2025}>2025</option>
-          <option value={2026}>2026</option>
-          <option value={2027}>2027</option>
-        </select>
-        <div style={{
-          marginLeft: '20px',
-          padding: '10px 15px',
-          backgroundColor: '#e3f2fd',
-          borderRadius: '6px',
-          fontWeight: 'bold',
-          color: '#1976d2'
-        }}>
-          Currently Viewing: <span style={{ color: '#218c74' }}>{yearFilter}</span>
-        </div>
-      </div>
-
-      {/* Summary Cards - Only show for Admin, Account, and Service Executive */}
+      {/* Summary Cards */}
       {shouldShowSummaryCards() && (
         <div style={{
           display: 'flex',
@@ -2053,7 +1814,6 @@ function ViewOrders() {
           flexWrap: 'wrap',
           gap: '20px'
         }}>
-          {/* Total Amount Card */}
           <div style={{
             backgroundColor: 'rgba(52, 152, 219, 0.1)',
             padding: '20px',
@@ -2067,7 +1827,6 @@ function ViewOrders() {
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3498db' }}>₹{totalAmount}</div>
           </div>
 
-          {/* Total Received Card */}
           <div style={{
             backgroundColor: 'rgba(39, 174, 96, 0.1)',
             padding: '20px',
@@ -2081,7 +1840,6 @@ function ViewOrders() {
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#27ae60' }}>₹{totalReceived}</div>
           </div>
 
-          {/* Total Balance Card */}
           <div style={{
             backgroundColor: totalBalance > 0 ? 'rgba(231, 76, 60, 0.1)' : 'rgba(39, 174, 96, 0.1)',
             padding: '20px',
@@ -2103,7 +1861,143 @@ function ViewOrders() {
         </div>
       )}
 
-      {/* Month Navigation Controls */}
+      {/* FILTER SECTION - MOVED AFTER SUMMARY CARDS - COMPACT SINGLE LINE */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '20px',
+        backgroundColor: '#fff',
+        padding: '12px 20px',
+        borderRadius: '8px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        flexWrap: 'wrap',
+        gap: '15px'
+      }}>
+        {/* Left side - Year Selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <label style={{ fontWeight: 'bold', fontSize: '14px', color: '#555' }}>Year:</label>
+          <select
+            value={yearFilter}
+            onChange={handleYearChange}
+            disabled={useDateRange}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '4px',
+              border: '1px solid #218c74',
+              backgroundColor: useDateRange ? '#f0f0f0' : 'white',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              color: '#218c74',
+              minWidth: '90px',
+              cursor: useDateRange ? 'not-allowed' : 'pointer'
+            }}
+          >
+            <option value={2023}>2023</option>
+            <option value={2024}>2024</option>
+            <option value={2025}>2025</option>
+            <option value={2026}>2026</option>
+            <option value={2027}>2027</option>
+          </select>
+        </div>
+
+        {/* Middle - Date Range Filter - COMPACT SINGLE LINE */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#555' }}>From:</span>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => {
+              setStartDate(e.target.value);
+              if (e.target.value && endDate) {
+                setUseDateRange(true);
+                setMonthFilter(null);
+                setCurrentViewMonth(null);
+                setClientTypeFilter(null);
+                setLeadSourceFilter(null);
+              }
+            }}
+            style={{
+              padding: '6px 10px',
+              borderRadius: '4px',
+              border: '1px solid #ced4da',
+              fontSize: '13px',
+              width: '140px'
+            }}
+          />
+          
+          <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#555' }}>To:</span>
+          <input
+            type="date"
+            value={endDate}
+            min={startDate}
+            onChange={(e) => {
+              setEndDate(e.target.value);
+              if (startDate && e.target.value) {
+                setUseDateRange(true);
+                setMonthFilter(null);
+                setCurrentViewMonth(null);
+                setClientTypeFilter(null);
+                setLeadSourceFilter(null);
+              }
+            }}
+            style={{
+              padding: '6px 10px',
+              borderRadius: '4px',
+              border: '1px solid #ced4da',
+              fontSize: '13px',
+              width: '140px'
+            }}
+          />
+        </div>
+
+        {/* Right side - Status and Clear Button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{
+            padding: '4px 12px',
+            backgroundColor: useDateRange ? '#e3f2fd' : '#e8f5e8',
+            borderRadius: '20px',
+            fontWeight: 'bold',
+            fontSize: '13px',
+            color: useDateRange ? '#1976d2' : '#218c74',
+            whiteSpace: 'nowrap'
+          }}>
+            {useDateRange ? (
+              <>📅 {new Date(startDate).toLocaleDateString().slice(0,5)} - {new Date(endDate).toLocaleDateString().slice(0,5)}</>
+            ) : (
+              <>📊 {yearFilter}{monthFilter ? ` - ${new Date(yearFilter, monthFilter - 1).toLocaleString('default', { month: 'short' })}` : ''}</>
+            )}
+          </div>
+
+          {useDateRange && (
+            <button
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+                setUseDateRange(false);
+                const { role, name } = getUserInfo();
+                fetchOrders(role, name, null, yearFilter, clientTypeFilter, 
+                           appliedExecutiveFilters.executive, appliedExecutiveFilters.executiveName, leadSourceFilter);
+              }}
+              style={{
+                padding: '4px 12px',
+                backgroundColor: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '20px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Clear ×
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Month Navigation */}
       {currentViewMonth && (
         <div style={{
           display: 'flex',
@@ -2141,8 +2035,6 @@ function ViewOrders() {
                 const params = new URLSearchParams();
                 params.set('month', newMonth);
                 params.set('year', currentViewYear);
-
-                // Clear other filters
                 params.delete('clientType');
                 params.delete('executive');
                 params.delete('executiveType');
@@ -2213,7 +2105,7 @@ function ViewOrders() {
         </div>
       )}
 
-      {/* Month Filter Info Section */}
+      {/* Month Filter Info */}
       {(monthFilterInfo.monthCount > 0 || monthFilterInfo.weekCount > 0) && (
         <div style={{
           backgroundColor: '#e3f2fd',
@@ -2271,7 +2163,7 @@ function ViewOrders() {
         </div>
       )}
 
-      {/* Filter Display Section */}
+      {/* Filter Display */}
       <div style={{
         display: 'flex',
         flexDirection: 'column',
@@ -2285,7 +2177,6 @@ function ViewOrders() {
           <h3 style={{ margin: '0 0 10px 0' }}>Active Filters:</h3>
         )}
 
-        {/* Month Filter Display */}
         {monthFilter && (
           <div style={{
             display: 'flex',
@@ -2314,7 +2205,6 @@ function ViewOrders() {
           </div>
         )}
 
-        {/* Client Type Filter Display */}
         {clientTypeFilter && (
           <div style={{
             display: 'flex',
@@ -2343,7 +2233,6 @@ function ViewOrders() {
           </div>
         )}
 
-        {/* Lead Source Filter Display */}
         {leadSourceFilter && (
           <div style={{
             display: 'flex',
@@ -2374,7 +2263,6 @@ function ViewOrders() {
           </div>
         )}
 
-        {/* Executive Filter Display */}
         {appliedExecutiveFilters.executiveName && (
           <div style={{
             display: 'flex',
@@ -2409,7 +2297,6 @@ function ViewOrders() {
           </div>
         )}
 
-        {/* Search Term Filter Display */}
         {searchTerm && (
           <div style={{
             display: 'flex',
@@ -2438,7 +2325,6 @@ function ViewOrders() {
           </div>
         )}
 
-        {/* Clear All Filters Button */}
         {(monthFilter || clientTypeFilter || appliedExecutiveFilters.executiveName || leadSourceFilter || searchTerm) && (
           <button
             onClick={clearAllFilters}
@@ -2458,7 +2344,7 @@ function ViewOrders() {
         )}
       </div>
 
-      {/* Search and Export/Import Controls */}
+      {/* Search and Export Controls */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -2467,7 +2353,6 @@ function ViewOrders() {
         flexWrap: 'wrap',
         gap: '15px'
       }}>
-        {/* Search Input */}
         <div style={{ flex: 1, minWidth: '300px' }}>
           <input
             type="text"
@@ -2484,9 +2369,7 @@ function ViewOrders() {
           />
         </div>
 
-        {/* Action Buttons - Now includes Lead Source Filter */}
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Lead Source Filter Button - Small filter button */}
           <div style={{ position: 'relative' }} ref={leadSourceFilterRef}>
             <button
               onClick={() => setShowLeadSourceFilter(!showLeadSourceFilter)}
@@ -2531,7 +2414,6 @@ function ViewOrders() {
               )}
             </button>
 
-            {/* Lead Source Filter Dropdown */}
             {showLeadSourceFilter && (
               <div style={{
                 position: 'absolute',
@@ -2601,7 +2483,6 @@ function ViewOrders() {
             )}
           </div>
 
-          {/* Export to Excel Button */}
           {canExportToExcel() && (
             <button
               onClick={handleExportToExcel}
@@ -2620,7 +2501,6 @@ function ViewOrders() {
             </button>
           )}
 
-          {/* Import from Excel Button */}
           {canImportFromExcel() && (
             <button
               onClick={() => document.getElementById('importExcelInput').click()}
@@ -2638,7 +2518,6 @@ function ViewOrders() {
             </button>
           )}
 
-          {/* Hidden file input for import */}
           <input
             id="importExcelInput"
             type="file"
@@ -2653,14 +2532,12 @@ function ViewOrders() {
       {Object.entries(groupedOrders).length > 0 ? (
         Object.entries(groupedOrders)
           .sort(([keyA], [keyB]) => {
-            // Sort months in descending order (newest first)
             const monthA = parseInt(keyA.split('-')[1]);
             const monthB = parseInt(keyB.split('-')[1]);
             return monthB - monthA;
           })
           .map(([monthYearKey, group]) => (
             <div key={monthYearKey} style={{ marginBottom: '30px' }}>
-              {/* Month Header */}
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -2673,13 +2550,11 @@ function ViewOrders() {
               }}>
                 <h3 style={{ margin: 0, fontSize: '18px' }}>{group.name}</h3>
                 <div style={{ display: 'flex', gap: '20px' }}>
-                  {/* Total Amount Display */}
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Amount</div>
                     <div style={{ fontWeight: 'bold', fontSize: '16px' }}>₹{group.totals.amount.toLocaleString('en-IN')}</div>
                   </div>
 
-                  {/* Total Received Display */}
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Received</div>
                     <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#ffeb3b' }}>
@@ -2687,7 +2562,6 @@ function ViewOrders() {
                     </div>
                   </div>
 
-                  {/* Total Balance Display */}
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '12px', opacity: 0.8 }}>Total Balance</div>
                     <div style={{
@@ -2701,12 +2575,10 @@ function ViewOrders() {
                 </div>
               </div>
 
-              {/* Orders Table with Horizontal Scroll */}
               <div style={{ overflowX: 'auto', height: '500px', position: 'relative' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
                   <thead style={{ backgroundColor: '#218c74', color: '#fff', position: 'sticky', top: 0, zIndex: 10 }}>
                     <tr>
-                      {/* Sticky Columns - S.No, Executive, Business with responsive class */}
                       <th className="sticky-column" style={{
                         padding: '12px 8px',
                         fontSize: '14px',
@@ -2740,10 +2612,8 @@ function ViewOrders() {
                         minWidth: '150px'
                       }}>Business</th>
 
-                      {/* Regular Headers */}
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Customer</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Location</th>
-                      {/* Lead Source Header */}
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Lead Source</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Contact</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Order No</th>
@@ -2770,48 +2640,30 @@ function ViewOrders() {
                   </thead>
                   <tbody>
                     {group.orders.map((order, orderIndex) => {
-                      // Check if this order has multiple rows
                       const hasMultipleRows = order.rows && order.rows.length > 1;
                       
                       if (hasMultipleRows) {
-                        // COMBINE MULTIPLE ROWS INTO ONE DISPLAY ROW
-                        
-                        // Combine requirements with commas
                         const combinedRequirements = order.rows
                           .map(row => {
-                            // Use customRequirement if it exists (for "other" selections)
-                            // Otherwise use the requirement field
                             const req = row.customRequirement || row.requirement || '';
-                            // If it's a time-based requirement, add "(Time Based)" indicator
                             const isTimeBased = row.days && row.days > 0;
                             return isTimeBased ? `${req} (${row.days} days)` : req;
                           })
-                          .filter(req => req) // Remove empty
+                          .filter(req => req)
                           .join(', ');
                         
-                        // Combine quantities with commas
                         const combinedQuantities = order.rows
-                          .map(row => {
-                            const qty = row.quantity || 0;
-                            // Add unit if available (pieces, etc.)
-                            return qty;
-                          })
+                          .map(row => row.quantity || 0)
                           .join(', ');
                         
-                        // Combine rates with commas (including currency symbol)
                         const combinedRates = order.rows
-                          .map(row => {
-                            const rate = parseFloat(row.rate || 0).toFixed(2);
-                            return `₹${rate}`;
-                          })
+                          .map(row => `₹${parseFloat(row.rate || 0).toFixed(2)}`)
                           .join(', ');
                         
-                        // Calculate total (sum of all rows)
                         const combinedTotal = order.rows
                           .reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0)
                           .toFixed(2);
                         
-                        // Get all delivery dates (take the earliest or latest? Let's take the earliest)
                         const deliveryDates = order.rows
                           .filter(row => row.deliveryDate)
                           .map(row => new Date(row.deliveryDate))
@@ -2821,26 +2673,22 @@ function ViewOrders() {
                           ? formatDate(deliveryDates[0].toISOString().split('T')[0])
                           : 'N/A';
                         
-                        // Get all assigned executives (unique)
                         const assignedExecutives = [...new Set(
                           order.rows
                             .map(row => row.assignedExecutive)
                             .filter(exec => exec)
                         )].join(', ');
                         
-                        // Get statuses (show unique or combined)
                         const statuses = [...new Set(
                           order.rows
                             .map(row => row.status)
                             .filter(status => status)
                         )].join(', ');
                         
-                        // Calculate row background color
                         const rowBgColor = orderIndex % 2 === 0 ? '#fdfdfd' : '#f5f9fa';
                         
                         return (
                           <tr key={order._id} style={{ backgroundColor: rowBgColor, borderBottom: '1px solid #eee' }}>
-                            {/* Sticky Cells - S.No, Executive, Business */}
                             <td className="sticky-column" style={{
                               padding: '10px 8px',
                               textAlign: 'center',
@@ -2902,11 +2750,9 @@ function ViewOrders() {
                               )}
                             </td>
 
-                            {/* Regular Cells */}
                             <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactPerson}</td>
                             <td style={{ padding: '10px 8px', minWidth: '100px' }}>{order.location}</td>
 
-                            {/* Lead Source Cell */}
                             <td style={{ padding: '10px 8px', minWidth: '120px' }}>
                               <span style={{
                                 backgroundColor: order.leadSource ? '#e3f2fd' : '#f5f5f5',
@@ -2932,7 +2778,6 @@ function ViewOrders() {
                             <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.orderDate)}</td>
                             <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.clientType}</td>
 
-                            {/* COMBINED REQUIREMENTS CELL */}
                             <td style={{ padding: '10px 8px', minWidth: '250px', fontWeight: '500', color: '#1976d2' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <span>{combinedRequirements}</span>
@@ -2944,17 +2789,14 @@ function ViewOrders() {
                               </div>
                             </td>
 
-                            {/* COMBINED QUANTITY CELL */}
                             <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '120px', fontWeight: '500' }}>
                               {combinedQuantities}
                             </td>
 
-                            {/* COMBINED RATE CELL */}
                             <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '150px' }}>
                               {combinedRates}
                             </td>
 
-                            {/* COMBINED TOTAL CELL */}
                             <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', minWidth: '100px', color: '#27ae60' }}>
                               ₹{combinedTotal}
                             </td>
@@ -2962,7 +2804,6 @@ function ViewOrders() {
                             <td style={{ padding: '10px 8px', textAlign: 'right', color: '#e67e22', minWidth: '80px' }}>{order.discount}</td>
                             <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60', minWidth: '100px' }}>{order.discountedTotal}</td>
 
-                            {/* Delivery Date - using earliest delivery date */}
                             <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>
                               {earliestDeliveryDate}
                               {deliveryDates.length > 1 && (
@@ -2972,7 +2813,6 @@ function ViewOrders() {
                               )}
                             </td>
 
-                            {/* Service Assigned - using combined assigned executives */}
                             <td style={{ padding: '10px 8px', textAlign: 'left', minWidth: '120px' }}>
                               {assignedExecutives ? (
                                 <span style={{
@@ -2999,7 +2839,6 @@ function ViewOrders() {
                               )}
                             </td>
 
-                            {/* Status - using combined statuses */}
                             <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>
                               <span style={{
                                 backgroundColor: statuses.includes('Completed') ? '#d4edda' :
@@ -3032,10 +2871,7 @@ function ViewOrders() {
                                   Admin: {order.createdBy}
                                 </span>
                               ) : (
-                                <span style={{
-                                  color: '#666',
-                                  fontSize: '12px'
-                                }}>
+                                <span style={{ color: '#666', fontSize: '12px' }}>
                                   {order.executive}
                                 </span>
                               )}
@@ -3060,7 +2896,6 @@ function ViewOrders() {
                             </td>
                             <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>{order.chequeNumber}</td>
 
-                            {/* Action Buttons */}
                             <td style={{
                               padding: '10px 8px',
                               display: 'flex',
@@ -3069,11 +2904,8 @@ function ViewOrders() {
                               flexWrap: 'wrap',
                               minWidth: '200px'
                             }}>
-                              {/* Print Order Button - Direct print */}
                               <button
-                                onClick={() => {
-                                  handlePrintOrder(order);
-                                }}
+                                onClick={() => handlePrintOrder(order)}
                                 style={{
                                   backgroundColor: '#9c27b0',
                                   color: 'white',
@@ -3091,7 +2923,6 @@ function ViewOrders() {
                                 🖨️ Print
                               </button>
 
-                              {/* Always show View Payments button */}
                               <button
                                 onClick={() => handleViewPayments(order)}
                                 disabled={paymentLoading}
@@ -3155,7 +2986,6 @@ function ViewOrders() {
                                     Edit
                                   </button>
 
-                                  {/* DELETE BUTTON - ONLY SHOW FOR ADMIN USERS */}
                                   {canDeleteOrders() && (
                                     <button
                                       onClick={() => confirmDelete(order._id)}
@@ -3179,9 +3009,7 @@ function ViewOrders() {
                           </tr>
                         );
                       } else {
-                        // SINGLE ROW - Render normally (original code for single row orders)
                         return order.rows.filter(filterOrders(order)).map((row, rowIndex) => {
-                          // Calculate background color based on row index
                           const rowBgColor = (orderIndex + rowIndex) % 2 === 0 ? '#fdfdfd' : '#f5f9fa';
 
                           return (
@@ -3192,7 +3020,6 @@ function ViewOrders() {
                                 borderBottom: '1px solid #eee'
                               }}
                             >
-                              {/* Sticky Cells - S.No, Executive, Business with responsive class */}
                               <td className="sticky-column" style={{
                                 padding: '10px 8px',
                                 textAlign: 'center',
@@ -3254,11 +3081,9 @@ function ViewOrders() {
                                 )}
                               </td>
 
-                              {/* Regular Cells */}
                               <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactPerson}</td>
                               <td style={{ padding: '10px 8px', minWidth: '100px' }}>{order.location}</td>
 
-                              {/* Lead Source Cell */}
                               <td style={{ padding: '10px 8px', minWidth: '120px' }}>
                                 <span style={{
                                   backgroundColor: order.leadSource ? '#e3f2fd' : '#f5f5f5',
@@ -3284,7 +3109,6 @@ function ViewOrders() {
                               <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.orderDate)}</td>
                               <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.clientType}</td>
 
-                              {/* Requirement Cell - using current row */}
                               <td style={{ padding: '10px 8px', minWidth: '250px' }}>
                                 <div>
                                   <div style={{ marginBottom: '0', padding: '0', fontWeight: '500', color: '#1976d2' }}>
@@ -3299,17 +3123,14 @@ function ViewOrders() {
                                 </div>
                               </td>
 
-                              {/* Quantity Cell - using current row */}
                               <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '120px', fontWeight: '500' }}>
                                 {row.quantity || 0}
                               </td>
 
-                              {/* Rate Cell - using current row */}
                               <td style={{ padding: '10px 8px', textAlign: 'right', minWidth: '150px' }}>
                                 ₹{parseFloat(row.rate || 0).toFixed(2)}
                               </td>
 
-                              {/* Total Cell - using current row */}
                               <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', minWidth: '100px', color: '#27ae60' }}>
                                 ₹{parseFloat(row.total || 0).toFixed(2)}
                               </td>
@@ -3317,12 +3138,10 @@ function ViewOrders() {
                               <td style={{ padding: '10px 8px', textAlign: 'right', color: '#e67e22', minWidth: '80px' }}>{order.discount}</td>
                               <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60', minWidth: '100px' }}>{order.discountedTotal}</td>
 
-                              {/* Delivery Date - using current row */}
                               <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>
                                 {formatDate(row.deliveryDate)}
                               </td>
 
-                              {/* Service Assigned - using current row */}
                               <td style={{ padding: '10px 8px', textAlign: 'left', minWidth: '120px' }}>
                                 {row.assignedExecutive ? (
                                   <span style={{
@@ -3349,7 +3168,6 @@ function ViewOrders() {
                                 )}
                               </td>
 
-                              {/* Status - using current row */}
                               <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>
                                 <span style={{
                                   backgroundColor: row.status === 'Completed' ? '#d4edda' :
@@ -3382,10 +3200,7 @@ function ViewOrders() {
                                     Admin: {order.createdBy}
                                   </span>
                                 ) : (
-                                  <span style={{
-                                    color: '#666',
-                                    fontSize: '12px'
-                                  }}>
+                                  <span style={{ color: '#666', fontSize: '12px' }}>
                                     {order.executive}
                                   </span>
                                 )}
@@ -3410,7 +3225,6 @@ function ViewOrders() {
                               </td>
                               <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>{order.chequeNumber}</td>
 
-                              {/* Action Buttons */}
                               <td style={{
                                 padding: '10px 8px',
                                 display: 'flex',
@@ -3419,11 +3233,8 @@ function ViewOrders() {
                                 flexWrap: 'wrap',
                                 minWidth: '200px'
                               }}>
-                                {/* Print Order Button - Direct print */}
                                 <button
-                                  onClick={() => {
-                                    handlePrintOrder(order);
-                                  }}
+                                  onClick={() => handlePrintOrder(order)}
                                   style={{
                                     backgroundColor: '#9c27b0',
                                     color: 'white',
@@ -3441,7 +3252,6 @@ function ViewOrders() {
                                   🖨️ Print
                                 </button>
 
-                                {/* Always show View Payments button */}
                                 <button
                                   onClick={() => handleViewPayments(order)}
                                   disabled={paymentLoading}
@@ -3505,7 +3315,6 @@ function ViewOrders() {
                                       Edit
                                     </button>
 
-                                    {/* DELETE BUTTON - ONLY SHOW FOR ADMIN USERS */}
                                     {canDeleteOrders() && (
                                       <button
                                         onClick={() => confirmDelete(order._id)}
@@ -3537,7 +3346,6 @@ function ViewOrders() {
             </div>
           ))
       ) : (
-        // No orders found message
         <div style={{
           textAlign: 'center',
           padding: '40px',
@@ -3587,7 +3395,6 @@ function ViewOrders() {
               {paymentData.amount ? 'Record Payment' : 'Payment History'}
             </h2>
 
-            {/* Order Summary Section */}
             <div style={{ marginBottom: '20px', border: '1px solid #eee', padding: '15px', borderRadius: '5px' }}>
               <h3 style={{ marginBottom: '10px', borderBottom: '1px solid #ddd', paddingBottom: '5px' }}>
                 Order Summary
@@ -3602,7 +3409,6 @@ function ViewOrders() {
                 <div>
                   <strong>Location:</strong> {currentOrder.location}
                 </div>
-                {/* Lead Source */}
                 <div>
                   <strong>Lead Source:</strong> {currentOrder.leadSource || 'Not specified'}
                   {currentOrder.otherLeadSource && currentOrder.leadSource === 'Other Specify' && (
@@ -3635,7 +3441,6 @@ function ViewOrders() {
               </div>
             </div>
 
-            {/* Payment History Section */}
             {paymentHistory.length > 0 && (
               <div style={{ marginBottom: '20px', border: '1px solid #eee', padding: '15px', borderRadius: '5px' }}>
                 <h3 style={{ marginBottom: '10px', borderBottom: '1px solid #ddd', paddingBottom: '5px' }}>
@@ -3675,10 +3480,8 @@ function ViewOrders() {
               </div>
             )}
 
-            {/* Payment Form */}
             {paymentData.amount && (
               <form onSubmit={handlePaymentSubmit}>
-                {/* Pending Amount Display */}
                 <div style={{ marginBottom: '15px' }}>
                   <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Pending Amount</label>
                   <input
@@ -3697,7 +3500,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Amount to Pay Input */}
                 <div style={{ marginBottom: '15px' }}>
                   <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Amount to Pay *</label>
                   <input
@@ -3719,7 +3521,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Payment Date Input */}
                 <div style={{ marginBottom: '15px' }}>
                   <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Payment Date *</label>
                   <input
@@ -3737,7 +3538,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Payment Method Select */}
                 <div style={{ marginBottom: '15px' }}>
                   <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Payment Method *</label>
                   <select
@@ -3760,7 +3560,6 @@ function ViewOrders() {
                   </select>
                 </div>
 
-                {/* UPI ID Selection (shown only when UPI method is selected) */}
                 {paymentData.method === 'UPI' && (
                   <div style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>UPI ID *</label>
@@ -3801,7 +3600,6 @@ function ViewOrders() {
                   </div>
                 )}
 
-                {/* Cheque Number Input (shown only when Cheque method is selected) */}
                 {paymentData.method === 'Cheque' && (
                   <div style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Cheque Number *</label>
@@ -3821,7 +3619,6 @@ function ViewOrders() {
                   </div>
                 )}
 
-                {/* Transaction ID Input (shown only when Bank Transfer method is selected) */}
                 {paymentData.method === 'Bank Transfer' && (
                   <div style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Transaction ID *</label>
@@ -3841,7 +3638,6 @@ function ViewOrders() {
                   </div>
                 )}
 
-                {/* Payment Notes Textarea */}
                 <div style={{ marginBottom: '15px' }}>
                   <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Notes</label>
                   <textarea
@@ -3859,7 +3655,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Form Action Buttons */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                   <button
                     type="button"
@@ -3893,7 +3688,6 @@ function ViewOrders() {
               </form>
             )}
 
-            {/* View Only Mode Actions */}
             {!paymentData.amount && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                 <button
@@ -3978,9 +3772,7 @@ function ViewOrders() {
           }}>
             <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Edit Order</h2>
 
-            {/* Order Details Form with lead source fields */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
-              {/* Business Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Business</label>
                 <input
@@ -3991,7 +3783,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Contact Person Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Contact Person</label>
                 <input
@@ -4002,7 +3793,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Location Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Location</label>
                 <input
@@ -4013,7 +3803,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Lead Source Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Lead Source</label>
                 <select
@@ -4045,7 +3834,6 @@ function ViewOrders() {
                 )}
               </div>
 
-              {/* Contact Code Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Contact Code</label>
                 <input
@@ -4056,7 +3844,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Phone Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Phone</label>
                 <input
@@ -4067,7 +3854,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Order No Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Order No</label>
                 <input
@@ -4078,7 +3864,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Order Date Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Order Date</label>
                 <input
@@ -4090,7 +3875,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Client Type Select */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Client Type</label>
                 <select
@@ -4105,7 +3889,6 @@ function ViewOrders() {
                 </select>
               </div>
 
-              {/* Created By Display (Read-only) */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Created By</label>
                 <input
@@ -4122,7 +3905,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Discount Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Discount</label>
                 <input
@@ -4134,7 +3916,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Final Amount Display (Read-only) */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Final Amount</label>
                 <input
@@ -4153,7 +3934,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Advance Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Advance</label>
                 <input
@@ -4165,7 +3945,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Balance Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Balance</label>
                 <input
@@ -4177,7 +3956,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Advance Date Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Advance Date</label>
                 <input
@@ -4189,7 +3967,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Payment Date Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Payment Date</label>
                 <input
@@ -4201,7 +3978,6 @@ function ViewOrders() {
                 />
               </div>
 
-              {/* Payment Method Select */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Payment Method</label>
                 <select
@@ -4226,7 +4002,6 @@ function ViewOrders() {
                 </select>
               </div>
 
-              {/* Cheque Number Input */}
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Cheque Number</label>
                 <input
@@ -4238,7 +4013,6 @@ function ViewOrders() {
               </div>
             </div>
 
-            {/* Order Items Section */}
             <h3 style={{ marginBottom: '15px' }}>Order Items</h3>
             {editingOrder.rows.map((row, index) => (
               <div key={index} style={{
@@ -4250,7 +4024,6 @@ function ViewOrders() {
                 backgroundColor: '#f5f5f5',
                 borderRadius: '4px'
               }}>
-                {/* Description Input */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Description</label>
                   <input
@@ -4260,7 +4033,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Requirement Input */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Requirement</label>
                   <input
@@ -4270,7 +4042,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Custom Requirement Input */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Custom Requirement</label>
                   <input
@@ -4280,7 +4051,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Quantity Input */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Quantity</label>
                   <input
@@ -4291,7 +4061,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Rate Input */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Rate</label>
                   <input
@@ -4302,7 +4071,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Delivery Date Input */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Delivery Date</label>
                   <input
@@ -4313,7 +4081,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Start Date Input */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Start Date</label>
                   <input
@@ -4324,7 +4091,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* End Date Input */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>End Date</label>
                   <input
@@ -4335,7 +4101,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Service Assigned To Input */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Service Assigned To</label>
                   <input
@@ -4346,7 +4111,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Status Select */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Status</label>
                   <select
@@ -4361,7 +4125,6 @@ function ViewOrders() {
                   </select>
                 </div>
 
-                {/* Remark Input */}
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Remark</label>
                   <input
@@ -4371,7 +4134,6 @@ function ViewOrders() {
                   />
                 </div>
 
-                {/* Is Completed Checkbox */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <label style={{ marginBottom: '5px' }}>Is Completed:</label>
                   <input
@@ -4384,7 +4146,6 @@ function ViewOrders() {
               </div>
             ))}
 
-            {/* Form Action Buttons */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
               <button
                 type="button"

@@ -693,59 +693,85 @@ function Admin() {
   }, []);
 
   useEffect(() => {
-    const fetchTargetData = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(`/api/executive/${selectedExecutive}`);
-        const data = response.data;
+  const fetchTargetData = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`/api/executive/${selectedExecutive}`);
+      const data = response.data;
 
-        let totalTarget = 0;
-        let totalAchieved = 0;
+      let totalTarget = 0;
+      let totalAchieved = 0;
+      
+      console.log('📊 Processing orders for target - ONLY counting Retail/New');
 
-        if (Array.isArray(data)) {
-          data.forEach((order) => {
-            if (order.target) totalTarget = parseFloat(order.target) || 0;
+      if (Array.isArray(data)) {
+        data.forEach((order) => {
+          // Get target from first order (if present)
+          if (order.target) totalTarget = parseFloat(order.target) || 0;
+          
+          // Check client type - ONLY count if Retail or New
+          const clientType = (order.clientType || '').toLowerCase().trim();
+          
+          if (clientType === 'retail' || clientType === 'new') {
+            // This is a RETAIL order - add to achieved
             if (order.rows) {
               order.rows.forEach((row) => {
-                totalAchieved += parseFloat(row.total || 0);
+                const rowTotal = parseFloat(row.total || 0);
+                totalAchieved += rowTotal;
               });
             }
-          });
-        } else if (data && typeof data === "object") {
-          if (data.target) totalTarget = parseFloat(data.target) || 0;
+            console.log(`✅ RETAIL order added: ${order.orderNo} (${order.clientType})`);
+          } else {
+            // This is NOT retail - exclude from achieved
+            console.log(`❌ EXCLUDED order: ${order.orderNo} (${order.clientType || 'No type'})`);
+          }
+        });
+      } else if (data && typeof data === "object") {
+        // Handle single order
+        if (data.target) totalTarget = parseFloat(data.target) || 0;
+        
+        const clientType = (data.clientType || '').toLowerCase().trim();
+        
+        if (clientType === 'retail' || clientType === 'new') {
           if (data.rows) {
             data.rows.forEach((row) => {
               totalAchieved += parseFloat(row.total || 0);
             });
           }
         }
-
-        setTargetData({
-          target: totalTarget,
-          achieved: totalAchieved,
-          formattedTarget: `₹${totalTarget.toLocaleString("en-IN")}`,
-          formattedAchieved: `₹${totalAchieved.toLocaleString("en-IN")}`,
-        });
-      } catch (error) {
-        console.error("Error fetching target data:", error);
-        setTargetData({
-          target: 100000,
-          achieved: 0,
-          formattedTarget: "₹100,000",
-          formattedAchieved: "₹0",
-        });
-      } finally {
-        setLoading(false);
       }
-    };
 
-    if (selectedExecutive) {
-      fetchTargetData();
-      const interval = setInterval(fetchTargetData, 30000);
-      return () => clearInterval(interval);
+      console.log('📊 Target Calculation Result:', {
+        target: totalTarget,
+        achieved: totalAchieved,
+        message: `Only retail/new orders counted towards target`
+      });
+
+      setTargetData({
+        target: totalTarget,
+        achieved: totalAchieved,
+        formattedTarget: `₹${totalTarget.toLocaleString("en-IN")}`,
+        formattedAchieved: `₹${totalAchieved.toLocaleString("en-IN")}`,
+      });
+    } catch (error) {
+      console.error("Error fetching target data:", error);
+      setTargetData({
+        target: 100000,
+        achieved: 0,
+        formattedTarget: "₹100,000",
+        formattedAchieved: "₹0",
+      });
+    } finally {
+      setLoading(false);
     }
-  }, [selectedExecutive]);
+  };
 
+  if (selectedExecutive) {
+    fetchTargetData();
+    const interval = setInterval(fetchTargetData, 30000);
+    return () => clearInterval(interval);
+  }
+}, [selectedExecutive]);
   const getProfileInitials = (name) =>
     name
       .split(" ")
