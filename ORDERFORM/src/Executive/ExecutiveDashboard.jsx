@@ -7,7 +7,12 @@ import {
   Cell,
   Tooltip,
   Legend,
-  ResponsiveContainer
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid
 } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import AutoLogout from '../mainpage/AutoLogout';
@@ -19,6 +24,8 @@ const COLORS = [
   "#FF8042",
   "#8884D8",
   "#82CA9D",
+  "#FF6384",
+  "#36A2EB"
 ];
 
 // Custom MonthPicker Component
@@ -187,7 +194,8 @@ const ProfileModal = ({ user, onClose, onSave }) => {
 const ExecutiveDashboard = ({ 
   executiveName, 
   onNavigateToPendingPayments, 
-  onNavigateToAppointments 
+  onNavigateToAppointments,
+  onNavigateToViewOrders // NEW PROP for navigating to view orders tab
 }) => {
   const [hasNewAppointments, setHasNewAppointments] = useState(false);
   const [selectedExecutive, setSelectedExecutive] = useState('');
@@ -220,6 +228,11 @@ const ExecutiveDashboard = ({
   });
   const [isFieldExec, setIsFieldExec] = useState(false);
   const [buttonsLoaded, setButtonsLoaded] = useState(false);
+  
+  // NEW STATE for client distribution with counts and amounts
+  const [clientDistribution, setClientDistribution] = useState([]);
+  const [totalClients, setTotalClients] = useState(0);
+  const [totalAmountByClient, setTotalAmountByClient] = useState(0);
 
   const navigate = useNavigate();
 
@@ -277,7 +290,7 @@ const ExecutiveDashboard = ({
 
   const handleNewAppointmentsClick = () => {
     if (onNavigateToAppointments) {
-      onNavigateToAppointments();
+      onNavigateToAppointments(); // This sets the tab to viewAppointments
     } else {
       localStorage.setItem('lastSeenAppointmentCount', appointmentCount.toString());
       setHasNewAppointments(false);
@@ -291,7 +304,7 @@ const ExecutiveDashboard = ({
 
   const handlePendingPaymentsClick = () => {
     if (onNavigateToPendingPayments) {
-      onNavigateToPendingPayments();
+      onNavigateToPendingPayments(); // This sets the tab to pending-payments
     } else {
       navigate('/pending-payments', { 
         state: { 
@@ -339,6 +352,44 @@ const ExecutiveDashboard = ({
           year: selectedDate.getFullYear()
         } 
       });
+    }
+  };
+
+  // NEW: Handle client bar click to navigate to view orders filtered by client type
+  const handleClientBarClick = (data) => {
+    if (data && data.activePayload && data.activePayload.length > 0) {
+      const clientType = data.activePayload[0].payload.name;
+      
+      // First, save the filters to localStorage so ViewOrders can read them
+      const filters = {
+        clientType: clientType,
+        month: selectedDate.getMonth() + 1,
+        year: selectedDate.getFullYear(),
+        executive: selectedExecutive
+      };
+      localStorage.setItem('viewOrdersFilters', JSON.stringify(filters));
+      
+      // Call the navigation prop to switch to viewOrders tab (just like appointments)
+      if (onNavigateToViewOrders) {
+        onNavigateToViewOrders(); // This will set activeTab to "viewOrders" in Admin
+      }
+    }
+  };
+
+  // NEW: Handle breakdown item click
+  const handleBreakdownItemClick = (clientType) => {
+    // Save filters to localStorage
+    const filters = {
+      clientType: clientType,
+      month: selectedDate.getMonth() + 1,
+      year: selectedDate.getFullYear(),
+      executive: selectedExecutive
+    };
+    localStorage.setItem('viewOrdersFilters', JSON.stringify(filters));
+    
+    // Call the navigation prop to switch to viewOrders tab
+    if (onNavigateToViewOrders) {
+      onNavigateToViewOrders(); // This will set activeTab to "viewOrders" in Admin
     }
   };
 
@@ -567,6 +618,94 @@ const ExecutiveDashboard = ({
     }
   }, [selectedExecutive, selectedDate, userProfile.role]);
 
+  // NEW FUNCTION: Fetch client distribution data with counts and amounts
+  const fetchClientDistribution = useCallback(async () => {
+    try {
+      const month = selectedDate.getMonth() + 1;
+      const year = selectedDate.getFullYear();
+
+      console.log(`Fetching client distribution for ${selectedExecutive} - Month: ${month}, Year: ${year}`);
+
+      const res = await axios.get('/api/orders', {
+        params: { 
+          executive: selectedExecutive,
+          month, 
+          year 
+        }
+      });
+      
+      const orders = res.data;
+      
+      // Initialize distribution object with counts and amounts
+      const distribution = {
+        'Retail': { count: 0, amount: 0 },
+        'Agent': { count: 0, amount: 0 },
+        'Renewal': { count: 0, amount: 0 },
+        'Renewal-Agent': { count: 0, amount: 0 }
+      };
+      
+      let totalClientsCount = 0;
+      let totalAmountSum = 0;
+      
+      orders.forEach(order => {
+        const clientType = order.clientType || 'Retail';
+        
+        // Calculate order total from rows
+        let orderTotal = 0;
+        if (order.rows && Array.isArray(order.rows)) {
+          orderTotal = order.rows.reduce((sum, row) => {
+            return sum + (parseFloat(row.total) || 0);
+          }, 0);
+        }
+        
+        // Add to appropriate client type
+        if (distribution.hasOwnProperty(clientType)) {
+          distribution[clientType].count++;
+          distribution[clientType].amount += orderTotal;
+        } else {
+          // Default to Retail if unknown
+          distribution['Retail'].count++;
+          distribution['Retail'].amount += orderTotal;
+        }
+        
+        totalClientsCount++;
+        totalAmountSum += orderTotal;
+      });
+      
+      // Convert to array format for chart
+      const distributionArray = Object.keys(distribution).map(key => ({
+        name: key,
+        count: distribution[key].count,
+        amount: distribution[key].amount
+      }));
+      
+      console.log('Client distribution with amounts:', distributionArray);
+      console.log('Total amount:', totalAmountSum);
+      
+      setClientDistribution(distributionArray);
+      setTotalClients(totalClientsCount);
+      setTotalAmountByClient(totalAmountSum);
+      
+    } catch (err) {
+      console.error('Error fetching client distribution:', err);
+      setClientDistribution([]);
+      setTotalClients(0);
+      setTotalAmountByClient(0);
+    }
+  }, [selectedExecutive, selectedDate]);
+
+  // NEW: Format currency for display
+  const formatCurrency = (value) => {
+    if (value >= 10000000) {
+      return `₹${(value / 10000000).toFixed(2)}Cr`;
+    } else if (value >= 100000) {
+      return `₹${(value / 100000).toFixed(2)}L`;
+    } else if (value >= 1000) {
+      return `₹${(value / 1000).toFixed(1)}K`;
+    }
+    return `₹${value}`;
+  };
+
   // Effect hooks
   useEffect(() => {
     if (achieved >= target && target > 0) {
@@ -618,15 +757,17 @@ const ExecutiveDashboard = ({
       fetchAppointmentCount();
       fetchFollowUpCount();
       fetchProspects();
+      fetchClientDistribution(); // NEW: Fetch client distribution with amounts
     }
   }, [
     selectedExecutive, 
-    selectedDate,  // This dependency ensures data is refetched when date changes
+    selectedDate,
     fetchExecutiveData, 
     fetchPendingPayments,
     fetchAppointmentCount, 
     fetchFollowUpCount, 
-    fetchProspects
+    fetchProspects,
+    fetchClientDistribution
   ]);
 
   // Auto-refresh interval
@@ -855,6 +996,91 @@ const ExecutiveDashboard = ({
           </div>
         </div>
 
+        {/* CLIENT OVERVIEW CARD - UPDATED with combined count and amount on single bar */}
+        <div className="dashboard-card client-overview-card">
+          <div className="card-header">
+            <h3>📊 Client Overview - {selectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</h3>
+          </div>
+          <div className="chart-container">
+            {clientDistribution.length > 0 ? (
+              <ResponsiveContainer width="100%" height={isMobile ? 200 : 250}>
+                <BarChart
+                  data={clientDistribution}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                  onClick={handleClientBarClick}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip 
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="custom-tooltip" style={{
+                            backgroundColor: '#fff',
+                            padding: '10px',
+                            border: '1px solid #ccc',
+                            borderRadius: '4px',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+                          }}>
+                            <p style={{ margin: 0, fontWeight: 'bold', color: '#333' }}>{label}</p>
+                            <p style={{ margin: '5px 0 0', color: '#8884d8' }}>
+                              <strong>Orders:</strong> {data.count}
+                            </p>
+                            <p style={{ margin: '2px 0 0', color: '#82ca9d' }}>
+                              <strong>Amount:</strong> {formatCurrency(data.amount)}
+                            </p>
+                            <p style={{ margin: '5px 0 0', fontSize: '11px', color: '#666', fontStyle: 'italic' }}>
+                              Click bar to view orders
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend />
+                  <Bar 
+                    dataKey="count" 
+                    fill="#8884d8" 
+                    name="Orders" 
+                    cursor="pointer"
+                  >
+                    {clientDistribution.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="no-data-message">
+                <p>No client data available for {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+              </div>
+            )}
+          </div>
+          <div className="card-footer">
+            <div className="footer-row">
+              <span className="footer-total">Total Clients: {totalClients}</span>
+              <span className="footer-total">Total Amount: {formatCurrency(totalAmountByClient)}</span>
+            </div>
+            <div className="footer-breakdown">
+              {clientDistribution.map(item => (
+                <div 
+                  key={item.name} 
+                  className="breakdown-item"
+                  onClick={() => handleBreakdownItemClick(item.name)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <span className="client-type">{item.name}:</span>
+                  <span className="client-count">{item.count} orders</span>
+                  <span className="client-amount">{formatCurrency(item.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Services Card - Medium */}
         <div className="dashboard-card services-card">
           <div className="card-header">
@@ -929,7 +1155,6 @@ const ExecutiveDashboard = ({
             <h3>👥 Prospects - {selectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</h3>
           </div>
           <div className="prospect-chart">
-            <h3>Total Prospects: {prospectData.count} for {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
             {hasProspectData ? (
               <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
                 <PieChart>
@@ -956,6 +1181,9 @@ const ExecutiveDashboard = ({
             ) : (
               <p>No prospect data available for {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
             )}
+          </div>
+          <div className="card-footer">
+            <span>Total Prospects: {prospectData.count}</span>
           </div>
         </div>
       </main>
@@ -1265,7 +1493,12 @@ const ExecutiveDashboard = ({
         }
 
         .target-card {
-          grid-column: 1 / -1;
+          grid-column: span 6;
+        }
+
+        /* Client Overview Card - takes 6 columns (half of first row) */
+        .client-overview-card {
+          grid-column: span 6;
         }
 
         .services-card {
@@ -1326,13 +1559,64 @@ const ExecutiveDashboard = ({
 
         .card-footer {
           display: flex;
-          justify-content: space-between;
+          flex-direction: column;
           padding-top: 1rem;
           border-top: 1px solid var(--border);
           font-weight: 600;
           font-size: 0.9rem;
+          gap: 0.75rem;
+        }
+
+        .footer-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
           flex-wrap: wrap;
           gap: 0.5rem;
+        }
+
+        .footer-total {
+          font-size: 1rem;
+          color: var(--primary);
+        }
+
+        .footer-breakdown {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          background: rgba(0, 0, 0, 0.02);
+          border-radius: var(--radius);
+          padding: 0.75rem;
+        }
+
+        .breakdown-item {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 0.5rem;
+          font-size: 0.85rem;
+          padding: 0.25rem;
+          border-radius: 4px;
+          transition: background-color 0.2s;
+        }
+
+        .breakdown-item:hover {
+          background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        .client-type {
+          font-weight: 600;
+          color: var(--text);
+        }
+
+        .client-count {
+          color: var(--info);
+          text-align: center;
+        }
+
+        .client-amount {
+          color: var(--success);
+          text-align: right;
+          font-weight: 600;
         }
 
         /* Prospects Chart Styles */
@@ -1341,10 +1625,19 @@ const ExecutiveDashboard = ({
           width: 100%;
         }
 
-        .prospect-chart h3 {
-          margin-bottom: 1rem;
-          font-size: 1.1rem;
-          color: var(--text);
+        .prospect-chart p {
+          text-align: center;
+          color: var(--text-light);
+          margin: 2rem 0;
+        }
+
+        .no-data-message {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 200px;
+          color: var(--text-light);
+          font-size: 1rem;
           text-align: center;
         }
 
@@ -1508,6 +1801,56 @@ const ExecutiveDashboard = ({
           overflow-y: auto;
         }
 
+        .form-group {
+          margin-bottom: 1rem;
+        }
+
+        .form-group label {
+          display: block;
+          margin-bottom: 0.5rem;
+          font-weight: 500;
+          color: var(--text);
+        }
+
+        .form-group input,
+        .form-group select {
+          width: 100%;
+          padding: 0.5rem;
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          font-size: 1rem;
+        }
+
+        .checkbox-group {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .checkbox-group input {
+          width: auto;
+        }
+
+        .checkbox-group label {
+          margin-bottom: 0;
+        }
+
+        .form-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 1rem;
+          margin-top: 1.5rem;
+        }
+
+        /* Custom Tooltip */
+        .custom-tooltip {
+          background-color: white;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+          padding: 10px;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
         /* Animations */
         @keyframes blink {
           0% { opacity: 1; }
@@ -1517,13 +1860,15 @@ const ExecutiveDashboard = ({
 
         /* Mobile Responsive Styles */
         @media (max-width: 1024px) {
-          .services-card {
+          .target-card,
+          .client-overview-card {
             grid-column: span 6;
           }
           
+          .services-card,
           .payments-card,
           .prospects-card {
-            grid-column: span 3;
+            grid-column: span 4;
           }
         }
 
@@ -1634,8 +1979,16 @@ const ExecutiveDashboard = ({
 
           .card-footer {
             font-size: 0.8rem;
+          }
+
+          .footer-row {
             flex-direction: column;
-            text-align: center;
+            align-items: flex-start;
+          }
+
+          .breakdown-item {
+            grid-template-columns: 1fr 1fr;
+            gap: 0.25rem;
           }
 
           .target-summary {
@@ -1698,6 +2051,15 @@ const ExecutiveDashboard = ({
             width: 1.25rem;
             height: 1.25rem;
             font-size: 0.7rem;
+          }
+
+          .breakdown-item {
+            grid-template-columns: 1fr;
+            text-align: center;
+          }
+
+          .client-amount {
+            text-align: center;
           }
         }
 
