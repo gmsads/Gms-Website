@@ -16,7 +16,6 @@ function PendingPayment({ executiveFilter = null }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const tableContainerRef = useRef(null);
   const today = new Date();
-  const searchTimeoutRef = useRef(null);
 
   // Get filter type from URL - determines if we show pending or completed
   const filterType = searchParams.get('filterType') || 'pending';
@@ -32,18 +31,6 @@ function PendingPayment({ executiveFilter = null }) {
     note: ''
   });
   const [paymentLoading, setPaymentLoading] = useState(false);
-
-  // Settlement modal states
-  const [showSettlementModal, setShowSettlementModal] = useState(false);
-  const [settlementData, setSettlementData] = useState({
-    date: today.toISOString().split('T')[0],
-    type: 'Full Settlement',
-    amount: '',
-    reason: '',
-    approvedBy: '',
-    notes: ''
-  });
-  const [settlementLoading, setSettlementLoading] = useState(false);
 
   // Follow-up modal states
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
@@ -61,26 +48,12 @@ function PendingPayment({ executiveFilter = null }) {
   const [selectedOrderForView, setSelectedOrderForView] = useState(null);
   const [loadingFollowUps, setLoadingFollowUps] = useState(false);
 
-  // View settlements modal
-  const [showViewSettlementsModal, setShowViewSettlementsModal] = useState(false);
-  const [orderSettlements, setOrderSettlements] = useState([]);
-  const [selectedOrderForSettlementView, setSelectedOrderForSettlementView] = useState(null);
-  const [loadingSettlements, setLoadingSettlements] = useState(false);
-
   // Success popup state
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [paymentResult, setPaymentResult] = useState({
     submittedAmount: 0,
     remainingBalance: 0,
     orderNo: ''
-  });
-
-  // Settlement success popup
-  const [showSettlementSuccess, setShowSettlementSuccess] = useState(false);
-  const [settlementResult, setSettlementResult] = useState({
-    orderNo: '',
-    type: '',
-    amount: 0
   });
 
   // Follow-up success popup
@@ -172,15 +145,6 @@ function PendingPayment({ executiveFilter = null }) {
     return sorted[0];
   }, []);
 
-  // Memoized function to get latest settlement
-  const getLatestSettlement = useCallback((order) => {
-    if (!order?.settlements?.length) return null;
-    const sorted = [...order.settlements].sort((a, b) =>
-      new Date(b.date) - new Date(a.date)
-    );
-    return sorted[0];
-  }, []);
-
   // Memoized function to format follow-up
   const formatFollowUp = useCallback((order) => {
     const latest = getLatestFollowUp(order);
@@ -205,59 +169,82 @@ function PendingPayment({ executiveFilter = null }) {
     return colors[status] || '#7f8c8d';
   }, []);
 
-  // Memoized function to get settlement type color
-  const getSettlementTypeColor = useCallback((type) => {
-    const colors = {
-      'Full Settlement': '#27ae60',
-      'Partial Settlement': '#f39c12',
-      'Write-off': '#e74c3c',
-      'Discount': '#3498db',
-      'Credit Note': '#9b59b6'
-    };
-    return colors[type] || '#7f8c8d';
-  }, []);
-
   // Fetch orders
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      
+      if (executiveFilter) params.append('executive', executiveFilter);
+      if (activeFilter) params.append('filterType', activeFilter);
+      
+      if (useDateFilter && selectedDate) {
+        params.append('date', selectedDate);
+      } else if (useMonthYearFilter) {
+        if (year) params.append('year', year.toString());
+        if (selectedMonth !== null) params.append('month', (selectedMonth + 1).toString());
+      }
+
+      const res = await axios.get('/api/orders/payments-dashboard?' + params.toString());
+      
+      let fetchedOrders = res.data;
+      
+      setOrders(fetchedOrders);
+      
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+      alert('Failed to fetch orders. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // FIXED: Apply filters locally when orders or searchTerm changes
+  useEffect(() => {
+    if (!orders.length) {
+      setFilteredOrders([]);
+      calculatePaymentSummaries([]);
+      return;
+    }
+
+    let filtered = [...orders];
+
+    // Apply search filter locally
+    if (searchTerm && searchTerm.trim() !== '') {
+      const term = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(order => {
+        // Search in multiple fields
+        const searchableFields = [
+          order?.executive || '',
+          order?.business || '',
+          order?.contactPerson || '',
+          order?.phone || '',
+          order?.contactCode || '',
+          order?.orderNo || '',
+          ...(order?.rows?.map(r => r?.requirement || '') || [])
+        ];
+
+        return searchableFields.some(field => 
+          field.toLowerCase().includes(term)
+        );
+      });
+    }
+
+    // Apply balance-based filter (pending/completed)
+    if (filterType === 'pending') {
+      filtered = filtered.filter(order => order.balance > 0);
+    } else if (filterType === 'completed') {
+      filtered = filtered.filter(order => order.balance <= 0);
+    }
+
+    setFilteredOrders(filtered);
+    calculatePaymentSummaries(filtered);
+  }, [orders, searchTerm, filterType]);
+
+  // Fetch orders when filters change
   useEffect(() => {
     fetchOrders();
   }, [year, selectedMonth, selectedDate, useDateFilter, activeFilter, executiveFilter, filterType]);
-
-  // Client-side search filter
-  useEffect(() => {
-    if (orders.length > 0) {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-
-      searchTimeoutRef.current = setTimeout(() => {
-        let filtered = orders;
-        
-        if (searchTerm.trim()) {
-          const term = searchTerm.toLowerCase().trim();
-          filtered = orders.filter(order => {
-            return (
-              (order?.executive?.toLowerCase() || '').includes(term) ||
-              (order?.business?.toLowerCase() || '').includes(term) ||
-              (order?.contactPerson?.toLowerCase() || '').includes(term) ||
-              (order?.phone?.toString() || '').includes(term) ||
-              (order?.contactCode?.toLowerCase() || '').includes(term) ||
-              (order?.orderNo?.toLowerCase() || '').includes(term) ||
-              (order?.gstNo?.toLowerCase() || '').includes(term)
-            );
-          });
-        }
-        
-        setFilteredOrders(filtered);
-        calculatePaymentSummaries(filtered);
-      }, 300);
-    }
-
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [searchTerm, orders]);
 
   // Update URL when filters change
   useEffect(() => {
@@ -287,64 +274,9 @@ function PendingPayment({ executiveFilter = null }) {
     }
   }, []);
 
-  const fetchOrders = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      
-      if (executiveFilter) params.append('executive', executiveFilter);
-      if (activeFilter) params.append('filterType', activeFilter);
-      
-      if (useDateFilter && selectedDate) {
-        params.append('date', selectedDate);
-      } else if (useMonthYearFilter) {
-        if (year) params.append('year', year.toString());
-        if (selectedMonth !== null) params.append('month', (selectedMonth + 1).toString());
-      }
-
-      const res = await axios.get('/api/orders/payments-dashboard?' + params.toString());
-      
-      let fetchedOrders = res.data;
-      
-      // Apply filter based on filterType from URL
-      if (filterType === 'pending') {
-        fetchedOrders = fetchedOrders.filter(order => order.balance > 0);
-      } else if (filterType === 'completed') {
-        fetchedOrders = fetchedOrders.filter(order => order.balance <= 0);
-      }
-      
-      setOrders(fetchedOrders);
-      
-      // Apply search filter if there's an existing search term
-      let filtered = fetchedOrders;
-      if (searchTerm.trim()) {
-        const term = searchTerm.toLowerCase().trim();
-        filtered = fetchedOrders.filter(order => {
-          return (
-            (order?.executive?.toLowerCase() || '').includes(term) ||
-            (order?.business?.toLowerCase() || '').includes(term) ||
-            (order?.contactPerson?.toLowerCase() || '').includes(term) ||
-            (order?.phone?.toString() || '').includes(term) ||
-            (order?.contactCode?.toLowerCase() || '').includes(term) ||
-            (order?.orderNo?.toLowerCase() || '').includes(term) ||
-            (order?.gstNo?.toLowerCase() || '').includes(term)
-          );
-        });
-      }
-      
-      setFilteredOrders(filtered);
-      calculatePaymentSummaries(filtered);
-      
-    } catch (err) {
-      console.error('Error fetching orders:', err);
-      alert('Failed to fetch orders. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const calculatePaymentSummaries = (ordersData) => {
     let total = 0, received = 0, pending = 0, todayCollected = 0, todayCount = 0;
+    const todayString = today.toISOString().split('T')[0];
 
     ordersData.forEach(order => {
       const orderTotal = order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0) || 0;
@@ -358,7 +290,7 @@ function PendingPayment({ executiveFilter = null }) {
       if (order.rows?.length > 0) {
         const hasDeliveryToday = order.rows.some(row => {
           if (!row.deliveryDate) return false;
-          return new Date(row.deliveryDate).toISOString().split('T')[0] === today.toISOString().split('T')[0];
+          return new Date(row.deliveryDate).toISOString().split('T')[0] === todayString;
         });
         
         if (hasDeliveryToday) {
@@ -388,19 +320,6 @@ function PendingPayment({ executiveFilter = null }) {
     }
   };
 
-  const fetchOrderSettlements = async (orderId) => {
-    setLoadingSettlements(true);
-    try {
-      const res = await axios.get(`/api/orders/${orderId}/settlements`);
-      setOrderSettlements(res.data.settlements || []);
-    } catch (err) {
-      console.error('Error fetching settlements:', err);
-      alert('Failed to load settlements');
-    } finally {
-      setLoadingSettlements(false);
-    }
-  };
-
   const handleBusinessClick = (businessName) => {
     if (!businessName || executiveFilter) return;
     navigate('/admin-dashboard/view-orders', {
@@ -415,19 +334,6 @@ function PendingPayment({ executiveFilter = null }) {
       amount: order.balance > 0 ? order.balance.toString() : '',
     }));
     setShowPaymentModal(true);
-  };
-
-  const handleSettlement = (order) => {
-    setCurrentOrder(order);
-    setSettlementData({
-      date: today.toISOString().split('T')[0],
-      type: 'Full Settlement',
-      amount: order.balance > 0 ? order.balance.toString() : '',
-      reason: '',
-      approvedBy: '',
-      notes: ''
-    });
-    setShowSettlementModal(true);
   };
 
   const handleFollowUp = (order) => {
@@ -448,20 +354,9 @@ function PendingPayment({ executiveFilter = null }) {
     await fetchOrderFollowUps(order._id);
   };
 
-  const handleViewSettlements = async (order) => {
-    setSelectedOrderForSettlementView(order);
-    setShowViewSettlementsModal(true);
-    await fetchOrderSettlements(order._id);
-  };
-
   const handlePaymentChange = (e) => {
     const { name, value } = e.target;
     setPaymentData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSettlementChange = (e) => {
-    const { name, value } = e.target;
-    setSettlementData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleFollowUpChange = (e) => {
@@ -469,88 +364,66 @@ function PendingPayment({ executiveFilter = null }) {
     setFollowUpData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handlePaymentSubmit = async (e) => {
-    e.preventDefault();
-    if (!currentOrder) return;
+// Update the handlePaymentSubmit function in PendingPayment.jsx
+const handlePaymentSubmit = async (e) => {
+  e.preventDefault();
+  if (!currentOrder) return;
 
-    const paymentAmount = parseFloat(paymentData.amount);
+  const paymentAmount = parseFloat(paymentData.amount);
 
-    if (!paymentAmount || isNaN(paymentAmount) || paymentAmount <= 0) {
-      alert('Please enter a valid payment amount greater than 0');
-      return;
+  if (!paymentAmount || isNaN(paymentAmount) || paymentAmount <= 0) {
+    alert('Please enter a valid payment amount greater than 0');
+    return;
+  }
+
+  if (paymentAmount > parseFloat(currentOrder.balance)) {
+    alert(`Payment amount cannot exceed current balance (₹${currentOrder.balance})`);
+    return;
+  }
+
+  setPaymentLoading(true);
+  try {
+    // Format payment data to match backend expectations
+    const paymentPayload = {
+      amount: paymentAmount,
+      method: paymentData.method,
+      date: paymentData.date,
+      note: paymentData.note
+    };
+
+    // Add method-specific fields
+    if (paymentData.method === 'UPI') {
+      paymentPayload.upiNumber = paymentData.reference;
+    } else if (paymentData.method === 'Cheque') {
+      paymentPayload.chequeNumber = paymentData.reference;
+    } else if (paymentData.method === 'Bank Transfer') {
+      // For bank transfer, you might want to store as reference
+      paymentPayload.note = paymentData.reference ? `Ref: ${paymentData.reference} - ${paymentData.note}` : paymentData.note;
     }
 
-    if (paymentAmount > parseFloat(currentOrder.balance)) {
-      alert(`Payment amount cannot exceed current balance (₹${currentOrder.balance})`);
-      return;
-    }
+    console.log('Sending payment payload:', paymentPayload);
 
-    setPaymentLoading(true);
-    try {
-      await axios.post(`/api/orders/${currentOrder._id}/record-payment`, paymentData);
+    await axios.post(`/api/orders/${currentOrder._id}/record-payment`, paymentPayload);
 
-      const remainingBalance = parseFloat((currentOrder.balance - paymentAmount).toFixed(2));
+    const remainingBalance = parseFloat((currentOrder.balance - paymentAmount).toFixed(2));
 
-      setPaymentResult({
-        submittedAmount: paymentAmount,
-        remainingBalance: remainingBalance,
-        orderNo: currentOrder.orderNo
-      });
-      setShowSuccessPopup(true);
-      setShowPaymentModal(false);
-      await fetchOrders();
+    setPaymentResult({
+      submittedAmount: paymentAmount,
+      remainingBalance: remainingBalance,
+      orderNo: currentOrder.orderNo
+    });
+    setShowSuccessPopup(true);
+    setShowPaymentModal(false);
+    await fetchOrders();
 
-    } catch (err) {
-      console.error('Error recording payment:', err);
-      alert('Failed to record payment. Please try again.');
-    } finally {
-      setPaymentLoading(false);
-    }
-  };
-
-  const handleSettlementSubmit = async (e) => {
-    e.preventDefault();
-    if (!currentOrder) return;
-
-    const settlementAmount = parseFloat(settlementData.amount);
-
-    if (!settlementAmount || isNaN(settlementAmount) || settlementAmount <= 0) {
-      alert('Please enter a valid settlement amount greater than 0');
-      return;
-    }
-
-    if (settlementAmount > parseFloat(currentOrder.balance)) {
-      alert(`Settlement amount cannot exceed current balance (₹${currentOrder.balance})`);
-      return;
-    }
-
-    if (settlementData.type === 'Full Settlement' && settlementAmount < parseFloat(currentOrder.balance)) {
-      if (!window.confirm('This is marked as Full Settlement but amount is less than balance. Continue anyway?')) {
-        return;
-      }
-    }
-
-    setSettlementLoading(true);
-    try {
-      await axios.post(`/api/orders/${currentOrder._id}/record-settlement`, settlementData);
-
-      setSettlementResult({
-        orderNo: currentOrder.orderNo,
-        type: settlementData.type,
-        amount: settlementAmount
-      });
-      setShowSettlementSuccess(true);
-      setShowSettlementModal(false);
-      await fetchOrders();
-
-    } catch (err) {
-      console.error('Error recording settlement:', err);
-      alert('Failed to record settlement. Please try again.');
-    } finally {
-      setSettlementLoading(false);
-    }
-  };
-
+  } catch (err) {
+    console.error('Error recording payment:', err);
+    console.error('Error response:', err.response?.data);
+    alert(err.response?.data?.error || 'Failed to record payment. Please try again.');
+  } finally {
+    setPaymentLoading(false);
+  }
+};
   const handleFollowUpSubmit = async (e) => {
     e.preventDefault();
     if (!currentOrder) return;
@@ -562,7 +435,9 @@ function PendingPayment({ executiveFilter = null }) {
 
     setFollowUpLoading(true);
     try {
-      await axios.post(`/api/orders/${currentOrder._id}/follow-up`, followUpData);
+      const response = await axios.post(`/api/orders/${currentOrder._id}/follow-up`, followUpData);
+      
+      console.log('Follow-up response:', response.data);
 
       setFollowUpResult({
         orderNo: currentOrder.orderNo,
@@ -574,7 +449,10 @@ function PendingPayment({ executiveFilter = null }) {
 
     } catch (err) {
       console.error('Error adding follow-up:', err);
-      alert('Failed to add follow-up. Please try again.');
+      console.error('Error response:', err.response?.data);
+      
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to add follow-up. Please try again.';
+      alert(`Failed to add follow-up: ${errorMessage}`);
     } finally {
       setFollowUpLoading(false);
     }
@@ -583,11 +461,6 @@ function PendingPayment({ executiveFilter = null }) {
   const closeSuccessPopup = () => {
     setShowSuccessPopup(false);
     setPaymentResult({ submittedAmount: 0, remainingBalance: 0, orderNo: '' });
-  };
-
-  const closeSettlementSuccess = () => {
-    setShowSettlementSuccess(false);
-    setSettlementResult({ orderNo: '', type: '', amount: 0 });
   };
 
   const closeFollowUpSuccess = () => {
@@ -604,10 +477,6 @@ function PendingPayment({ executiveFilter = null }) {
   const clearMonthYearFilter = () => {
     setSelectedMonth(today.getMonth());
     setYear(today.getFullYear());
-  };
-
-  const clearSearch = () => {
-    setSearchTerm('');
   };
 
   const handleFilterModeChange = (useDate) => {
@@ -638,7 +507,6 @@ function PendingPayment({ executiveFilter = null }) {
   const handleExportToExcel = useCallback(() => {
     const exportData = filteredOrders.map((order, orderIndex) => {
       const latestFollowUp = getLatestFollowUp(order);
-      const latestSettlement = getLatestSettlement(order);
       return {
         'S.No': orderIndex + 1,
         'Executive': order?.executive || '',
@@ -662,7 +530,192 @@ function PendingPayment({ executiveFilter = null }) {
 
     const fileName = `${filterType}_payments_report_${getFilterDescription().replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`;
     XLSX.writeFile(workbook, fileName);
-  }, [filteredOrders, getLatestFollowUp, getLatestSettlement, getDeliveryDate, getFilterDescription, filterType]);
+  }, [filteredOrders, getLatestFollowUp, getDeliveryDate, getFilterDescription, filterType]);
+
+  const handleExportToWord = async () => {
+    setExportLoading(true);
+    try {
+      const tableHeaders = [
+        'S.No', 'Executive', 'Business', 'Customer', 'Contact', 'Total', 'Advance', 'Balance', 
+        'Delivery Date', 'Latest Follow-up', 'Status', 'Next Follow-up'
+      ];
+
+      const tableRows = filteredOrders.map((order, index) => {
+        const latestFollowUp = getLatestFollowUp(order);
+        return [
+          (index + 1).toString(),
+          order?.executive || '',
+          order?.business || '',
+          order?.contactPerson || '',
+          `${order?.contactCode || ''} ${order?.phone || ''}`.trim(),
+          `₹${(order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0) || 0).toLocaleString()}`,
+          `₹${(order?.advance || 0).toLocaleString()}`,
+          `₹${(order?.balance || 0).toLocaleString()}`,
+          getDeliveryDate(order),
+          latestFollowUp ? `${new Date(latestFollowUp.date).toLocaleDateString()}: ${latestFollowUp.description}` : 'No follow-up',
+          latestFollowUp?.status || 'N/A',
+          latestFollowUp?.nextFollowUpDate ? new Date(latestFollowUp.nextFollowUpDate).toLocaleDateString() : 'Not set'
+        ];
+      });
+
+      const table = new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          new TableRow({
+            children: tableHeaders.map(header =>
+              new TableCell({
+                children: [new Paragraph({
+                  children: [new TextRun({ text: header, bold: true })],
+                  alignment: AlignmentType.CENTER,
+                })],
+                shading: { fill: "4472C4" },
+              })
+            ),
+          }),
+          ...tableRows.map(row =>
+            new TableRow({
+              children: row.map(cell =>
+                new TableCell({
+                  children: [new Paragraph({ text: cell })],
+                })
+              ),
+            })
+          ),
+        ],
+      });
+
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({
+              children: [new TextRun({ text: `${filterType === 'pending' ? 'Pending' : 'Completed'} Payments Report`, bold: true, size: 32 })],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 400 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: `Filter: ${getFilterDescription()}`, bold: true, size: 24 })],
+              spacing: { after: 200 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: `Generated on: ${today.toLocaleDateString()}`, size: 20 })],
+              spacing: { after: 400 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: `Total Orders: ${filteredOrders.length} | Total Amount: ₹${totalPayments.toLocaleString()} | Received: ₹${totalReceived.toLocaleString()} | Pending: ₹${totalPending.toLocaleString()}`, bold: true, size: 22 })],
+              spacing: { after: 400 },
+            }),
+            table,
+          ],
+        }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const fileName = `${filterType}_payments_report_${getFilterDescription().replace(/[^a-zA-Z0-9]/g, '_')}.docx`;
+      saveAs(blob, fileName);
+    } catch (error) {
+      console.error('Error generating Word document:', error);
+      alert('Error generating Word document. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleExportToPDF = () => {
+    setExportLoading(true);
+    try {
+      const doc = new jsPDF({ orientation: 'landscape' });
+
+      doc.setFontSize(16);
+      doc.setTextColor(40);
+      doc.text(`${filterType === 'pending' ? 'Pending' : 'Completed'} Payments Report`, 150, 15, { align: 'center' });
+
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+
+      const filterDesc = `Filter: ${getFilterDescription()}`;
+      const generatedOn = `Generated on: ${today.toLocaleDateString()}`;
+      const summary = `Total Orders: ${filteredOrders.length} | Total: ₹${totalPayments.toLocaleString()} | Received: ₹${totalReceived.toLocaleString()} | Pending: ₹${totalPending.toLocaleString()}`;
+
+      doc.text(filterDesc, 14, 25);
+      doc.text(generatedOn, 14, 32);
+      doc.text(summary, 14, 39);
+
+      const headers = ['S.No', 'Executive', 'Business', 'Customer', 'Balance', 'Delivery Date', 'Follow-up'];
+      const columnWidths = [15, 30, 40, 35, 25, 30, 55];
+      const startX = 10;
+      let startY = 50;
+
+      doc.setFillColor(68, 114, 196);
+      doc.setTextColor(255);
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'bold');
+
+      let currentX = startX;
+      headers.forEach((header, index) => {
+        doc.rect(currentX, startY, columnWidths[index], 6, 'F');
+        doc.text(header, currentX + 2, startY + 4);
+        currentX += columnWidths[index];
+      });
+
+      doc.setTextColor(0);
+      doc.setFont(undefined, 'normal');
+      startY += 6;
+
+      filteredOrders.forEach((order, index) => {
+        if (startY > 190) {
+          doc.addPage();
+          startY = 20;
+          doc.setFillColor(68, 114, 196);
+          doc.setTextColor(255);
+          doc.setFont(undefined, 'bold');
+          currentX = startX;
+          headers.forEach((header, idx) => {
+            doc.rect(currentX, startY, columnWidths[idx], 6, 'F');
+            doc.text(header, currentX + 2, startY + 4);
+            currentX += columnWidths[idx];
+          });
+          doc.setTextColor(0);
+          doc.setFont(undefined, 'normal');
+          startY += 6;
+        }
+
+        const latestFollowUp = getLatestFollowUp(order);
+        const followUpText = latestFollowUp
+          ? `${new Date(latestFollowUp.date).toLocaleDateString()}: ${latestFollowUp.description.substring(0, 30)}`
+          : 'No follow-up';
+
+        const rowData = [
+          (index + 1).toString(),
+          order?.executive?.substring(0, 12) || '',
+          order?.business?.substring(0, 15) || '',
+          order?.contactPerson?.substring(0, 12) || '',
+          `₹${(order?.balance || 0).toLocaleString()}`,
+          getDeliveryDate(order).substring(0, 10),
+          followUpText
+        ];
+
+        currentX = startX;
+        rowData.forEach((cell, cellIndex) => {
+          doc.text(cell, currentX + 2, startY + 4);
+          currentX += columnWidths[cellIndex];
+        });
+
+        doc.setDrawColor(200, 200, 200);
+        doc.line(startX, startY + 6, startX + columnWidths.reduce((a, b) => a + b, 0), startY + 6);
+
+        startY += 6;
+      });
+
+      const fileName = `${filterType}_payments_report_${getFilterDescription().replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      doc.save(fileName);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Error generating PDF. Please try exporting to Excel or Word instead.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
 
   // Filter button styles
   const filterButtonStyle = (filterTypeValue) => ({
@@ -747,7 +800,7 @@ function PendingPayment({ executiveFilter = null }) {
     },
     summaryContainer: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(4, 1fr)',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
       gap: '15px',
       marginBottom: '20px',
     },
@@ -790,29 +843,15 @@ function PendingPayment({ executiveFilter = null }) {
     searchContainer: {
       display: 'flex',
       justifyContent: 'center',
-      alignItems: 'center',
-      gap: '10px',
-      position: 'relative',
     },
     searchInput: {
       padding: '10px 15px',
-      paddingRight: '40px',
       width: '100%',
       maxWidth: '500px',
       borderRadius: '4px',
       border: '1px solid #ddd',
       fontSize: '14px',
       boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
-    },
-    searchClearButton: {
-      position: 'absolute',
-      right: 'calc(50% - 250px)',
-      background: 'none',
-      border: 'none',
-      fontSize: '18px',
-      cursor: 'pointer',
-      color: '#7f8c8d',
-      padding: '5px 10px',
     },
     filterModeContainer: {
       display: 'flex',
@@ -846,7 +885,6 @@ function PendingPayment({ executiveFilter = null }) {
     },
     dateInput: {
       padding: '8px 12px',
-      paddingLeft: '35px',
       borderRadius: '4px',
       border: '1px solid #ddd',
       fontSize: '14px',
@@ -978,21 +1016,9 @@ function PendingPayment({ executiveFilter = null }) {
     actionButtons: {
       display: 'flex',
       gap: '5px',
-      flexWrap: 'wrap',
     },
     payButton: {
       backgroundColor: '#9b59b6',
-      color: 'white',
-      border: 'none',
-      padding: '6px 12px',
-      borderRadius: '4px',
-      cursor: 'pointer',
-      fontSize: '12px',
-      fontWeight: '600',
-      transition: 'all 0.2s',
-    },
-    settlementButton: {
-      backgroundColor: '#16a085',
       color: 'white',
       border: 'none',
       padding: '6px 12px',
@@ -1015,17 +1041,6 @@ function PendingPayment({ executiveFilter = null }) {
     },
     viewButton: {
       backgroundColor: '#3498db',
-      color: 'white',
-      border: 'none',
-      padding: '6px 12px',
-      borderRadius: '4px',
-      cursor: 'pointer',
-      fontSize: '12px',
-      fontWeight: '600',
-      transition: 'all 0.2s',
-    },
-    viewSettlementButton: {
-      backgroundColor: '#8e44ad',
       color: 'white',
       border: 'none',
       padding: '6px 12px',
@@ -1165,16 +1180,6 @@ function PendingPayment({ executiveFilter = null }) {
       cursor: 'pointer',
       fontWeight: 'bold',
     },
-    settlementModalContent: {
-      backgroundColor: 'white',
-      padding: '25px',
-      borderRadius: '8px',
-      width: '500px',
-      maxWidth: '95%',
-      maxHeight: '90vh',
-      overflowY: 'auto',
-      borderTop: '4px solid #16a085',
-    },
     followUpModal: {
       position: 'fixed',
       top: 0,
@@ -1254,38 +1259,6 @@ function PendingPayment({ executiveFilter = null }) {
       color: '#7f8c8d',
       marginTop: '5px',
     },
-    settlementItem: {
-      padding: '15px',
-      border: '1px solid #ecf0f1',
-      borderRadius: '4px',
-      marginBottom: '10px',
-      backgroundColor: '#f0f7f4',
-    },
-    settlementHeader: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '8px',
-    },
-    settlementType: {
-      padding: '4px 8px',
-      borderRadius: '12px',
-      fontSize: '12px',
-      fontWeight: 'bold',
-      color: 'white',
-    },
-    settlementAmount: {
-      fontSize: '16px',
-      fontWeight: 'bold',
-      color: '#16a085',
-      margin: '5px 0',
-    },
-    settlementReason: {
-      margin: '5px 0',
-      padding: '5px',
-      backgroundColor: 'white',
-      borderRadius: '4px',
-    },
   };
 
   // Success popup styles
@@ -1316,11 +1289,6 @@ function PendingPayment({ executiveFilter = null }) {
       color: '#27ae60',
       marginBottom: '15px',
     },
-    settlementIcon: {
-      fontSize: '60px',
-      color: '#16a085',
-      marginBottom: '15px',
-    },
     followUpIcon: {
       fontSize: '60px',
       color: '#f39c12',
@@ -1330,12 +1298,6 @@ function PendingPayment({ executiveFilter = null }) {
       fontSize: '24px',
       fontWeight: 'bold',
       color: '#27ae60',
-      marginBottom: '20px',
-    },
-    settlementTitle: {
-      fontSize: '24px',
-      fontWeight: 'bold',
-      color: '#16a085',
       marginBottom: '20px',
     },
     followUpTitle: {
@@ -1378,18 +1340,6 @@ function PendingPayment({ executiveFilter = null }) {
     },
     button: {
       backgroundColor: '#27ae60',
-      color: 'white',
-      border: 'none',
-      padding: '12px 30px',
-      borderRadius: '6px',
-      fontSize: '16px',
-      fontWeight: 'bold',
-      cursor: 'pointer',
-      marginTop: '10px',
-      transition: 'all 0.3s',
-    },
-    settlementButton: {
-      backgroundColor: '#16a085',
       color: 'white',
       border: 'none',
       padding: '12px 30px',
@@ -1450,7 +1400,7 @@ function PendingPayment({ executiveFilter = null }) {
         </button>
       </div>
 
-      {/* Summary Boxes - 4 Cards Only */}
+      {/* Summary Boxes */}
       <div style={styles.summaryContainer}>
         <div style={styles.summaryBox}>
           <div style={styles.summaryLabel}>Total Payments</div>
@@ -1479,20 +1429,11 @@ function PendingPayment({ executiveFilter = null }) {
         <div style={styles.searchContainer}>
           <input
             type="text"
-            placeholder="Search by executive, business, customer, phone, order no..."
+            placeholder="Search by executive, business, customer, phone, requirement..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={styles.searchInput}
           />
-          {searchTerm && (
-            <button
-              onClick={clearSearch}
-              style={styles.searchClearButton}
-              title="Clear search"
-            >
-              ×
-            </button>
-          )}
         </div>
         
         <div style={styles.filterModeContainer}>
@@ -1590,15 +1531,13 @@ function PendingPayment({ executiveFilter = null }) {
               <th style={{...styles.th, width: '100px'}}>Balance</th>
               <th style={{...styles.th, width: '120px'}}>Delivery Date</th>
               <th style={{...styles.th, width: '200px'}}>Follow-up</th>
-              <th style={{...styles.th, width: '200px'}}>Actions</th>
+              <th style={{...styles.th, width: '150px'}}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="11" style={styles.loading}>
-                  Loading orders...
-                </td>
+                <td colSpan="11" style={styles.loading}>Loading orders...</td>
               </tr>
             ) : filteredOrders.length === 0 ? (
               <tr>
@@ -1611,7 +1550,6 @@ function PendingPayment({ executiveFilter = null }) {
               filteredOrders.map((order, index) => {
                 const latestFollowUp = getLatestFollowUp(order);
                 const followUpCount = order.followUps?.length || 0;
-                const settlementCount = order.settlements?.length || 0;
                 const isCompleted = order.balance <= 0;
 
                 return (
@@ -1639,7 +1577,7 @@ function PendingPayment({ executiveFilter = null }) {
                     <td
                       style={{...styles.td, ...styles.followUpCell}}
                       onClick={() => followUpCount > 0 && handleViewFollowUps(order)}
-                      title={latestFollowUp ? `Latest: ${latestFollowUp.description}\nStatus: ${latestFollowUp.status}\nClick to view all ${followUpCount} follow-ups` : 'No follow-ups'}
+                      title={latestFollowUp ? `Latest: ${latestFollowUp.description}\nClick to view all ${followUpCount} follow-ups` : 'No follow-ups'}
                     >
                       {latestFollowUp ? (
                         <span style={{ color: getFollowUpStatusColor(latestFollowUp.status) }}>
@@ -1651,46 +1589,17 @@ function PendingPayment({ executiveFilter = null }) {
                     <td style={styles.td}>
                       <div style={styles.actionButtons}>
                         {isCompleted ? (
-                          <>
-                            <span style={styles.completedBadge}>Completed</span>
-                            {followUpCount > 0 && (
-                              <button
-                                onClick={() => handleViewFollowUps(order)}
-                                style={styles.viewButton}
-                                title="View Follow-ups"
-                              >
-                                View F
-                              </button>
-                            )}
-                            {settlementCount > 0 && (
-                              <button
-                                onClick={() => handleViewSettlements(order)}
-                                style={styles.viewSettlementButton}
-                                title="View Settlements"
-                              >
-                                View S
-                              </button>
-                            )}
-                          </>
+                          <span style={styles.completedBadge}>Completed</span>
                         ) : (
                           <>
                             {filterType === 'pending' && order.balance > 0 && (
-                              <>
-                                <button
-                                  onClick={() => handleRecordPayment(order)}
-                                  style={styles.payButton}
-                                  title="Record Payment"
-                                >
-                                  Pay
-                                </button>
-                                <button
-                                  onClick={() => handleSettlement(order)}
-                                  style={styles.settlementButton}
-                                  title="Record Settlement"
-                                >
-                                  Settle
-                                </button>
-                              </>
+                              <button
+                                onClick={() => handleRecordPayment(order)}
+                                style={styles.payButton}
+                                title="Record Payment"
+                              >
+                                Pay
+                              </button>
                             )}
                             <button
                               onClick={() => handleFollowUp(order)}
@@ -1705,16 +1614,7 @@ function PendingPayment({ executiveFilter = null }) {
                                 style={styles.viewButton}
                                 title="View Follow-ups"
                               >
-                                View F
-                              </button>
-                            )}
-                            {settlementCount > 0 && (
-                              <button
-                                onClick={() => handleViewSettlements(order)}
-                                style={styles.viewSettlementButton}
-                                title="View Settlements"
-                              >
-                                View S
+                                View
                               </button>
                             )}
                           </>
@@ -1739,14 +1639,14 @@ function PendingPayment({ executiveFilter = null }) {
           {exportLoading ? 'Exporting...' : 'Export to Excel'}
         </button>
         <button
-          onClick={() => {}}
+          onClick={handleExportToWord}
           style={styles.wordButton}
           disabled={exportLoading || filteredOrders.length === 0}
         >
           {exportLoading ? 'Exporting...' : 'Export to Word'}
         </button>
         <button
-          onClick={() => {}}
+          onClick={handleExportToPDF}
           style={styles.pdfButton}
           disabled={exportLoading || filteredOrders.length === 0}
         >
@@ -1857,123 +1757,6 @@ function PendingPayment({ executiveFilter = null }) {
                   style={{...styles.paymentSubmitButton, opacity: paymentLoading ? 0.7 : 1}}
                 >
                   {paymentLoading ? 'Processing...' : 'Record Payment'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Settlement Modal */}
-      {showSettlementModal && currentOrder && (
-        <div style={styles.paymentModal}>
-          <div style={styles.settlementModalContent}>
-            <h3 style={{...styles.paymentModalTitle, color: '#16a085'}}>Record Settlement</h3>
-
-            <div style={styles.paymentFormGroup}>
-              <label style={styles.paymentFormLabel}>Current Balance</label>
-              <input
-                type="text"
-                value={`₹${currentOrder.balance ? parseFloat(currentOrder.balance).toLocaleString('en-IN') : '0'}`}
-                readOnly
-                style={{...styles.paymentFormInput, backgroundColor: '#f5f5f5', fontWeight: 'bold', color: '#e74c3c'}}
-              />
-            </div>
-
-            <form onSubmit={handleSettlementSubmit}>
-              <div style={styles.paymentFormGroup}>
-                <label style={styles.paymentFormLabel}>Settlement Type *</label>
-                <select
-                  name="type"
-                  value={settlementData.type}
-                  onChange={handleSettlementChange}
-                  style={styles.paymentFormInput}
-                  required
-                >
-                  <option value="Full Settlement">Full Settlement</option>
-                  <option value="Partial Settlement">Partial Settlement</option>
-                  <option value="Write-off">Write-off</option>
-                  <option value="Discount">Discount</option>
-                  <option value="Credit Note">Credit Note</option>
-                </select>
-              </div>
-
-              <div style={styles.paymentFormGroup}>
-                <label style={styles.paymentFormLabel}>Settlement Amount *</label>
-                <input
-                  type="number"
-                  name="amount"
-                  value={settlementData.amount}
-                  onChange={handleSettlementChange}
-                  placeholder={`Enter amount (max: ₹${currentOrder.balance ? parseFloat(currentOrder.balance).toLocaleString('en-IN') : '0'})`}
-                  style={styles.paymentFormInput}
-                  required
-                  min="0.01"
-                  step="0.01"
-                  max={currentOrder.balance || 0}
-                />
-              </div>
-
-              <div style={styles.paymentFormGroup}>
-                <label style={styles.paymentFormLabel}>Settlement Date *</label>
-                <input
-                  type="date"
-                  name="date"
-                  value={settlementData.date}
-                  onChange={handleSettlementChange}
-                  style={styles.paymentFormInput}
-                  required
-                />
-              </div>
-
-              <div style={styles.paymentFormGroup}>
-                <label style={styles.paymentFormLabel}>Reason for Settlement *</label>
-                <textarea
-                  name="reason"
-                  value={settlementData.reason}
-                  onChange={handleSettlementChange}
-                  style={styles.paymentFormTextarea}
-                  placeholder="Explain the reason for settlement"
-                  required
-                  rows="3"
-                />
-              </div>
-
-              <div style={styles.paymentFormGroup}>
-                <label style={styles.paymentFormLabel}>Approved By *</label>
-                <input
-                  type="text"
-                  name="approvedBy"
-                  value={settlementData.approvedBy}
-                  onChange={handleSettlementChange}
-                  style={styles.paymentFormInput}
-                  placeholder="Name of approver"
-                  required
-                />
-              </div>
-
-              <div style={styles.paymentFormGroup}>
-                <label style={styles.paymentFormLabel}>Additional Notes</label>
-                <textarea
-                  name="notes"
-                  value={settlementData.notes}
-                  onChange={handleSettlementChange}
-                  style={styles.paymentFormTextarea}
-                  placeholder="Any additional notes"
-                  rows="2"
-                />
-              </div>
-
-              <div style={styles.paymentFormButtons}>
-                <button type="button" onClick={() => setShowSettlementModal(false)} style={styles.paymentCancelButton}>
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={settlementLoading}
-                  style={{...styles.paymentSubmitButton, backgroundColor: '#16a085', opacity: settlementLoading ? 0.7 : 1}}
-                >
-                  {settlementLoading ? 'Processing...' : 'Record Settlement'}
                 </button>
               </div>
             </form>
@@ -2129,84 +1912,6 @@ function PendingPayment({ executiveFilter = null }) {
         </div>
       )}
 
-      {/* View Settlements Modal */}
-      {showViewSettlementsModal && selectedOrderForSettlementView && (
-        <div style={styles.viewFollowUpsModal}>
-          <div style={styles.viewFollowUpsContent}>
-            <h3 style={{...styles.paymentModalTitle, color: '#16a085'}}>
-              Settlements for {selectedOrderForSettlementView.business}
-              {selectedOrderForSettlementView.orderNo && ` (${selectedOrderForSettlementView.orderNo})`}
-            </h3>
-
-            {loadingSettlements ? (
-              <div style={{ textAlign: 'center', padding: '20px', color: '#7f8c8d' }}>
-                Loading settlements...
-              </div>
-            ) : orderSettlements.length === 0 ? (
-              <p style={{ textAlign: 'center', color: '#7f8c8d', padding: '20px' }}>
-                No settlements recorded for this order
-              </p>
-            ) : (
-              <>
-                {orderSettlements.sort((a, b) => new Date(b.date) - new Date(a.date)).map((settlement, idx) => (
-                  <div key={idx} style={styles.settlementItem}>
-                    <div style={styles.settlementHeader}>
-                      <span style={styles.followUpDate}>
-                        {new Date(settlement.date).toLocaleDateString('en-IN', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric'
-                        })}
-                      </span>
-                      <span style={{...styles.settlementType, backgroundColor: getSettlementTypeColor(settlement.type)}}>
-                        {settlement.type}
-                      </span>
-                    </div>
-
-                    <div style={styles.settlementAmount}>
-                      Amount: ₹{settlement.amount.toLocaleString()}
-                    </div>
-
-                    {settlement.reason && (
-                      <div style={styles.settlementReason}>
-                        <strong>Reason:</strong> {settlement.reason}
-                      </div>
-                    )}
-
-                    {settlement.approvedBy && (
-                      <div style={{ fontSize: '12px', color: '#7f8c8d', marginTop: '5px' }}>
-                        Approved by: {settlement.approvedBy}
-                      </div>
-                    )}
-
-                    {settlement.notes && (
-                      <div style={{ fontSize: '12px', color: '#95a5a6', marginTop: '5px', fontStyle: 'italic' }}>
-                        Notes: {settlement.notes}
-                      </div>
-                    )}
-
-                    {settlement.createdBy && (
-                      <div style={{ fontSize: '11px', color: '#95a5a6', marginTop: '5px' }}>
-                        Recorded by: {settlement.createdBy}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-              <button
-                onClick={() => setShowViewSettlementsModal(false)}
-                style={{...styles.paymentCancelButton, backgroundColor: '#16a085'}}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Payment Success Popup */}
       {showSuccessPopup && (
         <div style={successPopupStyles.modal}>
@@ -2237,43 +1942,6 @@ function PendingPayment({ executiveFilter = null }) {
               style={successPopupStyles.button}
               onMouseOver={(e) => e.target.style.backgroundColor = '#219a52'}
               onMouseOut={(e) => e.target.style.backgroundColor = '#27ae60'}
-            >
-              OK
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Settlement Success Popup */}
-      {showSettlementSuccess && (
-        <div style={successPopupStyles.modal}>
-          <div style={successPopupStyles.content}>
-            <div style={successPopupStyles.settlementIcon}>✓</div>
-            <h2 style={successPopupStyles.settlementTitle}>Settlement Recorded!</h2>
-
-            <p style={successPopupStyles.message}>
-              Settlement has been recorded successfully
-            </p>
-
-            <div style={successPopupStyles.amount}>
-              Type: {settlementResult.type}
-            </div>
-
-            <div style={successPopupStyles.balance}>
-              Amount: ₹{settlementResult.amount.toLocaleString()}
-            </div>
-
-            {settlementResult.orderNo && (
-              <div style={successPopupStyles.orderNo}>
-                Order: {settlementResult.orderNo}
-              </div>
-            )}
-
-            <button
-              onClick={closeSettlementSuccess}
-              style={successPopupStyles.settlementButton}
-              onMouseOver={(e) => e.target.style.backgroundColor = '#138d75'}
-              onMouseOut={(e) => e.target.style.backgroundColor = '#16a085'}
             >
               OK
             </button>
