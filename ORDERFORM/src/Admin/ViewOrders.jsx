@@ -9,6 +9,7 @@ import { toast } from 'react-toastify';
 function ViewOrders() {
   // ===== 1. ALL STATE VARIABLES FIRST =====
   const [orders, setOrders] = useState([]); // Stores all orders
+  const [filteredOrders, setFilteredOrders] = useState([]); // Stores filtered orders based on search
   const [groupedOrders, setGroupedOrders] = useState({}); // Orders grouped by month
   const [searchTerm, setSearchTerm] = useState(''); // Search filter term
   const [userRole, setUserRole] = useState(''); // Current user's role
@@ -744,11 +745,63 @@ function ViewOrders() {
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
   };
 
-  // ===== 7. GROUP ORDERS FUNCTION =====
-  const groupOrdersByMonth = (orders) => {
+  // ===== 7. FIXED: FILTER ORDERS FUNCTION =====
+  const filterOrdersBySearchTerm = (order) => {
+    if (!searchTerm || searchTerm.trim() === '') {
+      return true;
+    }
+
+    const term = searchTerm.toLowerCase().trim();
+
+    // Search in main order fields
+    const mainFields = [
+      order.executive || '',
+      order.business || '',
+      order.contactPerson || '',
+      order.location || '',
+      order.leadSource || '',
+      order.otherLeadSource || '',
+      `${order.contactCode || ''} ${order.phone || ''}`,
+      order.orderNo || '',
+      order.orderDate || '',
+      order.clientType || '',
+      order.discount || '',
+      order.discountedTotal || '',
+      order.advance || '',
+      order.balance || '',
+      order.advanceDate || '',
+      order.paymentDate || '',
+      order.paymentMethod || '',
+      order.chequeNumber || '',
+      order.createdBy || ''
+    ];
+
+    // Search in order rows
+    const rowFields = order.rows.flatMap(row => [
+      row.description || '',
+      row.requirement || '',
+      row.customRequirement || '',
+      row.quantity || '',
+      row.rate || '',
+      row.total || '',
+      row.deliveryDate || '',
+      row.assignedExecutive || '',
+      row.status || '',
+      row.remark || ''
+    ]);
+
+    const allFields = [...mainFields, ...rowFields];
+
+    return allFields.some(field => 
+      String(field).toLowerCase().includes(term)
+    );
+  };
+
+  // ===== 8. GROUP ORDERS FUNCTION =====
+  const groupOrdersByMonth = (ordersToGroup) => {
     const grouped = {};
 
-    orders.forEach(order => {
+    ordersToGroup.forEach(order => {
       let date;
 
       if (order.orderDate && typeof order.orderDate === 'string') {
@@ -813,13 +866,13 @@ function ViewOrders() {
     return grouped;
   };
 
-  // ===== 8. CALCULATE TOTALS FUNCTION =====
+  // ===== 9. CALCULATE TOTALS FUNCTION =====
   const calculateTotals = () => {
     let totalAmount = 0;
     let totalReceived = 0;
     let totalBalance = 0;
 
-    orders.forEach(order => {
+    filteredOrders.forEach(order => {
       const orderDate = new Date(order.orderDate);
       
       if (!useDateRange && orderDate.getFullYear() !== yearFilter) return;
@@ -849,7 +902,7 @@ function ViewOrders() {
 
   const { totalAmount, totalReceived, totalBalance } = calculateTotals();
 
-  // ===== 9. USER INFO FUNCTION =====
+  // ===== 10. USER INFO FUNCTION =====
   const getUserInfo = () => {
     try {
       const role = localStorage.getItem('role') || '';
@@ -867,7 +920,7 @@ function ViewOrders() {
     }
   };
 
-  // ===== 10. FETCH ORDERS FUNCTION =====
+  // ===== 11. FETCH ORDERS FUNCTION =====
   const fetchOrders = async (role, name, month = null, year = null, clientType = null, executive = null, executiveName = null, leadSource = null) => {
     setLoading(true);
     setError(null);
@@ -933,29 +986,27 @@ function ViewOrders() {
       const res = await axios.get(`${url}?${queryParams.toString()}`);
       console.log('📦 Total orders received from API:', res.data.length);
 
-      let filteredOrders = res.data;
+      let fetchedOrders = res.data;
       if (!useDateRange && yearFilter) {
-        filteredOrders = res.data.filter(order => {
+        fetchedOrders = res.data.filter(order => {
           if (!order.orderDate) return false;
           const orderDate = new Date(order.orderDate);
           if (isNaN(orderDate.getTime())) return false;
           return orderDate.getFullYear() === yearFilter;
         });
-        console.log(`📊 Orders after ${yearFilter} filter:`, filteredOrders.length);
+        console.log(`📊 Orders after ${yearFilter} filter:`, fetchedOrders.length);
       } else if (useDateRange) {
         console.log('📊 Using date range filter from backend');
       }
 
-      const sortedOrders = filteredOrders.sort((a, b) => {
+      const sortedOrders = fetchedOrders.sort((a, b) => {
         const dateA = new Date(a.orderDate || 0);
         const dateB = new Date(b.orderDate || 0);
         return dateB - dateA;
       });
 
       setOrders(sortedOrders);
-      setGroupedOrders(groupOrdersByMonth(sortedOrders));
-
-      console.log('✅ Final orders count:', sortedOrders.length);
+      
     } catch (err) {
       console.error('❌ Error fetching orders:', err);
       setError('Failed to fetch orders. Please try again.');
@@ -965,7 +1016,46 @@ function ViewOrders() {
     }
   };
 
-  // ===== 11. LEAD SOURCE FILTER HANDLER =====
+  // ===== 12. FIXED: APPLY FILTERS EFFECT =====
+  useEffect(() => {
+    if (!orders.length) {
+      setFilteredOrders([]);
+      setGroupedOrders({});
+      return;
+    }
+
+    // First filter by executive visibility rules
+    let visibilityFiltered = orders;
+    if (shouldSeeOnlyOwnOrders()) {
+      visibilityFiltered = orders.filter(order => order.executive === executiveName);
+    }
+
+    // Then apply all other filters (client type, lead source, etc.)
+    let filtered = visibilityFiltered;
+
+    if (clientTypeFilter) {
+      filtered = filtered.filter(order => order.clientType === clientTypeFilter);
+    }
+
+    if (leadSourceFilter) {
+      filtered = filtered.filter(order => order.leadSource === leadSourceFilter);
+    }
+
+    if (appliedExecutiveFilters.executiveName) {
+      filtered = filtered.filter(order => order.executive === appliedExecutiveFilters.executiveName);
+    }
+
+    // Finally apply search filter
+    if (searchTerm && searchTerm.trim() !== '') {
+      filtered = filtered.filter(order => filterOrdersBySearchTerm(order));
+    }
+
+    setFilteredOrders(filtered);
+    setGroupedOrders(groupOrdersByMonth(filtered));
+
+  }, [orders, searchTerm, clientTypeFilter, leadSourceFilter, appliedExecutiveFilters, executiveName, yearFilter, useDateRange]);
+
+  // ===== 13. LEAD SOURCE FILTER HANDLER =====
   const handleLeadSourceFilterSelect = (source) => {
     const params = new URLSearchParams(location.search);
 
@@ -1000,7 +1090,7 @@ function ViewOrders() {
     fetchOrders(role, name, month, year, clientType, executive, executiveName, source);
   };
 
-  // ===== 12. YEAR CHANGE HANDLER =====
+  // ===== 14. YEAR CHANGE HANDLER =====
   const handleYearChange = (e) => {
     const newYear = parseInt(e.target.value);
     setYearFilter(newYear);
@@ -1019,7 +1109,7 @@ function ViewOrders() {
     fetchOrders(role, name, month, newYear, clientType, executive, executiveName, leadSource);
   };
 
-  // ===== 13. CLEAR FILTERS FUNCTION =====
+  // ===== 15. CLEAR FILTERS FUNCTION =====
   const clearAllFilters = () => {
     setMonthFilter(null);
     setYearFilter(new Date().getFullYear());
@@ -1089,7 +1179,7 @@ function ViewOrders() {
     setSearchTerm('');
   };
 
-  // ===== 14. EDIT FUNCTIONS =====
+  // ===== 16. EDIT FUNCTIONS =====
   const handleEdit = (order) => {
     if (shouldSeeOnlyOwnOrders() && order.executive !== executiveName) {
       toast.error('You can only edit your own orders');
@@ -1155,7 +1245,7 @@ function ViewOrders() {
     }
   };
 
-  // ===== 15. DELETE FUNCTIONS =====
+  // ===== 17. DELETE FUNCTIONS =====
   const confirmDelete = (orderId) => {
     const orderToDeleteObj = orders.find(order => order._id === orderId);
     if (shouldSeeOnlyOwnOrders() && orderToDeleteObj && orderToDeleteObj.executive !== executiveName) {
@@ -1215,7 +1305,7 @@ function ViewOrders() {
     }
   };
 
-  // ===== 16. PAYMENT FUNCTIONS =====
+  // ===== 18. PAYMENT FUNCTIONS =====
   const handleRecordPayment = async (order) => {
     if (shouldSeeOnlyOwnOrders() && order.executive !== executiveName) {
       toast.error('You can only record payments for your own orders');
@@ -1443,21 +1533,16 @@ function ViewOrders() {
     setPaymentData(prev => ({ ...prev, [name]: value }));
   };
 
-  // ===== 17. EXPORT/IMPORT FUNCTIONS =====
+  // ===== 19. EXPORT/IMPORT FUNCTIONS =====
   const handleExportToExcel = () => {
-    let ordersToExport = orders;
+    let ordersToExport = filteredOrders;
     if (shouldSeeOnlyOwnOrders()) {
-      ordersToExport = orders.filter(order => order.executive === executiveName);
+      ordersToExport = filteredOrders.filter(order => order.executive === executiveName);
     }
 
-    const filteredOrders = ordersToExport.filter(order => {
-      const orderDate = new Date(order.orderDate);
-      return orderDate.getFullYear() === yearFilter;
-    });
-
-    const flattenedOrders = filteredOrders.flatMap(order =>
+    const flattenedOrders = ordersToExport.flatMap(order =>
       order.rows.map(row => ({
-        'S.No': filteredOrders.indexOf(order) + 1,
+        'S.No': ordersToExport.indexOf(order) + 1,
         'Executive': order.executive,
         'Business': order.business,
         'Customer': order.contactPerson,
@@ -1603,46 +1688,7 @@ function ViewOrders() {
     reader.readAsArrayBuffer(file);
   };
 
-  // ===== 18. FILTER ORDERS FUNCTION =====
-  const filterOrders = (order) => (row) => {
-    const valuesToSearch = [
-      order.executive || '',
-      order.business || '',
-      order.contactPerson || '',
-      order.location || '',
-      order.leadSource || '',
-      order.otherLeadSource || '',
-      `${order.contactCode || ''} ${order.phone || ''}`,
-      order.orderNo || '',
-      order.orderDate || '',
-      order.clientType || '',
-      row.description || '',
-      row.requirement || '',
-      row.customRequirement || '',
-      row.quantity || '',
-      row.rate || '',
-      row.total || '',
-      order.discount || '',
-      order.discountedTotal || '',
-      row.deliveryDate || '',
-      row.assignedExecutive || '',
-      row.status || '',
-      row.remark || '',
-      order.advance || '',
-      order.balance || '',
-      order.advanceDate || '',
-      order.paymentDate || '',
-      order.paymentMethod || '',
-      order.chequeNumber || '',
-      order.createdBy || ''
-    ];
-
-    return valuesToSearch.some((val) =>
-      String(val).toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  };
-
-  // ===== 19. USE EFFECTS =====
+  // ===== 20. USE EFFECTS =====
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const month = params.get('month');
@@ -1719,7 +1765,7 @@ function ViewOrders() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ===== 20. LOADING STATE =====
+  // ===== 21. LOADING STATE =====
   if (loading) {
     return (
       <div style={{
@@ -1737,7 +1783,7 @@ function ViewOrders() {
     );
   }
 
-  // ===== 21. ERROR STATE =====
+  // ===== 22. ERROR STATE =====
   if (error) {
     return (
       <div style={{
@@ -1778,7 +1824,7 @@ function ViewOrders() {
     );
   }
 
-// ===== 22. MAIN RENDER =====
+  // ===== 23. MAIN RENDER =====
   return (
     <div style={{ padding: '20px', backgroundColor: '#f9f9f9', minHeight: '100vh' }}>
       <style>{responsiveStyles}</style>
@@ -1825,6 +1871,9 @@ function ViewOrders() {
           }}>
             <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>Total Amount ({yearFilter})</div>
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3498db' }}>₹{totalAmount}</div>
+            <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+              {filteredOrders.length} orders
+            </div>
           </div>
 
           <div style={{
@@ -1861,7 +1910,7 @@ function ViewOrders() {
         </div>
       )}
 
-      {/* FILTER SECTION - MOVED AFTER SUMMARY CARDS - COMPACT SINGLE LINE */}
+      {/* FILTER SECTION - COMPACT SINGLE LINE */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -1901,7 +1950,7 @@ function ViewOrders() {
           </select>
         </div>
 
-        {/* Middle - Date Range Filter - COMPACT SINGLE LINE */}
+        {/* Middle - Date Range Filter */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#555' }}>From:</span>
           <input
@@ -1963,7 +2012,7 @@ function ViewOrders() {
             whiteSpace: 'nowrap'
           }}>
             {useDateRange ? (
-              <>📅 {new Date(startDate).toLocaleDateString().slice(0,5)} - {new Date(endDate).toLocaleDateString().slice(0,5)}</>
+              <>📅 {startDate ? new Date(startDate).toLocaleDateString().slice(0,5) : ''} - {endDate ? new Date(endDate).toLocaleDateString().slice(0,5) : ''}</>
             ) : (
               <>📊 {yearFilter}{monthFilter ? ` - ${new Date(yearFilter, monthFilter - 1).toLocaleString('default', { month: 'short' })}` : ''}</>
             )}
@@ -2356,7 +2405,7 @@ function ViewOrders() {
         <div style={{ flex: 1, minWidth: '300px' }}>
           <input
             type="text"
-            placeholder="Search orders..."
+            placeholder="Search orders by executive, business, customer, phone, requirement..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -2367,6 +2416,11 @@ function ViewOrders() {
               fontSize: '16px'
             }}
           />
+          {searchTerm && (
+            <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+              Searching in executive, business, customer, phone, order no, requirements...
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -2486,18 +2540,18 @@ function ViewOrders() {
           {canExportToExcel() && (
             <button
               onClick={handleExportToExcel}
-              disabled={orders.length === 0}
+              disabled={filteredOrders.length === 0}
               style={{
-                backgroundColor: orders.length === 0 ? '#ccc' : '#16a085',
+                backgroundColor: filteredOrders.length === 0 ? '#ccc' : '#16a085',
                 color: 'white',
                 padding: '12px 20px',
                 border: 'none',
                 borderRadius: '6px',
-                cursor: orders.length === 0 ? 'not-allowed' : 'pointer',
+                cursor: filteredOrders.length === 0 ? 'not-allowed' : 'pointer',
                 fontSize: '14px'
               }}
             >
-              Export to Excel ({yearFilter})
+              Export to Excel ({filteredOrders.length} orders)
             </button>
           )}
 
@@ -2572,6 +2626,9 @@ function ViewOrders() {
                       ₹{group.totals.balance.toLocaleString('en-IN')}
                     </div>
                   </div>
+                </div>
+                <div style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: '4px 12px', borderRadius: '20px' }}>
+                  {group.orders.length} orders
                 </div>
               </div>
 
@@ -3009,7 +3066,7 @@ function ViewOrders() {
                           </tr>
                         );
                       } else {
-                        return order.rows.filter(filterOrders(order)).map((row, rowIndex) => {
+                        return order.rows.map((row, rowIndex) => {
                           const rowBgColor = (orderIndex + rowIndex) % 2 === 0 ? '#fdfdfd' : '#f5f9fa';
 
                           return (
@@ -3353,7 +3410,7 @@ function ViewOrders() {
           borderRadius: '8px',
           marginTop: '20px'
         }}>
-          <h3 style={{ color: '#666' }}>No orders found for {yearFilter}</h3>
+          <h3 style={{ color: '#666' }}>No orders found</h3>
           <p style={{ color: '#999' }}>
             {appliedExecutiveFilters.executiveName && `for executive: ${appliedExecutiveFilters.executiveName}`}
             {appliedExecutiveFilters.executiveName && (monthFilter || clientTypeFilter || leadSourceFilter) && ' and '}
@@ -3362,9 +3419,9 @@ function ViewOrders() {
             {clientTypeFilter && `with client type: ${clientTypeFilter}`}
             {clientTypeFilter && leadSourceFilter && ' and '}
             {leadSourceFilter && `with lead source: ${leadSourceFilter}`}
-            {searchTerm && `matching search: "${searchTerm}"`}
+            {searchTerm && ` matching "${searchTerm}"`}
           </p>
-          <p style={{ color: '#999' }}>Try adjusting your search or importing orders</p>
+          <p style={{ color: '#999' }}>Try adjusting your filters or importing orders</p>
         </div>
       )}
 
@@ -3464,8 +3521,8 @@ function ViewOrders() {
                           ₹{parseFloat(payment.amount || 0).toLocaleString('en-IN')}
                         </td>
                         <td style={{ padding: '8px' }}>{payment.method}</td>
-                        <td style={{ padding: '8px' }}>{payment.reference}</td>
-                        <td style={{ padding: '8px' }}>{payment.note}</td>
+                        <td style={{ padding: '8px' }}>{payment.reference || '-'}</td>
+                        <td style={{ padding: '8px' }}>{payment.note || '-'}</td>
                       </tr>
                     ))}
                     <tr style={{ fontWeight: 'bold', backgroundColor: '#f9f9f9' }}>
@@ -3507,7 +3564,7 @@ function ViewOrders() {
                     name="amount"
                     value={paymentData.amount}
                     onChange={handlePaymentChange}
-                    placeholder={`Enter amount (max: ₹${currentOrder.balance ? parseFloat(currentOrder.balance).toLocaleString('en-IN') : '0'}`}
+                    placeholder={`Enter amount (max: ₹${currentOrder.balance ? parseFloat(currentOrder.balance).toLocaleString('en-IN') : '0'})`}
                     style={{
                       width: '100%',
                       padding: '8px',
@@ -3580,7 +3637,7 @@ function ViewOrders() {
                       <option value="9985330004@Swathi">9985330004@Swathi</option>
                       <option value="globalmarketingsolutions@idbi">globalmarketingsolutions@idbi</option>
                       <option value="9985403636@Vinay">9985403636@Vinay</option>                     
-                       <option value="other">Other UPI</option>
+                      <option value="other">Other UPI</option>
                     </select>
                     {paymentData.reference === 'other' && (
                       <input

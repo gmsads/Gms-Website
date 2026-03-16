@@ -1,4 +1,18 @@
 const mongoose = require('mongoose');
+// Define the document file schema first
+const documentFileSchema = new mongoose.Schema({
+  filename: String,
+  originalName: String,
+  path: String,
+  size: Number,
+  mimetype: String,
+  uploadedAt: {
+    type: Date,
+    default: Date.now
+  },
+  cloudinaryId: String,
+  url: String
+});
 
 const ServiceManagerSchema = new mongoose.Schema({
   name: String,
@@ -8,12 +22,13 @@ const ServiceManagerSchema = new mongoose.Schema({
   email: String,
   guardianName : String,
   guardianContact: Number,
-documents: {
-  aadhar: { type: String, default: null },
-  pan: { type: String, default: null },
-  educational: { type: String, default: null },
-  experience: { type: String, default: null }
-},
+  documents: {
+    aadhar: { files: [documentFileSchema], default: { files: [] } },
+    pan: { files: [documentFileSchema], default: { files: [] } },
+    educational: { files: [documentFileSchema], default: { files: [] } },
+    experience: { files: [documentFileSchema], default: { files: [] } },
+    customDocuments: { type: Map, of: { files: [documentFileSchema] }, default: new Map() }
+  },
 
   joiningDate: Date,
   experience: Number,

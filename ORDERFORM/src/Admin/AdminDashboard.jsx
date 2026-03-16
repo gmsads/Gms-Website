@@ -43,11 +43,15 @@ function AdminDashboard() {
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
-const [year, setYear] = useState(() => {
-  const currentYear = new Date().getFullYear();
-  return currentYear;
-});
+  const [year, setYear] = useState(() => {
+    const currentYear = new Date().getFullYear();
+    return currentYear;
+  });
   const [selectedMonth, setSelectedMonth] = useState(null);
+
+  // Add these two new state variables for comparison chart
+  const [comparisonData, setComparisonData] = useState(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
 
   // Date range filter states
   const [startDate, setStartDate] = useState('');
@@ -98,8 +102,6 @@ const [year, setYear] = useState(() => {
 
   const clientTypes = getClientTypeData();
 
-
-
   const toggleSection = (section) => {
     setOpenSections(prev => ({
       ...prev,
@@ -130,12 +132,10 @@ const [year, setYear] = useState(() => {
       try {
         const params = new URLSearchParams();
 
-        // If date range is active, use start and end dates
         if (useDateRange && startDate && endDate) {
           params.append('startDate', startDate);
           params.append('endDate', endDate);
         } else {
-          // Otherwise use year/month filters
           if (year !== 'all') {
             params.append('year', year);
           }
@@ -178,6 +178,42 @@ const [year, setYear] = useState(() => {
       }
     };
     fetchDashboardData();
+  }, [year, selectedMonth, startDate, endDate, useDateRange]);
+
+  // Add this new useEffect for fetching comparison data
+  useEffect(() => {
+    const fetchComparisonData = async () => {
+      setComparisonLoading(true);
+      try {
+        const params = new URLSearchParams();
+        
+        if (useDateRange && startDate && endDate) {
+          params.append('startDate', startDate);
+          params.append('endDate', endDate);
+        } else {
+          if (year !== 'all') {
+            params.append('year', year);
+          }
+          if (selectedMonth !== null) {
+            params.append('month', selectedMonth + 1);
+          }
+        }
+        
+        const response = await axios.get(`/api/dashboard/comparison-data?${params.toString()}`);
+        if (response.data) {
+          setComparisonData(response.data);
+        } else {
+          setComparisonData(null);
+        }
+      } catch (err) {
+        console.error('Error fetching comparison data:', err);
+        setComparisonData(null);
+      } finally {
+        setComparisonLoading(false);
+      }
+    };
+    
+    fetchComparisonData();
   }, [year, selectedMonth, startDate, endDate, useDateRange]);
 
   useEffect(() => {
@@ -236,7 +272,6 @@ const [year, setYear] = useState(() => {
   
   const appointments = safeArray(chartData?.appointments);
 
-
   const getTotalOrdersCount = () => {
     if (!chartData) return 0;
     if (selectedMonth !== null) {
@@ -251,6 +286,8 @@ const [year, setYear] = useState(() => {
 
       if (year !== 'all') {
         queryParams.append('year', year);
+      } else {
+        queryParams.append('year', 'all');
       }
 
       if (selectedMonth !== null) {
@@ -265,6 +302,8 @@ const [year, setYear] = useState(() => {
 
       if (year !== 'all') {
         queryParams.append('year', year);
+      } else {
+        queryParams.append('year', 'all');
       }
 
       if (selectedMonth !== null) {
@@ -275,7 +314,21 @@ const [year, setYear] = useState(() => {
 
       navigate(`/admin-dashboard/pending-payment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
     } else if (chartType === 'pending-service') {
-      navigate('/admin-dashboard/pending-service');
+      const queryParams = new URLSearchParams();
+      
+      if (year !== 'all') {
+        queryParams.append('year', year);
+      } else {
+        queryParams.append('year', 'all');
+      }
+      
+      if (selectedMonth !== null) {
+        queryParams.append('month', selectedMonth + 1);
+      } else {
+        queryParams.append('month', 'all');
+      }
+      
+      navigate(`/admin-dashboard/pending-service${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
     } else if (chartType === 'revenue') {
       navigate('/admin-dashboard/view-orders');
     } else if (chartType === 'daily-report') {
@@ -298,7 +351,6 @@ const [year, setYear] = useState(() => {
     setEndDate('');
     setUseDateRange(false);
   };
-
 
   const getTimePeriodText = () => {
     if (useDateRange && startDate && endDate) {
@@ -342,7 +394,6 @@ const [year, setYear] = useState(() => {
       height: '100vh',
       position: 'relative',
     },
-
     whatsappButton: {
       position: 'fixed',
       bottom: '30px',
@@ -380,7 +431,6 @@ const [year, setYear] = useState(() => {
       fontWeight: 'bold',
       boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
     },
-
     dashboardCards: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
@@ -835,7 +885,6 @@ const [year, setYear] = useState(() => {
               >
                 Dashboard
               </NavLink>
-
             </>
           )}
         </div>
@@ -920,7 +969,6 @@ const [year, setYear] = useState(() => {
               >
                 View Performance
               </NavLink>
-
               <NavLink
                 to="view-prospective"
                 style={linkStyle('view-prospective')}
@@ -930,7 +978,6 @@ const [year, setYear] = useState(() => {
               >
                 View Prospects
               </NavLink>
-
               <NavLink
                 to="select-appointment"
                 style={linkStyle('select-appointment')}
@@ -962,7 +1009,6 @@ const [year, setYear] = useState(() => {
           )}
         </div>
 
-
         <div style={styles.sidebarSection}>
           <div
             style={styles.sidebarSectionTitle}
@@ -989,7 +1035,6 @@ const [year, setYear] = useState(() => {
               >
                 Add Employee
               </NavLink>
-
               <NavLink
                 to="Employees"
                 style={linkStyle('Employees')}
@@ -1026,7 +1071,6 @@ const [year, setYear] = useState(() => {
               >
                 Target
               </NavLink>
-
               <NavLink
                 to="executives-logins"
                 style={linkStyle('executives-logins')}
@@ -1036,7 +1080,6 @@ const [year, setYear] = useState(() => {
               >
                 Executive Login Time
               </NavLink>
-
               <NavLink
                 to="daily-report"
                 style={linkStyle('daily-report')}
@@ -1059,7 +1102,6 @@ const [year, setYear] = useState(() => {
           )}
         </div>
 
-
         <div style={styles.sidebarSection}>
           <div
             style={styles.sidebarSectionTitle}
@@ -1077,8 +1119,6 @@ const [year, setYear] = useState(() => {
           </div>
           {openSections.reports && (
             <>
-
-
               <NavLink
                 to="daily-report"
                 style={linkStyle('daily-report')}
@@ -1109,6 +1149,7 @@ const [year, setYear] = useState(() => {
             </>
           )}
         </div>
+
         <div style={styles.sidebarSection}>
           <div
             style={styles.sidebarSectionTitle}
@@ -1135,7 +1176,6 @@ const [year, setYear] = useState(() => {
               >
                 Assign Service
               </NavLink>
-
               <NavLink
                 to="pending-service"
                 style={linkStyle('pending-service')}
@@ -1145,7 +1185,6 @@ const [year, setYear] = useState(() => {
               >
                 Pending Service
               </NavLink>
-
               <NavLink
                 to="view-design"
                 style={linkStyle('view-design')}
@@ -1155,8 +1194,6 @@ const [year, setYear] = useState(() => {
               >
                 View Design
               </NavLink>
-
-
               <NavLink
                 to="design-report"
                 style={linkStyle('design-report')}
@@ -1205,7 +1242,6 @@ const [year, setYear] = useState(() => {
               >
                 Pending Payment
               </NavLink>
-
               <NavLink
                 to="view-expenses"
                 style={linkStyle('view-expenses')}
@@ -1215,7 +1251,6 @@ const [year, setYear] = useState(() => {
               >
                 View Expenses
               </NavLink>
-
               <NavLink
                 to="inventory"
                 style={linkStyle('inventory')}
@@ -1255,7 +1290,6 @@ const [year, setYear] = useState(() => {
               >
                 Create Prospects ➕
               </NavLink>
-
               <NavLink
                 to="appointments"
                 style={linkStyle('appointments')}
@@ -1295,7 +1329,6 @@ const [year, setYear] = useState(() => {
               >
                 Create Anniversary
               </NavLink>
-
               <NavLink
                 to="anniversary-list"
                 style={linkStyle('anniversary-list')}
@@ -1439,10 +1472,8 @@ const [year, setYear] = useState(() => {
             <Outlet />
             {showDashboardCards && (
               <>
-                {/* Filter Section - All in one line */}
                 <div style={styles.yearSelectorWrapper}>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    {/* Year Filter */}
                     <label htmlFor="year-select" style={styles.yearSelectorLabel}>
                       Year:
                     </label>
@@ -1465,7 +1496,6 @@ const [year, setYear] = useState(() => {
                       ))}
                     </select>
 
-                    {/* Month Filter */}
                     <label htmlFor="month-select" style={styles.yearSelectorLabel}>
                       Month:
                     </label>
@@ -1488,7 +1518,6 @@ const [year, setYear] = useState(() => {
                       ))}
                     </select>
 
-                    {/* Date Range Filter */}
                     <label style={styles.yearSelectorLabel}>From:</label>
                     <input
                       type="date"
@@ -1519,26 +1548,23 @@ const [year, setYear] = useState(() => {
                       style={styles.dateInput}
                     />
 
-                    {/* Clear Filters Button */}
-                    {/* Clear Filters Button */}
-<button
-  onClick={handleClearFilters}
-  style={{
-    ...styles.clearButton,
-    marginTop: '-10px' // Add this line to align it properly
-  }}
-  onMouseEnter={(e) => {
-    e.currentTarget.style.backgroundColor = '#e0e0e0';
-  }}
-  onMouseLeave={(e) => {
-    e.currentTarget.style.backgroundColor = '#f0f0f0';
-  }}
->
-  Clear Filters
-</button>
+                    <button
+                      onClick={handleClearFilters}
+                      style={{
+                        ...styles.clearButton,
+                        marginTop: '-10px'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#e0e0e0';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#f0f0f0';
+                      }}
+                    >
+                      Clear Filters
+                    </button>
                   </div>
 
-                  {/* Profile and Logout - on the right */}
                   <div style={styles.userControls}>
                     <div
                       style={styles.profileBadge}
@@ -1549,22 +1575,21 @@ const [year, setYear] = useState(() => {
                         .map((w) => w[0]?.toUpperCase())
                         .join('')}
                     </div>
-                   <button
-  style={{
-    ...styles.logoutButton,
-    marginTop: '2px' // Add this line to align it properly
-  }}
-  onClick={() => {
-    localStorage.clear();
-    window.location.replace('/');
-  }}
->
-  Logout
-</button>
+                    <button
+                      style={{
+                        ...styles.logoutButton,
+                        marginTop: '2px'
+                      }}
+                      onClick={() => {
+                        localStorage.clear();
+                        window.location.replace('/');
+                      }}
+                    >
+                      Logout
+                    </button>
                   </div>
                 </div>
 
-                {/* Active Filter Display */}
                 <div style={styles.timePeriodText}>
                   Currently viewing: <strong>{getTimePeriodText()}</strong>
                 </div>
@@ -1579,8 +1604,6 @@ const [year, setYear] = useState(() => {
                   </div>
                 ) : (
                   <div style={styles.dashboardCards}>
-                    {/* All your existing chart components remain exactly the same */}
-                    {/* Total Revenue Bar Chart */}
                     <div 
                       style={{
                         ...styles.card,
@@ -1798,7 +1821,6 @@ const [year, setYear] = useState(() => {
                       )}
                     </div>
 
-                    {/* Total Orders Bar Chart */}
                     <div 
                       style={{
                         ...styles.card,
@@ -1903,7 +1925,6 @@ const [year, setYear] = useState(() => {
                       )}
                     </div>
 
-                    {/* Payment Status Chart */}
                     <div 
                       style={{
                         ...styles.card,
@@ -1964,7 +1985,6 @@ const [year, setYear] = useState(() => {
                       </div>
                     </div>
 
-                    {/* Service Status Chart */}
                     <div 
                       style={{
                         ...styles.card,
@@ -1972,7 +1992,23 @@ const [year, setYear] = useState(() => {
                       }}
                       onMouseEnter={() => setHoveredCard('service')}
                       onMouseLeave={() => setHoveredCard(null)}
-                      onClick={() => handleChartClick('pending-service')}
+                      onClick={() => {
+                        const queryParams = new URLSearchParams();
+                        
+                        if (year !== 'all') {
+                          queryParams.append('year', year);
+                        } else {
+                          queryParams.append('year', 'all');
+                        }
+                        
+                        if (selectedMonth !== null) {
+                          queryParams.append('month', selectedMonth + 1);
+                        } else {
+                          queryParams.append('month', 'all');
+                        }
+                        
+                        navigate(`/admin-dashboard/pending-service${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
+                      }}
                     >
                       <div>
                         Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}
@@ -1992,7 +2028,6 @@ const [year, setYear] = useState(() => {
 
                           const totalServices = serviceData.reduce((a, b) => a + b, 0);
 
-                          // Status mapping for navigation
                           const statusMap = [
                             { value: 'pending', label: 'Pending' },
                             { value: 'assigned to', label: 'Assigned' },
@@ -2050,7 +2085,6 @@ const [year, setYear] = useState(() => {
                                       }
                                     }
                                   },
-                                  // Custom plugin to show percentage in center
                                   afterDraw: function (chart) {
                                     const width = chart.width;
                                     const height = chart.height;
@@ -2059,7 +2093,6 @@ const [year, setYear] = useState(() => {
                                     ctx.restore();
 
                                     if (totalServices > 0) {
-                                      // Calculate completed percentage
                                       const completedCount = serviceData[3] + serviceData[1] + serviceData[2] + serviceData[7];
                                       const completedPercentage = ((completedCount / totalServices) * 100).toFixed(1);
 
@@ -2078,23 +2111,18 @@ const [year, setYear] = useState(() => {
                                     const clickedIndex = elements[0].index;
                                     const clickedStatus = statusMap[clickedIndex];
                                     
-                                    // Build query parameters
                                     const queryParams = new URLSearchParams();
                                     
-                                    // Add status filter
                                     queryParams.append('status', clickedStatus.value);
                                     
-                                    // Add year filter if not 'all'
                                     if (year !== 'all') {
                                       queryParams.append('year', year.toString());
                                     }
                                     
-                                    // Add month filter if selected
                                     if (selectedMonth !== null) {
                                       queryParams.append('month', (selectedMonth + 1).toString());
                                     }
                                     
-                                    // Navigate to pending-service with filters
                                     navigate(`/admin-dashboard/pending-service?${queryParams.toString()}`);
                                   }
                                 }
@@ -2113,7 +2141,6 @@ const [year, setYear] = useState(() => {
                       </div>
                     </div>
 
-                    {/* Appointments PolarArea */}
                     <div 
                       style={{
                         ...styles.card,
@@ -2166,154 +2193,335 @@ const [year, setYear] = useState(() => {
                       <div style={styles.number}>{appointments[1] || 0}</div>
                     </div>
 
-                   {/* Client Types Bar Chart - with amount on hover */}
+                    <div 
+                      style={{
+                        ...styles.card,
+                        ...(hoveredCard === 'clientTypes' ? styles.cardHover : {})
+                      }}
+                      onMouseEnter={() => setHoveredCard('clientTypes')}
+                      onMouseLeave={() => setHoveredCard(null)}
+                      onClick={(e) => {
+                        if (e.target.tagName !== 'BUTTON') {
+                          const queryParams = new URLSearchParams();
+                          if (selectedMonth !== null) {
+                            queryParams.append('month', selectedMonth + 1);
+                          }
+                          if (year !== 'all') {
+                            queryParams.append('year', year);
+                          }
+                          navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                        }
+                      }}
+                    >
+                      <div>Client Overview {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}</div>
+                      <div style={styles.chartContainer}>
+                        <Bar
+                          data={{
+                            labels: ['Retail', 'Renewal', 'Agent', 'Renewal-Agent'],
+                            datasets: [
+                              {
+                                label: 'Orders',
+                                data: [
+                                  clientTypes.Retail?.count !== undefined ? clientTypes.Retail.count : (clientTypes.Retail || 0),
+                                  clientTypes.Renewal?.count !== undefined ? clientTypes.Renewal.count : (clientTypes.Renewal || 0),
+                                  clientTypes.Agent?.count !== undefined ? clientTypes.Agent.count : (clientTypes.Agent || 0),
+                                  clientTypes['Renewal-Agent']?.count !== undefined ? clientTypes['Renewal-Agent'].count : (clientTypes['Renewal-Agent'] || 0),
+                                ],
+                                backgroundColor: ['#36A2EB', '#4BC0C0', '#FFCE56', '#9966FF'],
+                              }
+                            ],
+                          }}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                              legend: { display: false },
+                              tooltip: {
+                                callbacks: {
+                                  label: function(context) {
+                                    const label = context.label || '';
+                                    const count = context.raw || 0;
+                                    let amount = 0;
+                                    
+                                    if (label === 'Retail') amount = clientTypes.Retail?.amount || 0;
+                                    else if (label === 'Renewal') amount = clientTypes.Renewal?.amount || 0;
+                                    else if (label === 'Agent') amount = clientTypes.Agent?.amount || 0;
+                                    else if (label === 'Renewal-Agent') amount = clientTypes['Renewal-Agent']?.amount || 0;
+                                    
+                                    return [
+                                      `Orders: ${count}`,
+                                      `Amount: ₹${amount.toLocaleString('en-IN')}`
+                                    ];
+                                  }
+                                }
+                              }
+                            },
+                            onClick: (event, elements) => {
+                              if (elements && elements.length > 0) {
+                                const clientTypesList = ['Retail', 'Renewal', 'Agent', 'Renewal-Agent'];
+                                const selectedType = clientTypesList[elements[0].index];
+
+                                const queryParams = new URLSearchParams();
+                                queryParams.append('clientType', selectedType);
+
+                                if (selectedMonth !== null) {
+                                  queryParams.append('month', selectedMonth + 1);
+                                }
+                                if (year !== 'all') {
+                                  queryParams.append('year', year);
+                                }
+
+                                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                              }
+                            }
+                          }}
+                        />
+                      </div>
+                      <div style={styles.number}>
+                        {(
+                          (clientTypes.Retail?.count !== undefined ? clientTypes.Retail.count : (clientTypes.Retail || 0)) +
+                          (clientTypes.Renewal?.count !== undefined ? clientTypes.Renewal.count : (clientTypes.Renewal || 0)) +
+                          (clientTypes.Agent?.count !== undefined ? clientTypes.Agent.count : (clientTypes.Agent || 0)) +
+                          (clientTypes['Renewal-Agent']?.count !== undefined ? clientTypes['Renewal-Agent'].count : (clientTypes['Renewal-Agent'] || 0))
+                        )}
+                      </div>
+                    </div>
+
+                    <div 
+                      style={{
+                        ...styles.card,
+                        ...(hoveredCard === 'agentOrders' ? styles.cardHover : {})
+                      }}
+                      onMouseEnter={() => setHoveredCard('agentOrders')}
+                      onMouseLeave={() => setHoveredCard(null)}
+                      onClick={(e) => {
+                        if (e.target.tagName !== 'BUTTON') {
+                          const queryParams = new URLSearchParams();
+                          queryParams.append('clientType', 'Agent');
+                          if (selectedMonth !== null) {
+                            queryParams.append('month', selectedMonth + 1);
+                          }
+                          if (year !== 'all') {
+                            queryParams.append('year', year);
+                          }
+                          navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                        }
+                      }}
+                    >
+                      <div>Agent Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : '(Monthly)'}</div>
+                      {loading ? (
+                        <div style={styles.noDataMessage}>Loading agent data...</div>
+                      ) : (
+                        <>
+                          <div style={styles.chartContainer}>
+                            <Bar
+                              data={{
+                                labels: selectedMonth !== null
+                                  ? ['Agent Orders']
+                                  : monthLabels,
+                                datasets: [
+                                  {
+                                    label: 'Agent Orders',
+                                    data: selectedMonth !== null
+                                      ? [clientTypes.Agent?.count || 0]
+                                      : (() => {
+                                          const monthlyData = Array(12).fill(0);
+                                          if (selectedMonth !== null) {
+                                            monthlyData[selectedMonth] = clientTypes.Agent?.count || 0;
+                                          } else {
+                                            const currentMonth = new Date().getMonth();
+                                            monthlyData[currentMonth] = clientTypes.Agent?.count || 0;
+                                          }
+                                          return monthlyData;
+                                        })(),
+                                    backgroundColor: 'rgba(255, 206, 86, 0.7)',
+                                  }
+                                ]
+                              }}
+                              options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                  legend: { display: false },
+                                  tooltip: {
+                                    callbacks: {
+                                      label: function(context) {
+                                        const count = context.raw || 0;
+                                        const amount = clientTypes.Agent?.amount || 0;
+                                        return [
+                                          `Orders: ${count}`,
+                                          `Amount: ₹${amount.toLocaleString('en-IN')}`
+                                        ];
+                                      }
+                                    }
+                                  }
+                                },
+                                onClick: (_, elements) => {
+                                  if (elements && elements.length > 0) {
+                                    const queryParams = new URLSearchParams();
+                                    queryParams.append('clientType', 'Agent');
+
+                                    if (selectedMonth === null) {
+                                      const clickedMonth = elements[0].index + 1;
+                                      queryParams.append('month', clickedMonth);
+                                    } else {
+                                      queryParams.append('month', selectedMonth + 1);
+                                    }
+                                    if (year !== 'all') {
+                                      queryParams.append('year', year);
+                                    }
+
+                                    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                                  }
+                                }
+                              }}
+                            />
+                          </div>
+                          <div style={styles.number}>
+                            {clientTypes.Agent?.count || 0}
+                          </div>
+                        </>
+                      )}
+                      {selectedMonth !== null && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedMonth(null);
+                          }}
+                          style={{
+                            padding: '5px 10px',
+                            backgroundColor: '#003366',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            marginTop: '10px'
+                          }}
+                        >
+                          View All Months
+                        </button>
+                      )}
+                    </div>
+
+{/* SIMPLE AND CLEAN COMPARISON CHART */}
 <div 
   style={{
     ...styles.card,
-    ...(hoveredCard === 'clientTypes' ? styles.cardHover : {})
+    ...(hoveredCard === 'comparison' ? styles.cardHover : {}),
+    backgroundColor: '#ffffff',
+    padding: '16px'
   }}
-  onMouseEnter={() => setHoveredCard('clientTypes')}
+  onMouseEnter={() => setHoveredCard('comparison')}
   onMouseLeave={() => setHoveredCard(null)}
-  onClick={(e) => {
-    if (e.target.tagName !== 'BUTTON') {
-      const queryParams = new URLSearchParams();
-      if (selectedMonth !== null) {
-        queryParams.append('month', selectedMonth + 1);
-      }
-      if (year !== 'all') {
-        queryParams.append('year', year);
-      }
-      navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-    }
-  }}
 >
-  <div>Client Overview {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : ''}</div>
-  <div style={styles.chartContainer}>
-    <Bar
-      data={{
-        labels: ['Retail', 'Renewal', 'Agent', 'Renewal-Agent'],
-        datasets: [
-          {
-            label: 'Orders',
-            data: [
-              clientTypes.Retail?.count !== undefined ? clientTypes.Retail.count : (clientTypes.Retail || 0),
-              clientTypes.Renewal?.count !== undefined ? clientTypes.Renewal.count : (clientTypes.Renewal || 0),
-              clientTypes.Agent?.count !== undefined ? clientTypes.Agent.count : (clientTypes.Agent || 0),
-              clientTypes['Renewal-Agent']?.count !== undefined ? clientTypes['Renewal-Agent'].count : (clientTypes['Renewal-Agent'] || 0),
-            ],
-            backgroundColor: ['#36A2EB', '#4BC0C0', '#FFCE56', '#9966FF'],
-          }
-        ],
-      }}
-      options={{
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: function(context) {
-                const label = context.label || '';
-                const count = context.raw || 0;
-                let amount = 0;
-                
-                // Get the corresponding amount for this client type
-                if (label === 'Retail') amount = clientTypes.Retail?.amount || 0;
-                else if (label === 'Renewal') amount = clientTypes.Renewal?.amount || 0;
-                else if (label === 'Agent') amount = clientTypes.Agent?.amount || 0;
-                else if (label === 'Renewal-Agent') amount = clientTypes['Renewal-Agent']?.amount || 0;
-                
-                return [
-                  `Orders: ${count}`,
-                  `Amount: ₹${amount.toLocaleString('en-IN')}`
-                ];
-              }
-            }
-          }
-        },
-        onClick: (event, elements) => {
-          if (elements && elements.length > 0) {
-            const clientTypesList = ['Retail', 'Renewal', 'Agent', 'Renewal-Agent'];
-            const selectedType = clientTypesList[elements[0].index];
+  {/* Header */}
+  <div style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '16px'
+  }}>
+    <div style={{ fontSize: '15px', fontWeight: '600', color: '#1e293b' }}>
+      📊 Last 3 Months Comparison
+    </div>
 
-            const queryParams = new URLSearchParams();
-            queryParams.append('clientType', selectedType);
-
-            if (selectedMonth !== null) {
-              queryParams.append('month', selectedMonth + 1);
-            }
-            if (year !== 'all') {
-              queryParams.append('year', year);
-            }
-
-            navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-          }
-        }
-      }}
-    />
-  </div>
-  <div style={styles.number}>
-    {(
-      (clientTypes.Retail?.count !== undefined ? clientTypes.Retail.count : (clientTypes.Retail || 0)) +
-      (clientTypes.Renewal?.count !== undefined ? clientTypes.Renewal.count : (clientTypes.Renewal || 0)) +
-      (clientTypes.Agent?.count !== undefined ? clientTypes.Agent.count : (clientTypes.Agent || 0)) +
-      (clientTypes['Renewal-Agent']?.count !== undefined ? clientTypes['Renewal-Agent'].count : (clientTypes['Renewal-Agent'] || 0))
+    {comparisonData?.months && (
+      <div style={{
+        fontSize: '12px',
+        color: '#64748b',
+        background: '#f1f5f9',
+        padding: '4px 10px',
+        borderRadius: '16px'
+      }}>
+        {comparisonData.months[0]} - {comparisonData.months[comparisonData.months.length - 1]}
+      </div>
     )}
   </div>
-</div>
 
-{/* Agent Orders Chart - FIXED to show only one bar for selected month */}
-<div 
-  style={{
-    ...styles.card,
-    ...(hoveredCard === 'agentOrders' ? styles.cardHover : {})
-  }}
-  onMouseEnter={() => setHoveredCard('agentOrders')}
-  onMouseLeave={() => setHoveredCard(null)}
-  onClick={(e) => {
-    if (e.target.tagName !== 'BUTTON') {
-      const queryParams = new URLSearchParams();
-      queryParams.append('clientType', 'Agent');
-      if (selectedMonth !== null) {
-        queryParams.append('month', selectedMonth + 1);
-      }
-      if (year !== 'all') {
-        queryParams.append('year', year);
-      }
-      navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-    }
-  }}
->
-  <div>Agent Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : '(Monthly)'}</div>
-  {loading ? (
-    <div style={styles.noDataMessage}>Loading agent data...</div>
+  {comparisonLoading ? (
+    <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
+      Loading comparison data...
+    </div>
+  ) : !comparisonData || !comparisonData.months || comparisonData.months.length === 0 ? (
+    <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
+      No comparison data available
+    </div>
   ) : (
     <>
-      <div style={styles.chartContainer}>
+      {/* Stats Row */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        marginBottom: '20px',
+        background: '#f8fafc',
+        padding: '12px 16px',
+        borderRadius: '12px',
+        gap: '8px'
+      }}>
+        <div style={{ textAlign: 'center', flex: 1 }}>
+          <div style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>
+            {comparisonData.ordersData.reduce((a, b) => a + b, 0)}
+          </div>
+          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+            Total Orders
+          </div>
+        </div>
+
+        <div style={{ width: '1px', background: '#e2e8f0' }} />
+
+        <div style={{ textAlign: 'center', flex: 1 }}>
+          <div style={{ fontSize: '18px', fontWeight: '700', color: '#059669' }}>
+            {(() => {
+              const total = comparisonData.amountData.reduce((a, b) => a + b, 0);
+              if (total >= 10000000) {
+                return `₹${(total / 10000000).toFixed(2)}Cr`;
+              } else if (total >= 100000) {
+                return `₹${(total / 100000).toFixed(2)}L`;
+              } else {
+                return `₹${(total / 1000).toFixed(1)}K`;
+              }
+            })()}
+          </div>
+          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+            Total Revenue
+          </div>
+        </div>
+
+        <div style={{ width: '1px', background: '#e2e8f0' }} />
+
+        <div style={{ textAlign: 'center', flex: 1 }}>
+          <div style={{ fontSize: '18px', fontWeight: '700', color: '#d97706' }}>
+            {(comparisonData.ordersData.reduce((a, b) => a + b, 0) / 3).toFixed(1)}
+          </div>
+          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+            Monthly Avg
+          </div>
+        </div>
+      </div>
+
+      {/* BAR CHART - Actual values for bars, formatted labels */}
+      <div style={{ height: '160px', marginBottom: '16px' }}>
         <Bar
           data={{
-            labels: selectedMonth !== null
-              ? ['Agent Orders'] // Only show one bar for the selected month
-              : monthLabels,
+            labels: comparisonData.months,
             datasets: [
               {
-                label: 'Agent Orders',
-                data: selectedMonth !== null
-                  ? [clientTypes.Agent?.count || 0] // Single value for selected month
-                  : (() => {
-                      // For yearly view, create array with agent count in the selected month
-                      const monthlyData = Array(12).fill(0);
-                      if (selectedMonth !== null) {
-                        monthlyData[selectedMonth] = clientTypes.Agent?.count || 0;
-                      } else {
-                        // If no month selected, distribute across months based on available data
-                        // For now, put all in current month as placeholder
-                        const currentMonth = new Date().getMonth();
-                        monthlyData[currentMonth] = clientTypes.Agent?.count || 0;
-                      }
-                      return monthlyData;
-                    })(),
-                backgroundColor: 'rgba(255, 206, 86, 0.7)',
+                label: 'Orders',
+                data: comparisonData.ordersData,
+                backgroundColor: '#3b82f6',
+                borderRadius: 4,
+                barPercentage: 0.6,
+                categoryPercentage: 0.8,
+                yAxisID: 'y-orders'
+              },
+              {
+                label: 'Revenue',
+                data: comparisonData.amountData, // Use actual values for bar height
+                backgroundColor: '#f59e0b',
+                borderRadius: 4,
+                barPercentage: 0.6,
+                categoryPercentage: 0.8,
+                yAxisID: 'y-revenue'
               }
             ]
           }}
@@ -2321,68 +2529,198 @@ const [year, setYear] = useState(() => {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-              legend: { display: false },
+              legend: {
+                position: 'top',
+                labels: {
+                  boxWidth: 10,
+                  font: { size: 10 }
+                }
+              },
               tooltip: {
                 callbacks: {
-                  label: function(context) {
-                    const count = context.raw || 0;
-                    const amount = clientTypes.Agent?.amount || 0;
-                    return [
-                      `Orders: ${count}`,
-                      `Amount: ₹${amount.toLocaleString('en-IN')}`
-                    ];
+                  label: (context) => {
+                    const label = context.dataset.label;
+                    const value = context.raw;
+
+                    if (label === 'Revenue') {
+                      if (value >= 10000000) {
+                        return `Revenue: ₹${(value / 10000000).toFixed(2)} Cr`;
+                      } else if (value >= 100000) {
+                        return `Revenue: ₹${(value / 100000).toFixed(2)} L`;
+                      } else {
+                        return `Revenue: ₹${(value / 1000).toFixed(1)} K`;
+                      }
+                    }
+                    return `Orders: ${value}`;
                   }
                 }
               }
             },
+            scales: {
+              'y-orders': {
+                type: 'linear',
+                position: 'left',
+                beginAtZero: true,
+                grid: { color: '#e2e8f0', lineWidth: 0.5 },
+                title: { 
+                  display: true, 
+                  text: 'Orders',
+                  font: { size: 9 }
+                },
+                ticks: {
+                  font: { size: 8 },
+                  stepSize: 1
+                }
+              },
+              'y-revenue': {
+                type: 'linear',
+                position: 'right',
+                beginAtZero: true,
+                grid: { drawOnChartArea: false },
+                title: { 
+                  display: true, 
+                  text: 'Revenue (₹)',
+                  font: { size: 9 }
+                },
+                ticks: {
+                  font: { size: 8 },
+                  callback: function(value) {
+                    if (value >= 10000000) {
+                      return (value / 10000000).toFixed(1) + 'Cr';
+                    } else if (value >= 100000) {
+                      return (value / 100000).toFixed(1) + 'L';
+                    } else if (value >= 1000) {
+                      return (value / 1000).toFixed(1) + 'K';
+                    }
+                    return value;
+                  }
+                }
+              },
+              x: {
+                grid: { display: false },
+                ticks: {
+                  font: { size: 10, weight: '500' },
+                  color: '#334155'
+                }
+              }
+            },
             onClick: (_, elements) => {
-              if (elements && elements.length > 0) {
+              if (elements.length > 0) {
+                const index = elements[0].index;
+                const month = comparisonData.rawData[index];
                 const queryParams = new URLSearchParams();
-                queryParams.append('clientType', 'Agent');
-
-                if (selectedMonth === null) {
-                  const clickedMonth = elements[0].index + 1;
-                  queryParams.append('month', clickedMonth);
-                } else {
-                  queryParams.append('month', selectedMonth + 1);
-                }
-                if (year !== 'all') {
-                  queryParams.append('year', year);
-                }
-
+                queryParams.append('month', month.month + 1);
+                queryParams.append('year', month.year);
                 navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
               }
             }
           }}
         />
       </div>
-      <div style={styles.number}>
-        {clientTypes.Agent?.count || 0}
+
+      {/* Month Cards */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${comparisonData.months.length}, 1fr)`,
+        gap: '10px',
+        marginBottom: '12px'
+      }}>
+        {comparisonData.rawData.map((month, index) => {
+          const prevMonth = index > 0 ? comparisonData.rawData[index - 1] : null;
+          const orderDiff = prevMonth ? month.orders - prevMonth.orders : 0;
+          const colors = ['#3b82f6', '#f59e0b', '#10b981'];
+
+          return (
+            <div
+              key={index}
+              onClick={() => {
+                const queryParams = new URLSearchParams();
+                queryParams.append('month', month.month + 1);
+                queryParams.append('year', month.year);
+                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+              }}
+              style={{
+                background: index === 2 ? '#f0f9ff' : '#f8fafc',
+                padding: '10px 4px',
+                borderRadius: '8px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                border: index === 2 ? `1px solid ${colors[index]}` : '1px solid #e2e8f0',
+                transition: 'all 0.2s'
+              }}
+            >
+              <div style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b', marginBottom: '4px' }}>
+                {month.monthName}
+              </div>
+
+              <div style={{ fontSize: '18px', fontWeight: '700', color: colors[index] }}>
+                {month.orders}
+              </div>
+
+              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                {(() => {
+                  if (month.amount >= 10000000) {
+                    return `₹${(month.amount / 10000000).toFixed(2)}Cr`;
+                  } else if (month.amount >= 100000) {
+                    return `₹${(month.amount / 100000).toFixed(2)}L`;
+                  } else {
+                    return `₹${(month.amount / 1000).toFixed(1)}K`;
+                  }
+                })()}
+              </div>
+
+              {index > 0 && (
+                <div style={{
+                  fontSize: '10px',
+                  marginTop: '4px',
+                  padding: '2px 6px',
+                  borderRadius: '12px',
+                  display: 'inline-block',
+                  background: orderDiff > 0 ? '#dcfce7' : orderDiff < 0 ? '#fee2e2' : '#f1f5f9',
+                  color: orderDiff > 0 ? '#166534' : orderDiff < 0 ? '#991b1b' : '#475569',
+                  fontWeight: '500'
+                }}>
+                  {orderDiff > 0 ? '↑' : orderDiff < 0 ? '↓' : '→'} {Math.abs(orderDiff)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Growth Indicator */}
+      {comparisonData.rawData.length === 3 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: '#f1f5f9',
+          padding: '8px 12px',
+          borderRadius: '8px',
+          marginBottom: '8px'
+        }}>
+          <span style={{ fontSize: '12px', color: '#475569' }}>
+            Overall Growth:
+          </span>
+          <span style={{
+            fontSize: '14px',
+            fontWeight: '600',
+            color: comparisonData.rawData[2].orders > comparisonData.rawData[0].orders ? '#059669' : '#dc2626'
+          }}>
+            {comparisonData.rawData[2].orders > comparisonData.rawData[0].orders ? '↑' : '↓'}
+            {Math.abs(((comparisonData.rawData[2].orders - comparisonData.rawData[0].orders) / comparisonData.rawData[0].orders * 100)).toFixed(1)}%
+          </span>
+        </div>
+      )}
+
+      <div style={{ fontSize: '10px', color: '#94a3b8', textAlign: 'center' }}>
+        Click any month card or bar for details
       </div>
     </>
   )}
-  {selectedMonth !== null && (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        setSelectedMonth(null);
-      }}
-      style={{
-        padding: '5px 10px',
-        backgroundColor: '#003366',
-        color: 'white',
-        border: 'none',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        marginTop: '10px'
-      }}
-    >
-      View All Months
-    </button>
-  )}
-</div>
-                    {/* Prospective Clients Doughnut */}
-                    <div 
+</div>            
+
+ <div 
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'prospective' ? styles.cardHover : {})

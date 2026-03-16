@@ -550,5 +550,205 @@ router.get('/whatsapp/unread-count', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+// Add this new endpoint to dashboardRoutes.js
 
+// Comparison chart data for past 3 months
+router.get('/comparison-data', async (req, res) => {
+  try {
+    const { year, month, startDate, endDate } = req.query;
+    
+    // Parse year - handle 'all' case
+    let selectedYear = null;
+    if (year && year !== 'all' && year !== 'undefined' && year !== 'null') {
+      selectedYear = parseInt(year);
+    }
+    
+    const selectedMonth = month && month !== 'undefined' && month !== 'null' ? parseInt(month) - 1 : null;
+    
+    // Parse date range if provided
+    let rangeStartDate = null;
+    let rangeEndDate = null;
+    
+    if (startDate && endDate && startDate !== 'undefined' && endDate !== 'undefined') {
+      rangeStartDate = new Date(startDate);
+      rangeStartDate.setHours(0, 0, 0, 0);
+      
+      rangeEndDate = new Date(endDate);
+      rangeEndDate.setHours(23, 59, 59, 999);
+    }
+
+    // Determine the date range for comparison
+    // We want to show the last 3 months based on the filter
+    let comparisonMonths = [];
+    
+    if (rangeStartDate && rangeEndDate) {
+      // If date range is selected, show the months within that range
+      const start = new Date(rangeStartDate);
+      const end = new Date(rangeEndDate);
+      
+      // Get unique months between start and end
+      const months = new Set();
+      let currentDate = new Date(start);
+      
+      while (currentDate <= end) {
+        months.add(`${currentDate.getFullYear()}-${currentDate.getMonth()}`);
+        currentDate.setMonth(currentDate.getMonth() + 1);
+      }
+      
+      // Convert to array and sort
+      comparisonMonths = Array.from(months).map(m => {
+        const [y, mth] = m.split('-').map(Number);
+        return { year: y, month: mth };
+      }).sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.month - b.month;
+      });
+      
+      // Limit to last 3 months if more than 3
+      if (comparisonMonths.length > 3) {
+        comparisonMonths = comparisonMonths.slice(-3);
+      }
+    } else if (selectedYear && selectedMonth !== null) {
+      // If specific month is selected, show that month and previous 2
+      for (let i = 2; i >= 0; i--) {
+        let month = selectedMonth - i;
+        let year = selectedYear;
+        
+        while (month < 0) {
+          month += 12;
+          year -= 1;
+        }
+        
+        comparisonMonths.push({ year, month });
+      }
+    } else if (selectedYear) {
+      // If year is selected, show last 3 months of that year
+      // Or if it's current year, show recent months
+      const currentDate = new Date();
+      const targetYear = selectedYear;
+      
+      if (targetYear === currentDate.getFullYear()) {
+        // Current year - show last 3 months including current
+        for (let i = 2; i >= 0; i--) {
+          let month = currentDate.getMonth() - i;
+          let year = targetYear;
+          
+          while (month < 0) {
+            month += 12;
+            year -= 1;
+          }
+          
+          comparisonMonths.push({ year, month });
+        }
+      } else {
+        // Past year - show last 3 months of that year
+        for (let i = 2; i >= 0; i--) {
+          comparisonMonths.push({ year: targetYear, month: 11 - i });
+        }
+      }
+    } else {
+      // Default - show last 3 months including current
+      const currentDate = new Date();
+      for (let i = 2; i >= 0; i--) {
+        let month = currentDate.getMonth() - i;
+        let year = currentDate.getFullYear();
+        
+        while (month < 0) {
+          month += 12;
+          year -= 1;
+        }
+        
+        comparisonMonths.push({ year, month });
+      }
+    }
+
+    console.log('Comparison months:', comparisonMonths);
+
+    // Fetch all orders
+    const orders = await Order.find({}).lean();
+    
+    // Prepare result structure
+    const result = {
+      months: [],
+      ordersData: [],
+      amountData: [],
+      rawData: []
+    };
+
+    // Process each comparison month
+    comparisonMonths.forEach(({ year, month }) => {
+      const monthStart = new Date(year, month, 1);
+      monthStart.setHours(0, 0, 0, 0);
+      const monthEnd = new Date(year, month + 1, 1);
+      monthEnd.setHours(0, 0, 0, 0);
+      
+      // Filter orders for this month
+      const monthOrders = orders.filter(order => {
+        try {
+          let orderDate;
+          if (order.orderDate) {
+            if (typeof order.orderDate === 'string') {
+              if (order.orderDate.includes('-')) {
+                const parts = order.orderDate.split('-');
+                if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+                  orderDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                } else {
+                  orderDate = new Date(order.orderDate);
+                }
+              } else {
+                orderDate = new Date(order.orderDate);
+              }
+            } else {
+              orderDate = order.orderDate;
+            }
+          } else if (order.createdAt) {
+            orderDate = new Date(order.createdAt);
+          } else {
+            return false;
+          }
+          
+          if (!orderDate || isNaN(orderDate.getTime())) return false;
+          
+          return orderDate >= monthStart && orderDate < monthEnd;
+        } catch (e) {
+          return false;
+        }
+      });
+
+      // Calculate total amount for this month
+      let totalAmount = 0;
+      monthOrders.forEach(order => {
+        if (order.rows && Array.isArray(order.rows)) {
+          totalAmount += order.rows.reduce((sum, row) => {
+            return sum + (parseFloat(row.total) || 0);
+          }, 0);
+        }
+      });
+
+      // Add to result
+      result.months.push(`${monthLabels[month]} ${year}`);
+      result.ordersData.push(monthOrders.length);
+      result.amountData.push(totalAmount);
+      result.rawData.push({
+        year,
+        month,
+        orders: monthOrders.length,
+        amount: totalAmount,
+        monthName: `${monthLabels[month]} ${year}`
+      });
+    });
+
+    res.json(result);
+
+  } catch (err) {
+    console.error('Error in /comparison-data:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add this helper at the top of your routes file if not already present
+const monthLabels = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+];
 module.exports = router;

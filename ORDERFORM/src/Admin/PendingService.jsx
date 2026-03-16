@@ -17,16 +17,18 @@ function PendingService() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentDate = new Date();
   
-  // Initialize filters from URL or defaults (default to current month/year)
+  // Initialize filters from URL parameters (from AdminDashboard)
   const [year, setYear] = useState(() => {
     const urlYear = searchParams.get('year');
-    // If URL has a year, use it, otherwise use current year
+    // If URL has a year parameter, use it (could be 'all' or specific year)
+    // Otherwise default to current year
     return urlYear ? urlYear : currentDate.getFullYear().toString();
   });
   
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const urlMonth = searchParams.get('month');
-    // If URL has a month, use it, otherwise use current month
+    // If URL has a month parameter, use it (could be specific month)
+    // Otherwise default to current month
     return urlMonth ? urlMonth : (currentDate.getMonth() + 1).toString();
   });
   
@@ -78,6 +80,18 @@ function PendingService() {
     if (statusFromUrl) {
       setStatusFilter(statusFromUrl);
     }
+    
+    // Update year and month from URL when they change
+    const yearFromUrl = searchParams.get('year');
+    const monthFromUrl = searchParams.get('month');
+    
+    if (yearFromUrl !== null) {
+      setYear(yearFromUrl);
+    }
+    
+    if (monthFromUrl !== null) {
+      setSelectedMonth(monthFromUrl);
+    }
   }, [searchParams]);
 
   useEffect(() => {
@@ -91,12 +105,18 @@ function PendingService() {
   useEffect(() => {
     const params = new URLSearchParams();
     
+    // Only add year to URL if it's not 'all' or if it's explicitly set
     if (year && year !== 'all') {
       params.set('year', year.toString());
+    } else if (year === 'all') {
+      // Keep 'all' in URL to maintain the filter state
+      params.set('year', 'all');
     }
     
     if (selectedMonth && selectedMonth !== 'all') {
       params.set('month', selectedMonth.toString());
+    } else if (selectedMonth === 'all') {
+      params.set('month', 'all');
     }
     
     if (statusFilter && statusFilter !== 'all') {
@@ -141,7 +161,7 @@ function PendingService() {
 
     let result = [...orders];
 
-    // Apply year and month filters
+    // Apply year and month filters based on selection from AdminDashboard
     result = result.map(order => {
       const filteredRows = order.rows.filter(row => {
         try {
@@ -149,7 +169,7 @@ function PendingService() {
           
           if (isNaN(deliveryDate.getTime())) return false;
           
-          // Apply year filter (if not 'all')
+          // Apply year filter - if year is 'all', include all years
           if (year !== 'all') {
             const yearNum = parseInt(year);
             if (deliveryDate.getFullYear() !== yearNum) {
@@ -157,7 +177,7 @@ function PendingService() {
             }
           }
           
-          // Apply month filter (if not 'all')
+          // Apply month filter - if month is 'all', include all months
           if (selectedMonth !== 'all') {
             const monthNum = parseInt(selectedMonth) - 1; // Convert to 0-based
             if (deliveryDate.getMonth() !== monthNum) {
@@ -449,6 +469,11 @@ function PendingService() {
     const currentDate = new Date();
     setYear(currentDate.getFullYear().toString());
     setSelectedMonth((currentDate.getMonth() + 1).toString());
+    // Keep the URL updated
+    const params = new URLSearchParams(searchParams);
+    params.set('year', currentDate.getFullYear().toString());
+    params.set('month', (currentDate.getMonth() + 1).toString());
+    setSearchParams(params);
   };
 
   const clearAllFilters = () => {
@@ -456,6 +481,11 @@ function PendingService() {
     setSelectedMonth('all');
     setStatusFilter('all');
     setSearchTerm('');
+    // Update URL
+    const params = new URLSearchParams();
+    params.set('year', 'all');
+    params.set('month', 'all');
+    setSearchParams(params);
   };
 
   const getRemarkStyle = (remark = false) => {
@@ -592,8 +622,10 @@ function PendingService() {
     return left;
   };
 
-  // Responsive styles
+  // ... (keep all the styles object as it was)
+
   const styles = {
+    // ... (keep all the existing styles exactly as they were)
     container: {
       padding: isMobile ? '10px' : '20px',
       backgroundColor: '#f8f9fa',

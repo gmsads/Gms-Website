@@ -1,5 +1,20 @@
 const mongoose = require('mongoose');
 
+// Define the document file schema first
+const documentFileSchema = new mongoose.Schema({
+  filename: String,
+  originalName: String,
+  path: String,
+  size: Number,
+  mimetype: String,
+  uploadedAt: {
+    type: Date,
+    default: Date.now
+  },
+  cloudinaryId: String,
+  url: String
+});
+
 const executiveSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -11,7 +26,6 @@ const executiveSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
-
   password: {
     type: String,
     required: true
@@ -27,28 +41,31 @@ const executiveSchema = new mongoose.Schema({
     }
   },
   email: String,
-  guardianName : String,
+  guardianName: String,
   guardianContact: Number,
-
-  guardianContact : Number,
   aadhar: String,
   joiningDate: Date,
   experience: Number,
-    active: {
+  active: {
     type: Boolean,
     default: true
   },
-    resignationDate: String,
-    resignationReason: String,
-    rejoinDate: String,
-    imageUrl: String,
-    cloudinaryId: String,
-    documents: {
-  aadhar: { type: String, default: null },
-  pan: { type: String, default: null },
-  educational: { type: String, default: null },
-  experience: { type: String, default: null }
-}
+  resignationDate: String,
+  resignationReason: String,
+  rejoinDate: String,
+  imageUrl: String,
+  cloudinaryId: String,
+  documents: {
+    aadhar: { files: [documentFileSchema], default: { files: [] } },
+    pan: { files: [documentFileSchema], default: { files: [] } },
+    educational: { files: [documentFileSchema], default: { files: [] } },
+    experience: { files: [documentFileSchema], default: { files: [] } },
+    customDocuments: { 
+      type: Map, 
+      of: { files: [documentFileSchema] }, 
+      default: new Map() 
+    }
+  }
 });
 
 module.exports = mongoose.model('Executive', executiveSchema);
