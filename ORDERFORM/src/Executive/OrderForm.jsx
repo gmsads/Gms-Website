@@ -488,53 +488,73 @@ Global Marketing Solutions Team`;
       setIsSubmittingApproval(false);
     }
   };
+useEffect(() => {
+  const fetchAllExecutives = async () => {
+    try {
+      setLoadingExecutives(true);
+      
+      // Fetch regular executives
+      console.log("Fetching executives from /api/executives...");
+      const execsRes = await axios.get("/api/executives");
+      console.log("Executives received:", execsRes.data);
+      
+      const regularExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
 
-  useEffect(() => {
-    const fetchAllExecutives = async () => {
+      // Fetch field executives
+      let fieldExecutives = [];
       try {
-        setLoadingExecutives(true);
-
-        const execsRes = await axios.get("/api/executives");
-        const regularExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
-
         const fieldExecsRes = await axios.get("/api/field-executive/admin/executives");
-        const fieldExecutives = fieldExecsRes.data.map(name => ({ name, _id: name, type: 'field' }));
+        fieldExecutives = fieldExecsRes.data.map(name => ({ name, _id: name, type: 'field' }));
+      } catch (err) {
+        console.log("Field executives endpoint not available");
+      }
 
+      // Fetch service executives
+      let serviceExecutives = [];
+      try {
         const serviceExecsRes = await axios.get("/api/service-executives");
-        const serviceExecutives = serviceExecsRes.data.map(exec => ({
+        serviceExecutives = serviceExecsRes.data.map(exec => ({
           name: exec.name,
           _id: exec._id,
           type: 'service'
         }));
-
-        const allExecutives = [
-          ...regularExecs,
-          ...fieldExecutives,
-          ...serviceExecutives
-        ].filter((exec, index, self) =>
-          index === self.findIndex(e => e.name === exec.name)
-        ).sort((a, b) => a.name.localeCompare(b.name));
-
-        setSortedExecutives(allExecutives);
-
-        if (isAdmin) {
-          setSortedExecutives(allExecutives);
-        }
-
-        if (existingData?.executive && !isCreatingNew) {
-          setSelectedExecutive(existingData.executive);
-        }
-
-      } catch (error) {
-        console.error("Error fetching executives:", error);
-      } finally {
-        setLoadingExecutives(false);
+      } catch (err) {
+        console.log("Service executives endpoint not available");
       }
-    };
 
-    fetchAllExecutives();
-  }, [existingData, isAdmin, isCreatingNew]);
+      // Combine all executives and remove duplicates
+      const allExecutives = [
+        ...regularExecs,
+        ...fieldExecutives,
+        ...serviceExecutives
+      ].filter((exec, index, self) =>
+        index === self.findIndex(e => e.name === exec.name)
+      ).sort((a, b) => a.name.localeCompare(b.name));
 
+      console.log("All executives combined:", allExecutives);
+      setSortedExecutives(allExecutives);
+
+      // If there's an existing executive, select it
+      if (existingData?.executive && !isCreatingNew) {
+        setSelectedExecutive(existingData.executive);
+      }
+
+    } catch (error) {
+      console.error("Error fetching executives:", error);
+      // Try fallback to just regular executives
+      try {
+        const fallbackRes = await axios.get("/api/executives");
+        setSortedExecutives(fallbackRes.data);
+      } catch (fallbackErr) {
+        console.error("Fallback also failed:", fallbackErr);
+      }
+    } finally {
+      setLoadingExecutives(false);
+    }
+  };
+
+  fetchAllExecutives();
+}, [existingData, isAdmin, isCreatingNew]);
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
