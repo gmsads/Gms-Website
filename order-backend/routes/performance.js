@@ -5,7 +5,7 @@ const dayjs = require('dayjs');
 const Executive = require('../models/Executive');
 const ServiceExecutive = require('../models/ServiceExecutive');
 const Account = require('../models/Account');
-const FieldExecutive = require('../models/FieldExecutive'); // Use your existing model
+const FieldExecutive = require('../models/FieldExecutive');
 const ProspectiveClient = require('../models/ProspectiveClients');
 const Report = require('../models/ExecutiveRecord');
 const Target = require('../models/Target');
@@ -38,19 +38,19 @@ router.get('/overall', async (req, res) => {
 
     console.log(`Date range: ${startDate} to ${endDate}`);
 
-    // Fetch all executives from all types INCLUDING FIELD EXECUTIVES
+    // Fetch all executives from all types INCLUDING FIELD EXECUTIVES - USING .lean() TO FIX THE ERROR
     const [salesExecs, serviceExecs, accounts, fieldExecs] = await Promise.all([
-      Executive.find().select('name dateOfJoining'),
-      ServiceExecutive.find().select('name dateOfJoining'),
-      Account.find().select('name dateOfJoining'),
-      FieldExecutive.find().select('name joiningDate') // Use joiningDate instead of dateOfJoining
+      Executive.find().select('name dateOfJoining').lean(),
+      ServiceExecutive.find().select('name dateOfJoining').lean(),
+      Account.find().select('name dateOfJoining').lean(),
+      FieldExecutive.find().select('name joiningDate').lean() // Use joiningDate instead of dateOfJoining
     ]);
 
     const allExecutives = [
-      ...salesExecs.map(e => ({...e.toObject(), type: 'executive', dateOfJoining: e.dateOfJoining})),
-      ...serviceExecs.map(e => ({...e.toObject(), type: 'service', dateOfJoining: e.dateOfJoining})),
-      ...accounts.map(e => ({...e.toObject(), type: 'account', dateOfJoining: e.dateOfJoining})),
-      ...fieldExecs.map(e => ({...e.toObject(), type: 'field', dateOfJoining: e.joiningDate})) // Map joiningDate to dateOfJoining
+      ...salesExecs.map(e => ({...e, type: 'executive', dateOfJoining: e.dateOfJoining})),
+      ...serviceExecs.map(e => ({...e, type: 'service', dateOfJoining: e.dateOfJoining})),
+      ...accounts.map(e => ({...e, type: 'account', dateOfJoining: e.dateOfJoining})),
+      ...fieldExecs.map(e => ({...e, type: 'field', dateOfJoining: e.joiningDate})) // Map joiningDate to dateOfJoining
     ];
 
     const performanceData = [];
@@ -138,11 +138,13 @@ router.get('/overall', async (req, res) => {
 });
 
 // ========================================
-// GET performance data for an executive
+// GET performance data for an executive - FIXED WITH .lean()
 // ========================================
 router.get('/', async (req, res) => {
   try {
     const { executiveId, executiveType, startDate, endDate } = req.query;
+
+    console.log('Performance API called with:', { executiveId, executiveType, startDate, endDate });
 
     // Validate executiveId and executiveType
     if (!executiveId || !executiveType) {
@@ -152,26 +154,24 @@ router.get('/', async (req, res) => {
     let executive;
     let executiveName;
     
-    // Find executive based on type - ADD FIELD EXECUTIVE CASE
+    // Find executive based on type - USING .lean() TO FIX THE ERROR
     switch(executiveType) {
       case 'executive':
-        executive = await Executive.findById(executiveId);
+        executive = await Executive.findById(executiveId).lean();
         executiveName = executive?.name;
         break;
       case 'service':
-        executive = await ServiceExecutive.findById(executiveId);
+        executive = await ServiceExecutive.findById(executiveId).lean();
         executiveName = executive?.name;
         break;
       case 'account':
-        executive = await Account.findById(executiveId);
+        executive = await Account.findById(executiveId).lean();
         executiveName = executive?.name;
         break;
-      case 'field': // ADD FIELD EXECUTIVE CASE
-        // For field executives, find by _id
-        executive = await FieldExecutive.findById(executiveId);
+      case 'field':
+        executive = await FieldExecutive.findById(executiveId).lean();
         if (!executive) {
-          // Try to find by name if ID lookup fails
-          executive = await FieldExecutive.findOne({ name: executiveId });
+          executive = await FieldExecutive.findOne({ name: executiveId }).lean();
         }
         executiveName = executive?.name || executiveId;
         break;
@@ -188,7 +188,7 @@ router.get('/', async (req, res) => {
       executive = {
         _id: executiveId,
         name: executiveName,
-        dateOfJoining: new Date('2024-01-01') // Default date
+        dateOfJoining: new Date('2024-01-01')
       };
     } else if (executiveType === 'field' && executive) {
       // For field executives, map joiningDate to dateOfJoining
@@ -311,7 +311,7 @@ router.get('/', async (req, res) => {
       }
     });
 
-    // Handle prospects - create entries and count in ONE LOOP (FIXED)
+    // Handle prospects - create entries and count
     prospects.forEach(prospect => {
       const prospectDate = new Date(prospect.createdAt);
       const key = getMonthYearKey(prospectDate);
@@ -331,7 +331,6 @@ router.get('/', async (req, res) => {
         };
       }
       
-      // Count each prospect only ONCE
       monthlyTargets[key].prospects += 1;
     });
 
@@ -370,7 +369,7 @@ router.get('/', async (req, res) => {
     detailedMonthlyData.sort((a, b) => {
       const dateA = new Date(a.month);
       const dateB = new Date(b.month);
-      return dateB - dateA; // Descending order (newest first)
+      return dateB - dateA;
     });
 
     // Build response
@@ -406,22 +405,22 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Executive dropdown list - update to include all types INCLUDING FIELD
+// Executive dropdown list - update to include all types INCLUDING FIELD - FIXED WITH .lean()
 router.get('/executives', async (_req, res) => {
   try {
     const [salesExecs, serviceExecs, accounts, fieldExecs] = await Promise.all([
-      Executive.find().select('name dateOfJoining'),
-      ServiceExecutive.find().select('name dateOfJoining'),
-      Account.find().select('name dateOfJoining'),
-      FieldExecutive.find().select('name joiningDate') // Select joiningDate for field executives
+      Executive.find().select('name dateOfJoining').lean(),
+      ServiceExecutive.find().select('name dateOfJoining').lean(),
+      Account.find().select('name dateOfJoining').lean(),
+      FieldExecutive.find().select('name joiningDate').lean() // Select joiningDate for field executives
     ]);
     
     // Map all executives to a consistent format
     const allExecutives = [
-      ...salesExecs.map(e => ({...e.toObject(), type: 'executive', dateOfJoining: e.dateOfJoining})),
-      ...serviceExecs.map(e => ({...e.toObject(), type: 'service', dateOfJoining: e.dateOfJoining})),
-      ...accounts.map(e => ({...e.toObject(), type: 'account', dateOfJoining: e.dateOfJoining})),
-      ...fieldExecs.map(e => ({...e.toObject(), type: 'field', dateOfJoining: e.joiningDate})) // Map joiningDate to dateOfJoining
+      ...salesExecs.map(e => ({...e, type: 'executive', dateOfJoining: e.dateOfJoining})),
+      ...serviceExecs.map(e => ({...e, type: 'service', dateOfJoining: e.dateOfJoining})),
+      ...accounts.map(e => ({...e, type: 'account', dateOfJoining: e.dateOfJoining})),
+      ...fieldExecs.map(e => ({...e, type: 'field', dateOfJoining: e.joiningDate})) // Map joiningDate to dateOfJoining
     ];
     
     res.json(allExecutives);
@@ -432,23 +431,23 @@ router.get('/executives', async (_req, res) => {
 });
 
 // ========================================
-// GET overall performance for all time (when no month/year filters)
+// GET overall performance for all time (when no month/year filters) - FIXED WITH .lean()
 // ========================================
 router.get('/overall/all-time', async (req, res) => {
   try {
-    // Fetch all executives from all types INCLUDING FIELD
+    // Fetch all executives from all types INCLUDING FIELD - USING .lean()
     const [salesExecs, serviceExecs, accounts, fieldExecs] = await Promise.all([
-      Executive.find().select('name dateOfJoining'),
-      ServiceExecutive.find().select('name dateOfJoining'),
-      Account.find().select('name dateOfJoining'),
-      FieldExecutive.find().select('name joiningDate') // Select joiningDate
+      Executive.find().select('name dateOfJoining').lean(),
+      ServiceExecutive.find().select('name dateOfJoining').lean(),
+      Account.find().select('name dateOfJoining').lean(),
+      FieldExecutive.find().select('name joiningDate').lean() // Select joiningDate
     ]);
 
     const allExecutives = [
-      ...salesExecs.map(e => ({...e.toObject(), type: 'executive', dateOfJoining: e.dateOfJoining})),
-      ...serviceExecs.map(e => ({...e.toObject(), type: 'service', dateOfJoining: e.dateOfJoining})),
-      ...accounts.map(e => ({...e.toObject(), type: 'account', dateOfJoining: e.dateOfJoining})),
-      ...fieldExecs.map(e => ({...e.toObject(), type: 'field', dateOfJoining: e.joiningDate}))
+      ...salesExecs.map(e => ({...e, type: 'executive', dateOfJoining: e.dateOfJoining})),
+      ...serviceExecs.map(e => ({...e, type: 'service', dateOfJoining: e.dateOfJoining})),
+      ...accounts.map(e => ({...e, type: 'account', dateOfJoining: e.dateOfJoining})),
+      ...fieldExecs.map(e => ({...e, type: 'field', dateOfJoining: e.joiningDate}))
     ];
 
     const performanceData = [];
