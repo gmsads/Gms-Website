@@ -53,7 +53,7 @@ router.post("/login", async (req, res) => {
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean();
     
     if (serviceManager) {
       console.log('Service Manager found:', {
@@ -61,7 +61,6 @@ router.post("/login", async (req, res) => {
         active: serviceManager.active
       });
       
-      // Check if active is false (explicitly check for false)
       if (serviceManager.active === false) {
         console.log('Service Manager is inactive, denying login');
         return res.status(401).json({ 
@@ -85,7 +84,7 @@ router.post("/login", async (req, res) => {
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean();
     
     if (account) {
       console.log('Account found:', {
@@ -112,7 +111,7 @@ router.post("/login", async (req, res) => {
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean();
     
     if (serviceExecutive) {
       if (serviceExecutive.active === false) {
@@ -135,7 +134,7 @@ router.post("/login", async (req, res) => {
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean();
     
     if (itStaff) {
       if (itStaff.active === false) {
@@ -158,7 +157,7 @@ router.post("/login", async (req, res) => {
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean();
     
     if (salesManager) {
       if (salesManager.active === false) {
@@ -181,7 +180,7 @@ router.post("/login", async (req, res) => {
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean();
     
     if (digitalMarketing) {
       if (digitalMarketing.active === false) {
@@ -204,7 +203,7 @@ router.post("/login", async (req, res) => {
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean();
     
     if (agent) {
       if (agent.active === false) {
@@ -227,7 +226,7 @@ router.post("/login", async (req, res) => {
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean();
     
     if (hr) {
       if (hr.active === false) {
@@ -250,7 +249,7 @@ router.post("/login", async (req, res) => {
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean();
     
     if (clientService) {
       if (clientService.active === false) {
@@ -266,14 +265,14 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Check Executive
+    // Check Executive - THIS IS THE FIXED PART WITH .lean()
     const executive = await Executive.findOne({
       $or: [
         { name: new RegExp(`^${name.trim()}$`, "i") },
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean(); // ← ADD .lean() HERE
     
     if (executive) {
       if (executive.active === false) {
@@ -296,7 +295,7 @@ router.post("/login", async (req, res) => {
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean();
     
     if (admin) {
       if (admin.active === false) {
@@ -315,7 +314,7 @@ router.post("/login", async (req, res) => {
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean();
     
     if (designer) {
       if (designer.active === false) {
@@ -334,7 +333,7 @@ router.post("/login", async (req, res) => {
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean();
     
     if (vendor) {
       if (vendor.active === false) {
@@ -357,7 +356,7 @@ router.post("/login", async (req, res) => {
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean();
     
     if (fieldExecutive) {
       if (fieldExecutive.active === false) {
@@ -380,7 +379,7 @@ router.post("/login", async (req, res) => {
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    });
+    }).lean();
     
     if (unitEmployee) {
       if (unitEmployee.active === false) {
