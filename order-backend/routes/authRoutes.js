@@ -38,7 +38,8 @@ const FieldExecutive = require("../models/FieldExecutive");
 const Unit = require("../models/Unit");
 const Agent = require("../models/Agent");
 const HR = require("../models/HR");
-
+// At the top with other model imports, add this line:
+const VideoEditor = require("../models/VideoEditor");
 // ✅ Login route for Executive, Admin, Designer, Account, Service
 router.post("/login", async (req, res) => {
   const { name, password } = req.body;
@@ -241,6 +242,27 @@ router.post("/login", async (req, res) => {
         name: hr.name,
       });
     }
+ const videoEditor = await VideoEditor.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean();
+    
+    if (videoEditor) {
+      if (videoEditor.active === false) {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Account is inactive. Please contact administrator." 
+        });
+      }
+      return res.json({
+        success: true,
+        role: "Video Editor",
+        name: videoEditor.name,
+      });
+    }
 
     // Check Client service
     const clientService = await ClientService.findOne({
@@ -403,7 +425,55 @@ router.post("/login", async (req, res) => {
     return res.status(500).json({ success: false, message: "Server Error" });
   }
 });
+// ✅ Route to add Video Editor - ADD THIS ROUTE
+router.post("/add-video-editor", async (req, res) => {
+  const {
+    username,
+    name,
+    phone,
+    password,
+    email,
+    guardianName,
+    guardianContact,
+    aadhar,
+    joiningDate,
+    experience,
+    active
+  } = req.body;
 
+  try {
+    const existing = await VideoEditor.findOne({
+      $or: [{ username }, { name }],
+    });
+    if (existing) {
+      return res.status(400).json({
+        error:
+          existing.username === username
+            ? "Username already exists"
+            : "Name already exists",
+      });
+    }
+
+    const newVideoEditor = new VideoEditor({
+      username,
+      name,
+      password,
+      phone,
+      email,
+      guardianName,
+      guardianContact,
+      aadhar,
+      joiningDate,
+      experience,
+      active: active !== false
+    });
+    await newVideoEditor.save();
+    res.status(201).json({ message: "Video Editor added successfully" });
+  } catch (err) {
+    console.error("Error saving Video Editor:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 // ✅ Route to add an Executive (with username)
 router.post("/add-executive", async (req, res) => {
   const { username, name, password, phone, email,
@@ -983,7 +1053,8 @@ router.get("/employees", async (req, res) => {
       fieldExecutives,
       agents,
       vendors,
-      hrs
+      hrs,
+           videoEditors  // ADD VIDEO EDITOR
     ] = await Promise.all([
       Executive.find({}).lean(),
       Admin.find({}).lean(),
@@ -999,7 +1070,8 @@ router.get("/employees", async (req, res) => {
       FieldExecutive.find({}).lean(),
       Agent.find({}).lean(),
       Vendor.find({}).lean(),
-      HR.find({}).lean()
+      HR.find({}).lean(),
+        VideoEditor.find({}).lean()  // ADD VIDEO EDITOR
     ]);
 
     const employeeCategories = {
@@ -1017,7 +1089,8 @@ router.get("/employees", async (req, res) => {
       FieldExecutive: fieldExecutives,
       Agent: agents,
       Vendor: vendors,
-      HR: hrs
+      HR: hrs,
+          VideoEditor: videoEditors  // ADD VIDEO EDITOR
     };
 
     res.json(employeeCategories);
@@ -1047,7 +1120,8 @@ router.get("/user-profile", async (req, res) => {
       { model: FieldExecutive, name: "FieldExecutive" },
       { model: Agent, name: "Agent" },
       { model: Vendor, name: "Vendor" },
-      { model: HR, name: "HR" }
+      { model: HR, name: "HR" },
+        { model: VideoEditor, name: "VideoEditor" }  // ADD VIDEO EDITOR
     ];
 
     let user = null;
@@ -1109,7 +1183,8 @@ router.put("/update-profile", async (req, res) => {
       FieldExecutive,
       Agent,
       Vendor,
-      HR
+      HR,
+      VideoEditor  // ADD VIDEO EDITOR
     };
 
     // Find current user

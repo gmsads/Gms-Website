@@ -20,8 +20,9 @@ const Vendor = require('../models/Vendor');
 const Agent = require('../models/Agent');
 const FieldExecutive = require('../models/FieldExecutive');
 const Unit = require('../models/Unit');
+const VideoEditor = require('../models/VideoEditor'); // ADD VIDEO EDITOR MODEL
 
-// Map of role to model
+// Map of role to model - ADD VideoEditor to the map
 const modelMap = {
   'Executive': Executive,
   'Admin': Admin,
@@ -37,7 +38,8 @@ const modelMap = {
   'Vendor': Vendor,
   'Agent': Agent,
   'FieldExecutive': FieldExecutive,
-  'Unit': Unit
+  'Unit': Unit,
+  'VideoEditor': VideoEditor  // ADD VIDEO EDITOR HERE
 };
 
 // Log to verify all models are loaded
@@ -58,6 +60,172 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
+// ==================== GET EMPLOYEE DOCUMENTS ====================
+// Make sure this route is defined BEFORE the upload route
+router.get('/documents/:name', async (req, res) => {
+  try {
+    const { name } = req.params;
+    console.log(`🔍 Fetching documents for employee: ${name}`);
+    console.log(`🔍 Decoded name: ${decodeURIComponent(name)}`);
+
+    let foundEmployee = null;
+    let foundRole = null;
+
+    // Search in all models
+    for (const [roleName, model] of Object.entries(modelMap)) {
+      try {
+        // Try multiple search strategies
+        let emp = await model.findOne({
+          name: { $regex: new RegExp('^' + decodeURIComponent(name) + '$', 'i') }
+        });
+        
+        if (!emp) {
+          emp = await model.findOne({
+            name: decodeURIComponent(name)
+          });
+        }
+        
+        if (!emp) {
+          emp = await model.findOne({
+            username: { $regex: new RegExp('^' + decodeURIComponent(name) + '$', 'i') }
+          });
+        }
+
+        if (emp) {
+          foundEmployee = emp;
+          foundRole = roleName;
+          console.log(`✅ Found employee in model: ${roleName}, name: ${emp.name}`);
+          break;
+        }
+      } catch (err) {
+        console.error(`Error searching in ${roleName}:`, err.message);
+      }
+    }
+
+    if (!foundEmployee) {
+      console.error('❌ Employee not found with name:', name);
+      return res.status(404).json({
+        success: false,
+        message: `Employee not found with name: ${name}`
+      });
+    }
+
+    // Get role-specific document requirements
+    const roleDocumentRequirements = {
+      'Executive': ['aadhar', 'pan', 'educational', 'experience'],
+      'Admin': ['aadhar', 'pan', 'educational'],
+      'Designer': ['aadhar', 'pan', 'educational', 'portfolio'],
+      'Account': ['aadhar', 'pan', 'educational', 'certification'],
+      'ServiceExecutive': ['aadhar', 'pan', 'educational', 'drivingLicense'],
+      'ServiceManager': ['aadhar', 'pan', 'educational', 'experience'],
+      'SalesManager': ['aadhar', 'pan', 'educational'],
+      'ITTeam': ['aadhar', 'pan', 'educational', 'certification'],
+      'DigitalMarketing': ['aadhar', 'pan', 'educational', 'portfolio'],
+      'ClientService': ['aadhar', 'pan', 'educational'],
+      'HR': ['aadhar', 'pan', 'educational', 'certification'],
+      'Vendor': ['aadhar', 'pan', 'gstCertificate'],
+      'Agent': ['aadhar', 'pan'],
+      'FieldExecutive': ['aadhar', 'pan', 'drivingLicense'],
+      'Unit': ['aadhar', 'pan', 'educational'],
+      'VideoEditor': ['aadhar', 'pan', 'educational', 'portfolio']  // ADD VIDEO EDITOR REQUIREMENTS
+    };
+
+    const requiredDocs = roleDocumentRequirements[foundRole] || ['aadhar', 'pan'];
+
+    // Ensure documents have proper structure
+    const documents = foundEmployee.documents || {};
+
+    const ensureDocumentStructure = (doc) => {
+      if (!doc) return { files: [] };
+      if (typeof doc === 'string') return { files: [] };
+      if (doc.files && Array.isArray(doc.files)) return doc;
+      return { files: [] };
+    };
+
+    // Handle custom documents
+    let customDocsObject = {};
+    
+    if (documents.customDocuments) {
+      console.log('Raw customDocuments from DB:', documents.customDocuments);
+      
+      // Handle as Map
+      if (documents.customDocuments instanceof Map) {
+        documents.customDocuments.forEach((value, key) => {
+          if (value && typeof value === 'object') {
+            if (value.files && Array.isArray(value.files)) {
+              customDocsObject[key] = {
+                files: value.files.map(file => ({
+                  url: file.url || '',
+                  cloudinaryId: file.cloudinaryId || '',
+                  filename: file.filename || '',
+                  notes: file.notes || key,
+                  uploadedAt: file.uploadedAt || new Date()
+                }))
+              };
+            } else {
+              customDocsObject[key] = { files: [] };
+            }
+          } else {
+            customDocsObject[key] = { files: [] };
+          }
+        });
+      } 
+      // Handle as plain object
+      else if (typeof documents.customDocuments === 'object' && documents.customDocuments !== null) {
+        Object.entries(documents.customDocuments).forEach(([key, value]) => {
+          if (value && typeof value === 'object') {
+            if (value.files && Array.isArray(value.files)) {
+              customDocsObject[key] = {
+                files: value.files.map(file => ({
+                  url: file.url || '',
+                  cloudinaryId: file.cloudinaryId || '',
+                  filename: file.filename || '',
+                  notes: file.notes || key,
+                  uploadedAt: file.uploadedAt || new Date()
+                }))
+              };
+            } else {
+              customDocsObject[key] = { files: [] };
+            }
+          } else {
+            customDocsObject[key] = { files: [] };
+          }
+        });
+      }
+    }
+
+    console.log('Processed custom documents:', customDocsObject);
+
+    // Prepare response
+    const documentsForResponse = {
+      aadhar: ensureDocumentStructure(documents.aadhar),
+      pan: ensureDocumentStructure(documents.pan),
+      educational: ensureDocumentStructure(documents.educational),
+      experience: ensureDocumentStructure(documents.experience),
+      customDocuments: customDocsObject
+    };
+
+    console.log(`📄 Educational documents count: ${documentsForResponse.educational.files.length}`);
+    console.log(`📄 Experience documents count: ${documentsForResponse.experience.files.length}`);
+    console.log(`📄 Found ${Object.keys(documentsForResponse.customDocuments).length} custom document types`);
+
+    res.json({
+      success: true,
+      documents: documentsForResponse,
+      requiredDocuments: requiredDocs,
+      role: foundRole
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching documents:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+});
+
 // ==================== UPLOAD DOCUMENTS ====================
 router.post('/upload-documents', (req, res) => {
   upload.fields([
@@ -65,8 +233,8 @@ router.post('/upload-documents', (req, res) => {
     { name: 'aadhar_back', maxCount: 1 },
     { name: 'pan_front', maxCount: 1 },
     { name: 'pan_back', maxCount: 1 },
-    { name: 'educational', maxCount: 10 }, // Increased to 10
-    { name: 'experience', maxCount: 10 },   // Increased to 10
+    { name: 'educational', maxCount: 10 },
+    { name: 'experience', maxCount: 10 },
     { name: 'customDocument', maxCount: 20 }
   ])(req, res, async (err) => {
     try {
@@ -97,7 +265,6 @@ router.post('/upload-documents', (req, res) => {
       let Model = null;
       let foundRole = null;
 
-      // Try exact match first, then case-insensitive, then trimmed
       for (const [roleName, model] of Object.entries(modelMap)) {
         try {
           // Try exact match
@@ -114,6 +281,13 @@ router.post('/upload-documents', (req, res) => {
           if (!emp) {
             emp = await model.findOne({
               name: { $regex: new RegExp('^' + name.trim() + '$', 'i') }
+            });
+          }
+
+          // Try with username
+          if (!emp) {
+            emp = await model.findOne({
+              username: { $regex: new RegExp('^' + name + '$', 'i') }
             });
           }
 
@@ -157,7 +331,6 @@ router.post('/upload-documents', (req, res) => {
       if (!documents.customDocuments) {
         documents.customDocuments = new Map();
       } else if (!(documents.customDocuments instanceof Map)) {
-        // Convert plain object to Map if needed
         try {
           const oldDocs = documents.customDocuments;
           documents.customDocuments = new Map();
@@ -257,19 +430,16 @@ router.post('/upload-documents', (req, res) => {
       if (req.files && req.files.customDocument && req.files.customDocument.length > 0 && customDocName) {
         console.log(`Processing Custom Document: ${customDocName} with ${req.files.customDocument.length} file(s)`);
 
-        // Get or create the custom document type
         let customDocType = documents.customDocuments.get(customDocName);
         if (!customDocType) {
           customDocType = { files: [] };
           documents.customDocuments.set(customDocName, customDocType);
         }
 
-        // Ensure files array exists
         if (!customDocType.files) {
           customDocType.files = [];
         }
 
-        // Add each file
         req.files.customDocument.forEach((file, index) => {
           console.log(`Adding file ${index + 1}:`, file.originalname);
 
@@ -333,156 +503,6 @@ router.post('/upload-documents', (req, res) => {
   });
 });
 
-// ==================== GET EMPLOYEE DOCUMENTS ====================
-router.get('/documents/:name', async (req, res) => {
-  try {
-    const { name } = req.params;
-    console.log(`Fetching documents for employee: ${name}`);
-
-    let foundEmployee = null;
-    let foundRole = null;
-
-    // Search in all models
-    for (const [roleName, model] of Object.entries(modelMap)) {
-      try {
-        const emp = await model.findOne({
-          name: { $regex: new RegExp('^' + name + '$', 'i') }
-        });
-
-        if (emp) {
-          foundEmployee = emp;
-          foundRole = roleName;
-          console.log(`✅ Found employee in model: ${roleName}`);
-          break;
-        }
-      } catch (err) {
-        console.error(`Error searching in ${roleName}:`, err.message);
-      }
-    }
-
-    if (!foundEmployee) {
-      console.error('❌ Employee not found:', name);
-      return res.status(404).json({
-        success: false,
-        message: 'Employee not found'
-      });
-    }
-
-    // Get role-specific document requirements
-    const roleDocumentRequirements = {
-      'Executive': ['aadhar', 'pan', 'educational', 'experience'],
-      'Admin': ['aadhar', 'pan', 'educational'],
-      'Designer': ['aadhar', 'pan', 'educational', 'portfolio'],
-      'Account': ['aadhar', 'pan', 'educational', 'certification'],
-      'ServiceExecutive': ['aadhar', 'pan', 'educational', 'drivingLicense'],
-      'ServiceManager': ['aadhar', 'pan', 'educational', 'experience'],
-      'SalesManager': ['aadhar', 'pan', 'educational'],
-      'ITTeam': ['aadhar', 'pan', 'educational', 'certification'],
-      'DigitalMarketing': ['aadhar', 'pan', 'educational', 'portfolio'],
-      'ClientService': ['aadhar', 'pan', 'educational'],
-      'HR': ['aadhar', 'pan', 'educational', 'certification'],
-      'Vendor': ['aadhar', 'pan', 'gstCertificate'],
-      'Agent': ['aadhar', 'pan'],
-      'FieldExecutive': ['aadhar', 'pan', 'drivingLicense'],
-      'Unit': ['aadhar', 'pan', 'educational']
-    };
-
-    const requiredDocs = roleDocumentRequirements[foundRole] || ['aadhar', 'pan'];
-
-    // Ensure documents have proper structure
-    const documents = foundEmployee.documents || {};
-
-    const ensureDocumentStructure = (doc) => {
-      if (!doc) return { files: [] };
-      if (typeof doc === 'string') return { files: [] };
-      if (doc.files && Array.isArray(doc.files)) return doc;
-      return { files: [] };
-    };
-
-    // Handle custom documents
-    let customDocsObject = {};
-    
-    if (documents.customDocuments) {
-      console.log('Raw customDocuments from DB:', documents.customDocuments);
-      
-      // Handle as Map
-      if (documents.customDocuments instanceof Map) {
-        documents.customDocuments.forEach((value, key) => {
-          if (value && typeof value === 'object') {
-            if (value.files && Array.isArray(value.files)) {
-              customDocsObject[key] = {
-                files: value.files.map(file => ({
-                  url: file.url || '',
-                  cloudinaryId: file.cloudinaryId || '',
-                  filename: file.filename || '',
-                  notes: file.notes || key,
-                  uploadedAt: file.uploadedAt || new Date()
-                }))
-              };
-            } else {
-              customDocsObject[key] = { files: [] };
-            }
-          } else {
-            customDocsObject[key] = { files: [] };
-          }
-        });
-      } 
-      // Handle as plain object
-      else if (typeof documents.customDocuments === 'object' && documents.customDocuments !== null) {
-        Object.entries(documents.customDocuments).forEach(([key, value]) => {
-          if (value && typeof value === 'object') {
-            if (value.files && Array.isArray(value.files)) {
-              customDocsObject[key] = {
-                files: value.files.map(file => ({
-                  url: file.url || '',
-                  cloudinaryId: file.cloudinaryId || '',
-                  filename: file.filename || '',
-                  notes: file.notes || key,
-                  uploadedAt: file.uploadedAt || new Date()
-                }))
-              };
-            } else {
-              customDocsObject[key] = { files: [] };
-            }
-          } else {
-            customDocsObject[key] = { files: [] };
-          }
-        });
-      }
-    }
-
-    console.log('Processed custom documents:', customDocsObject);
-
-    // Prepare response
-    const documentsForResponse = {
-      aadhar: ensureDocumentStructure(documents.aadhar),
-      pan: ensureDocumentStructure(documents.pan),
-      educational: ensureDocumentStructure(documents.educational),
-      experience: ensureDocumentStructure(documents.experience),
-      customDocuments: customDocsObject
-    };
-
-    console.log(`Educational documents count: ${documentsForResponse.educational.files.length}`);
-    console.log(`Experience documents count: ${documentsForResponse.experience.files.length}`);
-    console.log(`Found ${Object.keys(documentsForResponse.customDocuments).length} custom document types`);
-
-    res.json({
-      success: true,
-      documents: documentsForResponse,
-      requiredDocuments: requiredDocs,
-      role: foundRole
-    });
-
-  } catch (error) {
-    console.error('Error fetching documents:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
-  }
-});
-
 // ==================== DELETE DOCUMENT ====================
 router.delete('/documents/:name/:docType/:fileIndex', async (req, res) => {
   try {
@@ -521,12 +541,10 @@ router.delete('/documents/:name/:docType/:fileIndex', async (req, res) => {
       console.log(`Deleting custom document: ${customName}, index: ${index}`);
 
       if (documents.customDocuments) {
-        // Handle as Map
         if (documents.customDocuments instanceof Map) {
           if (documents.customDocuments.has(customName)) {
             const customDoc = documents.customDocuments.get(customName);
             if (customDoc.files && customDoc.files[index]) {
-              // Optional: Delete from Cloudinary
               if (customDoc.files[index].cloudinaryId) {
                 try {
                   await cloudinary.uploader.destroy(customDoc.files[index].cloudinaryId);
@@ -535,21 +553,16 @@ router.delete('/documents/:name/:docType/:fileIndex', async (req, res) => {
                   console.error('Cloudinary delete error:', cloudinaryError);
                 }
               }
-
               customDoc.files.splice(index, 1);
               if (customDoc.files.length === 0) {
                 documents.customDocuments.delete(customName);
               }
             }
           }
-        }
-        // Handle as plain object
-        else if (typeof documents.customDocuments === 'object') {
+        } else if (typeof documents.customDocuments === 'object') {
           if (documents.customDocuments[customName]) {
             if (documents.customDocuments[customName].files &&
               documents.customDocuments[customName].files[index]) {
-
-              // Delete from Cloudinary
               if (documents.customDocuments[customName].files[index].cloudinaryId) {
                 try {
                   await cloudinary.uploader.destroy(documents.customDocuments[customName].files[index].cloudinaryId);
@@ -557,7 +570,6 @@ router.delete('/documents/:name/:docType/:fileIndex', async (req, res) => {
                   console.error('Cloudinary delete error:', cloudinaryError);
                 }
               }
-
               documents.customDocuments[customName].files.splice(index, 1);
               if (documents.customDocuments[customName].files.length === 0) {
                 delete documents.customDocuments[customName];
@@ -566,11 +578,8 @@ router.delete('/documents/:name/:docType/:fileIndex', async (req, res) => {
           }
         }
       }
-    }
-    // Handle regular documents (aadhar, pan, educational, experience)
-    else {
+    } else {
       if (documents[docType] && documents[docType].files && documents[docType].files[index]) {
-        // Optional: Delete from Cloudinary
         if (documents[docType].files[index].cloudinaryId) {
           try {
             await cloudinary.uploader.destroy(documents[docType].files[index].cloudinaryId);
@@ -579,12 +588,10 @@ router.delete('/documents/:name/:docType/:fileIndex', async (req, res) => {
             console.error('Cloudinary delete error:', cloudinaryError);
           }
         }
-
         documents[docType].files.splice(index, 1);
       }
     }
 
-    // Update employee in database
     await Model.findOneAndUpdate(
       { _id: foundEmployee._id },
       { $set: { documents } }
@@ -607,7 +614,7 @@ router.delete('/documents/:name/:docType/:fileIndex', async (req, res) => {
   }
 });
 
-// ==================== GET ALL EMPLOYEES (for reference) ====================
+// ==================== GET ALL EMPLOYEES ====================
 router.get('/', async (req, res) => {
   try {
     const allEmployees = {};

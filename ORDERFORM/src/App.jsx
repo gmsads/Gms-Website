@@ -78,7 +78,9 @@ import SalaryComponent from './Admin/SalaryComponent.jsx';
 import AttendanceComponent from './Admin/AttendanceComponent.jsx';
 import ViewLeave from './Admin/AdminAllLeaves.jsx';
 import DailyHrDashbaord from './HR/DailyHRReport.jsx';
-import ViewHRReports from './Admin/ViewHRReports.jsx'
+import ViewHRReports from './Admin/ViewHRReports.jsx';
+// Import Video Editor Dashboard
+import VideoEditorDashboard from './VideoEditors/VideoEditorDashboard.jsx'; // ADD VIDEO EDITOR IMPORT
 
 // ============ WRAPPER COMPONENT FOR HR ATTENDANCE ============
 const AttendanceWithEmployees = () => {
@@ -135,6 +137,17 @@ function App() {
       {/* PWA Install Button visible on all pages */}
       <InstallPWAButton />
       <Routes>
+
+        {/* ============ VIDEO EDITOR DASHBOARD ROUTE ============ */}
+        <Route
+          path="/video-editor-dashboard"
+          element={
+            <ProtectedRoute allowedRoles={['Video Editor', 'Admin']}>
+              <VideoEditorDashboard />
+            </ProtectedRoute>
+          }
+        />
+        {/* ====================================================== */}
 
         {/* ============ HR DASHBOARD ROUTE WITH NESTED ROUTES ============ */}
         <Route

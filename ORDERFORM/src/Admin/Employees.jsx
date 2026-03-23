@@ -51,10 +51,11 @@ export default function Employees() {
   const [selectedFiles, setSelectedFiles] = useState({});
   const [uploadProgress, setUploadProgress] = useState({});
 
+  // UPDATED: Added 'VideoEditor' to roleOptions
   const roleOptions = useMemo(() => [
     'Executive', 'Admin', 'Designer', 'Account', 'ServiceExecutive',
     'ServiceManager', 'SalesManager', 'ITTeam', 'DigitalMarketing',
-    'ClientService', 'HR', 'Vendor', 'Agent', 'FieldExecutive', 'Unit'
+    'ClientService', 'HR', 'Vendor', 'Agent', 'FieldExecutive', 'Unit', 'VideoEditor'
   ], []);
 
   // Function to get initials from name
@@ -1189,7 +1190,7 @@ export default function Employees() {
                         </div>
                         <div className="employee-actions">
                           <button className="documents-button" onClick={() => openDocumentModal(employee, category)} title="Upload/View Documents">
-                            
+                            📄
                           </button>
                           <div onClick={() => toggleEmployeeStatus(category, index, employee)} className="toggle-switch" aria-label={employee.active ? 'Deactivate' : 'Activate'}>
                             <div className={employee.active ? 'slider-active' : 'slider-inactive'}>

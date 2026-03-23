@@ -60,7 +60,8 @@ const handleSubmit = async (e) => {
     'agent': 'add-agent',
     'FieldExecutive': 'add-field-executive',
     'vendor': 'add-vendor',
-    'hr': 'add-hr'  // Added HR role endpoint
+    'hr': 'add-hr' , // Added HR role endpoint
+      'videoeditor': 'add-video-editor'  // ADD VIDEO EDITOR ENDPOINT
   };
 
   const endpoint = roleEndpointMap[formData.role];
@@ -490,6 +491,7 @@ const handleSubmit = async (e) => {
                 <option value="FieldExecutive">Field Executive</option>
                 <option value="vendor">Vendor</option>
                 <option value="hr">HR</option>  {/* Added HR role option */}
+                  <option value="videoeditor">Video Editor</option>  {/* ADD VIDEO EDITOR OPTION */}
               </select>
             </div>
           </div>

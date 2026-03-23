@@ -53,7 +53,8 @@ const roleRoutes = {
   'Unit': '/unit-dashboard',                // Redirect to executive order page
   'FieldExecutive': '/order',      // Redirect to executive order page
   'fieldexecutive': '/order'  ,
-  'HR': '/hr-dashboard' // ADD HR ROLE HERE
+  'HR': '/hr-dashboard' ,// ADD HR ROLE HERE
+   'Video Editor': '/video-editor-dashboard'  // ADD VIDEO EDITOR HERE
      // Keep backward compatibility
 };
 
