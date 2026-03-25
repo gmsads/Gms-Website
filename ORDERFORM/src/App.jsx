@@ -1,6 +1,6 @@
 // src/App.js
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import LandingPage from './mainpage/LandingPage';
 import Order from './Executive/order';
@@ -79,8 +79,11 @@ import AttendanceComponent from './Admin/AttendanceComponent.jsx';
 import ViewLeave from './Admin/AdminAllLeaves.jsx';
 import DailyHrDashbaord from './HR/DailyHRReport.jsx';
 import ViewHRReports from './Admin/ViewHRReports.jsx';
-// Import Video Editor Dashboard
-import VideoEditorDashboard from './VideoEditors/VideoEditorDashboard.jsx'; // ADD VIDEO EDITOR IMPORT
+// Import Video Editor Dashboard and its sub-components
+import VideoEditorDashboard from './VideoEditors/VideoEditorDashboard.jsx';
+import AssignedVideos from './VideoEditors/AssignedVideos.jsx';
+import UploadVideo from './VideoEditors/UploadVideo.jsx';
+import MyWork from './VideoEditors/MyWork.jsx';
 
 // ============ WRAPPER COMPONENT FOR HR ATTENDANCE ============
 const AttendanceWithEmployees = () => {
@@ -138,15 +141,21 @@ function App() {
       <InstallPWAButton />
       <Routes>
 
-        {/* ============ VIDEO EDITOR DASHBOARD ROUTE ============ */}
+        {/* ============ VIDEO EDITOR DASHBOARD ROUTE WITH NESTED ROUTES ============ */}
         <Route
           path="/video-editor-dashboard"
           element={
             <ProtectedRoute allowedRoles={['Video Editor', 'Admin']}>
-              <VideoEditorDashboard />
+              <VideoEditorDashboard loggedInUser={localStorage.getItem('userName')} />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<VideoEditorDashboard loggedInUser={localStorage.getItem('userName')} />} />
+          <Route path="assigned-videos" element={<AssignedVideos />} />
+          <Route path="upload-video" element={<UploadVideo />} />
+          <Route path="my-work" element={<MyWork />} />
+        </Route>
         {/* ====================================================== */}
 
         {/* ============ HR DASHBOARD ROUTE WITH NESTED ROUTES ============ */}
@@ -478,6 +487,8 @@ function App() {
             </ProtectedRoute>
           }
         >
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<DesignerDashboard />} />
           <Route path="assigned-designs" element={<AssignedDesigns />} />
           <Route path="greetingdesignform" element={<GreetingdesignForm />} />
           <Route path="start-design" element={<StartDesign />} />

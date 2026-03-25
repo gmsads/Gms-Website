@@ -135,14 +135,13 @@ export default function Employees() {
       const response = await fetch(`/api/employees/documents/${encodeURIComponent(employeeName)}`);
       if (response.ok) {
         const data = await response.json();
-        console.log('Raw API response:', data);
-        
+
         if (data.success) {
           setRequiredDocuments(data.requiredDocuments || []);
-          
+
           // Get documents from response
           const docs = data.documents || {};
-          
+
           // Ensure documents have the correct structure
           const ensureDocumentStructure = (doc) => {
             if (!doc) return { files: [] };
@@ -150,22 +149,20 @@ export default function Employees() {
             if (doc.files && Array.isArray(doc.files)) return doc;
             return { files: [] };
           };
-          
+
           // Handle custom documents
           let customDocs = {};
           if (docs.customDocuments) {
             if (typeof docs.customDocuments === 'object' && docs.customDocuments !== null) {
               customDocs = docs.customDocuments;
-              
-              // Ensure each custom document type has a files array and process each file
+
+              // Ensure each custom document type has a files array
               Object.keys(customDocs).forEach(key => {
                 const docData = customDocs[key];
-                
                 if (docData && docData.files) {
                   if (!Array.isArray(docData.files)) {
                     docData.files = [];
                   } else {
-                    // Ensure each file has all required properties
                     docData.files = docData.files.map(file => ({
                       url: file.url || '',
                       cloudinaryId: file.cloudinaryId || '',
@@ -180,9 +177,7 @@ export default function Employees() {
               });
             }
           }
-          
-          console.log('Processed custom docs:', customDocs);
-          
+
           const fixedDocs = {
             aadhar: ensureDocumentStructure(docs.aadhar),
             pan: ensureDocumentStructure(docs.pan),
@@ -190,14 +185,14 @@ export default function Employees() {
             experience: ensureDocumentStructure(docs.experience),
             customDocuments: customDocs
           };
-          
+
           return fixedDocs;
         }
       }
     } catch (error) {
       console.error('Error fetching documents:', error);
     }
-    
+
     // Return default structure on error
     return {
       aadhar: { files: [] },
@@ -231,7 +226,7 @@ export default function Employees() {
         showPopup('You can upload maximum 10 educational documents at a time', 'error');
         return;
       }
-      
+
       if (selectedFiles.experience && selectedFiles.experience.length > 10) {
         showPopup('You can upload maximum 10 experience documents at a time', 'error');
         return;
@@ -239,7 +234,6 @@ export default function Employees() {
 
       // Create FormData
       const formData = new FormData();
-
       formData.append('name', employee.name.trim());
 
       if (documentNotes) {
@@ -262,11 +256,6 @@ export default function Employees() {
           }
         }
       });
-
-      // Debug: Log FormData contents
-      for (let pair of formData.entries()) {
-        console.log('FormData:', pair[0], pair[1] instanceof File ? pair[1].name : pair[1]);
-      }
 
       const response = await fetch('/api/employees/upload-documents', {
         method: 'POST',
@@ -292,10 +281,12 @@ export default function Employees() {
         return updated;
       });
 
-      showPopup(`${Object.values(selectedFiles).reduce((acc, files) => 
+      showPopup(`${Object.values(selectedFiles).reduce((acc, files) =>
         acc + (Array.isArray(files) ? files.length : 1), 0)} documents uploaded successfully!`, 'success');
-      
-      setDocumentModal(prev => ({ ...prev, documents: result.documents }));
+
+      // Refresh documents in modal
+      const updatedDocs = await fetchEmployeeDocuments(employee.name);
+      setDocumentModal(prev => ({ ...prev, documents: updatedDocs }));
       setSelectedFiles({});
       setCustomDocName('');
       setDocumentNotes('');
@@ -304,7 +295,7 @@ export default function Employees() {
       console.error('Document upload error:', err);
       showPopup(`Error: ${err.message}`, 'error');
     }
-  }, [documentModal, selectedFiles, customDocName, documentNotes, selectedDocumentType, showPopup]);
+  }, [documentModal, selectedFiles, customDocName, documentNotes, selectedDocumentType, showPopup, fetchEmployeeDocuments]);
 
   // Rejoin submit handler
   const handleRejoinSubmit = useCallback(async () => {
@@ -464,28 +455,51 @@ export default function Employees() {
 
   // Open document upload modal
   const openDocumentModal = useCallback(async (employee, category) => {
-    const docs = await fetchEmployeeDocuments(employee.name);
+    if (!employee || !employee.name) {
+      showPopup('Employee information is missing', 'error');
+      return;
+    }
 
-    // Ensure docs has the right structure
-    const safeDocs = docs || {
-      aadhar: { files: [] },
-      pan: { files: [] },
-      educational: { files: [] },
-      experience: { files: [] },
-      customDocuments: {}
-    };
+    try {
+      const docs = await fetchEmployeeDocuments(employee.name);
 
+      const safeDocs = docs || {
+        aadhar: { files: [] },
+        pan: { files: [] },
+        educational: { files: [] },
+        experience: { files: [] },
+        customDocuments: {}
+      };
+
+      setDocumentModal({
+        isOpen: true,
+        employee: employee,
+        category: category,
+        documents: safeDocs
+      });
+      setSelectedFiles({});
+      setCustomDocName('');
+      setDocumentNotes('');
+      setSelectedDocumentType('');
+    } catch (error) {
+      console.error('Error opening document modal:', error);
+      showPopup('Failed to load documents', 'error');
+    }
+  }, [fetchEmployeeDocuments, showPopup]);
+
+  // Close document modal
+  const closeDocumentModal = useCallback(() => {
     setDocumentModal({
-      isOpen: true,
-      employee,
-      category,
-      documents: safeDocs
+      isOpen: false,
+      employee: null,
+      category: '',
+      documents: {}
     });
     setSelectedFiles({});
     setCustomDocName('');
     setDocumentNotes('');
     setSelectedDocumentType('');
-  }, [fetchEmployeeDocuments]);
+  }, []);
 
   // Handle document file selection
   const handleDocumentFileChange = useCallback((docField, files) => {
@@ -498,7 +512,7 @@ export default function Employees() {
       showPopup('Maximum 10 experience documents can be selected', 'warning');
       return;
     }
-    
+
     setSelectedFiles(prev => ({
       ...prev,
       [docField]: files
@@ -512,18 +526,31 @@ export default function Employees() {
     }
   }, []);
 
-  // Delete document
+  // Handle delete document
   const handleDeleteDocument = useCallback(async (docType, fileIndex, employeeName) => {
     try {
-      const response = await fetch(`/api/employees/documents/${employeeName}/${docType}/${fileIndex}`, {
+      if (!employeeName) {
+        showPopup('Employee name is required', 'error');
+        return;
+      }
+
+      const response = await fetch(`/api/employees/documents/${encodeURIComponent(employeeName)}/${encodeURIComponent(docType)}/${fileIndex}`, {
         method: 'DELETE'
       });
 
-      if (!response.ok) throw new Error('Failed to delete document');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete document');
+      }
 
       // Refresh documents
       const updatedDocs = await fetchEmployeeDocuments(employeeName);
-      setDocumentModal(prev => ({ ...prev, documents: updatedDocs }));
+
+      // Update the document modal
+      setDocumentModal(prev => ({
+        ...prev,
+        documents: updatedDocs
+      }));
 
       // Update employee categories
       setEmployeeCategories(prev => {
@@ -543,7 +570,7 @@ export default function Employees() {
       showPopup('Document deleted successfully', 'success');
     } catch (err) {
       console.error('Delete error:', err);
-      showPopup('Failed to delete document', 'error');
+      showPopup(`Failed to delete document: ${err.message}`, 'error');
     }
   }, [fetchEmployeeDocuments, showPopup]);
 
@@ -640,34 +667,6 @@ export default function Employees() {
     setExpanded(prev => ({ ...prev, [category]: !prev[category] }));
   }, []);
 
-  // Add this function inside your Employees component (near your other functions)
-  const getFilePreview = (file) => {
-    if (!file || !file.url) return null;
-
-    // Check if it's an image
-    const isImage = file.url.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i);
-
-    if (isImage) {
-      return (
-        <div className="image-thumbnail-container">
-          <img
-            src={file.url}
-            alt={file.filename || 'Document preview'}
-            className="document-thumbnail"
-            onClick={() => viewDocument(file.url)}
-          />
-        </div>
-      );
-    }
-
-    // For non-image files (PDF, etc.)
-    return (
-      <div className="file-icon-container">
-        <span>📄</span>
-      </div>
-    );
-  };
-
   // Clean up preview URL
   useEffect(() => {
     return () => {
@@ -754,18 +753,12 @@ export default function Employees() {
       )}
 
       {/* Document Upload Modal */}
-      {documentModal.isOpen && (
+      {documentModal.isOpen && documentModal.employee && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '900px' }}>
             <div className="modal-header">
-              <h3>Manage Documents - {documentModal.employee?.name}</h3>
-              <button className="close-button" onClick={() => {
-                setDocumentModal({ isOpen: false, employee: null, category: '', documents: {} });
-                setSelectedFiles({});
-                setCustomDocName('');
-                setDocumentNotes('');
-                setSelectedDocumentType('');
-              }}>
+              <h3>Manage Documents - {documentModal.employee.name}</h3>
+              <button className="close-button" onClick={closeDocumentModal}>
                 &times;
               </button>
             </div>
@@ -814,8 +807,8 @@ export default function Employees() {
                 <h4>
                   Upload {selectedDocumentType === 'aadhar' ? 'Aadhar Card' :
                     selectedDocumentType === 'pan' ? 'PAN Card' :
-                      selectedDocumentType === 'educational' ? 'Educational Documents (Max 10 files)' : 
-                      'Experience/Offer Letters (Max 10 files)'}
+                      selectedDocumentType === 'educational' ? 'Educational Documents (Max 10 files)' :
+                        'Experience/Offer Letters (Max 10 files)'}
                 </h4>
 
                 {(selectedDocumentType === 'aadhar' || selectedDocumentType === 'pan') && (
@@ -862,7 +855,7 @@ export default function Employees() {
                     {selectedFiles[selectedDocumentType] && selectedFiles[selectedDocumentType].length > 0 && (
                       <div className="file-list">
                         <p className="file-count">
-                          {selectedFiles[selectedDocumentType].length} file(s) selected 
+                          {selectedFiles[selectedDocumentType].length} file(s) selected
                           {selectedFiles[selectedDocumentType].length === 10 && ' (Maximum reached)'}
                         </p>
                         {selectedFiles[selectedDocumentType].map((file, idx) => (
@@ -920,7 +913,12 @@ export default function Employees() {
                       </span>
                       <div className="document-actions">
                         <button onClick={() => viewDocument(file.url)}>View</button>
-                        <button className="delete-doc" onClick={() => handleDeleteDocument('aadhar', idx, documentModal.employee.name)}>Delete</button>
+                        <button
+                          className="delete-doc"
+                          onClick={() => handleDeleteDocument('aadhar', idx, documentModal.employee.name)}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                   ))
@@ -948,7 +946,12 @@ export default function Employees() {
                       </span>
                       <div className="document-actions">
                         <button onClick={() => viewDocument(file.url)}>View</button>
-                        <button className="delete-doc" onClick={() => handleDeleteDocument('pan', idx, documentModal.employee.name)}>Delete</button>
+                        <button
+                          className="delete-doc"
+                          onClick={() => handleDeleteDocument('pan', idx, documentModal.employee.name)}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                   ))
@@ -976,7 +979,12 @@ export default function Employees() {
                       </span>
                       <div className="document-actions">
                         <button onClick={() => viewDocument(file.url)}>View</button>
-                        <button className="delete-doc" onClick={() => handleDeleteDocument('educational', idx, documentModal.employee.name)}>Delete</button>
+                        <button
+                          className="delete-doc"
+                          onClick={() => handleDeleteDocument('educational', idx, documentModal.employee.name)}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                   ))
@@ -1004,7 +1012,12 @@ export default function Employees() {
                       </span>
                       <div className="document-actions">
                         <button onClick={() => viewDocument(file.url)}>View</button>
-                        <button className="delete-doc" onClick={() => handleDeleteDocument('experience', idx, documentModal.employee.name)}>Delete</button>
+                        <button
+                          className="delete-doc"
+                          onClick={() => handleDeleteDocument('experience', idx, documentModal.employee.name)}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                   ))
@@ -1019,9 +1032,6 @@ export default function Employees() {
                 <div className="document-group">
                   <h5>Custom Documents</h5>
                   {Object.entries(documentModal.documents.customDocuments).map(([docName, docData]) => {
-                    console.log(`Rendering ${docName}:`, docData);
-                    
-                    // Safely get files array
                     let files = [];
                     if (docData) {
                       if (Array.isArray(docData.files)) {
@@ -1073,7 +1083,12 @@ export default function Employees() {
                                   {/* Actions */}
                                   <div className="document-actions">
                                     <button onClick={() => viewDocument(file.url)}>View</button>
-                                    <button className="delete-doc" onClick={() => handleDeleteDocument(`custom_${docName}`, idx, documentModal.employee.name)}>Delete</button>
+                                    <button 
+                                      className="delete-doc" 
+                                      onClick={() => handleDeleteDocument(docName, idx, documentModal.employee.name)}
+                                    >
+                                      Delete
+                                    </button>
                                   </div>
                                 </>
                               ) : (
@@ -1097,13 +1112,7 @@ export default function Employees() {
             </div>
 
             <div className="modal-footer">
-              <button className="cancel-button" onClick={() => {
-                setDocumentModal({ isOpen: false, employee: null, category: '', documents: {} });
-                setSelectedFiles({});
-                setCustomDocName('');
-                setDocumentNotes('');
-                setSelectedDocumentType('');
-              }}>
+              <button className="cancel-button" onClick={closeDocumentModal}>
                 Close
               </button>
               <button
@@ -1498,7 +1507,10 @@ export default function Employees() {
             {/* Modal Footer */}
             <div className="modal-footer">
               <button className="cancel-button" onClick={() => { setEditModal({ isOpen: false, employee: null, currentCategory: '', originalCategory: '', showRejoinDate: false }); setImagePreview(null); }}>Cancel</button>
-              <button className="documents-button-large" onClick={() => { setEditModal(prev => ({ ...prev, isOpen: false })); openDocumentModal(editModal.employee, editModal.currentCategory); }}>Manage Documents</button>
+              <button className="documents-button-large" onClick={() => { 
+                setEditModal(prev => ({ ...prev, isOpen: false })); 
+                openDocumentModal(editModal.employee, editModal.currentCategory); 
+              }}>Manage Documents</button>
               <button className="download-individual-button" onClick={() => downloadIndividualData(editModal.employee)}>Download Data</button>
               <button className="save-button" onClick={handleSave}>Save Changes</button>
             </div>

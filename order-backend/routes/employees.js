@@ -20,9 +20,9 @@ const Vendor = require('../models/Vendor');
 const Agent = require('../models/Agent');
 const FieldExecutive = require('../models/FieldExecutive');
 const Unit = require('../models/Unit');
-const VideoEditor = require('../models/VideoEditor'); // ADD VIDEO EDITOR MODEL
+const VideoEditor = require('../models/VideoEditor');
 
-// Map of role to model - ADD VideoEditor to the map
+// Map of role to model
 const modelMap = {
   'Executive': Executive,
   'Admin': Admin,
@@ -39,14 +39,13 @@ const modelMap = {
   'Agent': Agent,
   'FieldExecutive': FieldExecutive,
   'Unit': Unit,
-  'VideoEditor': VideoEditor  // ADD VIDEO EDITOR HERE
+  'VideoEditor': VideoEditor
 };
 
-// Log to verify all models are loaded
 console.log('📦 Models loaded in employees route:', Object.keys(modelMap));
 
 // Configure Cloudinary storage for documents
-const storage = new CloudinaryStorage({
+const documentStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: 'employee-documents',
@@ -55,18 +54,32 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({
-  storage: storage,
+// Configure Cloudinary storage for profile images
+const profileStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'employee-profiles',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 400, height: 400, crop: 'limit' }],
+    resource_type: 'auto',
+  },
+});
+
+const uploadDocuments = multer({
+  storage: documentStorage,
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
+const uploadProfile = multer({
+  storage: profileStorage,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
+
 // ==================== GET EMPLOYEE DOCUMENTS ====================
-// Make sure this route is defined BEFORE the upload route
 router.get('/documents/:name', async (req, res) => {
   try {
     const { name } = req.params;
-    console.log(`🔍 Fetching documents for employee: ${name}`);
-    console.log(`🔍 Decoded name: ${decodeURIComponent(name)}`);
+    console.log(`🔍 Fetching documents for employee: ${decodeURIComponent(name)}`);
 
     let foundEmployee = null;
     let foundRole = null;
@@ -74,7 +87,6 @@ router.get('/documents/:name', async (req, res) => {
     // Search in all models
     for (const [roleName, model] of Object.entries(modelMap)) {
       try {
-        // Try multiple search strategies
         let emp = await model.findOne({
           name: { $regex: new RegExp('^' + decodeURIComponent(name) + '$', 'i') }
         });
@@ -94,7 +106,7 @@ router.get('/documents/:name', async (req, res) => {
         if (emp) {
           foundEmployee = emp;
           foundRole = roleName;
-          console.log(`✅ Found employee in model: ${roleName}, name: ${emp.name}`);
+          console.log(`✅ Found employee in model: ${roleName}`);
           break;
         }
       } catch (err) {
@@ -127,12 +139,10 @@ router.get('/documents/:name', async (req, res) => {
       'Agent': ['aadhar', 'pan'],
       'FieldExecutive': ['aadhar', 'pan', 'drivingLicense'],
       'Unit': ['aadhar', 'pan', 'educational'],
-      'VideoEditor': ['aadhar', 'pan', 'educational', 'portfolio']  // ADD VIDEO EDITOR REQUIREMENTS
+      'VideoEditor': ['aadhar', 'pan', 'educational', 'portfolio']
     };
 
     const requiredDocs = roleDocumentRequirements[foundRole] || ['aadhar', 'pan'];
-
-    // Ensure documents have proper structure
     const documents = foundEmployee.documents || {};
 
     const ensureDocumentStructure = (doc) => {
@@ -146,9 +156,6 @@ router.get('/documents/:name', async (req, res) => {
     let customDocsObject = {};
     
     if (documents.customDocuments) {
-      console.log('Raw customDocuments from DB:', documents.customDocuments);
-      
-      // Handle as Map
       if (documents.customDocuments instanceof Map) {
         documents.customDocuments.forEach((value, key) => {
           if (value && typeof value === 'object') {
@@ -169,9 +176,7 @@ router.get('/documents/:name', async (req, res) => {
             customDocsObject[key] = { files: [] };
           }
         });
-      } 
-      // Handle as plain object
-      else if (typeof documents.customDocuments === 'object' && documents.customDocuments !== null) {
+      } else if (typeof documents.customDocuments === 'object' && documents.customDocuments !== null) {
         Object.entries(documents.customDocuments).forEach(([key, value]) => {
           if (value && typeof value === 'object') {
             if (value.files && Array.isArray(value.files)) {
@@ -194,9 +199,6 @@ router.get('/documents/:name', async (req, res) => {
       }
     }
 
-    console.log('Processed custom documents:', customDocsObject);
-
-    // Prepare response
     const documentsForResponse = {
       aadhar: ensureDocumentStructure(documents.aadhar),
       pan: ensureDocumentStructure(documents.pan),
@@ -204,10 +206,6 @@ router.get('/documents/:name', async (req, res) => {
       experience: ensureDocumentStructure(documents.experience),
       customDocuments: customDocsObject
     };
-
-    console.log(`📄 Educational documents count: ${documentsForResponse.educational.files.length}`);
-    console.log(`📄 Experience documents count: ${documentsForResponse.experience.files.length}`);
-    console.log(`📄 Found ${Object.keys(documentsForResponse.customDocuments).length} custom document types`);
 
     res.json({
       success: true,
@@ -226,9 +224,150 @@ router.get('/documents/:name', async (req, res) => {
   }
 });
 
+// ==================== UPDATE EMPLOYEE PROFILE WITH IMAGE ====================
+router.put('/update-profile', uploadProfile.single('image'), async (req, res) => {
+  try {
+    console.log('========== UPDATE PROFILE REQUEST ==========');
+    console.log('Request body:', req.body);
+    console.log('File received:', req.file ? req.file.originalname : 'No file');
+    
+    let { name, username, phone, email, guardianName, guardianContact, aadhar, joiningDate, experience, role, active, rejoinDate, resignationDate, resignationReason } = req.body;
+    
+    const isActive = active === 'true' || active === true;
+    
+    console.log(`Updating employee: ${name}, Role: ${role}, Active: ${isActive}`);
+    
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: 'Employee name is required'
+      });
+    }
+    
+    // Find the employee
+    let foundEmployee = null;
+    let Model = null;
+    let foundRole = null;
+    
+    if (role && modelMap[role]) {
+      try {
+        foundEmployee = await modelMap[role].findOne({ name: name });
+        if (foundEmployee) {
+          Model = modelMap[role];
+          foundRole = role;
+          console.log(`✅ Found employee in specified model: ${role}`);
+        }
+      } catch (err) {
+        console.error(`Error searching in ${role}:`, err.message);
+      }
+    }
+    
+    if (!foundEmployee) {
+      for (const [roleName, model] of Object.entries(modelMap)) {
+        try {
+          let emp = await model.findOne({ name: name });
+          if (!emp) {
+            emp = await model.findOne({
+              name: { $regex: new RegExp('^' + name + '$', 'i') }
+            });
+          }
+          if (emp) {
+            foundEmployee = emp;
+            Model = model;
+            foundRole = roleName;
+            console.log(`✅ Found employee in model: ${roleName}`);
+            break;
+          }
+        } catch (err) {
+          console.error(`Error searching in ${roleName}:`, err.message);
+        }
+      }
+    }
+    
+    if (!foundEmployee) {
+      console.error('❌ Employee not found with name:', name);
+      return res.status(404).json({
+        success: false,
+        message: `Employee not found with name: ${name}`
+      });
+    }
+    
+    // Prepare update object
+    const updateData = {
+      username: username || foundEmployee.username,
+      phone: phone || foundEmployee.phone,
+      email: email || foundEmployee.email,
+      guardianName: guardianName || foundEmployee.guardianName,
+      guardianContact: guardianContact || foundEmployee.guardianContact,
+      aadhar: aadhar || foundEmployee.aadhar,
+      joiningDate: joiningDate || foundEmployee.joiningDate,
+      experience: experience || foundEmployee.experience,
+      active: isActive,
+      rejoinDate: rejoinDate || foundEmployee.rejoinDate,
+      resignationDate: resignationDate || foundEmployee.resignationDate,
+      resignationReason: resignationReason || foundEmployee.resignationReason
+    };
+    
+    // Handle image upload
+    if (req.file) {
+      if (foundEmployee.cloudinaryId) {
+        try {
+          await cloudinary.uploader.destroy(foundEmployee.cloudinaryId);
+          console.log(`Deleted old image: ${foundEmployee.cloudinaryId}`);
+        } catch (cloudinaryError) {
+          console.error('Cloudinary delete error:', cloudinaryError);
+        }
+      }
+      
+      updateData.imageUrl = req.file.path;
+      updateData.cloudinaryId = req.file.filename;
+    }
+    
+    // Remove undefined/empty fields
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined || updateData[key] === '') {
+        delete updateData[key];
+      }
+    });
+    
+    console.log('Update data:', updateData);
+    
+    const updatedEmployee = await Model.findOneAndUpdate(
+      { _id: foundEmployee._id },
+      { $set: updateData },
+      { new: true }
+    );
+    
+    console.log('✅ Employee updated successfully');
+    
+    res.json({
+      success: true,
+      message: 'Employee profile updated successfully',
+      employee: {
+        name: updatedEmployee.name,
+        username: updatedEmployee.username,
+        phone: updatedEmployee.phone,
+        email: updatedEmployee.email,
+        imageUrl: updatedEmployee.imageUrl,
+        active: updatedEmployee.active,
+        role: foundRole
+      }
+    });
+    
+  } catch (error) {
+    console.error('========== UPDATE PROFILE ERROR ==========');
+    console.error('Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update employee profile',
+      error: error.message
+    });
+  }
+});
+
 // ==================== UPLOAD DOCUMENTS ====================
 router.post('/upload-documents', (req, res) => {
-  upload.fields([
+  uploadDocuments.fields([
     { name: 'aadhar_front', maxCount: 1 },
     { name: 'aadhar_back', maxCount: 1 },
     { name: 'pan_front', maxCount: 1 },
@@ -248,9 +387,6 @@ router.post('/upload-documents', (req, res) => {
       }
 
       console.log('========== DOCUMENT UPLOAD START ==========');
-      console.log('Request body:', req.body);
-      console.log('Files received:', req.files ? Object.keys(req.files) : 'No files');
-
       const { name, documentNotes, customDocName } = req.body;
 
       if (!name) {
@@ -260,42 +396,28 @@ router.post('/upload-documents', (req, res) => {
         });
       }
 
-      // Find employee with multiple search strategies
       let foundEmployee = null;
       let Model = null;
       let foundRole = null;
 
       for (const [roleName, model] of Object.entries(modelMap)) {
         try {
-          // Try exact match
           let emp = await model.findOne({ name: name });
-
-          // Try case-insensitive if not found
           if (!emp) {
             emp = await model.findOne({
               name: { $regex: new RegExp('^' + name + '$', 'i') }
             });
           }
-
-          // Try with trimmed name
-          if (!emp) {
-            emp = await model.findOne({
-              name: { $regex: new RegExp('^' + name.trim() + '$', 'i') }
-            });
-          }
-
-          // Try with username
           if (!emp) {
             emp = await model.findOne({
               username: { $regex: new RegExp('^' + name + '$', 'i') }
             });
           }
-
           if (emp) {
             foundEmployee = emp;
             Model = model;
             foundRole = roleName;
-            console.log(`✅ Found employee in model: ${roleName} with name: ${emp.name}`);
+            console.log(`✅ Found employee in model: ${roleName}`);
             break;
           }
         } catch (modelError) {
@@ -311,10 +433,8 @@ router.post('/upload-documents', (req, res) => {
         });
       }
 
-      // Initialize documents structure
       let documents = foundEmployee.documents || {};
 
-      // Ensure all document types exist with proper structure
       const ensureDocumentStructure = (doc) => {
         if (!doc) return { files: [] };
         if (typeof doc === 'string') return { files: [] };
@@ -327,7 +447,6 @@ router.post('/upload-documents', (req, res) => {
       documents.educational = ensureDocumentStructure(documents.educational);
       documents.experience = ensureDocumentStructure(documents.experience);
 
-      // Handle customDocuments Map
       if (!documents.customDocuments) {
         documents.customDocuments = new Map();
       } else if (!(documents.customDocuments instanceof Map)) {
@@ -344,9 +463,8 @@ router.post('/upload-documents', (req, res) => {
         }
       }
 
-      // ===== PROCESS AADHAR FILES =====
-      if (req.files && req.files.aadhar_front && req.files.aadhar_front.length > 0) {
-        console.log(`Processing Aadhar front: ${req.files.aadhar_front.length} file(s)`);
+      // Process files
+      if (req.files && req.files.aadhar_front) {
         req.files.aadhar_front.forEach(file => {
           documents.aadhar.files.push({
             url: file.path,
@@ -358,8 +476,7 @@ router.post('/upload-documents', (req, res) => {
         });
       }
 
-      if (req.files && req.files.aadhar_back && req.files.aadhar_back.length > 0) {
-        console.log(`Processing Aadhar back: ${req.files.aadhar_back.length} file(s)`);
+      if (req.files && req.files.aadhar_back) {
         req.files.aadhar_back.forEach(file => {
           documents.aadhar.files.push({
             url: file.path,
@@ -371,9 +488,7 @@ router.post('/upload-documents', (req, res) => {
         });
       }
 
-      // ===== PROCESS PAN FILES =====
-      if (req.files && req.files.pan_front && req.files.pan_front.length > 0) {
-        console.log(`Processing PAN front: ${req.files.pan_front.length} file(s)`);
+      if (req.files && req.files.pan_front) {
         req.files.pan_front.forEach(file => {
           documents.pan.files.push({
             url: file.path,
@@ -385,8 +500,7 @@ router.post('/upload-documents', (req, res) => {
         });
       }
 
-      if (req.files && req.files.pan_back && req.files.pan_back.length > 0) {
-        console.log(`Processing PAN back: ${req.files.pan_back.length} file(s)`);
+      if (req.files && req.files.pan_back) {
         req.files.pan_back.forEach(file => {
           documents.pan.files.push({
             url: file.path,
@@ -398,9 +512,7 @@ router.post('/upload-documents', (req, res) => {
         });
       }
 
-      // ===== PROCESS EDUCATIONAL DOCUMENTS =====
-      if (req.files && req.files.educational && req.files.educational.length > 0) {
-        console.log(`Processing Educational: ${req.files.educational.length} file(s)`);
+      if (req.files && req.files.educational) {
         req.files.educational.forEach((file, index) => {
           documents.educational.files.push({
             url: file.path,
@@ -412,9 +524,7 @@ router.post('/upload-documents', (req, res) => {
         });
       }
 
-      // ===== PROCESS EXPERIENCE DOCUMENTS =====
-      if (req.files && req.files.experience && req.files.experience.length > 0) {
-        console.log(`Processing Experience: ${req.files.experience.length} file(s)`);
+      if (req.files && req.files.experience) {
         req.files.experience.forEach((file, index) => {
           documents.experience.files.push({
             url: file.path,
@@ -426,48 +536,31 @@ router.post('/upload-documents', (req, res) => {
         });
       }
 
-      // ===== PROCESS CUSTOM DOCUMENTS =====
-      if (req.files && req.files.customDocument && req.files.customDocument.length > 0 && customDocName) {
-        console.log(`Processing Custom Document: ${customDocName} with ${req.files.customDocument.length} file(s)`);
-
+      if (req.files && req.files.customDocument && customDocName) {
         let customDocType = documents.customDocuments.get(customDocName);
         if (!customDocType) {
           customDocType = { files: [] };
           documents.customDocuments.set(customDocName, customDocType);
         }
-
-        if (!customDocType.files) {
-          customDocType.files = [];
-        }
+        if (!customDocType.files) customDocType.files = [];
 
         req.files.customDocument.forEach((file, index) => {
-          console.log(`Adding file ${index + 1}:`, file.originalname);
-
-          const fileData = {
+          customDocType.files.push({
             url: file.path,
             cloudinaryId: file.filename,
             filename: file.originalname,
             notes: documentNotes || `${customDocName} ${index + 1}`,
             uploadedAt: new Date()
-          };
-
-          console.log('File data being saved:', fileData);
-          customDocType.files.push(fileData);
+          });
         });
-
-        console.log(`Custom document ${customDocName} now has ${customDocType.files.length} files`);
       }
 
-      // Update employee in database
-      const updatedEmployee = await Model.findOneAndUpdate(
+      await Model.findOneAndUpdate(
         { _id: foundEmployee._id },
         { $set: { documents: documents } },
         { new: true }
       );
 
-      console.log('✅ Documents uploaded successfully');
-
-      // Prepare response - convert Map to object for JSON
       const customDocsObject = {};
       documents.customDocuments.forEach((value, key) => {
         customDocsObject[key] = value;
@@ -489,15 +582,11 @@ router.post('/upload-documents', (req, res) => {
 
     } catch (error) {
       console.error('========== DOCUMENT UPLOAD ERROR ==========');
-      console.error('Error name:', error.name);
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-
+      console.error(error);
       return res.status(500).json({
         success: false,
         message: 'Failed to upload documents',
-        error: error.message,
-        errorType: error.name
+        error: error.message
       });
     }
   });
@@ -535,61 +624,15 @@ router.delete('/documents/:name/:docType/:fileIndex', async (req, res) => {
 
     const documents = foundEmployee.documents || {};
 
-    // Handle custom documents
-    if (docType.startsWith('custom_')) {
-      const customName = docType.replace('custom_', '');
-      console.log(`Deleting custom document: ${customName}, index: ${index}`);
-
-      if (documents.customDocuments) {
-        if (documents.customDocuments instanceof Map) {
-          if (documents.customDocuments.has(customName)) {
-            const customDoc = documents.customDocuments.get(customName);
-            if (customDoc.files && customDoc.files[index]) {
-              if (customDoc.files[index].cloudinaryId) {
-                try {
-                  await cloudinary.uploader.destroy(customDoc.files[index].cloudinaryId);
-                  console.log(`Deleted from Cloudinary: ${customDoc.files[index].cloudinaryId}`);
-                } catch (cloudinaryError) {
-                  console.error('Cloudinary delete error:', cloudinaryError);
-                }
-              }
-              customDoc.files.splice(index, 1);
-              if (customDoc.files.length === 0) {
-                documents.customDocuments.delete(customName);
-              }
-            }
-          }
-        } else if (typeof documents.customDocuments === 'object') {
-          if (documents.customDocuments[customName]) {
-            if (documents.customDocuments[customName].files &&
-              documents.customDocuments[customName].files[index]) {
-              if (documents.customDocuments[customName].files[index].cloudinaryId) {
-                try {
-                  await cloudinary.uploader.destroy(documents.customDocuments[customName].files[index].cloudinaryId);
-                } catch (cloudinaryError) {
-                  console.error('Cloudinary delete error:', cloudinaryError);
-                }
-              }
-              documents.customDocuments[customName].files.splice(index, 1);
-              if (documents.customDocuments[customName].files.length === 0) {
-                delete documents.customDocuments[customName];
-              }
-            }
-          }
+    if (documents[docType] && documents[docType].files && documents[docType].files[index]) {
+      if (documents[docType].files[index].cloudinaryId) {
+        try {
+          await cloudinary.uploader.destroy(documents[docType].files[index].cloudinaryId);
+        } catch (cloudinaryError) {
+          console.error('Cloudinary delete error:', cloudinaryError);
         }
       }
-    } else {
-      if (documents[docType] && documents[docType].files && documents[docType].files[index]) {
-        if (documents[docType].files[index].cloudinaryId) {
-          try {
-            await cloudinary.uploader.destroy(documents[docType].files[index].cloudinaryId);
-            console.log(`Deleted from Cloudinary: ${documents[docType].files[index].cloudinaryId}`);
-          } catch (cloudinaryError) {
-            console.error('Cloudinary delete error:', cloudinaryError);
-          }
-        }
-        documents[docType].files.splice(index, 1);
-      }
+      documents[docType].files.splice(index, 1);
     }
 
     await Model.findOneAndUpdate(

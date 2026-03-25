@@ -2286,122 +2286,166 @@ function AdminDashboard() {
                         )}
                       </div>
                     </div>
-
                     <div 
-                      style={{
-                        ...styles.card,
-                        ...(hoveredCard === 'agentOrders' ? styles.cardHover : {})
-                      }}
-                      onMouseEnter={() => setHoveredCard('agentOrders')}
-                      onMouseLeave={() => setHoveredCard(null)}
-                      onClick={(e) => {
-                        if (e.target.tagName !== 'BUTTON') {
-                          const queryParams = new URLSearchParams();
-                          queryParams.append('clientType', 'Agent');
-                          if (selectedMonth !== null) {
-                            queryParams.append('month', selectedMonth + 1);
+  style={{
+    ...styles.card,
+    ...(hoveredCard === 'agentOrders' ? styles.cardHover : {})
+  }}
+  onMouseEnter={() => setHoveredCard('agentOrders')}
+  onMouseLeave={() => setHoveredCard(null)}
+  onClick={(e) => {
+    if (e.target.tagName !== 'BUTTON') {
+      const queryParams = new URLSearchParams();
+      queryParams.append('clientType', 'Agent');
+      if (selectedMonth !== null) {
+        queryParams.append('month', selectedMonth + 1);
+      }
+      if (year !== 'all') {
+        queryParams.append('year', year);
+      }
+      navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+    }
+  }}
+>
+  <div>Agent Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : '(Monthly)'}</div>
+  {loading ? (
+    <div style={styles.noDataMessage}>Loading agent data...</div>
+  ) : (
+    <>
+      <div style={styles.chartContainer}>
+        <Bar
+          data={{
+            labels: selectedMonth !== null
+              ? ['Agent Orders']
+              : monthLabels, // Use all 12 months as labels
+            datasets: [
+              {
+                label: 'Agent Orders',
+                data: selectedMonth !== null
+                  ? [clientTypes.Agent?.count || 0]
+                  : (() => {
+                      // Check if we have monthly agent orders data
+                      if (chartData?.agentOrdersByMonth && Array.isArray(chartData.agentOrdersByMonth)) {
+                        // Use the actual monthly data from backend
+                        return chartData.agentOrdersByMonth;
+                      } else {
+                        // Fallback: create array based on total agent orders
+                        // This is not accurate - better to get from backend
+                        const totalAgentOrders = clientTypes.Agent?.count || 0;
+                        // Distribute total across months (fallback only)
+                        // You should remove this fallback and ensure backend provides monthly data
+                        return monthLabels.map((_, monthIndex) => {
+                          // Check if we have month-specific data from the current filtered view
+                          // If not, return 0 for all months except maybe the selected one
+                          if (selectedMonth === null) {
+                            return 0; // Better to show zeros than incorrect distribution
                           }
-                          if (year !== 'all') {
-                            queryParams.append('year', year);
-                          }
-                          navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-                        }
-                      }}
-                    >
-                      <div>Agent Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : year === 'all' ? '(All Years)' : '(Monthly)'}</div>
-                      {loading ? (
-                        <div style={styles.noDataMessage}>Loading agent data...</div>
-                      ) : (
-                        <>
-                          <div style={styles.chartContainer}>
-                            <Bar
-                              data={{
-                                labels: selectedMonth !== null
-                                  ? ['Agent Orders']
-                                  : monthLabels,
-                                datasets: [
-                                  {
-                                    label: 'Agent Orders',
-                                    data: selectedMonth !== null
-                                      ? [clientTypes.Agent?.count || 0]
-                                      : (() => {
-                                          const monthlyData = Array(12).fill(0);
-                                          if (selectedMonth !== null) {
-                                            monthlyData[selectedMonth] = clientTypes.Agent?.count || 0;
-                                          } else {
-                                            const currentMonth = new Date().getMonth();
-                                            monthlyData[currentMonth] = clientTypes.Agent?.count || 0;
-                                          }
-                                          return monthlyData;
-                                        })(),
-                                    backgroundColor: 'rgba(255, 206, 86, 0.7)',
-                                  }
-                                ]
-                              }}
-                              options={{
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                plugins: {
-                                  legend: { display: false },
-                                  tooltip: {
-                                    callbacks: {
-                                      label: function(context) {
-                                        const count = context.raw || 0;
-                                        const amount = clientTypes.Agent?.amount || 0;
-                                        return [
-                                          `Orders: ${count}`,
-                                          `Amount: ₹${amount.toLocaleString('en-IN')}`
-                                        ];
-                                      }
-                                    }
-                                  }
-                                },
-                                onClick: (_, elements) => {
-                                  if (elements && elements.length > 0) {
-                                    const queryParams = new URLSearchParams();
-                                    queryParams.append('clientType', 'Agent');
-
-                                    if (selectedMonth === null) {
-                                      const clickedMonth = elements[0].index + 1;
-                                      queryParams.append('month', clickedMonth);
-                                    } else {
-                                      queryParams.append('month', selectedMonth + 1);
-                                    }
-                                    if (year !== 'all') {
-                                      queryParams.append('year', year);
-                                    }
-
-                                    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-                                  }
-                                }
-                              }}
-                            />
-                          </div>
-                          <div style={styles.number}>
-                            {clientTypes.Agent?.count || 0}
-                          </div>
-                        </>
-                      )}
-                      {selectedMonth !== null && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedMonth(null);
-                          }}
-                          style={{
-                            padding: '5px 10px',
-                            backgroundColor: '#003366',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            marginTop: '10px'
-                          }}
-                        >
-                          View All Months
-                        </button>
-                      )}
-                    </div>
+                          return monthIndex === selectedMonth ? totalAgentOrders : 0;
+                        });
+                      }
+                    })(),
+                backgroundColor: 'rgba(255, 206, 86, 0.7)',
+                borderRadius: 8,
+              }
+            ]
+          }}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const count = context.raw || 0;
+                    // Get the amount for this month if available
+                    let amount = 0;
+                    if (chartData?.agentAmountByMonth && Array.isArray(chartData.agentAmountByMonth)) {
+                      amount = chartData.agentAmountByMonth[context.dataIndex] || 0;
+                    }
+                    return [
+                      `Orders: ${count}`,
+                      `Amount: ₹${amount.toLocaleString('en-IN')}`
+                    ];
+                  }
+                }
+              }
+            },
+            onClick: (_, elements) => {
+              if (elements && elements.length > 0) {
+                const queryParams = new URLSearchParams();
+                queryParams.append('clientType', 'Agent');
+                
+                if (selectedMonth === null) {
+                  // Show orders for the clicked month
+                  const clickedMonth = elements[0].index + 1;
+                  queryParams.append('month', clickedMonth);
+                } else {
+                  queryParams.append('month', selectedMonth + 1);
+                }
+                if (year !== 'all') {
+                  queryParams.append('year', year);
+                }
+                
+                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+              }
+            },
+            scales: {
+              x: {
+                title: {
+                  display: selectedMonth === null,
+                  text: 'Month',
+                  font: { size: 10 }
+                },
+                ticks: {
+                  maxRotation: 45,
+                  minRotation: 45,
+                  autoSkip: true,
+                  font: { size: 9 }
+                }
+              },
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: 'Number of Orders',
+                  font: { size: 10 }
+                },
+                ticks: {
+                  stepSize: 1,
+                  font: { size: 9 }
+                }
+              }
+            }
+          }}
+        />
+      </div>
+      <div style={styles.number}>
+        {clientTypes.Agent?.count || 0}
+      </div>
+      {selectedMonth !== null && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedMonth(null);
+          }}
+          style={{
+            padding: '5px 10px',
+            backgroundColor: '#003366',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            marginTop: '10px',
+            fontSize: '11px'
+          }}
+        >
+          View All Months
+        </button>
+      )}
+    </>
+  )}
+</div>
 
 {/* SIMPLE AND CLEAN COMPARISON CHART */}
 <div 
