@@ -1054,7 +1054,7 @@ router.get("/employees", async (req, res) => {
       agents,
       vendors,
       hrs,
-           videoEditors  // ADD VIDEO EDITOR
+      videoEditors
     ] = await Promise.all([
       Executive.find({}).lean(),
       Admin.find({}).lean(),
@@ -1071,7 +1071,7 @@ router.get("/employees", async (req, res) => {
       Agent.find({}).lean(),
       Vendor.find({}).lean(),
       HR.find({}).lean(),
-        VideoEditor.find({}).lean()  // ADD VIDEO EDITOR
+      VideoEditor.find({}).lean()
     ]);
 
     const employeeCategories = {
@@ -1090,7 +1090,7 @@ router.get("/employees", async (req, res) => {
       Agent: agents,
       Vendor: vendors,
       HR: hrs,
-          VideoEditor: videoEditors  // ADD VIDEO EDITOR
+      "Graphic Designer": videoEditors  // Display name changed
     };
 
     res.json(employeeCategories);
@@ -1098,7 +1098,6 @@ router.get("/employees", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 // Get user profile
 router.get("/user-profile", async (req, res) => {
   try {

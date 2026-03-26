@@ -32,18 +32,22 @@ const AttendanceComponent = ({ employees = [] }) => {
     notes: ''
   });
 
-  // Sort employees alphabetically by name
-  const sortedEmployees = [...employees].sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
+  // Sort employees alphabetically by name with null checks
+  const sortedEmployees = [...employees]
+    .filter(employee => employee && employee.name)
+    .sort((a, b) => {
+      if (!a.name) return 1;
+      if (!b.name) return -1;
+      return a.name.localeCompare(b.name);
+    });
 
   // Filter employees based on search term
   const filteredEmployees = sortedEmployees.filter(employee =>
-    employee.name.toLowerCase().includes(searchTerm.toLowerCase())
+    employee.name && employee.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Get active employees only
-  const activeEmployees = filteredEmployees.filter(e => e?.active) || [];
+  const activeEmployees = filteredEmployees.filter(e => e && e.active) || [];
 
   // Fetch attendance data when month or employee changes
   useEffect(() => {
@@ -51,7 +55,7 @@ const AttendanceComponent = ({ employees = [] }) => {
       try {
         setLoading(true);
         let url = `/api/attendance?month=${selectedMonth}`;
-        if (selectedEmployee) {
+        if (selectedEmployee && selectedEmployee._id) {
           url += `&employeeId=${selectedEmployee._id}`;
         }
 
@@ -78,7 +82,7 @@ const AttendanceComponent = ({ employees = [] }) => {
 
     const ws = XLSX.utils.json_to_sheet(
       attendanceData.map(record => {
-        const employee = employees.find(e => e._id === record.employeeId) || {};
+        const employee = employees.find(e => e && e._id === record.employeeId) || {};
         return {
           'Employee Name': employee.name || 'Unknown',
           'Date': new Date(record.date).toLocaleDateString(),
@@ -164,7 +168,7 @@ const AttendanceComponent = ({ employees = [] }) => {
   // Helper function to check if a date is Sunday
   const isSunday = (dateStr) => {
     const date = new Date(dateStr);
-    return date.getDay() === 0; // 0 represents Sunday
+    return date.getDay() === 0;
   };
 
   // Show loading state
@@ -215,6 +219,28 @@ const AttendanceComponent = ({ employees = [] }) => {
               cellClass += ` ${record.status}`;
             }
 
+            // Get status display text
+            let statusDisplay = '';
+            switch (record?.status) {
+              case 'present':
+                statusDisplay = 'Present';
+                break;
+              case 'absent':
+                statusDisplay = 'Absent';
+                break;
+              case 'half-day':
+                statusDisplay = 'Half Day';
+                break;
+              case 'leave':
+                statusDisplay = 'Leave';
+                break;
+              case 'holiday':
+                statusDisplay = 'Holiday';
+                break;
+              default:
+                statusDisplay = '';
+            }
+
             return (
               <div
                 key={date}
@@ -222,11 +248,15 @@ const AttendanceComponent = ({ employees = [] }) => {
                 onClick={() => handleEditAttendance(date, selectedEmployee)}
               >
                 <div className="day-number">{i + 1}</div>
-                <div className="day-status">{record?.status || ''}</div>
+                {record?.status && (
+                  <div className="day-status">
+                    {statusDisplay}
+                  </div>
+                )}
                 {/* Display notes if they exist */}
                 {record?.notes && (
                   <div className="day-notes" title={record.notes}>
-                    {record.notes}
+                    {record.notes.length > 20 ? record.notes.substring(0, 20) + '...' : record.notes}
                   </div>
                 )}
               </div>
@@ -268,6 +298,8 @@ const AttendanceComponent = ({ employees = [] }) => {
             const presentCount = monthData.filter(r => r.status === 'present').length;
             const absentCount = monthData.filter(r => r.status === 'absent').length;
             const halfDayCount = monthData.filter(r => r.status === 'half-day').length;
+            const leaveCount = monthData.filter(r => r.status === 'leave').length;
+            const holidayCount = monthData.filter(r => r.status === 'holiday').length;
 
             return (
               <div
@@ -280,9 +312,11 @@ const AttendanceComponent = ({ employees = [] }) => {
               >
                 <div className="month-name">{month.shortName}</div>
                 <div className="month-stats">
-                  <div className="stat present">{presentCount}P</div>
-                  <div className="stat absent">{absentCount}A</div>
-                  <div className="stat half-day">{halfDayCount}H</div>
+                  <div className="stat present">P: {presentCount}</div>
+                  <div className="stat absent">A: {absentCount}</div>
+                  <div className="stat half-day">H: {halfDayCount}</div>
+                  <div className="stat leave">L: {leaveCount}</div>
+                  <div className="stat holiday">HD: {holidayCount}</div>
                 </div>
               </div>
             );
@@ -299,6 +333,8 @@ const AttendanceComponent = ({ employees = [] }) => {
     const presentCount = attendanceData.filter(r => r.status === 'present').length;
     const absentCount = attendanceData.filter(r => r.status === 'absent').length;
     const halfDayCount = attendanceData.filter(r => r.status === 'half-day').length;
+    const leaveCount = attendanceData.filter(r => r.status === 'leave').length;
+    const holidayCount = attendanceData.filter(r => r.status === 'holiday').length;
     const totalDays = new Date(
       new Date(selectedMonth + '-01').getFullYear(),
       new Date(selectedMonth + '-01').getMonth() + 1,
@@ -330,6 +366,14 @@ const AttendanceComponent = ({ employees = [] }) => {
           <div className="summary-item half-day">
             <span className="summary-label">Half Day:</span>
             <span className="summary-value">{halfDayCount}</span>
+          </div>
+          <div className="summary-item leave">
+            <span className="summary-label">Leave:</span>
+            <span className="summary-value">{leaveCount}</span>
+          </div>
+          <div className="summary-item holiday">
+            <span className="summary-label">Holiday:</span>
+            <span className="summary-value">{holidayCount}</span>
           </div>
         </div>
       </div>
@@ -453,7 +497,7 @@ const AttendanceComponent = ({ employees = [] }) => {
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
-              <h3>Edit Attendance for {editAttendanceModal.employee.name}</h3>
+              <h3>Edit Attendance for {editAttendanceModal.employee?.name}</h3>
               <p>{new Date(editAttendanceModal.date).toLocaleDateString()}</p>
               <button
                 className="close-button"
@@ -482,6 +526,8 @@ const AttendanceComponent = ({ employees = [] }) => {
                   <option value="present">Present</option>
                   <option value="absent">Absent</option>
                   <option value="half-day">Half Day</option>
+                  <option value="leave">Leave</option>
+                  <option value="holiday">Holiday</option>
                 </select>
               </div>
 
@@ -527,8 +573,9 @@ const AttendanceComponent = ({ employees = [] }) => {
       <style>{`
         .attendance-component {
           padding: 20px;
-          max-width: 1200px;
+          max-width: 1400px;
           margin: 0 auto;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
         }
         
         .controls {
@@ -547,16 +594,12 @@ const AttendanceComponent = ({ employees = [] }) => {
           flex-wrap: wrap;
         }
         
-        .month-selector select {
-          padding: 5px;
-          border-radius: 4px;
-          border: 1px solid #ddd;
-        }
-        
+        .month-selector select,
         .month-selector input {
-          padding: 5px;
-          border-radius: 4px;
+          padding: 8px 12px;
+          border-radius: 6px;
           border: 1px solid #ddd;
+          font-size: 14px;
         }
         
         .month-navigation {
@@ -566,11 +609,12 @@ const AttendanceComponent = ({ employees = [] }) => {
         }
         
         .nav-button {
-          padding: 5px 10px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
+          padding: 8px 16px;
+          border: none;
+          border-radius: 6px;
           cursor: pointer;
           font-weight: 500;
+          transition: all 0.2s;
         }
         
         .prev-button {
@@ -583,6 +627,11 @@ const AttendanceComponent = ({ employees = [] }) => {
           color: white;
         }
         
+        .nav-button:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
         .nav-button:disabled {
           opacity: 0.5;
           cursor: not-allowed;
@@ -593,9 +642,15 @@ const AttendanceComponent = ({ employees = [] }) => {
           color: white;
           border: none;
           padding: 8px 16px;
-          border-radius: 4px;
+          border-radius: 6px;
           cursor: pointer;
           font-weight: 500;
+          transition: all 0.2s;
+        }
+        
+        .download-button:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
         .attendance-container {
@@ -606,8 +661,8 @@ const AttendanceComponent = ({ employees = [] }) => {
         
         .employee-list {
           flex: 1;
-          max-width: 250px;
-          border-right: 1px solid #ddd;
+          max-width: 280px;
+          border-right: 1px solid #e0e0e0;
           padding-right: 20px;
         }
         
@@ -617,32 +672,38 @@ const AttendanceComponent = ({ employees = [] }) => {
         
         .search-container input {
           width: 100%;
-          padding: 8px;
-          border-radius: 4px;
+          padding: 10px;
+          border-radius: 6px;
           border: 1px solid #ddd;
+          font-size: 14px;
         }
         
         .employee-list ul {
           list-style: none;
           padding: 0;
           margin: 0;
-          max-height: 500px;
+          max-height: 600px;
           overflow-y: auto;
         }
         
         .employee-list li {
-          padding: 10px;
+          padding: 12px;
           cursor: pointer;
-          border-bottom: 1px solid #eee;
+          border-bottom: 1px solid #f0f0f0;
+          transition: all 0.2s;
+          border-radius: 6px;
+          margin-bottom: 4px;
         }
         
         .employee-list li:hover {
           background-color: #f5f5f5;
+          transform: translateX(2px);
         }
         
         .employee-list li.selected {
           background-color: #003366;
           color: white;
+          font-weight: 500;
         }
         
         .attendance-details {
@@ -651,48 +712,51 @@ const AttendanceComponent = ({ employees = [] }) => {
         
         .summary-section {
           margin-bottom: 20px;
-          padding: 15px;
-          background: #f9f9f9;
-          border-radius: 8px;
-          border: 1px solid #ddd;
+          padding: 20px;
+          background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+          border-radius: 12px;
+          border: 1px solid #e0e0e0;
         }
         
         .summary-section h4 {
           margin-top: 0;
           margin-bottom: 15px;
           color: #003366;
-          font-size: 1.1rem;
+          font-size: 1.2rem;
         }
         
         .summary-line {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          gap: 10px;
-          flex-wrap: nowrap;
-          overflow-x: auto;
-          padding-bottom: 5px;
+          gap: 12px;
+          flex-wrap: wrap;
         }
         
         .summary-item {
           flex: 1;
-          min-width: 120px;
+          min-width: 100px;
           text-align: center;
-          padding: 10px;
-          border-radius: 6px;
+          padding: 12px;
+          border-radius: 8px;
           background: white;
-          border: 1px solid #ddd;
-          white-space: nowrap;
+          border: 1px solid #e0e0e0;
+          transition: all 0.2s;
+        }
+        
+        .summary-item:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
         
         .summary-item.present {
           border-color: #4CAF50;
-          background-color: #e6f7e6;
+          background-color: #e8f5e9;
         }
         
         .summary-item.absent {
           border-color: #F44336;
-          background-color: #fde8e8;
+          background-color: #ffebee;
         }
         
         .summary-item.half-day {
@@ -700,18 +764,28 @@ const AttendanceComponent = ({ employees = [] }) => {
           background-color: #fff3e0;
         }
         
+        .summary-item.leave {
+          border-color: #2196F3;
+          background-color: #e3f2fd;
+        }
+        
+        .summary-item.holiday {
+          border-color: #9C27B0;
+          background-color: #f3e5f5;
+        }
+        
         .summary-label {
           font-weight: bold;
           display: block;
-          margin-bottom: 5px;
+          margin-bottom: 8px;
           color: #555;
-          font-size: 0.9rem;
+          font-size: 0.85rem;
         }
         
         .summary-value {
-          font-size: 1.1rem;
+          font-size: 1.3rem;
           color: #003366;
-          font-weight: 600;
+          font-weight: 700;
         }
         
         .calendar-view {
@@ -729,9 +803,11 @@ const AttendanceComponent = ({ employees = [] }) => {
         .day-name-cell {
           text-align: center;
           font-weight: bold;
-          padding: 5px;
+          padding: 12px;
           font-size: 0.9rem;
           color: #555;
+          background: #f8f9fa;
+          border-radius: 8px;
         }
         
         .days-grid {
@@ -741,86 +817,108 @@ const AttendanceComponent = ({ employees = [] }) => {
         }
         
         .day-cell {
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          padding: 8px;
-          min-height: 80px;
+          border: 1px solid #e0e0e0;
+          border-radius: 8px;
+          padding: 12px 8px;
+          min-height: 100px;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
           cursor: pointer;
           position: relative;
+          transition: all 0.2s;
+          background: white;
+        }
+        
+        .day-cell:hover:not(.empty) {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+          border-color: #003366;
         }
         
         .day-cell.empty {
-          background-color: #f9f9f9;
+          background-color: #fafafa;
           cursor: default;
+          border-color: #f0f0f0;
         }
         
-        /* Sunday styling - blue background */
-        .day-cell.sunday {
-          background-color: #e6f2ff;
-          border-color: #4d94ff;
-        }
-        
+        /* Status-specific styles */
         .day-cell.present {
-          background-color: #e6f7e6;
+          background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
           border-color: #4CAF50;
         }
         
         .day-cell.absent {
-          background-color: #fde8e8;
+          background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
           border-color: #F44336;
         }
         
         .day-cell.half-day {
-          background-color: #fff3e0;
+          background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
           border-color: #FF9800;
         }
         
-        /* Combined styles for Sunday with status */
+        .day-cell.leave {
+          background: linear-gradient(135deg, #e3f2fd 0%, #bbdef5 100%);
+          border-color: #2196F3;
+        }
+        
+        .day-cell.holiday {
+          background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+          border-color: #9C27B0;
+        }
+        
+        .day-cell.sunday {
+          background: linear-gradient(135deg, #e6f2ff 0%, #cce5ff 100%);
+          border-color: #4d94ff;
+        }
+        
+        /* Combined styles */
         .day-cell.sunday.present {
-          background-color: #d9f2d9;
-          border-color: #4CAF50;
+          background: linear-gradient(135deg, #d9f2d9 0%, #b8e6b8 100%);
         }
         
         .day-cell.sunday.absent {
-          background-color: #f8d7da;
-          border-color: #F44336;
+          background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
         }
         
         .day-cell.sunday.half-day {
-          background-color: #ffe6cc;
-          border-color: #FF9800;
+          background: linear-gradient(135deg, #ffe6cc 0%, #ffd9b3 100%);
+        }
+        
+        .day-cell.sunday.leave {
+          background: linear-gradient(135deg, #d4e3f5 0%, #c2d6e8 100%);
+        }
+        
+        .day-cell.sunday.holiday {
+          background: linear-gradient(135deg, #e8d9f0 0%, #d9c8e6 100%);
         }
         
         .day-number {
           font-weight: bold;
-          font-size: 0.9rem;
-          margin-bottom: 2px;
+          font-size: 1rem;
+          margin-bottom: 6px;
+          color: #333;
         }
         
         .day-status {
-          font-size: 0.8rem;
-          text-transform: capitalize;
-          margin-bottom: 3px;
+          font-size: 0.75rem;
+          margin-top: 4px;
           font-weight: 500;
+          text-transform: capitalize;
         }
         
         .day-notes {
-          font-size: 0.7rem;
+          font-size: 0.65rem;
           color: #666;
           text-align: center;
           word-wrap: break-word;
-          overflow: hidden;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          line-height: 1.2;
-          max-height: 2.4em;
-          width: 100%;
-          padding: 0 2px;
+          margin-top: 4px;
+          padding: 2px 4px;
+          background: rgba(255,255,255,0.7);
+          border-radius: 4px;
+          max-width: 100%;
         }
         
         .year-view {
@@ -839,50 +937,65 @@ const AttendanceComponent = ({ employees = [] }) => {
         }
         
         .month-cell {
-          border: 1px solid #ddd;
-          border-radius: 8px;
+          border: 1px solid #e0e0e0;
+          border-radius: 10px;
           padding: 15px;
           text-align: center;
           cursor: pointer;
           transition: all 0.2s;
+          background: white;
         }
         
         .month-cell:hover {
-          background-color: #f5f5f5;
-          transform: scale(1.05);
+          background-color: #f8f9fa;
+          transform: scale(1.02);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
         
         .month-name {
           font-weight: bold;
-          font-size: 1.2rem;
+          font-size: 1.1rem;
           color: #003366;
+          margin-bottom: 12px;
         }
         
         .month-stats {
           display: flex;
-          justify-content: space-around;
-          margin-top: 8px;
-          font-size: 0.8rem;
+          justify-content: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          font-size: 0.7rem;
         }
         
         .month-stats .stat {
-          padding: 2px 5px;
-          border-radius: 3px;
+          padding: 4px 8px;
+          border-radius: 6px;
+          font-weight: 500;
         }
         
         .month-stats .present {
-          background-color: #e6f7e6;
+          background-color: #e8f5e9;
           color: #2e7d32;
         }
         
         .month-stats .absent {
-          background-color: #fde8e8;
+          background-color: #ffebee;
           color: #c62828;
         }
         
         .month-stats .half-day {
           background-color: #fff3e0;
           color: #e65100;
+        }
+        
+        .month-stats .leave {
+          background-color: #e3f2fd;
+          color: #1565c0;
+        }
+        
+        .month-stats .holiday {
+          background-color: #f3e5f5;
+          color: #6a1b9a;
         }
         
         .modal-overlay {
@@ -896,17 +1009,19 @@ const AttendanceComponent = ({ employees = [] }) => {
           justify-content: center;
           align-items: center;
           z-index: 1000;
+          animation: fadeIn 0.2s;
         }
         
         .modal-content {
           background: white;
-          padding: 20px 30px;
+          padding: 25px;
           border-radius: 12px;
-          width: 400px;
+          width: 450px;
           max-width: 90%;
           max-height: 90vh;
           overflow-y: auto;
-          box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+          box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+          animation: slideUp 0.3s;
         }
         
         .modal-header {
@@ -915,18 +1030,19 @@ const AttendanceComponent = ({ employees = [] }) => {
           align-items: center;
           margin-bottom: 20px;
           padding-bottom: 15px;
-          border-bottom: 1px solid #eaeaea;
+          border-bottom: 2px solid #f0f0f0;
         }
         
         .modal-header h3 {
           color: #003366;
           margin: 0;
-          font-size: 1.4rem;
+          font-size: 1.3rem;
         }
         
         .modal-header p {
           margin: 5px 0 0;
           color: #666;
+          font-size: 0.9rem;
         }
         
         .close-button {
@@ -936,6 +1052,11 @@ const AttendanceComponent = ({ employees = [] }) => {
           cursor: pointer;
           color: #999;
           padding: 0 10px;
+          transition: color 0.2s;
+        }
+        
+        .close-button:hover {
+          color: #333;
         }
         
         .form-container {
@@ -960,14 +1081,23 @@ const AttendanceComponent = ({ employees = [] }) => {
         .form-group select,
         .form-group textarea {
           width: 100%;
-          padding: 8px 12px;
+          padding: 10px;
           border-radius: 6px;
           border: 1px solid #ddd;
           font-size: 0.95rem;
+          transition: border-color 0.2s;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+          outline: none;
+          border-color: #003366;
         }
         
         .form-group textarea {
           min-height: 80px;
+          resize: vertical;
         }
         
         .modal-footer {
@@ -976,7 +1106,7 @@ const AttendanceComponent = ({ employees = [] }) => {
           gap: 15px;
           margin-top: 25px;
           padding-top: 15px;
-          border-top: 1px solid #eaeaea;
+          border-top: 1px solid #f0f0f0;
         }
         
         .cancel-button {
@@ -987,6 +1117,11 @@ const AttendanceComponent = ({ employees = [] }) => {
           border: 1px solid #ddd;
           cursor: pointer;
           font-weight: 500;
+          transition: all 0.2s;
+        }
+        
+        .cancel-button:hover {
+          background: #e0e0e0;
         }
         
         .save-button {
@@ -997,33 +1132,92 @@ const AttendanceComponent = ({ employees = [] }) => {
           border: none;
           cursor: pointer;
           font-weight: 500;
+          transition: all 0.2s;
+        }
+        
+        .save-button:hover {
+          background: #004c99;
+          transform: translateY(-1px);
         }
         
         .loading {
-          padding: 20px;
+          padding: 40px;
           text-align: center;
+          font-size: 1.1rem;
+          color: #666;
         }
         
         .error {
-          padding: 20px;
-          color: red;
+          padding: 40px;
+          color: #F44336;
           text-align: center;
+          font-size: 1.1rem;
         }
         
         .blink-heading {
           font-family: Arial, sans-serif;
           font-size: 24px;
           font-weight: bold;
-          position: center;
           color: rgb(221, 34, 181);
           text-align: center;
-          margin: 20px 0;
+          margin: 40px 0;
           animation: blink 1.5s infinite;
         }
-
+        
         @keyframes blink {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0; }
+          50% { opacity: 0.5; }
+        }
+        
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+          from {
+            transform: translateY(50px);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+        
+        @media (max-width: 768px) {
+          .attendance-container {
+            flex-direction: column;
+          }
+          
+          .employee-list {
+            max-width: 100%;
+            border-right: none;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+          }
+          
+          .summary-line {
+            flex-direction: column;
+          }
+          
+          .summary-item {
+            width: 100%;
+          }
+          
+          .year-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+          
+          .days-grid {
+            gap: 4px;
+          }
+          
+          .day-cell {
+            min-height: 70px;
+            padding: 6px 4px;
+          }
         }
       `}</style>
     </div>
@@ -1037,12 +1231,10 @@ function getDaysInMonth(monthStr) {
   const [year, month] = monthStr.split('-').map(Number);
   if (isNaN(year) || isNaN(month)) return [];
 
-  // Use UTC to avoid timezone issues
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const days = [];
 
   for (let i = 1; i <= daysInMonth; i++) {
-    // Create date string in YYYY-MM-DD format
     const dayStr = String(i).padStart(2, '0');
     days.push(`${year}-${String(month).padStart(2, '0')}-${dayStr}`);
   }

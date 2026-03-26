@@ -491,7 +491,7 @@ const handleSubmit = async (e) => {
                 <option value="FieldExecutive">Field Executive</option>
                 <option value="vendor">Vendor</option>
                 <option value="hr">HR</option>  {/* Added HR role option */}
-                  <option value="videoeditor">Video Editor</option>  {/* ADD VIDEO EDITOR OPTION */}
+                  <option value="videoeditor">Graphic Designer</option>  {/* ADD VIDEO EDITOR OPTION */}
               </select>
             </div>
           </div>
