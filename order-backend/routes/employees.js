@@ -388,8 +388,11 @@ router.post('/upload-documents', (req, res) => {
 
       console.log('========== DOCUMENT UPLOAD START ==========');
       const { name, documentNotes, customDocName } = req.body;
+      const employeeName = name ? name.trim() : '';
 
-      if (!name) {
+      console.log(`Searching for employee: "${employeeName}"`);
+
+      if (!employeeName) {
         return res.status(400).json({
           success: false,
           message: 'Employee name is required'
@@ -400,53 +403,98 @@ router.post('/upload-documents', (req, res) => {
       let Model = null;
       let foundRole = null;
 
-      for (const [roleName, model] of Object.entries(modelMap)) {
-        try {
-          let emp = await model.findOne({ name: name });
-          if (!emp) {
-            emp = await model.findOne({
-              name: { $regex: new RegExp('^' + name + '$', 'i') }
+      // Search in Executive model first
+      console.log('🔍 Searching in Executive model...');
+      
+      let exec = await Executive.findOne({
+        name: { $regex: new RegExp('^' + escapeRegex(employeeName) + '$', 'i') }
+      });
+      
+      if (!exec) {
+        exec = await Executive.findOne({
+          name: { $regex: new RegExp(escapeRegex(employeeName), 'i') }
+        });
+      }
+      
+      if (!exec) {
+        exec = await Executive.findOne({
+          username: { $regex: new RegExp(escapeRegex(employeeName), 'i') }
+        });
+      }
+      
+      if (exec) {
+        foundEmployee = exec;
+        Model = Executive;
+        foundRole = 'Executive';
+        console.log(`✅ Found employee in Executive model: "${exec.name}"`);
+      }
+      
+      // If not found, search other models
+      if (!foundEmployee) {
+        for (const [roleName, model] of Object.entries(modelMap)) {
+          if (roleName === 'Executive') continue;
+          
+          try {
+            let emp = await model.findOne({
+              name: { $regex: new RegExp('^' + escapeRegex(employeeName) + '$', 'i') }
             });
+            
+            if (!emp) {
+              emp = await model.findOne({
+                name: { $regex: new RegExp(escapeRegex(employeeName), 'i') }
+              });
+            }
+            
+            if (emp) {
+              foundEmployee = emp;
+              Model = model;
+              foundRole = roleName;
+              console.log(`✅ Found employee in model: ${roleName}`);
+              break;
+            }
+          } catch (modelError) {
+            console.error(`Error searching in ${roleName}:`, modelError.message);
           }
-          if (!emp) {
-            emp = await model.findOne({
-              username: { $regex: new RegExp('^' + name + '$', 'i') }
-            });
-          }
-          if (emp) {
-            foundEmployee = emp;
-            Model = model;
-            foundRole = roleName;
-            console.log(`✅ Found employee in model: ${roleName}`);
-            break;
-          }
-        } catch (modelError) {
-          console.error(`Error searching in ${roleName}:`, modelError.message);
         }
       }
 
       if (!foundEmployee) {
-        console.error('❌ Employee not found with name:', name);
+        console.error('❌ Employee not found with name:', employeeName);
         return res.status(404).json({
           success: false,
-          message: `Employee not found with name: ${name}`
+          message: `Employee not found with name: "${employeeName}"`
         });
       }
 
-      let documents = foundEmployee.documents || {};
-
-      const ensureDocumentStructure = (doc) => {
+      // Helper function to convert old string documents to new structure
+      const convertToDocumentStructure = (doc) => {
         if (!doc) return { files: [] };
-        if (typeof doc === 'string') return { files: [] };
+        if (typeof doc === 'string') {
+          // Convert old string URL to new structure
+          return {
+            files: [{
+              url: doc,
+              cloudinaryId: doc.split('/').pop().split('.')[0],
+              filename: 'Document',
+              notes: 'Legacy document',
+              uploadedAt: new Date()
+            }]
+          };
+        }
         if (doc.files && Array.isArray(doc.files)) return doc;
         return { files: [] };
       };
 
-      documents.aadhar = ensureDocumentStructure(documents.aadhar);
-      documents.pan = ensureDocumentStructure(documents.pan);
-      documents.educational = ensureDocumentStructure(documents.educational);
-      documents.experience = ensureDocumentStructure(documents.experience);
+      // Initialize documents with conversion of old string data
+      let documents = foundEmployee.documents || {};
+      
+      // Convert old string documents to new structure
+      documents.aadhar = convertToDocumentStructure(documents.aadhar);
+      documents.pan = convertToDocumentStructure(documents.pan);
+      documents.educational = convertToDocumentStructure(documents.educational);
+      documents.experience = convertToDocumentStructure(documents.experience);
 
+      // Initialize custom documents as Map if needed
       if (!documents.customDocuments) {
         documents.customDocuments = new Map();
       } else if (!(documents.customDocuments instanceof Map)) {
@@ -455,7 +503,7 @@ router.post('/upload-documents', (req, res) => {
           documents.customDocuments = new Map();
           if (typeof oldDocs === 'object' && oldDocs !== null) {
             Object.entries(oldDocs).forEach(([key, value]) => {
-              documents.customDocuments.set(key, value);
+              documents.customDocuments.set(key, convertToDocumentStructure(value));
             });
           }
         } catch (e) {
@@ -463,14 +511,14 @@ router.post('/upload-documents', (req, res) => {
         }
       }
 
-      // Process files
+      // Process uploaded files
       if (req.files && req.files.aadhar_front) {
         req.files.aadhar_front.forEach(file => {
           documents.aadhar.files.push({
             url: file.path,
             cloudinaryId: file.filename,
             filename: file.originalname,
-            notes: 'Aadhar Front',
+            notes: documentNotes || 'Aadhar Front',
             uploadedAt: new Date()
           });
         });
@@ -482,7 +530,7 @@ router.post('/upload-documents', (req, res) => {
             url: file.path,
             cloudinaryId: file.filename,
             filename: file.originalname,
-            notes: 'Aadhar Back',
+            notes: documentNotes || 'Aadhar Back',
             uploadedAt: new Date()
           });
         });
@@ -494,7 +542,7 @@ router.post('/upload-documents', (req, res) => {
             url: file.path,
             cloudinaryId: file.filename,
             filename: file.originalname,
-            notes: 'PAN Front',
+            notes: documentNotes || 'PAN Front',
             uploadedAt: new Date()
           });
         });
@@ -506,7 +554,7 @@ router.post('/upload-documents', (req, res) => {
             url: file.path,
             cloudinaryId: file.filename,
             filename: file.originalname,
-            notes: 'PAN Back',
+            notes: documentNotes || 'PAN Back',
             uploadedAt: new Date()
           });
         });
@@ -555,29 +603,34 @@ router.post('/upload-documents', (req, res) => {
         });
       }
 
+      // Save the updated documents
       await Model.findOneAndUpdate(
         { _id: foundEmployee._id },
         { $set: { documents: documents } },
         { new: true }
       );
 
-      const customDocsObject = {};
-      documents.customDocuments.forEach((value, key) => {
-        customDocsObject[key] = value;
-      });
+      console.log(`✅ Documents uploaded successfully for ${foundEmployee.name}`);
+      console.log(`   Total files uploaded: ${Object.values(req.files || {}).reduce((sum, files) => sum + files.length, 0)}`);
 
-      const responseDocs = {
-        aadhar: documents.aadhar,
-        pan: documents.pan,
-        educational: documents.educational,
-        experience: documents.experience,
-        customDocuments: customDocsObject
-      };
+      // Prepare response
+      const customDocsObject = {};
+      if (documents.customDocuments instanceof Map) {
+        documents.customDocuments.forEach((value, key) => {
+          customDocsObject[key] = value;
+        });
+      }
 
       return res.json({
         success: true,
         message: 'Documents uploaded successfully',
-        documents: responseDocs
+        documents: {
+          aadhar: documents.aadhar,
+          pan: documents.pan,
+          educational: documents.educational,
+          experience: documents.experience,
+          customDocuments: customDocsObject
+        }
       });
 
     } catch (error) {
@@ -592,6 +645,15 @@ router.post('/upload-documents', (req, res) => {
   });
 });
 
+// Helper function to escape regex special characters
+function escapeRegex(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Helper function to escape regex special characters
+function escapeRegex(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 // ==================== DELETE DOCUMENT ====================
 router.delete('/documents/:name/:docType/:fileIndex', async (req, res) => {
   try {

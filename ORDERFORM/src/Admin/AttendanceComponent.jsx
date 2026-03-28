@@ -231,9 +231,6 @@ const AttendanceComponent = ({ employees = [] }) => {
               case 'half-day':
                 statusDisplay = 'Half Day';
                 break;
-              case 'leave':
-                statusDisplay = 'Leave';
-                break;
               case 'holiday':
                 statusDisplay = 'Holiday';
                 break;
@@ -298,7 +295,6 @@ const AttendanceComponent = ({ employees = [] }) => {
             const presentCount = monthData.filter(r => r.status === 'present').length;
             const absentCount = monthData.filter(r => r.status === 'absent').length;
             const halfDayCount = monthData.filter(r => r.status === 'half-day').length;
-            const leaveCount = monthData.filter(r => r.status === 'leave').length;
             const holidayCount = monthData.filter(r => r.status === 'holiday').length;
 
             return (
@@ -315,7 +311,6 @@ const AttendanceComponent = ({ employees = [] }) => {
                   <div className="stat present">P: {presentCount}</div>
                   <div className="stat absent">A: {absentCount}</div>
                   <div className="stat half-day">H: {halfDayCount}</div>
-                  <div className="stat leave">L: {leaveCount}</div>
                   <div className="stat holiday">HD: {holidayCount}</div>
                 </div>
               </div>
@@ -333,7 +328,6 @@ const AttendanceComponent = ({ employees = [] }) => {
     const presentCount = attendanceData.filter(r => r.status === 'present').length;
     const absentCount = attendanceData.filter(r => r.status === 'absent').length;
     const halfDayCount = attendanceData.filter(r => r.status === 'half-day').length;
-    const leaveCount = attendanceData.filter(r => r.status === 'leave').length;
     const holidayCount = attendanceData.filter(r => r.status === 'holiday').length;
     const totalDays = new Date(
       new Date(selectedMonth + '-01').getFullYear(),
@@ -366,10 +360,6 @@ const AttendanceComponent = ({ employees = [] }) => {
           <div className="summary-item half-day">
             <span className="summary-label">Half Day:</span>
             <span className="summary-value">{halfDayCount}</span>
-          </div>
-          <div className="summary-item leave">
-            <span className="summary-label">Leave:</span>
-            <span className="summary-value">{leaveCount}</span>
           </div>
           <div className="summary-item holiday">
             <span className="summary-label">Holiday:</span>
@@ -526,7 +516,6 @@ const AttendanceComponent = ({ employees = [] }) => {
                   <option value="present">Present</option>
                   <option value="absent">Absent</option>
                   <option value="half-day">Half Day</option>
-                  <option value="leave">Leave</option>
                   <option value="holiday">Holiday</option>
                 </select>
               </div>
@@ -764,11 +753,6 @@ const AttendanceComponent = ({ employees = [] }) => {
           background-color: #fff3e0;
         }
         
-        .summary-item.leave {
-          border-color: #2196F3;
-          background-color: #e3f2fd;
-        }
-        
         .summary-item.holiday {
           border-color: #9C27B0;
           background-color: #f3e5f5;
@@ -859,11 +843,6 @@ const AttendanceComponent = ({ employees = [] }) => {
           border-color: #FF9800;
         }
         
-        .day-cell.leave {
-          background: linear-gradient(135deg, #e3f2fd 0%, #bbdef5 100%);
-          border-color: #2196F3;
-        }
-        
         .day-cell.holiday {
           background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
           border-color: #9C27B0;
@@ -885,10 +864,6 @@ const AttendanceComponent = ({ employees = [] }) => {
         
         .day-cell.sunday.half-day {
           background: linear-gradient(135deg, #ffe6cc 0%, #ffd9b3 100%);
-        }
-        
-        .day-cell.sunday.leave {
-          background: linear-gradient(135deg, #d4e3f5 0%, #c2d6e8 100%);
         }
         
         .day-cell.sunday.holiday {
@@ -986,11 +961,6 @@ const AttendanceComponent = ({ employees = [] }) => {
         .month-stats .half-day {
           background-color: #fff3e0;
           color: #e65100;
-        }
-        
-        .month-stats .leave {
-          background-color: #e3f2fd;
-          color: #1565c0;
         }
         
         .month-stats .holiday {
