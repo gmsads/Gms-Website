@@ -24,19 +24,632 @@ ChartJS.register(
   Filler
 );
 
+/* ═══════════════════════════════════════════════════════════
+   SIDEBAR CSS
+═══════════════════════════════════════════════════════════ */
+const SIDEBAR_CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  --sb-w:         280px;
+  --sb-bg:        #0f172a;
+  --sb-border:    rgba(255,255,255,0.08);
+  --sb-surface:   rgba(255,255,255,0.05);
+  --sb-hover:     rgba(255,255,255,0.08);
+  --accent:       #818cf8;
+  --accent-glow:  rgba(129,140,248,0.3);
+  --accent-soft:  rgba(129,140,248,0.12);
+  --accent-mid:   rgba(129,140,248,0.2);
+  --teal:         #2dd4bf;
+  --violet:       #a78bfa;
+  --t1:           #f8fafc;
+  --t2:           #cbd5e1;
+  --t3:           #64748b;
+  --t4:           #334155;
+  --font:         'Outfit', system-ui, sans-serif;
+}
+
+@keyframes sb-slideIn {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes sb-fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes activeDot {
+  0%,100% { box-shadow: 0 0 0 0 rgba(129,140,248,0.6); }
+  50%      { box-shadow: 0 0 0 5px rgba(129,140,248,0); }
+}
+@keyframes shimmerLine {
+  0%   { opacity: 0.4; transform: scaleX(0.6); }
+  50%  { opacity: 1;   transform: scaleX(1); }
+  100% { opacity: 0.4; transform: scaleX(0.6); }
+}
+@keyframes countBadge {
+  from { transform: scale(0.7); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+.sb {
+  width: var(--sb-w);
+  min-width: var(--sb-w);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 50;
+  background: var(--sb-bg);
+  border-right: 1px solid var(--sb-border);
+  overflow: hidden;
+  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+              width    0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(129,140,248,0.08) 0%, transparent 60%);
+}
+.sb::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 20px; right: 20px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(129,140,248,0.5), transparent);
+  animation: shimmerLine 4s ease infinite;
+}
+
+.sb.closed {
+  transform: translateX(-100%);
+}
+
+.sb-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid var(--sb-border);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.18s;
+  position: relative;
+}
+.sb-logo:hover { background: var(--sb-hover); }
+.sb-logo img { width: 120px; height: auto; flex-shrink: 0; }
+.sb-logo-pill {
+  margin-left: auto;
+  background: var(--accent-mid);
+  border: 1px solid rgba(129,140,248,0.4);
+  color: #c7d2fe;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font);
+  letter-spacing: 0.1em;
+  padding: 4px 10px;
+  border-radius: 100px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.sb-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 0 20px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(129,140,248,0.3) transparent;
+}
+.sb-body::-webkit-scrollbar       { width: 4px; }
+.sb-body::-webkit-scrollbar-thumb { background: rgba(129,140,248,0.3); border-radius: 3px; }
+
+.sb-group { margin-bottom: 4px; }
+
+.sb-group-hdr {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+  border-radius: 0;
+}
+.sb-group-hdr:hover { background: var(--sb-hover); }
+
+.sb-group-icon { font-size: 16px; line-height: 1; flex-shrink: 0; }
+
+.sb-group-label {
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--t3);
+  flex: 1;
+  transition: color 0.15s;
+}
+.sb-group-hdr:hover .sb-group-label { color: var(--t2); }
+
+.sb-chevron {
+  color: var(--t4);
+  font-size: 12px;
+  transition: transform 0.25s cubic-bezier(0.4,0,0.2,1), color 0.15s;
+  flex-shrink: 0;
+}
+.sb-chevron.open {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+.sb-sep {
+  height: 1px;
+  background: var(--sb-border);
+  margin: 8px 20px;
+}
+
+.sb-items {
+  overflow: hidden;
+  animation: sb-fadeUp 0.22s ease both;
+}
+
+.sb-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px 10px 32px;
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  position: relative;
+  transition:
+    background   0.15s ease,
+    border-color 0.15s ease,
+    padding-left 0.18s ease,
+    color        0.15s ease;
+}
+.sb-item:hover {
+  background: var(--sb-hover);
+  padding-left: 36px;
+}
+.sb-item-emoji {
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+.sb-item:hover .sb-item-emoji { transform: scale(1.15); }
+
+.sb-item-label {
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--t2);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.15s;
+}
+.sb-item:hover .sb-item-label { color: var(--t1); }
+
+.sb-badge {
+  background: var(--accent-mid);
+  border: 1px solid rgba(129,140,248,0.35);
+  color: #c7d2fe;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font);
+  padding: 3px 8px;
+  border-radius: 100px;
+  flex-shrink: 0;
+  animation: countBadge 0.3s ease both;
+}
+
+.sb-item.active {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+  padding-left: 36px;
+}
+.sb-item.active .sb-item-label {
+  color: #e2e8ff;
+  font-weight: 600;
+}
+.sb-item.active::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: activeDot 2.2s ease infinite;
+}
+
+.sb-new {
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--font);
+  letter-spacing: 0.08em;
+  color: #34d399;
+  background: rgba(52,211,153,0.12);
+  border: 1px solid rgba(52,211,153,0.3);
+  padding: 3px 7px;
+  border-radius: 100px;
+  flex-shrink: 0;
+}
+
+.sb-footer {
+  flex-shrink: 0;
+  padding: 16px 20px;
+  border-top: 1px solid var(--sb-border);
+  background: rgba(0,0,0,0.2);
+}
+
+.sb-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border: 1px solid transparent;
+}
+.sb-user:hover {
+  background: var(--sb-hover);
+  border-color: var(--sb-border);
+}
+
+.sb-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--accent), var(--violet));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: 16px;
+  color: #fff;
+  box-shadow: 0 4px 12px var(--accent-glow);
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+  position: relative;
+}
+.sb-avatar::after {
+  content: '';
+  position: absolute;
+  bottom: -2px; right: -2px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #10b981;
+  border: 2px solid var(--sb-bg);
+}
+
+.sb-user-info { flex: 1; min-width: 0; }
+.sb-username {
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--t1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-role {
+  font-family: var(--font);
+  font-size: 11px;
+  color: var(--t3);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sb-logout {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(239,68,68,0.12);
+  border: 1px solid rgba(239,68,68,0.25);
+  color: #f87171;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  font-family: var(--font);
+}
+.sb-logout:hover {
+  background: rgba(239,68,68,0.2);
+  border-color: rgba(239,68,68,0.4);
+  transform: scale(1.05);
+  color: #fca5a5;
+}
+
+.sb-search {
+  margin: 16px 16px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--sb-border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.sb-search:focus-within {
+  border-color: rgba(129,140,248,0.5);
+  background: var(--accent-soft);
+}
+.sb-search-icon { font-size: 14px; color: var(--t3); flex-shrink: 0; }
+.sb-search input {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--t1);
+  width: 100%;
+}
+.sb-search input::placeholder { color: var(--t3); }
+
+.sb-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 49;
+  animation: sb-fadeUp 0.2s ease;
+}
+`;
+
+/* ═══════════════════════════════════════════════════════════
+   NAV STRUCTURE
+═══════════════════════════════════════════════════════════ */
+const NAV = [
+  {
+    key: 'overview', label: 'Overview', icon: '⚡',
+    items: [
+      { to: '/admin-dashboard', label: 'Dashboard', emoji: '📊' },
+    ],
+  },
+  {
+    key: 'sales', label: 'Sales', icon: '💼',
+    items: [
+      { to: 'create-order',       label: 'Create Order',       emoji: '➕', badge: 'NEW' },
+      { to: 'advance-approvals',  label: 'Advance Approvals',  emoji: '✅' },
+      { to: 'view-orders',        label: 'View All Orders',    emoji: '📋' },
+      { to: 'parties',            label: 'Clients',            emoji: '👥' },
+      { to: 'quotation',          label: 'Quotation',          emoji: '💬' },
+      { to: 'performance',        label: 'Performance',        emoji: '📈' },
+      { to: 'view-prospective',   label: 'View Prospects',     emoji: '🎯' },
+      { to: 'select-appointment', label: 'Appointments',       emoji: '📅' },
+      { to: 'ledger',             label: 'Ledger',             emoji: '📒' },
+      { to: 'purchase',           label: 'Purchase',           emoji: '🛒' },
+    ],
+  },
+  {
+    key: 'users', label: 'Manage Users', icon: '👤',
+    items: [
+      { to: 'add-executive',     label: 'Add Employee',        emoji: '➕' },
+      { to: 'Employees',         label: 'Employees',           emoji: '👨‍💼' },
+      { to: 'tele-breaks',       label: 'Tele Breaks',         emoji: '☕' },
+      { to: 'unit-attendance',   label: 'Unit Attendance',     emoji: '🕐' },
+      { to: 'view-leaves',       label: 'View Leave Requests', emoji: '🏖️' },
+      { to: 'activity',          label: 'Target',              emoji: '🎯' },
+      { to: 'executives-logins', label: 'Executive Login Time',emoji: '🔐' },
+      { to: 'daily-report',      label: 'Daily Report',        emoji: '📄' },
+      { to: 'fieldvisitsadmin',  label: 'Field Visits',        emoji: '📍' },
+    ],
+  },
+  {
+    key: 'reports', label: 'Reports', icon: '📊',
+    items: [
+      { to: 'daily-report',      label: 'Daily Report',        emoji: '📄' },
+      { to: 'view-hrreport',     label: 'HR Report',           emoji: '👔' },
+      { to: 'fieldvisitsadmin',  label: 'Field Visits',        emoji: '🗺️' },
+    ],
+  },
+  {
+    key: 'operations', label: 'Operations', icon: '🔧',
+    items: [
+      { to: 'assign-service',    label: 'Assign Service',      emoji: '🔄' },
+      { to: 'pending-service',   label: 'Pending Service',     emoji: '⏳' },
+      { to: 'view-design',       label: 'View Design',         emoji: '🎨' },
+      { to: 'design-report',     label: 'Design Reports',      emoji: '🗂️' },
+      { to: 'vendors',           label: 'Vendors',             emoji: '🏪' },
+    ],
+  },
+  {
+    key: 'accounts', label: 'Accounts', icon: '💰',
+    items: [
+      { to: 'pending-payment',   label: 'Pending Payment',     emoji: '💳' },
+      { to: 'view-expenses',     label: 'View Expenses',       emoji: '💸' },
+      { to: 'inventory',         label: 'Inventory',           emoji: '📦' },
+    ],
+  },
+  {
+    key: 'clients', label: 'Clients', icon: '🤝',
+    items: [
+      { to: 'prospects',         label: 'Create Prospects',    emoji: '🎯' },
+      { to: 'appointments',      label: 'Create Appointments', emoji: '📅' },
+    ],
+  },
+  {
+    key: 'events', label: 'Events', icon: '🎉',
+    items: [
+      { to: 'create-anniversary',label: 'Create Anniversary',  emoji: '🎂' },
+      { to: 'anniversary-list',  label: 'Anniversary List',    emoji: '📋' },
+    ],
+  },
+];
+
+/* ═══════════════════════════════════════════════════════════
+   SIDEBAR COMPONENT
+═══════════════════════════════════════════════════════════ */
+function Sidebar({ open, onClose }) {
+  const navigate = useNavigate();
+  const [openSec, setOpenSec] = useState({ overview: true });
+  const [search, setSearch] = useState('');
+
+  const userName = localStorage.getItem('userName') || 'Admin User';
+  const initials = userName.split(' ').map(w => w[0]?.toUpperCase()).join('').slice(0, 2);
+  const isMobile = window.innerWidth <= 768;
+
+  const toggle = (key) => setOpenSec(p => ({ ...p, [key]: !p[key] }));
+  const closeMob = () => { if (isMobile && onClose) onClose(); };
+
+  const query = search.trim().toLowerCase();
+  const filtered = query
+    ? NAV.map(sec => ({
+        ...sec,
+        items: sec.items.filter(it => it.label.toLowerCase().includes(query)),
+      })).filter(sec => sec.items.length > 0)
+    : NAV;
+
+  const handleNavigation = (to, e) => {
+    if (e) e.preventDefault();
+    if (to === 'create-order') {
+      navigate('create-order');
+    } else {
+      navigate(to);
+    }
+    closeMob();
+  };
+
+  const handleLogout = () => {
+    localStorage.clear();
+    window.location.replace('/');
+  };
+
+  return (
+    <>
+      <style>{SIDEBAR_CSS}</style>
+
+      {isMobile && open && (
+        <div className="sb-overlay" onClick={onClose} />
+      )}
+
+      <aside className={`sb${open ? '' : ' closed'}`}>
+        <div
+          className="sb-logo"
+          onClick={() => { handleNavigation('/admin-dashboard'); }}
+        >
+          <img src={GMSLogo} alt="GMS Logo" />
+          <span className="sb-logo-pill">Admin</span>
+        </div>
+
+        <div className="sb-search">
+          <span className="sb-search-icon">🔍</span>
+          <input
+            type="text"
+            placeholder="Search menu…"
+            value={search}
+            onChange={e => {
+              setSearch(e.target.value);
+              if (e.target.value.trim()) {
+                const expanded = {};
+                NAV.forEach(s => expanded[s.key] = true);
+                setOpenSec(expanded);
+              }
+            }}
+          />
+          {search && (
+            <span
+              style={{ color: 'var(--t3)', cursor: 'pointer', fontSize: 13, flexShrink: 0 }}
+              onClick={() => setSearch('')}
+            >
+              ✕
+            </span>
+          )}
+        </div>
+
+        <div className="sb-body">
+          {filtered.map((sec, si) => (
+            <div key={sec.key} className="sb-group">
+              {si > 0 && <div className="sb-sep" />}
+              <div
+                className="sb-group-hdr"
+                onClick={() => toggle(sec.key)}
+              >
+                <span className="sb-group-icon">{sec.icon}</span>
+                <span className="sb-group-label">{sec.label}</span>
+                <span className={`sb-chevron${openSec[sec.key] ? ' open' : ''}`}>
+                  ▾
+                </span>
+              </div>
+              {(openSec[sec.key] || query) && (
+                <div className="sb-items">
+                  {sec.items.map((item) => (
+                    <NavLink
+                      key={item.label}
+                      to={item.to}
+                      className={({ isActive }) =>
+                        `sb-item${isActive ? ' active' : ''}`
+                      }
+                      onClick={(e) => handleNavigation(item.to, e)}
+                      style={{ animationDelay: `${sec.items.indexOf(item) * 0.03}s` }}
+                    >
+                      <span className="sb-item-emoji">{item.emoji}</span>
+                      <span className="sb-item-label">{item.label}</span>
+                      {item.badge === 'NEW' && (
+                        <span className="sb-new">NEW</span>
+                      )}
+                      {item.count != null && (
+                        <span className="sb-badge">{item.count}</span>
+                      )}
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {query && filtered.length === 0 && (
+            <div style={{
+              textAlign: 'center',
+              padding: '40px 20px',
+              color: 'var(--t3)',
+              fontFamily: 'var(--font)',
+              fontSize: 14,
+            }}>
+              No results for "{search}"
+            </div>
+          )}
+        </div>
+
+        <div className="sb-footer">
+          <div
+            className="sb-user"
+            onClick={() => { handleNavigation('/admin-dashboard/profile'); }}
+          >
+            <div className="sb-avatar">{initials}</div>
+            <div className="sb-user-info">
+              <div className="sb-username">{userName}</div>
+              <div className="sb-role">Administrator · GMS</div>
+            </div>
+            <button
+              className="sb-logout"
+              title="Sign out"
+              onClick={(e) => { e.stopPropagation(); handleLogout(); }}
+            >
+              ⎋
+            </button>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ADMIN DASHBOARD MAIN COMPONENT
+═══════════════════════════════════════════════════════════ */
 function AdminDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
-  const [hoveredItem, setHoveredItem] = useState('');
-  const [openSections, setOpenSections] = useState({
-    general: false,
-    sales: false,
-    services: false,
-    clients: false,
-    events: false,
-    manageUsers: false,
-    accounts: false,
-    reports: false
-  });
   const location = useLocation();
   const navigate = useNavigate();
   const [prospectiveData, setProspectiveData] = useState(null);
@@ -44,12 +657,10 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
   
-  // Financial Year: April to March
   const [financialYear, setFinancialYear] = useState(() => {
     const currentDate = new Date();
-    const currentMonth = currentDate.getMonth(); // 0-11, Jan=0
+    const currentMonth = currentDate.getMonth();
     const currentYear = currentDate.getFullYear();
-    // If current month is Jan-Mar (0-2), we're in previous financial year
     if (currentMonth >= 0 && currentMonth <= 2) {
       return `${currentYear - 1}-${currentYear}`;
     }
@@ -60,7 +671,6 @@ function AdminDashboard() {
   const [comparisonData, setComparisonData] = useState(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
 
-  // Date range filter states
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [useDateRange, setUseDateRange] = useState(false);
@@ -75,29 +685,21 @@ function AdminDashboard() {
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [selectedFormType, setSelectedFormType] = useState('order');
 
-  // Month labels for financial year (April to March)
   const monthLabels = [
     'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
     'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar',
   ];
 
-  // Generate financial years for dropdown (last 5 years and next 5 years)
   const getFinancialYears = () => {
     const currentDate = new Date();
     const currentYear = currentDate.getFullYear();
     const years = [];
-    
-    // Add "All Financial Years" option
     years.push('all');
-    
-    // Generate last 10 financial years and next 5
     for (let i = -10; i <= 5; i++) {
       const startYear = currentYear + i;
       const endYear = startYear + 1;
       years.push(`${startYear}-${endYear}`);
     }
-    
-    // Remove duplicates and sort
     return [...new Set(years)].sort((a, b) => {
       if (a === 'all') return -1;
       if (b === 'all') return 1;
@@ -109,25 +711,6 @@ function AdminDashboard() {
 
   const financialYears = getFinancialYears();
 
-  // Helper: Get financial year start and end dates
-  const getFinancialYearDates = (fy) => {
-    if (fy === 'all') return { startDate: null, endDate: null };
-    const [startYear, endYear] = fy.split('-').map(Number);
-    const start = new Date(startYear, 3, 1); // April 1st (month 3 = April)
-    const end = new Date(endYear, 2, 31, 23, 59, 59, 999); // March 31st (month 2 = March)
-    return { startDate: start, endDate: end };
-  };
-
-  // Helper: Get month index for financial year (0 = April, 11 = March)
-  const getFinancialMonthIndex = (date) => {
-    const month = date.getMonth(); // 0-11 (Jan=0)
-    if (month >= 3) { // April to December
-      return month - 3;
-    } else { // January to March
-      return month + 9;
-    }
-  };
-
   const getClientTypeData = () => {
     const defaultTypes = {
       Retail: { count: 0, amount: 0 },
@@ -135,13 +718,10 @@ function AdminDashboard() {
       Agent: { count: 0, amount: 0 },
       'Renewal-Agent': { count: 0, amount: 0 }
     };
-
     if (!chartData?.clientTypes) return defaultTypes;
-
     if (chartData.clientTypes.Retail && typeof chartData.clientTypes.Retail === 'object') {
       return chartData.clientTypes;
     }
-
     return {
       Retail: { count: chartData.clientTypes.Retail || 0, amount: 0 },
       Renewal: { count: chartData.clientTypes.Renewal || 0, amount: 0 },
@@ -151,13 +731,6 @@ function AdminDashboard() {
   };
 
   const clientTypes = getClientTypeData();
-
-  const toggleSection = (section) => {
-    setOpenSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
 
   const handleMenuItemClick = () => {
     if (window.innerWidth <= 768) {
@@ -170,7 +743,6 @@ function AdminDashboard() {
       const isDesktop = window.innerWidth > 768;
       setSidebarOpen(isDesktop);
     };
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -181,7 +753,6 @@ function AdminDashboard() {
       setWeeklyLoading(true);
       try {
         const params = new URLSearchParams();
-
         if (useDateRange && startDate && endDate) {
           params.append('startDate', startDate);
           params.append('endDate', endDate);
@@ -191,12 +762,10 @@ function AdminDashboard() {
           } else {
             params.append('financialYear', 'all');
           }
-
           if (selectedMonth !== null) {
             params.append('month', selectedMonth + 1);
           }
         }
-
         const [chartRes, prospectRes] = await Promise.all([
           axios.get(`/api/dashboard/chart-data?${params.toString()}`).catch(err => {
             console.error('Chart data error:', err);
@@ -207,19 +776,16 @@ function AdminDashboard() {
             return { data: null };
           })
         ]);
-
         if (chartRes && chartRes.data) {
           setChartData(chartRes.data);
         } else {
           setChartData(null);
         }
-
         if (prospectRes && prospectRes.data) {
           setProspectiveData(prospectRes.data);
         } else {
           setProspectiveData(null);
         }
-
       } catch (err) {
         console.error('API Error:', err);
         setChartData(null);
@@ -237,7 +803,6 @@ function AdminDashboard() {
       setComparisonLoading(true);
       try {
         const params = new URLSearchParams();
-        
         if (useDateRange && startDate && endDate) {
           params.append('startDate', startDate);
           params.append('endDate', endDate);
@@ -249,7 +814,6 @@ function AdminDashboard() {
             params.append('month', selectedMonth + 1);
           }
         }
-        
         const response = await axios.get(`/api/dashboard/comparison-data?${params.toString()}`);
         if (response.data) {
           setComparisonData(response.data);
@@ -263,7 +827,6 @@ function AdminDashboard() {
         setComparisonLoading(false);
       }
     };
-    
     fetchComparisonData();
   }, [financialYear, selectedMonth, startDate, endDate, useDateRange]);
 
@@ -276,7 +839,6 @@ function AdminDashboard() {
         console.error('Error fetching unread count:', error);
       }
     };
-
     fetchUnreadCount();
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
@@ -287,10 +849,8 @@ function AdminDashboard() {
       setSearchError('Please enter exactly 10 digits');
       return;
     }
-
     setIsSearchLoading(true);
     setSearchError('');
-
     try {
       if (selectedFormType === 'order') {
         const response = await axios.get(`/api/by-phone?phone=${orderNumber}`);
@@ -315,7 +875,6 @@ function AdminDashboard() {
     }
   };
 
-  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const showDashboardCards = location.pathname === '/admin-dashboard';
   const safeArray = (arr) => (Array.isArray(arr) ? arr : []);
 
@@ -333,51 +892,40 @@ function AdminDashboard() {
   const handleChartClick = (chartType) => {
     if (chartType === 'pending-payment') {
       const queryParams = new URLSearchParams();
-
       if (financialYear !== 'all') {
         queryParams.append('financialYear', financialYear);
       } else {
         queryParams.append('financialYear', 'all');
       }
-
       if (selectedMonth !== null) {
         queryParams.append('month', selectedMonth + 1);
       }
-
       queryParams.append('filterType', 'pending');
-
       navigate(`/admin-dashboard/pending-payment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
     } else if (chartType === 'completed-payment') {
       const queryParams = new URLSearchParams();
-
       if (financialYear !== 'all') {
         queryParams.append('financialYear', financialYear);
       } else {
         queryParams.append('financialYear', 'all');
       }
-
       if (selectedMonth !== null) {
         queryParams.append('month', selectedMonth + 1);
       }
-
       queryParams.append('filterType', 'completed');
-
       navigate(`/admin-dashboard/pending-payment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
     } else if (chartType === 'pending-service') {
       const queryParams = new URLSearchParams();
-      
       if (financialYear !== 'all') {
         queryParams.append('financialYear', financialYear);
       } else {
         queryParams.append('financialYear', 'all');
       }
-      
       if (selectedMonth !== null) {
         queryParams.append('month', selectedMonth + 1);
       } else {
         queryParams.append('month', 'all');
       }
-      
       navigate(`/admin-dashboard/pending-service${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
     } else if (chartType === 'revenue') {
       navigate('/admin-dashboard/view-orders');
@@ -387,7 +935,7 @@ function AdminDashboard() {
   };
 
   const handleCreateOrderClick = (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setShowOrderForm(false);
     setOrderNumber('');
     navigate('create-order');
@@ -418,26 +966,11 @@ function AdminDashboard() {
       height: '100vh',
       overflow: 'hidden',
     },
-    sidebar: {
-      width: sidebarOpen ? '250px' : '0',
-      backgroundColor: '#001529',
-      backgroundImage: 'linear-gradient(to bottom, #001529, #003366)',
-      color: '#fff',
-      overflowX: 'hidden',
-      transition: 'width 0.3s',
-      position: 'fixed',
-      top: 0,
-      bottom: 0,
-      left: 0,
-      zIndex: 10,
-      height: '100vh',
-      boxShadow: '2px 0 5px rgba(0,0,0,0.1)',
-    },
     content: {
       flex: 1,
-      marginLeft: sidebarOpen ? '250px' : '0',
+      marginLeft: sidebarOpen ? '280px' : '0',
       padding: '20px',
-      transition: 'margin-left 0.3s',
+      transition: 'margin-left 0.32s cubic-bezier(0.4, 0, 0.2, 1)',
       overflowY: 'auto',
       backgroundColor: '#f0f2f5',
       backgroundImage: 'linear-gradient(to bottom right, #f0f2f5, #e6e9ed)',
@@ -563,66 +1096,6 @@ function AdminDashboard() {
       position: 'relative',
       marginTop: '10px',
     },
-    sidebarHeader: {
-      padding: '20px',
-      fontSize: '18px',
-      fontWeight: 'bold',
-      color: '#fff',
-      borderBottom: '1px solid rgba(255,255,255,0.1)',
-      marginBottom: '10px',
-      backgroundColor: 'rgba(0,0,0,0.1)',
-      cursor: 'pointer',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center'
-    },
-    sidebarSection: {
-      marginBottom: '5px',
-    },
-    sidebarSectionTitle: {
-      padding: '12px 20px',
-      fontSize: '14px',
-      fontWeight: '600',
-      color: 'rgba(255,255,255,0.8)',
-      textTransform: 'uppercase',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      cursor: 'pointer',
-      backgroundColor: 'rgba(0,0,0,0.1)',
-      borderBottom: '1px solid rgba(255,255,255,0.05)',
-    },
-    sidebarItem: {
-      padding: '12px 30px',
-      cursor: 'pointer',
-      color: 'rgba(255,255,255,0.8)',
-      textDecoration: 'none',
-      display: 'block',
-      transition: 'all 0.3s',
-      fontSize: '14px',
-      borderLeft: '3px solid transparent',
-      backgroundColor: 'rgba(0,0,0,0.05)',
-    },
-    hoverEffect: {
-      backgroundColor: 'rgba(255,255,255,0.1)',
-      borderLeft: '3px solid #1890ff',
-    },
-    activeSidebarItem: {
-      backgroundColor: 'rgba(255,255,255,0.1)',
-      borderLeft: '3px solid #1890ff',
-      fontWeight: '600',
-    },
-    burger: {
-      fontSize: '24px',
-      marginRight: '20px',
-      cursor: 'pointer',
-      color: '#fff',
-      position: 'fixed',
-      left: '10px',
-      top: '15px',
-      zIndex: 30,
-      display: window.innerWidth <= 768 ? 'block' : 'none',
-    },
     number: {
       fontSize: '40px',
       color: '#002244',
@@ -741,56 +1214,6 @@ function AdminDashboard() {
     formTypeRadio: {
       marginRight: '5px'
     },
-    userControls: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '15px',
-    },
-    profileBadge: {
-      width: '32px',
-      height: '32px',
-      borderRadius: '50%',
-      backgroundColor: '#1890ff',
-      backgroundImage: 'linear-gradient(to bottom right, #1890ff, #0050b3)',
-      color: '#fff',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontWeight: 'bold',
-      userSelect: 'none',
-      cursor: 'pointer',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-    },
-    logoutButton: {
-      backgroundColor: '#ff4d4f',
-      backgroundImage: 'linear-gradient(to bottom right, #ff4d4f, #cf1322)',
-      color: '#fff',
-      border: 'none',
-      padding: '6px 12px',
-      borderRadius: '4px',
-      cursor: 'pointer',
-      whiteSpace: 'nowrap',
-      fontSize: '14px',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-    },
-    dropdownIcon: {
-      transition: 'transform 0.3s',
-      fontSize: '12px'
-    },
-    mobileMenuButton: {
-      position: 'fixed',
-      left: '10px',
-      top: '15px',
-      zIndex: '30',
-      fontSize: '24px',
-      cursor: 'pointer',
-      color: '#003366',
-      display: window.innerWidth <= 768 ? 'block' : 'none',
-      backgroundColor: 'white',
-      borderRadius: '4px',
-      padding: '5px 10px',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    },
     timePeriodText: {
       fontSize: '14px',
       color: '#666',
@@ -874,541 +1297,61 @@ function AdminDashboard() {
       color: '#666',
       marginTop: '8px',
       fontStyle: 'italic'
+    },
+    mobileMenuButton: {
+      position: 'fixed',
+      top: '16px',
+      left: '16px',
+      zIndex: 100,
+      width: '44px',
+      height: '44px',
+      background: '#0f172a',
+      border: '1px solid rgba(255,255,255,0.12)',
+      borderRadius: '12px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: 'pointer',
+      color: '#94a3b8',
+      fontSize: '20px',
+      transition: 'all 0.15s',
+      boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
     }
-  };
-
-  const linkStyle = (name) => ({ isActive }) => ({
-    ...styles.sidebarItem,
-    ...(isActive ? styles.activeSidebarItem : {}),
-    ...(hoveredItem === name ? styles.hoverEffect : {}),
-  });
-
-  const Sidebar = () => {
-    return (
-      <div style={{
-        ...styles.sidebar,
-        ...(window.innerWidth <= 768 && !sidebarOpen ? { display: 'none' } : {})
-      }}>
-        <div
-          style={{ ...styles.sidebarHeader, textAlign: 'center', cursor: 'pointer' }}
-          onClick={() => {
-            navigate('/admin-dashboard');
-            handleMenuItemClick();
-          }}
-        >
-          <img
-            src={GMSLogo}
-            alt="GMS Logo"
-            style={{
-              width: '160px',
-              height: 'auto',
-              transition: 'transform 0.3s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
-            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-          />
-        </div>
-
-        <div style={styles.sidebarSection}>
-          <div
-            style={styles.sidebarSectionTitle}
-            onClick={() => toggleSection('general')}
-          >
-            Dashboard
-            <span
-              style={{
-                ...styles.dropdownIcon,
-                transform: openSections.general ? 'rotate(180deg)' : 'rotate(0deg)',
-              }}
-            >
-              ▼
-            </span>
-          </div>
-          {openSections.general && (
-            <>
-              <NavLink
-                to="/admin-dashboard"
-                style={linkStyle('dashboard')}
-                onMouseEnter={() => setHoveredItem('dashboard')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Dashboard
-              </NavLink>
-            </>
-          )}
-        </div>
-
-        <div style={styles.sidebarSection}>
-          <div
-            style={styles.sidebarSectionTitle}
-            onClick={() => toggleSection('sales')}
-          >
-            SALES
-            <span
-              style={{
-                ...styles.dropdownIcon,
-                transform: openSections.sales ? 'rotate(180deg)' : 'rotate(0deg)',
-              }}
-            >
-              ▼
-            </span>
-          </div>
-          {openSections.sales && (
-            <>
-              <NavLink
-                to="create-order"
-                style={linkStyle('create-order')}
-                onMouseEnter={() => setHoveredItem('create-order')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleCreateOrderClick}
-              >
-                Create-Order ➕
-              </NavLink>
-              <NavLink
-                to="advance-approvals"
-                style={linkStyle('advance-approvals')}
-                onMouseEnter={() => setHoveredItem('advance-approvals')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Advance-Approvals
-              </NavLink>
-              <NavLink
-                to="view-orders"
-                style={linkStyle('view-orders')}
-                onMouseEnter={() => setHoveredItem('view-orders')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                View All Orders
-              </NavLink>
-              <NavLink
-                to="view-leaves"
-                style={linkStyle('view-leaves')}
-                onMouseEnter={() => setHoveredItem('view-leaves')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                View Leave Requests
-              </NavLink>
-              <NavLink
-                to="parties"
-                style={linkStyle('parties')}
-                onMouseEnter={() => setHoveredItem('parties')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Clients
-              </NavLink>
-              <NavLink
-                to="quotation"
-                style={linkStyle('quotation')}
-                onMouseEnter={() => setHoveredItem('quotation')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Quotation
-              </NavLink>
-              <NavLink
-                to="performance"
-                style={linkStyle('performance')}
-                onMouseEnter={() => setHoveredItem('performance')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                View Performance
-              </NavLink>
-              <NavLink
-                to="view-prospective"
-                style={linkStyle('view-prospective')}
-                onMouseEnter={() => setHoveredItem('view-prospective')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                View Prospects
-              </NavLink>
-              <NavLink
-                to="select-appointment"
-                style={linkStyle('select-appointment')}
-                onMouseEnter={() => setHoveredItem('select-appointment')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                View Appointments
-              </NavLink>
-              <NavLink
-                to="ledger"
-                style={linkStyle('ledger')}
-                onMouseEnter={() => setHoveredItem('ledger')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Ledger
-              </NavLink>
-              <NavLink
-                to="purchase"
-                style={linkStyle('purchase')}
-                onMouseEnter={() => setHoveredItem('purchase')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Purchase
-              </NavLink>
-            </>
-          )}
-        </div>
-
-        <div style={styles.sidebarSection}>
-          <div
-            style={styles.sidebarSectionTitle}
-            onClick={() => toggleSection('manageUsers')}
-          >
-            MANAGE USERS
-            <span
-              style={{
-                ...styles.dropdownIcon,
-                transform: openSections.manageUsers ? 'rotate(180deg)' : 'rotate(0deg)',
-              }}
-            >
-              ▼
-            </span>
-          </div>
-          {openSections.manageUsers && (
-            <>
-              <NavLink
-                to="add-executive"
-                style={linkStyle('add-executive')}
-                onMouseEnter={() => setHoveredItem('add-executive')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Add Employee
-              </NavLink>
-              <NavLink
-                to="Employees"
-                style={linkStyle('Employees')}
-                onMouseEnter={() => setHoveredItem('Employees')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Employees
-              </NavLink>
-              <NavLink
-                to="tele-breaks"
-                style={linkStyle('tele-breaks')}
-                onMouseEnter={() => setHoveredItem('tele-breaks')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Tele-Breaks
-              </NavLink>
-              <NavLink
-                to="unit-attendance"
-                style={linkStyle('unit-attendance')}
-                onMouseEnter={() => setHoveredItem('unit-attendance')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Unit-Attendance
-              </NavLink>
-              <NavLink
-                to="activity"
-                style={linkStyle('activity')}
-                onMouseEnter={() => setHoveredItem('activity')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Target
-              </NavLink>
-              <NavLink
-                to="executives-logins"
-                style={linkStyle('executives-logins')}
-                onMouseEnter={() => setHoveredItem('executives-logins')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Executive Login Time
-              </NavLink>
-              <NavLink
-                to="daily-report"
-                style={linkStyle('daily-report')}
-                onMouseEnter={() => setHoveredItem('daily-report')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Daily Report
-              </NavLink>
-              <NavLink
-                to="fieldvisitsadmin"
-                style={linkStyle('fieldvisitsadmin')}
-                onMouseEnter={() => setHoveredItem('fieldvisitsadmin')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Field Visits
-              </NavLink>
-            </>
-          )}
-        </div>
-
-        <div style={styles.sidebarSection}>
-          <div
-            style={styles.sidebarSectionTitle}
-            onClick={() => toggleSection('reports')}
-          >
-            Reports
-            <span
-              style={{
-                ...styles.dropdownIcon,
-                transform: openSections.reports ? 'rotate(180deg)' : 'rotate(0deg)',
-              }}
-            >
-              ▼
-            </span>
-          </div>
-          {openSections.reports && (
-            <>
-              <NavLink
-                to="daily-report"
-                style={linkStyle('daily-report')}
-                onMouseEnter={() => setHoveredItem('daily-report')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Daily Report
-              </NavLink>
-              <NavLink
-                to="view-hrreport"
-                style={linkStyle('view-hrreport')}
-                onMouseEnter={() => setHoveredItem('view-hrreport')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                HR Report
-              </NavLink>
-              <NavLink
-                to="fieldvisitsadmin"
-                style={linkStyle('fieldvisitsadmin')}
-                onMouseEnter={() => setHoveredItem('fieldvisitsadmin')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Field Visits
-              </NavLink>
-            </>
-          )}
-        </div>
-
-        <div style={styles.sidebarSection}>
-          <div
-            style={styles.sidebarSectionTitle}
-            onClick={() => toggleSection('services')}
-          >
-            SERVICES
-            <span
-              style={{
-                ...styles.dropdownIcon,
-                transform: openSections.services ? 'rotate(180deg)' : 'rotate(0deg)',
-              }}
-            >
-              ▼
-            </span>
-          </div>
-          {openSections.services && (
-            <>
-              <NavLink
-                to="assign-service"
-                style={linkStyle('assign-service')}
-                onMouseEnter={() => setHoveredItem('assign-service')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Assign Service
-              </NavLink>
-              <NavLink
-                to="pending-service"
-                style={linkStyle('pending-service')}
-                onMouseEnter={() => setHoveredItem('pending-service')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Pending Service
-              </NavLink>
-              <NavLink
-                to="view-design"
-                style={linkStyle('view-design')}
-                onMouseEnter={() => setHoveredItem('view-design')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                View Design
-              </NavLink>
-              <NavLink
-                to="design-report"
-                style={linkStyle('design-report')}
-                onMouseEnter={() => setHoveredItem('design-report')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Design Reports
-              </NavLink>
-              <NavLink
-                to="vendors"
-                style={linkStyle('vendors')}
-                onMouseEnter={() => setHoveredItem('vendors')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Vendors
-              </NavLink>
-            </>
-          )}
-        </div>
-
-        <div style={styles.sidebarSection}>
-          <div
-            style={styles.sidebarSectionTitle}
-            onClick={() => toggleSection('accounts')}
-          >
-            ACCOUNTS
-            <span
-              style={{
-                ...styles.dropdownIcon,
-                transform: openSections.accounts ? 'rotate(180deg)' : 'rotate(0deg)',
-              }}
-            >
-              ▼
-            </span>
-          </div>
-          {openSections.accounts && (
-            <>
-              <NavLink
-                to="pending-payment"
-                style={linkStyle('pending-payment')}
-                onMouseEnter={() => setHoveredItem('pending-payment')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Pending Payment
-              </NavLink>
-              <NavLink
-                to="view-expenses"
-                style={linkStyle('view-expenses')}
-                onMouseEnter={() => setHoveredItem('view-expenses')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                View Expenses
-              </NavLink>
-              <NavLink
-                to="inventory"
-                style={linkStyle('inventory')}
-                onMouseEnter={() => setHoveredItem('inventory')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Inventory
-              </NavLink>
-            </>
-          )}
-        </div>
-
-        <div style={styles.sidebarSection}>
-          <div
-            style={styles.sidebarSectionTitle}
-            onClick={() => toggleSection('clients')}
-          >
-            CLIENTS
-            <span
-              style={{
-                ...styles.dropdownIcon,
-                transform: openSections.clients ? 'rotate(180deg)' : 'rotate(0deg)',
-              }}
-            >
-              ▼
-            </span>
-          </div>
-          {openSections.clients && (
-            <>
-              <NavLink
-                to="prospects"
-                style={linkStyle('prospects')}
-                onMouseEnter={() => setHoveredItem('prospects')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Create Prospects ➕
-              </NavLink>
-              <NavLink
-                to="appointments"
-                style={linkStyle('appointments')}
-                onMouseEnter={() => setHoveredItem('appointments')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Create Appointments ➕
-              </NavLink>
-            </>
-          )}
-        </div>
-
-        <div style={styles.sidebarSection}>
-          <div
-            style={styles.sidebarSectionTitle}
-            onClick={() => toggleSection('events')}
-          >
-            EVENTS
-            <span
-              style={{
-                ...styles.dropdownIcon,
-                transform: openSections.events ? 'rotate(180deg)' : 'rotate(0deg)',
-              }}
-            >
-              ▼
-            </span>
-          </div>
-          {openSections.events && (
-            <>
-              <NavLink
-                to="create-anniversary"
-                style={linkStyle('create-anniversary')}
-                onMouseEnter={() => setHoveredItem('create-anniversary')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Create Anniversary
-              </NavLink>
-              <NavLink
-                to="anniversary-list"
-                style={linkStyle('anniversary-list')}
-                onMouseEnter={() => setHoveredItem('anniversary-list')}
-                onMouseLeave={() => setHoveredItem('')}
-                onClick={handleMenuItemClick}
-              >
-                Anniversary List
-              </NavLink>
-            </>
-          )}
-        </div>
-      </div>
-    );
   };
 
   const [hoveredCard, setHoveredCard] = useState(null);
 
+  useEffect(() => {
+    if (!location.pathname.includes('create-order')) {
+      setShowOrderForm(false);
+      setOrderNumber('');
+      setExistingOrderData(null);
+    }
+  }, [location.pathname]);
+
   return (
     <div style={styles.container}>
       {window.innerWidth <= 768 && (
-        <div
+        <button
           style={styles.mobileMenuButton}
-          onClick={toggleSidebar}
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = '#818cf8';
+            e.currentTarget.style.color = '#f8fafc';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
+            e.currentTarget.style.color = '#94a3b8';
+          }}
         >
-          ☰
-        </div>
+          {sidebarOpen ? '✕' : '☰'}
+        </button>
       )}
 
-      <Sidebar />
+      <Sidebar 
+        open={sidebarOpen} 
+        onClose={() => setSidebarOpen(false)} 
+      />
 
       <div style={styles.content}>
         {location.pathname.includes('create-order') ? (
@@ -1614,30 +1557,6 @@ function AdminDashboard() {
                       Clear Filters
                     </button>
                   </div>
-
-                  <div style={styles.userControls}>
-                    <div
-                      style={styles.profileBadge}
-                      onClick={() => navigate('/admin-dashboard/profile')}
-                    >
-                      {(localStorage.getItem('userName') || 'A')
-                        .split(' ')
-                        .map((w) => w[0]?.toUpperCase())
-                        .join('')}
-                    </div>
-                    <button
-                      style={{
-                        ...styles.logoutButton,
-                        marginTop: '2px'
-                      }}
-                      onClick={() => {
-                        localStorage.clear();
-                        window.location.replace('/');
-                      }}
-                    >
-                      Logout
-                    </button>
-                  </div>
                 </div>
 
                 <div style={styles.timePeriodText}>
@@ -1657,9 +1576,9 @@ function AdminDashboard() {
                     <div 
                       style={{
                         ...styles.card,
-                        ...(hoveredCard === 'revenue' ? styles.cardHover : {})
+                        ...(hoveredCard === 'revenueOrders' ? styles.cardHover : {})
                       }}
-                      onMouseEnter={() => setHoveredCard('revenue')}
+                      onMouseEnter={() => setHoveredCard('revenueOrders')}
                       onMouseLeave={() => setHoveredCard(null)}
                       onClick={(e) => {
                         if (e.target.tagName !== 'BUTTON') {
@@ -1674,7 +1593,7 @@ function AdminDashboard() {
                         }
                       }}
                     >
-                      <div>Total Revenue {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : financialYear === 'all' ? '(All Financial Years)' : '(Monthly)'}</div>
+                      <div>Revenue & Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : financialYear === 'all' ? '(All Financial Years)' : '(Monthly)'}</div>
                       <div style={styles.chartContainer}>
                         <Bar
                           data={{
@@ -1687,52 +1606,22 @@ function AdminDashboard() {
                                 data: selectedMonth !== null
                                   ? chartData?.weeklyOrders?.map(w => w.amount || 0) || []
                                   : safeArray(chartData?.amountByMonth),
-                                backgroundColor: selectedMonth !== null
-                                  ? [
-                                      'rgba(49, 122, 176, 0.8)',
-                                      'rgba(49, 122, 176, 0.7)',
-                                      'rgba(49, 122, 176, 0.6)',
-                                      'rgba(49, 122, 176, 0.5)',
-                                      'rgba(49, 122, 176, 0.4)',
-                                    ]
-                                  : [
-                                      'rgba(49, 122, 176, 0.9)',
-                                      'rgba(49, 122, 176, 0.85)',
-                                      'rgba(49, 122, 176, 0.8)',
-                                      'rgba(49, 122, 176, 0.75)',
-                                      'rgba(49, 122, 176, 0.7)',
-                                      'rgba(49, 122, 176, 0.65)',
-                                      'rgba(49, 122, 176, 0.6)',
-                                      'rgba(49, 122, 176, 0.65)',
-                                      'rgba(49, 122, 176, 0.7)',
-                                      'rgba(49, 122, 176, 0.75)',
-                                      'rgba(49, 122, 176, 0.8)',
-                                      'rgba(49, 122, 176, 0.85)',
-                                    ],
-                                borderColor: selectedMonth !== null
-                                  ? [
-                                      'rgba(49, 122, 176, 1)',
-                                      'rgba(49, 122, 176, 0.9)',
-                                      'rgba(49, 122, 176, 0.8)',
-                                      'rgba(49, 122, 176, 0.7)',
-                                      'rgba(49, 122, 176, 0.6)',
-                                    ]
-                                  : [
-                                      'rgba(49, 122, 176, 1)',
-                                      'rgba(49, 122, 176, 0.95)',
-                                      'rgba(49, 122, 176, 0.9)',
-                                      'rgba(49, 122, 176, 0.85)',
-                                      'rgba(49, 122, 176, 0.8)',
-                                      'rgba(49, 122, 176, 0.75)',
-                                      'rgba(49, 122, 176, 0.7)',
-                                      'rgba(49, 122, 176, 0.75)',
-                                      'rgba(49, 122, 176, 0.8)',
-                                      'rgba(49, 122, 176, 0.85)',
-                                      'rgba(49, 122, 176, 0.9)',
-                                      'rgba(49, 122, 176, 0.95)',
-                                    ],
+                                backgroundColor: 'rgba(49, 122, 176, 0.7)',
+                                borderColor: 'rgba(49, 122, 176, 1)',
                                 borderWidth: 1,
                                 borderRadius: 8,
+                                yAxisID: 'y-revenue',
+                              },
+                              {
+                                label: 'Total Orders',
+                                data: selectedMonth !== null
+                                  ? chartData?.weeklyOrders?.map(w => w.count) || []
+                                  : safeArray(chartData?.totalOrdersByMonth),
+                                backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                borderWidth: 1,
+                                borderRadius: 8,
+                                yAxisID: 'y-orders',
                               }
                             ]
                           }}
@@ -1740,32 +1629,35 @@ function AdminDashboard() {
                             responsive: true,
                             maintainAspectRatio: false,
                             plugins: {
-                              legend: { display: false },
+                              legend: {
+                                position: 'top',
+                                labels: {
+                                  usePointStyle: true,
+                                  boxWidth: 10,
+                                }
+                              },
                               tooltip: {
-                                backgroundColor: 'rgba(49, 122, 176, 0.95)',
-                                titleColor: '#FFFFFF',
-                                bodyColor: '#FFFFFF',
+                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                titleColor: '#fff',
+                                bodyColor: '#fff',
                                 borderColor: '#317ab0',
                                 borderWidth: 1,
                                 cornerRadius: 8,
                                 padding: 12,
                                 callbacks: {
-                                  title: function(tooltipItems) {
-                                    const dataIndex = tooltipItems[0].dataIndex;
-                                    if (selectedMonth !== null) {
-                                      return `Week ${dataIndex + 1}`;
-                                    } else {
-                                      return monthLabels[dataIndex];
-                                    }
-                                  },
                                   label: (context) => {
-                                    const amount = context.raw;
-                                    if (amount >= 10000000) {
-                                      return `Revenue: ₹${(amount / 10000000).toFixed(2)} Cr`;
-                                    } else if (amount >= 100000) {
-                                      return `Revenue: ₹${(amount / 100000).toFixed(2)} L`;
+                                    const label = context.dataset.label;
+                                    const value = context.raw;
+                                    if (label === 'Total Revenue') {
+                                      if (value >= 10000000) {
+                                        return `Revenue: ₹${(value / 10000000).toFixed(2)} Cr`;
+                                      } else if (value >= 100000) {
+                                        return `Revenue: ₹${(value / 100000).toFixed(2)} L`;
+                                      } else {
+                                        return `Revenue: ₹${value.toLocaleString('en-IN')}`;
+                                      }
                                     } else {
-                                      return `Revenue: ₹${amount.toLocaleString('en-IN')}`;
+                                      return `Orders: ${value}`;
                                     }
                                   }
                                 }
@@ -1794,9 +1686,16 @@ function AdminDashboard() {
                                 grid: { display: true, color: 'rgba(49, 122, 176, 0.1)' },
                                 ticks: { autoSkip: false, color: '#317ab0' }
                               },
-                              y: {
+                              'y-revenue': {
+                                type: 'linear',
+                                position: 'left',
                                 beginAtZero: true,
                                 grid: { color: 'rgba(49, 122, 176, 0.1)' },
+                                title: {
+                                  display: true,
+                                  text: 'Revenue (₹)',
+                                  color: '#317ab0',
+                                },
                                 ticks: {
                                   callback: function(value) {
                                     if (value >= 10000000) {
@@ -1810,42 +1709,60 @@ function AdminDashboard() {
                                   },
                                   color: '#317ab0'
                                 }
+                              },
+                              'y-orders': {
+                                type: 'linear',
+                                position: 'right',
+                                beginAtZero: true,
+                                grid: { drawOnChartArea: false },
+                                title: {
+                                  display: true,
+                                  text: 'Orders',
+                                  color: '#36a2eb',
+                                },
+                                ticks: {
+                                  stepSize: 1,
+                                  color: '#36a2eb'
+                                }
                               }
                             }
                           }}
                         />
                       </div>
                       
-                      <div style={styles.number}>
-                        {selectedMonth !== null 
-                          ? (() => {
-                              const amount = chartData?.amountByMonth?.[selectedMonth] || 0;
-                              if (amount >= 10000000) {
-                                return (amount / 10000000).toFixed(2) + 'Cr';
-                              } else if (amount >= 100000) {
-                                return (amount / 100000).toFixed(2) + 'L';
-                              } else {
-                                return amount.toLocaleString('en-IN');
-                              }
-                            })()
-                          : (() => {
-                              const total = safeArray(chartData?.amountByMonth).reduce((sum, amount) => sum + amount, 0);
-                              if (total >= 10000000) {
-                                return (total / 10000000).toFixed(2) + 'Cr';
-                              } else if (total >= 100000) {
-                                return (total / 100000).toFixed(2) + 'L';
-                              } else {
-                                return total.toLocaleString('en-IN');
-                              }
-                            })()
-                        }
-                      </div>
-                      
-                      <div style={styles.revenueSubtext}>
-                        {selectedMonth !== null 
-                          ? `₹${(chartData?.amountByMonth?.[selectedMonth] || 0).toLocaleString('en-IN')}`
-                          : `₹${safeArray(chartData?.amountByMonth).reduce((sum, amount) => sum + amount, 0).toLocaleString('en-IN')}`
-                        }
+                      <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', marginTop: '15px', gap: '20px' }}>
+                        <div style={{ textAlign: 'center', flex: 1 }}>
+                          <div style={styles.number}>
+                            {selectedMonth !== null 
+                              ? (() => {
+                                  const amount = chartData?.amountByMonth?.[selectedMonth] || 0;
+                                  if (amount >= 10000000) {
+                                    return (amount / 10000000).toFixed(2) + 'Cr';
+                                  } else if (amount >= 100000) {
+                                    return (amount / 100000).toFixed(2) + 'L';
+                                  } else {
+                                    return amount.toLocaleString('en-IN');
+                                  }
+                                })()
+                              : (() => {
+                                  const total = safeArray(chartData?.amountByMonth).reduce((sum, amount) => sum + amount, 0);
+                                  if (total >= 10000000) {
+                                    return (total / 10000000).toFixed(2) + 'Cr';
+                                  } else if (total >= 100000) {
+                                    return (total / 100000).toFixed(2) + 'L';
+                                  } else {
+                                    return total.toLocaleString('en-IN');
+                                  }
+                                })()
+                            }
+                          </div>
+                          <div style={styles.revenueSubtext}>Total Revenue</div>
+                        </div>
+                        <div style={{ width: '1px', backgroundColor: '#e0e0e0' }} />
+                        <div style={{ textAlign: 'center', flex: 1 }}>
+                          <div style={styles.number}>{getTotalOrdersCount()}</div>
+                          <div style={styles.revenueSubtext}>Total Orders</div>
+                        </div>
                       </div>
                       
                       {selectedMonth !== null && (
@@ -1864,110 +1781,6 @@ function AdminDashboard() {
                             marginTop: '10px',
                             fontWeight: 'bold',
                             fontSize: '12px'
-                          }}
-                        >
-                          View All Months
-                        </button>
-                      )}
-                    </div>
-
-                    <div 
-                      style={{
-                        ...styles.card,
-                        ...(hoveredCard === 'orders' ? styles.cardHover : {})
-                      }}
-                      onMouseEnter={() => setHoveredCard('orders')}
-                      onMouseLeave={() => setHoveredCard(null)}
-                      onClick={(e) => {
-                        if (e.target.tagName !== 'BUTTON') {
-                          const queryParams = new URLSearchParams();
-                          if (selectedMonth !== null) {
-                            queryParams.append('month', selectedMonth + 1);
-                          }
-                          if (financialYear !== 'all') {
-                            queryParams.append('financialYear', financialYear);
-                          }
-                          navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-                        }
-                      }}
-                    >
-                      <div>Total Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : financialYear === 'all' ? '(All Financial Years)' : '(Monthly)'}</div>
-                      <div style={styles.chartContainer}>
-                        {selectedMonth !== null && weeklyLoading ? (
-                          <div style={styles.noDataMessage}>Loading weekly data...</div>
-                        ) : selectedMonth !== null && (!chartData?.weeklyOrders || chartData.weeklyOrders.length === 0) ? (
-                          <div style={styles.noDataMessage}>No weekly data available for this month</div>
-                        ) : (
-                          <Bar
-                            data={{
-                              labels: selectedMonth !== null
-                                ? chartData?.weeklyOrders?.map((_, i) => `Week ${i + 1}`) || ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']
-                                : monthLabels,
-                              datasets: [
-                                {
-                                  label: 'Total Orders',
-                                  data: selectedMonth !== null
-                                    ? chartData?.weeklyOrders?.map(w => w.count) || []
-                                    : safeArray(chartData?.totalOrdersByMonth),
-                                  backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                                  borderColor: 'rgba(54, 162, 235, 1)',
-                                  borderWidth: 1,
-                                }
-                              ]
-                            }}
-                            options={{
-                              responsive: true,
-                              maintainAspectRatio: false,
-                              plugins: {
-                                legend: { display: false },
-                                tooltip: {
-                                  callbacks: {
-                                    label: (context) => {
-                                      const orders = context.raw;
-                                      return `Orders: ${orders}`;
-                                    }
-                                  }
-                                }
-                              },
-                              onClick: (_, elements) => {
-                                if (elements.length > 0) {
-                                  const queryParams = new URLSearchParams();
-                                  if (selectedMonth === null) {
-                                    const clickedMonth = elements[0].index + 1;
-                                    queryParams.append('month', clickedMonth);
-                                    if (financialYear !== 'all') {
-                                      queryParams.append('financialYear', financialYear);
-                                    }
-                                  } else {
-                                    queryParams.append('month', selectedMonth + 1);
-                                    if (financialYear !== 'all') {
-                                      queryParams.append('financialYear', financialYear);
-                                    }
-                                  }
-                                  navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-                                }
-                              }
-                            }}
-                          />
-                        )}
-                      </div>
-                      <div style={styles.number}>
-                        {getTotalOrdersCount()}
-                      </div>
-                      {selectedMonth !== null && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedMonth(null);
-                          }}
-                          style={{
-                            padding: '5px 10px',
-                            backgroundColor: '#003366',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            marginTop: '10px'
                           }}
                         >
                           View All Months
@@ -2336,475 +2149,476 @@ function AdminDashboard() {
                         )}
                       </div>
                     </div>
+
                     <div 
-  style={{
-    ...styles.card,
-    ...(hoveredCard === 'agentOrders' ? styles.cardHover : {})
-  }}
-  onMouseEnter={() => setHoveredCard('agentOrders')}
-  onMouseLeave={() => setHoveredCard(null)}
-  onClick={(e) => {
-    if (e.target.tagName !== 'BUTTON') {
-      const queryParams = new URLSearchParams();
-      queryParams.append('clientType', 'Agent');
-      if (selectedMonth !== null) {
-        queryParams.append('month', selectedMonth + 1);
-      }
-      if (financialYear !== 'all') {
-        queryParams.append('financialYear', financialYear);
-      }
-      navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-    }
-  }}
->
-  <div>Agent Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : financialYear === 'all' ? '(All Financial Years)' : '(Monthly)'}</div>
-  {loading ? (
-    <div style={styles.noDataMessage}>Loading agent data...</div>
-  ) : (
-    <>
-      <div style={styles.chartContainer}>
-        <Bar
-          data={{
-            labels: selectedMonth !== null
-              ? ['Agent Orders']
-              : monthLabels,
-            datasets: [
-              {
-                label: 'Agent Orders',
-                data: selectedMonth !== null
-                  ? [clientTypes.Agent?.count || 0]
-                  : (() => {
-                      if (chartData?.agentOrdersByMonth && Array.isArray(chartData.agentOrdersByMonth)) {
-                        return chartData.agentOrdersByMonth;
-                      } else {
-                        const totalAgentOrders = clientTypes.Agent?.count || 0;
-                        return monthLabels.map((_, monthIndex) => {
-                          if (selectedMonth === null) {
-                            return 0;
+                      style={{
+                        ...styles.card,
+                        ...(hoveredCard === 'agentOrders' ? styles.cardHover : {})
+                      }}
+                      onMouseEnter={() => setHoveredCard('agentOrders')}
+                      onMouseLeave={() => setHoveredCard(null)}
+                      onClick={(e) => {
+                        if (e.target.tagName !== 'BUTTON') {
+                          const queryParams = new URLSearchParams();
+                          queryParams.append('clientType', 'Agent');
+                          if (selectedMonth !== null) {
+                            queryParams.append('month', selectedMonth + 1);
                           }
-                          return monthIndex === selectedMonth ? totalAgentOrders : 0;
-                        });
-                      }
-                    })(),
-                backgroundColor: 'rgba(255, 206, 86, 0.7)',
-                borderRadius: 8,
-              }
-            ]
-          }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    const count = context.raw || 0;
-                    let amount = 0;
-                    if (chartData?.agentAmountByMonth && Array.isArray(chartData.agentAmountByMonth)) {
-                      amount = chartData.agentAmountByMonth[context.dataIndex] || 0;
-                    }
-                    return [
-                      `Orders: ${count}`,
-                      `Amount: ₹${amount.toLocaleString('en-IN')}`
-                    ];
-                  }
-                }
-              }
-            },
-            onClick: (_, elements) => {
-              if (elements && elements.length > 0) {
-                const queryParams = new URLSearchParams();
-                queryParams.append('clientType', 'Agent');
-                
-                if (selectedMonth === null) {
-                  const clickedMonth = elements[0].index + 1;
-                  queryParams.append('month', clickedMonth);
-                } else {
-                  queryParams.append('month', selectedMonth + 1);
-                }
-                if (financialYear !== 'all') {
-                  queryParams.append('financialYear', financialYear);
-                }
-                
-                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-              }
-            },
-            scales: {
-              x: {
-                title: {
-                  display: selectedMonth === null,
-                  text: 'Month',
-                  font: { size: 10 }
-                },
-                ticks: {
-                  maxRotation: 45,
-                  minRotation: 45,
-                  autoSkip: true,
-                  font: { size: 9 }
-                }
-              },
-              y: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: 'Number of Orders',
-                  font: { size: 10 }
-                },
-                ticks: {
-                  stepSize: 1,
-                  font: { size: 9 }
-                }
-              }
-            }
-          }}
-        />
-      </div>
-      <div style={styles.number}>
-        {clientTypes.Agent?.count || 0}
-      </div>
-      {selectedMonth !== null && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedMonth(null);
-          }}
-          style={{
-            padding: '5px 10px',
-            backgroundColor: '#003366',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            marginTop: '10px',
-            fontSize: '11px'
-          }}
-        >
-          View All Months
-        </button>
-      )}
-    </>
-  )}
-</div>
+                          if (financialYear !== 'all') {
+                            queryParams.append('financialYear', financialYear);
+                          }
+                          navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                        }
+                      }}
+                    >
+                      <div>Agent Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : financialYear === 'all' ? '(All Financial Years)' : '(Monthly)'}</div>
+                      {loading ? (
+                        <div style={styles.noDataMessage}>Loading agent data...</div>
+                      ) : (
+                        <>
+                          <div style={styles.chartContainer}>
+                            <Bar
+                              data={{
+                                labels: selectedMonth !== null
+                                  ? ['Agent Orders']
+                                  : monthLabels,
+                                datasets: [
+                                  {
+                                    label: 'Agent Orders',
+                                    data: selectedMonth !== null
+                                      ? [clientTypes.Agent?.count || 0]
+                                      : (() => {
+                                          if (chartData?.agentOrdersByMonth && Array.isArray(chartData.agentOrdersByMonth)) {
+                                            return chartData.agentOrdersByMonth;
+                                          } else {
+                                            const totalAgentOrders = clientTypes.Agent?.count || 0;
+                                            return monthLabels.map((_, monthIndex) => {
+                                              if (selectedMonth === null) {
+                                                return 0;
+                                              }
+                                              return monthIndex === selectedMonth ? totalAgentOrders : 0;
+                                            });
+                                          }
+                                        })(),
+                                    backgroundColor: 'rgba(255, 206, 86, 0.7)',
+                                    borderRadius: 8,
+                                  }
+                                ]
+                              }}
+                              options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                  legend: { display: false },
+                                  tooltip: {
+                                    callbacks: {
+                                      label: function(context) {
+                                        const count = context.raw || 0;
+                                        let amount = 0;
+                                        if (chartData?.agentAmountByMonth && Array.isArray(chartData.agentAmountByMonth)) {
+                                          amount = chartData.agentAmountByMonth[context.dataIndex] || 0;
+                                        }
+                                        return [
+                                          `Orders: ${count}`,
+                                          `Amount: ₹${amount.toLocaleString('en-IN')}`
+                                        ];
+                                      }
+                                    }
+                                  }
+                                },
+                                onClick: (_, elements) => {
+                                  if (elements && elements.length > 0) {
+                                    const queryParams = new URLSearchParams();
+                                    queryParams.append('clientType', 'Agent');
+                                    
+                                    if (selectedMonth === null) {
+                                      const clickedMonth = elements[0].index + 1;
+                                      queryParams.append('month', clickedMonth);
+                                    } else {
+                                      queryParams.append('month', selectedMonth + 1);
+                                    }
+                                    if (financialYear !== 'all') {
+                                      queryParams.append('financialYear', financialYear);
+                                    }
+                                    
+                                    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                                  }
+                                },
+                                scales: {
+                                  x: {
+                                    title: {
+                                      display: selectedMonth === null,
+                                      text: 'Month',
+                                      font: { size: 10 }
+                                    },
+                                    ticks: {
+                                      maxRotation: 45,
+                                      minRotation: 45,
+                                      autoSkip: true,
+                                      font: { size: 9 }
+                                    }
+                                  },
+                                  y: {
+                                    beginAtZero: true,
+                                    title: {
+                                      display: true,
+                                      text: 'Number of Orders',
+                                      font: { size: 10 }
+                                    },
+                                    ticks: {
+                                      stepSize: 1,
+                                      font: { size: 9 }
+                                    }
+                                  }
+                                }
+                              }}
+                            />
+                          </div>
+                          <div style={styles.number}>
+                            {clientTypes.Agent?.count || 0}
+                          </div>
+                          {selectedMonth !== null && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedMonth(null);
+                              }}
+                              style={{
+                                padding: '5px 10px',
+                                backgroundColor: '#003366',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                marginTop: '10px',
+                                fontSize: '11px'
+                              }}
+                            >
+                              View All Months
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
 
-<div 
-  style={{
-    ...styles.card,
-    ...(hoveredCard === 'comparison' ? styles.cardHover : {}),
-    backgroundColor: '#ffffff',
-    padding: '16px'
-  }}
-  onMouseEnter={() => setHoveredCard('comparison')}
-  onMouseLeave={() => setHoveredCard(null)}
->
-  <div style={{
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '16px'
-  }}>
-    <div style={{ fontSize: '15px', fontWeight: '600', color: '#1e293b' }}>
-      📊 Last 3 Months Comparison
-    </div>
+                    <div 
+                      style={{
+                        ...styles.card,
+                        ...(hoveredCard === 'comparison' ? styles.cardHover : {}),
+                        backgroundColor: '#ffffff',
+                        padding: '16px'
+                      }}
+                      onMouseEnter={() => setHoveredCard('comparison')}
+                      onMouseLeave={() => setHoveredCard(null)}
+                    >
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '16px'
+                      }}>
+                        <div style={{ fontSize: '15px', fontWeight: '600', color: '#1e293b' }}>
+                          📊 Last 3 Months Comparison
+                        </div>
 
-    {comparisonData?.months && (
-      <div style={{
-        fontSize: '12px',
-        color: '#64748b',
-        background: '#f1f5f9',
-        padding: '4px 10px',
-        borderRadius: '16px'
-      }}>
-        {comparisonData.months[0]} - {comparisonData.months[comparisonData.months.length - 1]}
-      </div>
-    )}
-  </div>
+                        {comparisonData?.months && (
+                          <div style={{
+                            fontSize: '12px',
+                            color: '#64748b',
+                            background: '#f1f5f9',
+                            padding: '4px 10px',
+                            borderRadius: '16px'
+                          }}>
+                            {comparisonData.months[0]} - {comparisonData.months[comparisonData.months.length - 1]}
+                          </div>
+                        )}
+                      </div>
 
-  {comparisonLoading ? (
-    <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
-      Loading comparison data...
-    </div>
-  ) : !comparisonData || !comparisonData.months || comparisonData.months.length === 0 ? (
-    <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
-      No comparison data available
-    </div>
-  ) : (
-    <>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        marginBottom: '20px',
-        background: '#f8fafc',
-        padding: '12px 16px',
-        borderRadius: '12px',
-        gap: '8px'
-      }}>
-        <div style={{ textAlign: 'center', flex: 1 }}>
-          <div style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>
-            {comparisonData.ordersData.reduce((a, b) => a + b, 0)}
-          </div>
-          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-            Total Orders
-          </div>
-        </div>
+                      {comparisonLoading ? (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
+                          Loading comparison data...
+                        </div>
+                      ) : !comparisonData || !comparisonData.months || comparisonData.months.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
+                          No comparison data available
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            marginBottom: '20px',
+                            background: '#f8fafc',
+                            padding: '12px 16px',
+                            borderRadius: '12px',
+                            gap: '8px'
+                          }}>
+                            <div style={{ textAlign: 'center', flex: 1 }}>
+                              <div style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>
+                                {comparisonData.ordersData.reduce((a, b) => a + b, 0)}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                Total Orders
+                              </div>
+                            </div>
 
-        <div style={{ width: '1px', background: '#e2e8f0' }} />
+                            <div style={{ width: '1px', background: '#e2e8f0' }} />
 
-        <div style={{ textAlign: 'center', flex: 1 }}>
-          <div style={{ fontSize: '18px', fontWeight: '700', color: '#059669' }}>
-            {(() => {
-              const total = comparisonData.amountData.reduce((a, b) => a + b, 0);
-              if (total >= 10000000) {
-                return `₹${(total / 10000000).toFixed(2)}Cr`;
-              } else if (total >= 100000) {
-                return `₹${(total / 100000).toFixed(2)}L`;
-              } else {
-                return `₹${(total / 1000).toFixed(1)}K`;
-              }
-            })()}
-          </div>
-          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-            Total Revenue
-          </div>
-        </div>
+                            <div style={{ textAlign: 'center', flex: 1 }}>
+                              <div style={{ fontSize: '18px', fontWeight: '700', color: '#059669' }}>
+                                {(() => {
+                                  const total = comparisonData.amountData.reduce((a, b) => a + b, 0);
+                                  if (total >= 10000000) {
+                                    return `₹${(total / 10000000).toFixed(2)}Cr`;
+                                  } else if (total >= 100000) {
+                                    return `₹${(total / 100000).toFixed(2)}L`;
+                                  } else {
+                                    return `₹${(total / 1000).toFixed(1)}K`;
+                                  }
+                                })()}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                Total Revenue
+                              </div>
+                            </div>
 
-        <div style={{ width: '1px', background: '#e2e8f0' }} />
+                            <div style={{ width: '1px', background: '#e2e8f0' }} />
 
-        <div style={{ textAlign: 'center', flex: 1 }}>
-          <div style={{ fontSize: '18px', fontWeight: '700', color: '#d97706' }}>
-            {(comparisonData.ordersData.reduce((a, b) => a + b, 0) / 3).toFixed(1)}
-          </div>
-          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-            Monthly Avg
-          </div>
-        </div>
-      </div>
+                            <div style={{ textAlign: 'center', flex: 1 }}>
+                              <div style={{ fontSize: '18px', fontWeight: '700', color: '#d97706' }}>
+                                {(comparisonData.ordersData.reduce((a, b) => a + b, 0) / 3).toFixed(1)}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                Monthly Avg
+                              </div>
+                            </div>
+                          </div>
 
-      <div style={{ height: '160px', marginBottom: '16px' }}>
-        <Bar
-          data={{
-            labels: comparisonData.months,
-            datasets: [
-              {
-                label: 'Orders',
-                data: comparisonData.ordersData,
-                backgroundColor: '#3b82f6',
-                borderRadius: 4,
-                barPercentage: 0.6,
-                categoryPercentage: 0.8,
-                yAxisID: 'y-orders'
-              },
-              {
-                label: 'Revenue',
-                data: comparisonData.amountData,
-                backgroundColor: '#f59e0b',
-                borderRadius: 4,
-                barPercentage: 0.6,
-                categoryPercentage: 0.8,
-                yAxisID: 'y-revenue'
-              }
-            ]
-          }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: 'top',
-                labels: {
-                  boxWidth: 10,
-                  font: { size: 10 }
-                }
-              },
-              tooltip: {
-                callbacks: {
-                  label: (context) => {
-                    const label = context.dataset.label;
-                    const value = context.raw;
+                          <div style={{ height: '160px', marginBottom: '16px' }}>
+                            <Bar
+                              data={{
+                                labels: comparisonData.months,
+                                datasets: [
+                                  {
+                                    label: 'Orders',
+                                    data: comparisonData.ordersData,
+                                    backgroundColor: '#3b82f6',
+                                    borderRadius: 4,
+                                    barPercentage: 0.6,
+                                    categoryPercentage: 0.8,
+                                    yAxisID: 'y-orders'
+                                  },
+                                  {
+                                    label: 'Revenue',
+                                    data: comparisonData.amountData,
+                                    backgroundColor: '#f59e0b',
+                                    borderRadius: 4,
+                                    barPercentage: 0.6,
+                                    categoryPercentage: 0.8,
+                                    yAxisID: 'y-revenue'
+                                  }
+                                ]
+                              }}
+                              options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                  legend: {
+                                    position: 'top',
+                                    labels: {
+                                      boxWidth: 10,
+                                      font: { size: 10 }
+                                    }
+                                  },
+                                  tooltip: {
+                                    callbacks: {
+                                      label: (context) => {
+                                        const label = context.dataset.label;
+                                        const value = context.raw;
 
-                    if (label === 'Revenue') {
-                      if (value >= 10000000) {
-                        return `Revenue: ₹${(value / 10000000).toFixed(2)} Cr`;
-                      } else if (value >= 100000) {
-                        return `Revenue: ₹${(value / 100000).toFixed(2)} L`;
-                      } else {
-                        return `Revenue: ₹${(value / 1000).toFixed(1)} K`;
-                      }
-                    }
-                    return `Orders: ${value}`;
-                  }
-                }
-              }
-            },
-            scales: {
-              'y-orders': {
-                type: 'linear',
-                position: 'left',
-                beginAtZero: true,
-                grid: { color: '#e2e8f0', lineWidth: 0.5 },
-                title: { 
-                  display: true, 
-                  text: 'Orders',
-                  font: { size: 9 }
-                },
-                ticks: {
-                  font: { size: 8 },
-                  stepSize: 1
-                }
-              },
-              'y-revenue': {
-                type: 'linear',
-                position: 'right',
-                beginAtZero: true,
-                grid: { drawOnChartArea: false },
-                title: { 
-                  display: true, 
-                  text: 'Revenue (₹)',
-                  font: { size: 9 }
-                },
-                ticks: {
-                  font: { size: 8 },
-                  callback: function(value) {
-                    if (value >= 10000000) {
-                      return (value / 10000000).toFixed(1) + 'Cr';
-                    } else if (value >= 100000) {
-                      return (value / 100000).toFixed(1) + 'L';
-                    } else if (value >= 1000) {
-                      return (value / 1000).toFixed(1) + 'K';
-                    }
-                    return value;
-                  }
-                }
-              },
-              x: {
-                grid: { display: false },
-                ticks: {
-                  font: { size: 10, weight: '500' },
-                  color: '#334155'
-                }
-              }
-            },
-            onClick: (_, elements) => {
-              if (elements.length > 0) {
-                const index = elements[0].index;
-                const month = comparisonData.rawData[index];
-                const queryParams = new URLSearchParams();
-                queryParams.append('month', month.month + 1);
-                queryParams.append('year', month.year);
-                if (financialYear !== 'all') {
-                  queryParams.append('financialYear', financialYear);
-                }
-                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-              }
-            }
-          }}
-        />
-      </div>
+                                        if (label === 'Revenue') {
+                                          if (value >= 10000000) {
+                                            return `Revenue: ₹${(value / 10000000).toFixed(2)} Cr`;
+                                          } else if (value >= 100000) {
+                                            return `Revenue: ₹${(value / 100000).toFixed(2)} L`;
+                                          } else {
+                                            return `Revenue: ₹${(value / 1000).toFixed(1)} K`;
+                                          }
+                                        }
+                                        return `Orders: ${value}`;
+                                      }
+                                    }
+                                  }
+                                },
+                                scales: {
+                                  'y-orders': {
+                                    type: 'linear',
+                                    position: 'left',
+                                    beginAtZero: true,
+                                    grid: { color: '#e2e8f0', lineWidth: 0.5 },
+                                    title: { 
+                                      display: true, 
+                                      text: 'Orders',
+                                      font: { size: 9 }
+                                    },
+                                    ticks: {
+                                      font: { size: 8 },
+                                      stepSize: 1
+                                    }
+                                  },
+                                  'y-revenue': {
+                                    type: 'linear',
+                                    position: 'right',
+                                    beginAtZero: true,
+                                    grid: { drawOnChartArea: false },
+                                    title: { 
+                                      display: true, 
+                                      text: 'Revenue (₹)',
+                                      font: { size: 9 }
+                                    },
+                                    ticks: {
+                                      font: { size: 8 },
+                                      callback: function(value) {
+                                        if (value >= 10000000) {
+                                          return (value / 10000000).toFixed(1) + 'Cr';
+                                        } else if (value >= 100000) {
+                                          return (value / 100000).toFixed(1) + 'L';
+                                        } else if (value >= 1000) {
+                                          return (value / 1000).toFixed(1) + 'K';
+                                        }
+                                        return value;
+                                      }
+                                    }
+                                  },
+                                  x: {
+                                    grid: { display: false },
+                                    ticks: {
+                                      font: { size: 10, weight: '500' },
+                                      color: '#334155'
+                                    }
+                                  }
+                                },
+                                onClick: (_, elements) => {
+                                  if (elements.length > 0) {
+                                    const index = elements[0].index;
+                                    const month = comparisonData.rawData[index];
+                                    const queryParams = new URLSearchParams();
+                                    queryParams.append('month', month.month + 1);
+                                    queryParams.append('year', month.year);
+                                    if (financialYear !== 'all') {
+                                      queryParams.append('financialYear', financialYear);
+                                    }
+                                    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                                  }
+                                }
+                              }}
+                            />
+                          </div>
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${comparisonData.months.length}, 1fr)`,
-        gap: '10px',
-        marginBottom: '12px'
-      }}>
-        {comparisonData.rawData.map((month, index) => {
-          const prevMonth = index > 0 ? comparisonData.rawData[index - 1] : null;
-          const orderDiff = prevMonth ? month.orders - prevMonth.orders : 0;
-          const colors = ['#3b82f6', '#f59e0b', '#10b981'];
+                          <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: `repeat(${comparisonData.months.length}, 1fr)`,
+                            gap: '10px',
+                            marginBottom: '12px'
+                          }}>
+                            {comparisonData.rawData.map((month, index) => {
+                              const prevMonth = index > 0 ? comparisonData.rawData[index - 1] : null;
+                              const orderDiff = prevMonth ? month.orders - prevMonth.orders : 0;
+                              const colors = ['#3b82f6', '#f59e0b', '#10b981'];
 
-          return (
-            <div
-              key={index}
-              onClick={() => {
-                const queryParams = new URLSearchParams();
-                queryParams.append('month', month.month + 1);
-                queryParams.append('year', month.year);
-                if (financialYear !== 'all') {
-                  queryParams.append('financialYear', financialYear);
-                }
-                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-              }}
-              style={{
-                background: index === 2 ? '#f0f9ff' : '#f8fafc',
-                padding: '10px 4px',
-                borderRadius: '8px',
-                textAlign: 'center',
-                cursor: 'pointer',
-                border: index === 2 ? `1px solid ${colors[index]}` : '1px solid #e2e8f0',
-                transition: 'all 0.2s'
-              }}
-            >
-              <div style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b', marginBottom: '4px' }}>
-                {month.monthName}
-              </div>
+                              return (
+                                <div
+                                  key={index}
+                                  onClick={() => {
+                                    const queryParams = new URLSearchParams();
+                                    queryParams.append('month', month.month + 1);
+                                    queryParams.append('year', month.year);
+                                    if (financialYear !== 'all') {
+                                      queryParams.append('financialYear', financialYear);
+                                    }
+                                    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                                  }}
+                                  style={{
+                                    background: index === 2 ? '#f0f9ff' : '#f8fafc',
+                                    padding: '10px 4px',
+                                    borderRadius: '8px',
+                                    textAlign: 'center',
+                                    cursor: 'pointer',
+                                    border: index === 2 ? `1px solid ${colors[index]}` : '1px solid #e2e8f0',
+                                    transition: 'all 0.2s'
+                                  }}
+                                >
+                                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b', marginBottom: '4px' }}>
+                                    {month.monthName}
+                                  </div>
 
-              <div style={{ fontSize: '18px', fontWeight: '700', color: colors[index] }}>
-                {month.orders}
-              </div>
+                                  <div style={{ fontSize: '18px', fontWeight: '700', color: colors[index] }}>
+                                    {month.orders}
+                                  </div>
 
-              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                {(() => {
-                  if (month.amount >= 10000000) {
-                    return `₹${(month.amount / 10000000).toFixed(2)}Cr`;
-                  } else if (month.amount >= 100000) {
-                    return `₹${(month.amount / 100000).toFixed(2)}L`;
-                  } else {
-                    return `₹${(month.amount / 1000).toFixed(1)}K`;
-                  }
-                })()}
-              </div>
+                                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                    {(() => {
+                                      if (month.amount >= 10000000) {
+                                        return `₹${(month.amount / 10000000).toFixed(2)}Cr`;
+                                      } else if (month.amount >= 100000) {
+                                        return `₹${(month.amount / 100000).toFixed(2)}L`;
+                                      } else {
+                                        return `₹${(month.amount / 1000).toFixed(1)}K`;
+                                      }
+                                    })()}
+                                  </div>
 
-              {index > 0 && (
-                <div style={{
-                  fontSize: '10px',
-                  marginTop: '4px',
-                  padding: '2px 6px',
-                  borderRadius: '12px',
-                  display: 'inline-block',
-                  background: orderDiff > 0 ? '#dcfce7' : orderDiff < 0 ? '#fee2e2' : '#f1f5f9',
-                  color: orderDiff > 0 ? '#166534' : orderDiff < 0 ? '#991b1b' : '#475569',
-                  fontWeight: '500'
-                }}>
-                  {orderDiff > 0 ? '↑' : orderDiff < 0 ? '↓' : '→'} {Math.abs(orderDiff)}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                                  {index > 0 && (
+                                    <div style={{
+                                      fontSize: '10px',
+                                      marginTop: '4px',
+                                      padding: '2px 6px',
+                                      borderRadius: '12px',
+                                      display: 'inline-block',
+                                      background: orderDiff > 0 ? '#dcfce7' : orderDiff < 0 ? '#fee2e2' : '#f1f5f9',
+                                      color: orderDiff > 0 ? '#166534' : orderDiff < 0 ? '#991b1b' : '#475569',
+                                      fontWeight: '500'
+                                    }}>
+                                      {orderDiff > 0 ? '↑' : orderDiff < 0 ? '↓' : '→'} {Math.abs(orderDiff)}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
 
-      {comparisonData.rawData.length === 3 && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          background: '#f1f5f9',
-          padding: '8px 12px',
-          borderRadius: '8px',
-          marginBottom: '8px'
-        }}>
-          <span style={{ fontSize: '12px', color: '#475569' }}>
-            Overall Growth:
-          </span>
-          <span style={{
-            fontSize: '14px',
-            fontWeight: '600',
-            color: comparisonData.rawData[2].orders > comparisonData.rawData[0].orders ? '#059669' : '#dc2626'
-          }}>
-            {comparisonData.rawData[2].orders > comparisonData.rawData[0].orders ? '↑' : '↓'}
-            {Math.abs(((comparisonData.rawData[2].orders - comparisonData.rawData[0].orders) / comparisonData.rawData[0].orders * 100)).toFixed(1)}%
-          </span>
-        </div>
-      )}
+                          {comparisonData.rawData.length === 3 && (
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              background: '#f1f5f9',
+                              padding: '8px 12px',
+                              borderRadius: '8px',
+                              marginBottom: '8px'
+                            }}>
+                              <span style={{ fontSize: '12px', color: '#475569' }}>
+                                Overall Growth:
+                              </span>
+                              <span style={{
+                                fontSize: '14px',
+                                fontWeight: '600',
+                                color: comparisonData.rawData[2].orders > comparisonData.rawData[0].orders ? '#059669' : '#dc2626'
+                              }}>
+                                {comparisonData.rawData[2].orders > comparisonData.rawData[0].orders ? '↑' : '↓'}
+                                {Math.abs(((comparisonData.rawData[2].orders - comparisonData.rawData[0].orders) / comparisonData.rawData[0].orders * 100)).toFixed(1)}%
+                              </span>
+                            </div>
+                          )}
 
-      <div style={{ fontSize: '10px', color: '#94a3b8', textAlign: 'center' }}>
-        Click any month card or bar for details
-      </div>
-    </>
-  )}
-</div>            
+                          <div style={{ fontSize: '10px', color: '#94a3b8', textAlign: 'center' }}>
+                            Click any month card or bar for details
+                          </div>
+                        </>
+                      )}
+                    </div>
 
- <div 
+                    <div 
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'prospective' ? styles.cardHover : {})

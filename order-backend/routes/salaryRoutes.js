@@ -1,15 +1,13 @@
-// routes/salaryRoutes.js
 const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 const Salary = require('../models/Salary');
 
-// GET /api/salaries - Get all salaries with error handling
+// GET /api/salaries - Get all salaries
 router.get('/', async (req, res) => {
   try {
     console.log('GET /api/salaries - Fetching all salaries');
     
-    // First check if we can connect to the database
     if (mongoose.connection.readyState !== 1) {
       console.error('MongoDB not connected');
       return res.status(500).json({ 
@@ -18,35 +16,15 @@ router.get('/', async (req, res) => {
       });
     }
     
-    // Find all salaries without population first to isolate the issue
     const salaries = await Salary.find({});
     console.log(`Found ${salaries.length} salary records`);
-    
-    // Try to populate, but handle errors gracefully
-    try {
-      const populatedSalaries = await Salary.find({})
-        .populate('employeeId', 'name role employeeId active department')
-        .lean(); // Use lean() for better performance
-        
-      console.log('Successfully populated salaries');
-      return res.json(populatedSalaries);
-    } catch (populateError) {
-      console.error('Population error:', populateError);
-      // If population fails, return unpopulated data
-      return res.json(salaries);
-    }
+    return res.json(salaries);
     
   } catch (error) {
-    console.error('=== ERROR IN GET /api/salaries ===');
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    console.error('===================================');
-    
+    console.error('Error in GET /api/salaries:', error);
     res.status(500).json({ 
       message: 'Failed to fetch salaries',
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      error: error.message 
     });
   }
 });
@@ -71,7 +49,6 @@ router.get('/months/available', async (req, res) => {
     
     const availableMonths = Array.from(allMonths).sort().reverse();
     console.log('Available months:', availableMonths);
-    
     res.json(availableMonths);
   } catch (error) {
     console.error('Error fetching available months:', error);
@@ -89,7 +66,6 @@ router.post('/', async (req, res) => {
     
     const { employeeId, basicSalary, employeeName } = req.body;
     
-    // Validate required fields
     if (!employeeId) {
       return res.status(400).json({ message: 'Employee ID is required' });
     }
@@ -102,18 +78,19 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'Employee name is required' });
     }
     
-    // Validate basic salary is positive
     if (basicSalary < 0) {
       return res.status(400).json({ message: 'Basic salary must be a positive number' });
     }
     
-    // Validate employeeId format
-    if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+    // Convert to ObjectId
+    let objectId;
+    try {
+      objectId = new mongoose.Types.ObjectId(employeeId);
+    } catch (err) {
       return res.status(400).json({ message: 'Invalid employee ID format' });
     }
     
-    // Check if salary record already exists
-    let salary = await Salary.findOne({ employeeId });
+    let salary = await Salary.findOne({ employeeId: objectId });
     
     if (salary) {
       console.log('Updating existing salary for employee:', employeeId);
@@ -122,52 +99,22 @@ router.post('/', async (req, res) => {
     } else {
       console.log('Creating new salary for employee:', employeeId);
       salary = new Salary({
-        employeeId: employeeId,
+        employeeId: objectId,
         employeeName: employeeName,
         basicSalary: basicSalary,
         paymentHistory: []
       });
     }
     
-    // Validate before saving
-    const validationError = salary.validateSync();
-    if (validationError) {
-      console.error('Validation error:', validationError);
-      return res.status(400).json({ 
-        message: 'Validation failed',
-        errors: validationError.errors 
-      });
-    }
-    
     await salary.save();
     console.log('Salary saved successfully');
-    
-    // Try to populate, but don't fail if it doesn't work
-    try {
-      await salary.populate('employeeId', 'name role employeeId active department');
-    } catch (popError) {
-      console.log('Could not populate employee data:', popError.message);
-    }
-    
     res.status(200).json(salary);
     
   } catch (error) {
-    console.error('=== ERROR IN POST /api/salaries ===');
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Error code:', error.code);
-    console.error('Error stack:', error.stack);
-    console.error('=====================================');
+    console.error('Error in POST /api/salaries:', error);
     
     if (error.code === 11000) {
       return res.status(400).json({ message: 'Salary record already exists for this employee' });
-    }
-    
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({ 
-        message: 'Validation error',
-        errors: error.errors 
-      });
     }
     
     res.status(500).json({ 
@@ -187,9 +134,7 @@ router.post('/:employeeId/payments', async (req, res) => {
     console.log('Employee ID:', employeeId);
     console.log('Month:', month);
     console.log('Amount:', amount);
-    console.log('=======================');
     
-    // Validate inputs
     if (!month) {
       return res.status(400).json({ message: 'Month is required' });
     }
@@ -208,19 +153,22 @@ router.post('/:employeeId/payments', async (req, res) => {
       return res.status(400).json({ message: 'Amount must be a positive number' });
     }
     
-    // Validate employeeId format
-    if (!mongoose.Types.ObjectId.isValid(employeeId)) {
-      return res.status(400).json({ message: 'Invalid employee ID format' });
+    let salary = null;
+    
+    // Try to find by ObjectId
+    if (mongoose.Types.ObjectId.isValid(employeeId)) {
+      salary = await Salary.findOne({ employeeId: new mongoose.Types.ObjectId(employeeId) });
     }
     
-    // Find salary
-    const salary = await Salary.findOne({ employeeId });
+    // Try by employeeName
+    if (!salary) {
+      salary = await Salary.findOne({ employeeName: employeeId });
+    }
     
     if (!salary) {
       return res.status(404).json({ message: 'Salary record not found for this employee' });
     }
     
-    // Check for existing payment
     const existingPaymentIndex = salary.paymentHistory.findIndex(
       p => p.month === month
     );
@@ -243,14 +191,10 @@ router.post('/:employeeId/payments', async (req, res) => {
     
     await salary.save();
     console.log('Payment saved successfully');
-    
     res.status(200).json(salary);
     
   } catch (error) {
-    console.error('=== PAYMENT ERROR ===');
-    console.error(error);
-    console.error('=====================');
-    
+    console.error('Payment error:', error);
     res.status(500).json({ 
       message: 'Failed to record payment',
       error: error.message 
@@ -258,26 +202,45 @@ router.post('/:employeeId/payments', async (req, res) => {
   }
 });
 
-// Get single salary by employee ID
+// GET /api/salaries/:employeeId - Get single salary by employee ID
 router.get('/:employeeId', async (req, res) => {
   try {
     const { employeeId } = req.params;
+    console.log('GET /api/salaries/:employeeId - Looking for:', employeeId);
     
-    if (!mongoose.Types.ObjectId.isValid(employeeId)) {
-      return res.status(400).json({ message: 'Invalid employee ID format' });
+    let salary = null;
+    
+    // Try to find by ObjectId (this is the correct way since employeeId is ObjectId in schema)
+    if (mongoose.Types.ObjectId.isValid(employeeId)) {
+      salary = await Salary.findOne({ employeeId: new mongoose.Types.ObjectId(employeeId) });
+      if (salary) console.log('Found by ObjectId');
     }
     
-    const salary = await Salary.findOne({ employeeId })
-      .populate('employeeId', 'name role employeeId active department');
-      
+    // If not found, try by employeeName
     if (!salary) {
+      salary = await Salary.findOne({ employeeName: employeeId });
+      if (salary) console.log('Found by employeeName');
+    }
+    
+    if (!salary) {
+      console.log('Salary not found for:', employeeId);
       return res.status(404).json({ message: 'Salary not found' });
     }
+    
+    console.log('Salary found:', {
+      employeeId: salary.employeeId,
+      employeeName: salary.employeeName,
+      basicSalary: salary.basicSalary,
+      paymentHistoryCount: salary.paymentHistory?.length || 0
+    });
     
     res.json(salary);
   } catch (error) {
     console.error('Error fetching salary:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      message: error.message,
+      stack: error.stack 
+    });
   }
 });
 

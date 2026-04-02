@@ -28,7 +28,8 @@ function OrderForm({
   const [business, setBusiness] = useState(routerLocation.state?.businessName || "");
   const [contactPerson, setContactPerson] = useState(routerLocation.state?.customerName || "");
   const [clientLocation, setClientLocation] = useState(existingData?.location || "");
-  
+  const [isNewFromExisting, setIsNewFromExisting] = useState(false);
+
   // Lead Source states
   const [leadSources] = useState([
     'India Mart',
@@ -43,7 +44,7 @@ function OrderForm({
   ]);
   const [leadSource, setLeadSource] = useState(existingData?.leadSource || '');
   const [otherLeadSource, setOtherLeadSource] = useState(existingData?.otherLeadSource || '');
-  
+
   const [contactNumber, setContactNumber] = useState(
     existingData
       ? `${existingData.contactCode || "+91"} ${existingData.phone || ""}`
@@ -365,6 +366,7 @@ Global Marketing Solutions Team`;
     setShowInvoice(true);
   };
 
+  // Modify the createNewOrderFromExisting function
   const createNewOrderFromExisting = () => {
     // Determine the new order type based on existing order type
     let newClientType = "";
@@ -386,19 +388,23 @@ Global Marketing Solutions Team`;
           newClientType = "";
       }
     }
-    
-    // Keep business name (in uppercase) and contact number from existing order
-    const existingBusiness = business || "";
-    
+
+    // Set mode to "new from existing"
+    setIsNewFromExisting(true);
+
+    // Keep these fields from existing order (these will be read-only)
+    setBusiness((existingData?.business || "").toUpperCase());
+    setContactPerson(existingData?.contactPerson || "");
+    setContactNumber(`${existingData?.contactCode || "+91"} ${existingData?.phone || ""}`);
+    setClientType(newClientType);
+
+    // Reset ALL other fields for new order
     setSelectedExecutive(isAdmin ? "" : localStorage.getItem("userName") || "");
-    setBusiness(existingBusiness);
-    setContactPerson("");
     setClientLocation("");
-    setLeadSource(""); // Reset lead source
-    setOtherLeadSource(""); // Reset other lead source
+    setLeadSource("");
+    setOtherLeadSource("");
     setOrderDate(new Date().toISOString().split("T")[0]);
     setAdvanceDate(new Date().toISOString().split("T")[0]);
-    setClientType(newClientType); // Set the determined client type
     setTarget("");
     setDiscount(0);
     setRows([{
@@ -424,14 +430,14 @@ Global Marketing Solutions Team`;
     setHasAdvanceApproval(false);
     setApprovalRequested(false);
     setApprovalReason("");
-    
+
     if (approvalPollingRef.current) {
       clearInterval(approvalPollingRef.current);
       approvalPollingRef.current = null;
     }
-    
+
     setIsCreatingNew(true);
-    
+
     if (onNewOrder) onNewOrder();
   };
 
@@ -488,73 +494,73 @@ Global Marketing Solutions Team`;
       setIsSubmittingApproval(false);
     }
   };
-useEffect(() => {
-  const fetchAllExecutives = async () => {
-    try {
-      setLoadingExecutives(true);
-      
-      // Fetch regular executives
-      console.log("Fetching executives from /api/executives...");
-      const execsRes = await axios.get("/api/executives");
-      console.log("Executives received:", execsRes.data);
-      
-      const regularExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
-
-      // Fetch field executives
-      let fieldExecutives = [];
+  useEffect(() => {
+    const fetchAllExecutives = async () => {
       try {
-        const fieldExecsRes = await axios.get("/api/field-executive/admin/executives");
-        fieldExecutives = fieldExecsRes.data.map(name => ({ name, _id: name, type: 'field' }));
-      } catch (err) {
-        console.log("Field executives endpoint not available");
+        setLoadingExecutives(true);
+
+        // Fetch regular executives
+        console.log("Fetching executives from /api/executives...");
+        const execsRes = await axios.get("/api/executives");
+        console.log("Executives received:", execsRes.data);
+
+        const regularExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
+
+        // Fetch field executives
+        let fieldExecutives = [];
+        try {
+          const fieldExecsRes = await axios.get("/api/field-executive/admin/executives");
+          fieldExecutives = fieldExecsRes.data.map(name => ({ name, _id: name, type: 'field' }));
+        } catch (err) {
+          console.log("Field executives endpoint not available");
+        }
+
+        // Fetch service executives
+        let serviceExecutives = [];
+        try {
+          const serviceExecsRes = await axios.get("/api/service-executives");
+          serviceExecutives = serviceExecsRes.data.map(exec => ({
+            name: exec.name,
+            _id: exec._id,
+            type: 'service'
+          }));
+        } catch (err) {
+          console.log("Service executives endpoint not available");
+        }
+
+        // Combine all executives and remove duplicates
+        const allExecutives = [
+          ...regularExecs,
+          ...fieldExecutives,
+          ...serviceExecutives
+        ].filter((exec, index, self) =>
+          index === self.findIndex(e => e.name === exec.name)
+        ).sort((a, b) => a.name.localeCompare(b.name));
+
+        console.log("All executives combined:", allExecutives);
+        setSortedExecutives(allExecutives);
+
+        // If there's an existing executive, select it
+        if (existingData?.executive && !isCreatingNew) {
+          setSelectedExecutive(existingData.executive);
+        }
+
+      } catch (error) {
+        console.error("Error fetching executives:", error);
+        // Try fallback to just regular executives
+        try {
+          const fallbackRes = await axios.get("/api/executives");
+          setSortedExecutives(fallbackRes.data);
+        } catch (fallbackErr) {
+          console.error("Fallback also failed:", fallbackErr);
+        }
+      } finally {
+        setLoadingExecutives(false);
       }
+    };
 
-      // Fetch service executives
-      let serviceExecutives = [];
-      try {
-        const serviceExecsRes = await axios.get("/api/service-executives");
-        serviceExecutives = serviceExecsRes.data.map(exec => ({
-          name: exec.name,
-          _id: exec._id,
-          type: 'service'
-        }));
-      } catch (err) {
-        console.log("Service executives endpoint not available");
-      }
-
-      // Combine all executives and remove duplicates
-      const allExecutives = [
-        ...regularExecs,
-        ...fieldExecutives,
-        ...serviceExecutives
-      ].filter((exec, index, self) =>
-        index === self.findIndex(e => e.name === exec.name)
-      ).sort((a, b) => a.name.localeCompare(b.name));
-
-      console.log("All executives combined:", allExecutives);
-      setSortedExecutives(allExecutives);
-
-      // If there's an existing executive, select it
-      if (existingData?.executive && !isCreatingNew) {
-        setSelectedExecutive(existingData.executive);
-      }
-
-    } catch (error) {
-      console.error("Error fetching executives:", error);
-      // Try fallback to just regular executives
-      try {
-        const fallbackRes = await axios.get("/api/executives");
-        setSortedExecutives(fallbackRes.data);
-      } catch (fallbackErr) {
-        console.error("Fallback also failed:", fallbackErr);
-      }
-    } finally {
-      setLoadingExecutives(false);
-    }
-  };
-
-  fetchAllExecutives();
-}, [existingData, isAdmin, isCreatingNew]);
+    fetchAllExecutives();
+  }, [existingData, isAdmin, isCreatingNew]);
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -607,14 +613,14 @@ useEffect(() => {
       setPaymentDate(existingData.paymentDate || "");
       setAdvance(existingData.advance?.toString() || "");
       setBalance(existingData.balance?.toString() || "");
-      
+
       if (existingData.paymentMethods) {
-        const methods = typeof existingData.paymentMethods === 'string' 
-          ? existingData.paymentMethods.split(' + ') 
+        const methods = typeof existingData.paymentMethods === 'string'
+          ? existingData.paymentMethods.split(' + ')
           : existingData.paymentMethods;
         setPaymentMethods(methods);
       }
-      
+
       setDesign(existingData.designStatus === "provided" ? "yes" : "no");
     }
 
@@ -652,187 +658,187 @@ useEffect(() => {
     await submitOrder();
   };
 
- // In OrderForm.js - submitOrder function
+  // In OrderForm.js - submitOrder function
 
-const submitOrder = async () => {
-  setIsSubmitting(true);
-  try {
-    const phone = contactNumber.replace(/\D/g, "").slice(-10);
-    if (phone.length !== 10) throw new Error("Please enter a valid 10-digit phone number");
+  const submitOrder = async () => {
+    setIsSubmitting(true);
+    try {
+      const phone = contactNumber.replace(/\D/g, "").slice(-10);
+      if (phone.length !== 10) throw new Error("Please enter a valid 10-digit phone number");
 
-    const totalNum = parseFloat(total) || 0;
-    const advanceNum = parseFloat(advance) || 0;
+      const totalNum = parseFloat(total) || 0;
+      const advanceNum = parseFloat(advance) || 0;
 
-    // Determine final lead source value
-    const finalLeadSource = leadSource === 'Other Specify' 
-      ? otherLeadSource 
-      : leadSource;
+      // Determine final lead source value
+      const finalLeadSource = leadSource === 'Other Specify'
+        ? otherLeadSource
+        : leadSource;
 
-    const designRequestData = {
-      executive: selectedExecutive,
-      businessName: business,
-      contactPerson: contactPerson,
-      phoneNumber: phone,
-      requirements: rows
+      const designRequestData = {
+        executive: selectedExecutive,
+        businessName: business,
+        contactPerson: contactPerson,
+        phoneNumber: phone,
+        requirements: rows
+          .filter((row) => row.requirement)
+          .map((row) => row.requirement === "other" ? row.customRequirement : row.requirement)
+          .join(", "),
+        status: "pending",
+        requestDate: new Date().toISOString(),
+      };
+
+      let paymentMethodStr = paymentMethods.includes("UPI") && selectedUpi
+        ? paymentMethods.map((m) => m === "UPI" ? `UPI - ${selectedUpi}` : m).join(" + ")
+        : paymentMethods.join(" + ");
+
+      const finalCreatedBy = isAdmin ? createdBy : (existingData?.createdBy || selectedExecutive);
+
+      // FIX: Create requirement details array for each row
+      const requirementDetails = rows
         .filter((row) => row.requirement)
-        .map((row) => row.requirement === "other" ? row.customRequirement : row.requirement)
-        .join(", "),
-      status: "pending",
-      requestDate: new Date().toISOString(),
-    };
+        .map((row) => {
+          const requirementName = row.requirement === "other" ? row.customRequirement : row.requirement;
+          const quantity = row.quantity ? parseFloat(row.quantity) : 0;
+          const rate = row.rate ? parseFloat(row.rate) : 0;
+          const rowTotal = row.total ? parseFloat(row.total) : 0;
 
-    let paymentMethodStr = paymentMethods.includes("UPI") && selectedUpi
-      ? paymentMethods.map((m) => m === "UPI" ? `UPI - ${selectedUpi}` : m).join(" + ")
-      : paymentMethods.join(" + ");
+          return {
+            name: requirementName,
+            quantity: quantity,
+            rate: rate,
+            total: rowTotal,
+            description: row.description || "",
+            days: row.days || "",
+            deliveryDate: row.deliveryDate || "",
+            gstIncluded: row.gstIncluded,
+            assignedExecutive: row.assignedExecutive || null,
+            status: row.status || "Pending",
+            remark: row.remark || ""
+          };
+        });
 
-    const finalCreatedBy = isAdmin ? createdBy : (existingData?.createdBy || selectedExecutive);
+      // Create a summary string for backward compatibility
+      const allRequirements = requirementDetails
+        .map(req => `${req.quantity} x ${req.name}`)
+        .join(", ");
 
-    // FIX: Create requirement details array for each row
-    const requirementDetails = rows
-      .filter((row) => row.requirement)
-      .map((row) => {
-        const requirementName = row.requirement === "other" ? row.customRequirement : row.requirement;
-        const quantity = row.quantity ? parseFloat(row.quantity) : 0;
-        const rate = row.rate ? parseFloat(row.rate) : 0;
-        const rowTotal = row.total ? parseFloat(row.total) : 0;
+      const allDescriptions = requirementDetails
+        .map(req => `${req.description}${req.days ? ` (${req.days} days)` : ''}`)
+        .filter(desc => desc.trim())
+        .join(" | ");
 
-        return {
-          name: requirementName,
-          quantity: quantity,
-          rate: rate,
-          total: rowTotal,
-          description: row.description || "",
-          days: row.days || "",
-          deliveryDate: row.deliveryDate || "",
-          gstIncluded: row.gstIncluded,
-          assignedExecutive: row.assignedExecutive || null,
-          status: row.status || "Pending",
-          remark: row.remark || ""
-        };
-      });
+      // FIX: Store EACH ROW SEPARATELY in the rows array, not just one aggregated row
+      const mainOrderData = {
+        executive: selectedExecutive,
+        business,
+        contactPerson,
+        location: clientLocation,
+        leadSource: finalLeadSource,
+        otherLeadSource: otherLeadSource,
+        contactCode: "+91",
+        phone,
+        orderDate,
+        target,
+        clientType: clientType || "New",
 
-    // Create a summary string for backward compatibility
-    const allRequirements = requirementDetails
-      .map(req => `${req.quantity} x ${req.name}`)
-      .join(", ");
+        // FIX: Store each requirement as a separate row in the rows array
+        rows: rows
+          .filter((row) => row.requirement) // Only include rows with requirements
+          .map((row) => ({
+            requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
+            customRequirement: row.customRequirement || "",
+            description: row.description || "",
+            quantity: parseFloat(row.quantity) || 0,
+            rate: parseFloat(row.rate) || 0,
+            days: row.days ? parseInt(row.days) : 0,
+            startDate: row.startDate || null,
+            endDate: row.endDate || null,
+            total: parseFloat(row.total) || 0,
+            deliveryDate: row.deliveryDate || null,
+            gstIncluded: row.gstIncluded !== undefined ? row.gstIncluded : true,
+            assignedExecutive: row.assignedExecutive || null,
+            remark: row.remark || "",
+            isCompleted: row.isCompleted || false,
+            status: row.status || "Pending"
+          })),
 
-    const allDescriptions = requirementDetails
-      .map(req => `${req.description}${req.days ? ` (${req.days} days)` : ''}`)
-      .filter(desc => desc.trim())
-      .join(" | ");
+        // Store requirement details for reference (optional)
+        requirementDetails: requirementDetails,
 
-    // FIX: Store EACH ROW SEPARATELY in the rows array, not just one aggregated row
-    const mainOrderData = {
-      executive: selectedExecutive,
-      business,
-      contactPerson,
-      location: clientLocation,
-      leadSource: finalLeadSource,
-      otherLeadSource: otherLeadSource,
-      contactCode: "+91",
-      phone,
-      orderDate,
-      target,
-      clientType: clientType || "New",
-      
-      // FIX: Store each requirement as a separate row in the rows array
-      rows: rows
-        .filter((row) => row.requirement) // Only include rows with requirements
-        .map((row) => ({
+        advanceDate,
+        paymentDate,
+        paymentMethods: paymentMethodStr,
+        advance: advanceNum.toFixed(2),
+        balance: (totalNum - advanceNum - (parseFloat(discount) || 0)).toFixed(2),
+        total: totalNum.toFixed(2),
+        discount: (parseFloat(discount) || 0).toFixed(2),
+        discountedTotal: (totalNum - (parseFloat(discount) || 0)).toFixed(2),
+        chequeNumber,
+        chequeImage,
+        designStatus: design === "no" ? "pending" : "provided",
+        createdBy: finalCreatedBy,
+
+        // Keep original rows for backward compatibility
+        originalRows: rows.map(row => ({
           requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
-          customRequirement: row.customRequirement || "",
-          description: row.description || "",
-          quantity: parseFloat(row.quantity) || 0,
-          rate: parseFloat(row.rate) || 0,
-          days: row.days ? parseInt(row.days) : 0,
-          startDate: row.startDate || null,
-          endDate: row.endDate || null,
-          total: parseFloat(row.total) || 0,
-          deliveryDate: row.deliveryDate || null,
-          gstIncluded: row.gstIncluded !== undefined ? row.gstIncluded : true,
-          assignedExecutive: row.assignedExecutive || null,
-          remark: row.remark || "",
-          isCompleted: row.isCompleted || false,
-          status: row.status || "Pending"
-        })),
-      
-      // Store requirement details for reference (optional)
-      requirementDetails: requirementDetails,
-      
-      advanceDate,
-      paymentDate,
-      paymentMethods: paymentMethodStr,
-      advance: advanceNum.toFixed(2),
-      balance: (totalNum - advanceNum - (parseFloat(discount) || 0)).toFixed(2),
-      total: totalNum.toFixed(2),
-      discount: (parseFloat(discount) || 0).toFixed(2),
-      discountedTotal: (totalNum - (parseFloat(discount) || 0)).toFixed(2),
-      chequeNumber,
-      chequeImage,
-      designStatus: design === "no" ? "pending" : "provided",
-      createdBy: finalCreatedBy,
-      
-      // Keep original rows for backward compatibility
-      originalRows: rows.map(row => ({
-        requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
-        description: row.description,
-        quantity: row.quantity,
-        rate: row.rate,
-        days: row.days,
-        total: row.total,
-        deliveryDate: row.deliveryDate,
-        gstIncluded: row.gstIncluded
-      }))
-    };
+          description: row.description,
+          quantity: row.quantity,
+          rate: row.rate,
+          days: row.days,
+          total: row.total,
+          deliveryDate: row.deliveryDate,
+          gstIncluded: row.gstIncluded
+        }))
+      };
 
-    console.log('Final order data being submitted:', mainOrderData);
-    console.log('Rows count:', mainOrderData.rows.length);
-    console.log('First row quantity:', mainOrderData.rows[0]?.quantity);
+      console.log('Final order data being submitted:', mainOrderData);
+      console.log('Rows count:', mainOrderData.rows.length);
+      console.log('First row quantity:', mainOrderData.rows[0]?.quantity);
 
-    setIsSubmittingDesign(true);
-    await axios.post("/api/design-requests", designRequestData);
-    setIsSubmittingDesign(false);
+      setIsSubmittingDesign(true);
+      await axios.post("/api/design-requests", designRequestData);
+      setIsSubmittingDesign(false);
 
-    const orderResponse = (existingData && !isCreatingNew)
-      ? await axios.put(`/api/orders/${existingData._id}`, mainOrderData)
-      : await axios.post("/api/submit", mainOrderData);
+      const orderResponse = (existingData && !isCreatingNew)
+        ? await axios.put(`/api/orders/${existingData._id}`, mainOrderData)
+        : await axios.post("/api/submit", mainOrderData);
 
-    const orderDataForWhatsApp = {
-      business: business,
-      contactPerson: contactPerson,
-      orderNumber: orderResponse.data.orderNumber || `ORD-${Date.now()}`,
-      requirements: allRequirements,
-      requirementDetails: requirementDetails,
-      total: discountedTotal,
-      advance: advance,
-      balance: balance,
-      orderDate: orderDate,
-      location: clientLocation,
-      paymentMethods: paymentMethodStr,
-      advanceDate: advanceDate,
-      paymentDate: paymentDate,
-      chequeNumber: chequeNumber,
-      upiId: selectedUpi,
-      bankName: bankName,
-      transactionRef: transactionRef,
-      poNumber: poNumber
-    };
+      const orderDataForWhatsApp = {
+        business: business,
+        contactPerson: contactPerson,
+        orderNumber: orderResponse.data.orderNumber || `ORD-${Date.now()}`,
+        requirements: allRequirements,
+        requirementDetails: requirementDetails,
+        total: discountedTotal,
+        advance: advance,
+        balance: balance,
+        orderDate: orderDate,
+        location: clientLocation,
+        paymentMethods: paymentMethodStr,
+        advanceDate: advanceDate,
+        paymentDate: paymentDate,
+        chequeNumber: chequeNumber,
+        upiId: selectedUpi,
+        bankName: bankName,
+        transactionRef: transactionRef,
+        poNumber: poNumber
+      };
 
-    sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
+      sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
 
-    setShowSuccessModal(true);
-    setTimeout(() => {
-      setShowSuccessModal(false);
+      setShowSuccessModal(true);
+      setTimeout(() => {
+        setShowSuccessModal(false);
+        setIsSubmitting(false);
+        setIsCreatingNew(false);
+        if (onSuccess) onSuccess(orderResponse.data);
+      }, 2000);
+    } catch (err) {
+      console.error("Submission error:", err);
+      alert(`Submission failed: ${err.response?.data?.message || err.message}`);
       setIsSubmitting(false);
-      setIsCreatingNew(false);
-      if (onSuccess) onSuccess(orderResponse.data);
-    }, 2000);
-  } catch (err) {
-    console.error("Submission error:", err);
-    alert(`Submission failed: ${err.response?.data?.message || err.message}`);
-    setIsSubmitting(false);
-  }
-};
+    }
+  };
   const fetchTargetForDate = async (dateString) => {
     if (!dateString || !selectedExecutive) return;
     setLoadingTarget(true);
@@ -1084,20 +1090,20 @@ const submitOrder = async () => {
   // If viewing existing order, show clean document view
   if (existingData && !isCreatingNew) {
     return (
-      <div id="print-area" ref={printRef} style={{ 
-        fontFamily: 'Arial, sans-serif', 
-        maxWidth: '800px', 
-        margin: '0 auto', 
-        padding: '20px', 
+      <div id="print-area" ref={printRef} style={{
+        fontFamily: 'Arial, sans-serif',
+        maxWidth: '800px',
+        margin: '0 auto',
+        padding: '20px',
         backgroundColor: 'white',
         fontSize: '14px'
       }}>
         {/* Header Section */}
-        <div style={{ 
-          backgroundColor: '#f0f8ff', 
-          padding: '15px', 
-          borderRadius: '8px', 
-          marginBottom: '20px', 
+        <div style={{
+          backgroundColor: '#f0f8ff',
+          padding: '15px',
+          borderRadius: '8px',
+          marginBottom: '20px',
           borderLeft: '4px solid #2196F3',
           borderBottom: '2px solid #2196F3'
         }}>
@@ -1122,8 +1128,8 @@ const submitOrder = async () => {
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <button 
-                onClick={createNewOrderFromExisting} 
+              <button
+                onClick={createNewOrderFromExisting}
                 style={{
                   padding: '6px 12px',
                   backgroundColor: '#4CAF50',
@@ -1138,7 +1144,7 @@ const submitOrder = async () => {
               >
                 📝 Create New Order
               </button>
-              <button 
+              <button
                 onClick={handlePrint}
                 style={{
                   padding: '6px 12px',
@@ -1158,25 +1164,25 @@ const submitOrder = async () => {
         </div>
 
         {/* Customer Information */}
-        <div style={{ 
-          backgroundColor: 'white', 
-          padding: '15px', 
-          borderRadius: '6px', 
+        <div style={{
+          backgroundColor: 'white',
+          padding: '15px',
+          borderRadius: '6px',
           marginBottom: '15px',
           border: '1px solid #ddd'
         }}>
-          <h3 style={{ 
-            margin: '0 0 10px 0', 
-            color: '#333', 
+          <h3 style={{
+            margin: '0 0 10px 0',
+            color: '#333',
             fontSize: '16px',
-            borderBottom: '1px solid #4CAF50', 
-            paddingBottom: '5px' 
+            borderBottom: '1px solid #4CAF50',
+            paddingBottom: '5px'
           }}>
             Customer Information
           </h3>
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
             gap: '12px'
           }}>
             <div>
@@ -1210,7 +1216,7 @@ const submitOrder = async () => {
               </div>
             </div>
             {/* REMOVED: Sale Closed By display section */}
-            
+
             {/* Lead Source display */}
             {existingData.leadSource && (
               <div>
@@ -1223,10 +1229,10 @@ const submitOrder = async () => {
             )}
             <div>
               <div style={{ color: '#666', fontSize: '12px' }}>Order Type</div>
-              <div style={{ 
-                fontWeight: 'bold', 
-                fontSize: '14px', 
-                color: existingData.clientType === 'Renewal' ? '#4CAF50' : '#2196F3' 
+              <div style={{
+                fontWeight: 'bold',
+                fontSize: '14px',
+                color: existingData.clientType === 'Renewal' ? '#4CAF50' : '#2196F3'
               }}>
                 {existingData.clientType}
               </div>
@@ -1243,26 +1249,26 @@ const submitOrder = async () => {
         </div>
 
         {/* Requirements Table */}
-        <div style={{ 
-          backgroundColor: 'white', 
-          padding: '15px', 
-          borderRadius: '6px', 
+        <div style={{
+          backgroundColor: 'white',
+          padding: '15px',
+          borderRadius: '6px',
           marginBottom: '15px',
           border: '1px solid #ddd'
         }}>
-          <h3 style={{ 
-            margin: '0 0 10px 0', 
-            color: '#333', 
+          <h3 style={{
+            margin: '0 0 10px 0',
+            color: '#333',
             fontSize: '16px',
-            borderBottom: '1px solid #4CAF50', 
-            paddingBottom: '5px' 
+            borderBottom: '1px solid #4CAF50',
+            paddingBottom: '5px'
           }}>
             Order Requirements
           </h3>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ 
-              width: '100%', 
-              borderCollapse: 'collapse', 
+            <table style={{
+              width: '100%',
+              borderCollapse: 'collapse',
               fontSize: '12px',
               minWidth: '600px'
             }}>
@@ -1281,7 +1287,7 @@ const submitOrder = async () => {
                 {existingData.rows && existingData.rows.map((row, index) => {
                   const gstIncluded = row.gstIncluded !== undefined ? row.gstIncluded : true;
                   return (
-                    <tr key={index} style={{ 
+                    <tr key={index} style={{
                       backgroundColor: index % 2 === 0 ? '#f9f9f9' : 'white',
                       borderBottom: '1px solid #eee'
                     }}>
@@ -1291,41 +1297,41 @@ const submitOrder = async () => {
                       <td style={{ padding: '8px', border: '1px solid #ddd', verticalAlign: 'top' }}>
                         {row.description}
                       </td>
-                      <td style={{ 
-                        padding: '8px', 
-                        border: '1px solid #ddd', 
+                      <td style={{
+                        padding: '8px',
+                        border: '1px solid #ddd',
                         textAlign: 'center',
                         verticalAlign: 'top'
                       }}>
                         {row.quantity}
                       </td>
-                      <td style={{ 
-                        padding: '8px', 
-                        border: '1px solid #ddd', 
+                      <td style={{
+                        padding: '8px',
+                        border: '1px solid #ddd',
                         textAlign: 'right',
                         verticalAlign: 'top'
                       }}>
                         ₹{parseFloat(row.rate).toFixed(2)}
                       </td>
-                      <td style={{ 
-                        padding: '8px', 
-                        border: '1px solid #ddd', 
-                        textAlign: 'right', 
+                      <td style={{
+                        padding: '8px',
+                        border: '1px solid #ddd',
+                        textAlign: 'right',
                         fontWeight: 'bold',
                         verticalAlign: 'top'
                       }}>
                         ₹{parseFloat(row.total).toFixed(2)}
                       </td>
-                      <td style={{ 
-                        padding: '8px', 
+                      <td style={{
+                        padding: '8px',
                         border: '1px solid #ddd',
                         verticalAlign: 'top'
                       }}>
                         {new Date(row.deliveryDate).toLocaleDateString()}
                       </td>
-                      <td style={{ 
-                        padding: '8px', 
-                        border: '1px solid #ddd', 
+                      <td style={{
+                        padding: '8px',
+                        border: '1px solid #ddd',
                         textAlign: 'center',
                         verticalAlign: 'top',
                         color: gstIncluded ? '#4CAF50' : '#999'
@@ -1341,26 +1347,26 @@ const submitOrder = async () => {
         </div>
 
         {/* Payment Information */}
-        <div style={{ 
-          backgroundColor: 'white', 
-          padding: '15px', 
-          borderRadius: '6px', 
+        <div style={{
+          backgroundColor: 'white',
+          padding: '15px',
+          borderRadius: '6px',
           marginBottom: '15px',
           border: '1px solid #ddd'
         }}>
-          <h3 style={{ 
-            margin: '0 0 10px 0', 
-            color: '#333', 
+          <h3 style={{
+            margin: '0 0 10px 0',
+            color: '#333',
             fontSize: '16px',
-            borderBottom: '1px solid #4CAF50', 
-            paddingBottom: '5px' 
+            borderBottom: '1px solid #4CAF50',
+            paddingBottom: '5px'
           }}>
             Payment Summary
           </h3>
-          
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
             gap: '15px',
             marginBottom: '15px'
           }}>
@@ -1390,10 +1396,10 @@ const submitOrder = async () => {
             </div>
             <div>
               <div style={{ color: '#666', fontSize: '12px' }}>Balance</div>
-              <div style={{ 
-                fontWeight: 'bold', 
-                fontSize: '16px', 
-                color: existingData.balance > 0 ? '#F44336' : '#4CAF50' 
+              <div style={{
+                fontWeight: 'bold',
+                fontSize: '16px',
+                color: existingData.balance > 0 ? '#F44336' : '#4CAF50'
               }}>
                 ₹{parseFloat(existingData.balance || 0).toFixed(2)}
               </div>
@@ -1415,10 +1421,10 @@ const submitOrder = async () => {
 
           {/* Additional Payment Details */}
           {(existingData.chequeNumber || existingData.poNumber || existingData.bankName) && (
-            <div style={{ 
-              marginTop: '12px', 
-              padding: '10px', 
-              backgroundColor: '#f5f5f5', 
+            <div style={{
+              marginTop: '12px',
+              padding: '10px',
+              backgroundColor: '#f5f5f5',
               borderRadius: '4px',
               fontSize: '12px'
             }}>
@@ -1448,19 +1454,19 @@ const submitOrder = async () => {
         </div>
 
         {/* Design Status */}
-        <div style={{ 
-          backgroundColor: 'white', 
-          padding: '15px', 
+        <div style={{
+          backgroundColor: 'white',
+          padding: '15px',
           borderRadius: '6px',
           border: '1px solid #ddd',
           marginBottom: '20px'
         }}>
-          <h3 style={{ 
-            margin: '0 0 10px 0', 
-            color: '#333', 
+          <h3 style={{
+            margin: '0 0 10px 0',
+            color: '#333',
             fontSize: '16px',
-            borderBottom: '1px solid #4CAF50', 
-            paddingBottom: '5px' 
+            borderBottom: '1px solid #4CAF50',
+            paddingBottom: '5px'
           }}>
             Design Status
           </h3>
@@ -1479,8 +1485,8 @@ const submitOrder = async () => {
             }}>
               {existingData.designStatus === 'provided' ? '✓' : '!'}
             </div>
-            <span style={{ 
-              fontSize: '14px', 
+            <span style={{
+              fontSize: '14px',
               fontWeight: 'bold',
               color: existingData.designStatus === 'provided' ? '#4CAF50' : '#FF9800'
             }}>
@@ -1488,13 +1494,13 @@ const submitOrder = async () => {
             </span>
           </div>
           {existingData.designStatus !== 'provided' && (
-            <div style={{ 
-              marginTop: '8px', 
-              padding: '8px', 
-              backgroundColor: '#FFF8E1', 
-              borderRadius: '4px', 
-              fontSize: '12px', 
-              color: '#E65100' 
+            <div style={{
+              marginTop: '8px',
+              padding: '8px',
+              backgroundColor: '#FFF8E1',
+              borderRadius: '4px',
+              fontSize: '12px',
+              color: '#E65100'
             }}>
               This order requires design work. The design team has been notified.
             </div>
@@ -1502,14 +1508,14 @@ const submitOrder = async () => {
         </div>
 
         {/* Action Buttons */}
-        <div style={{ 
-          marginTop: '20px', 
-          display: 'flex', 
-          gap: '10px', 
+        <div style={{
+          marginTop: '20px',
+          display: 'flex',
+          gap: '10px',
           justifyContent: 'center',
           flexWrap: 'wrap'
         }}>
-          <button 
+          <button
             onClick={onBack}
             style={{
               padding: '8px 16px',
@@ -1525,7 +1531,7 @@ const submitOrder = async () => {
           >
             ← Back to Search
           </button>
-          <button 
+          <button
             onClick={createNewOrderFromExisting}
             style={{
               padding: '8px 16px',
@@ -1541,7 +1547,7 @@ const submitOrder = async () => {
           >
             📝 Create New Order
           </button>
-          <button 
+          <button
             onClick={generateInvoice}
             style={{
               padding: '8px 16px',
@@ -1731,12 +1737,13 @@ const submitOrder = async () => {
               <input type="text" value={selectedExecutive} readOnly />
             )}
           </label>
-
           <label>
             Order Type:
-            <select 
-              value={clientType} 
+            <select
+              value={clientType}
               onChange={(e) => setClientType(e.target.value)}
+              disabled={isNewFromExisting}  // Make it disabled/read-only
+              style={{ backgroundColor: isNewFromExisting ? '#f5f5f5' : 'white' }}
             >
               <option value="">Select</option>
               <option value="Retail">Retail</option>
@@ -1756,23 +1763,49 @@ const submitOrder = async () => {
               onChange={(e) => handleBusinessChange(e.target.value)}
               placeholder="ENTER BUSINESS NAME"
               style={{ textTransform: 'uppercase' }}
+              readOnly={isNewFromExisting}  // Make it read-only
+              className={isNewFromExisting ? "readonly-field" : ""}
             />
           </label>
+
+          {/* Contact Person field - make it read-only when in new from existing mode */}
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <label>
+              Contact Person:
+              <input
+                type="text"
+                value={contactPerson}
+                onChange={(e) => {
+                  if (validateContactPerson(e.target.value) || e.target.value === "") {
+                    setContactPerson(capitalizeFirst(e.target.value));
+                  }
+                }}
+                placeholder="Contact person name"
+                readOnly={isNewFromExisting}  // Make it read-only
+                className={isNewFromExisting ? "readonly-field" : ""}
+              />
+            </label>
+          </div>
 
           {/* UPDATED SECTION: Removed Sale Closed By field */}
           <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: '200px' }}>
+
+              {/* Contact Number field - make it read-only */}
               <label>
-                Contact Person:
+                Contact Number:
                 <input
                   type="text"
-                  value={contactPerson}
+                  value={contactNumber}
                   onChange={(e) => {
-                    if (validateContactPerson(e.target.value) || e.target.value === "") {
-                      setContactPerson(capitalizeFirst(e.target.value));
+                    if (validateContactNumber(e.target.value) || e.target.value === "") {
+                      handleContactNumberChange(e);
                     }
                   }}
-                  placeholder="Contact person name"
+                  placeholder="+91 9876543210"
+                  maxLength="14"
+                  readOnly={isNewFromExisting}  // Make it read-only
+                  className={isNewFromExisting ? "readonly-field" : ""}
                 />
               </label>
             </div>
@@ -1818,7 +1851,6 @@ const submitOrder = async () => {
             </div>
           </div>
 
-          {/* REMOVED: splitCommission and commissionSplitInfo display section */}
 
           <div className="design-status-container" style={{ marginBottom: "16px" }}>
             <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
@@ -1867,10 +1899,10 @@ const submitOrder = async () => {
         <div className="right">
           <label>
             Order Date:
-            <input 
-              type="date" 
-              value={orderDate} 
-              onChange={handleOrderDateChange} 
+            <input
+              type="date"
+              value={orderDate}
+              onChange={handleOrderDateChange}
             />
           </label>
 
@@ -2386,6 +2418,19 @@ const submitOrder = async () => {
         .target-change-animation {
           animation: targetChange 1.5s ease;
         }
+
+        .readonly-field {
+  background-color: #f5f5f5;
+  color: #666;
+  cursor: not-allowed;
+  border-color: #ddd;
+}
+
+select:disabled {
+  background-color: #f5f5f5;
+  color: #666;
+  cursor: not-allowed;
+}
         .no-print {
           /* This class hides elements during printing */
         }

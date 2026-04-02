@@ -1,4 +1,3 @@
-// models/Salary.js
 const mongoose = require('mongoose');
 
 const PaymentSchema = new mongoose.Schema({
@@ -32,20 +31,14 @@ const PaymentSchema = new mongoose.Schema({
   }
 }, { 
   timestamps: true,
-  strict: true // Enforce schema
+  strict: true
 });
 
 const SalarySchema = new mongoose.Schema({
   employeeId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Employee',
-    required: [true, 'Employee ID is required'],
-    validate: {
-      validator: function(v) {
-        return mongoose.Types.ObjectId.isValid(v);
-      },
-      message: 'Invalid employee ID format'
-    }
+    required: [true, 'Employee ID is required']
   },
   employeeName: {
     type: String,
@@ -63,10 +56,11 @@ const SalarySchema = new mongoose.Schema({
   }
 }, { 
   timestamps: true,
-  strict: true 
+  strict: true
 });
 
 // Create indexes
 SalarySchema.index({ employeeId: 1 }, { unique: true });
+SalarySchema.index({ employeeName: 1 });
 
 module.exports = mongoose.model('Salary', SalarySchema);

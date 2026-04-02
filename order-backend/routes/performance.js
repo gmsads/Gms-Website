@@ -153,20 +153,27 @@ router.get('/', async (req, res) => {
 
     let executive;
     let executiveName;
+    let dateOfJoining = null;
     
-    // Find executive based on type - USING .lean() TO FIX THE ERROR
+    // Find executive based on type
     switch(executiveType) {
       case 'executive':
         executive = await Executive.findById(executiveId).lean();
         executiveName = executive?.name;
+        dateOfJoining = executive?.joiningDate;
+        console.log(`Executive ${executiveName} joiningDate:`, dateOfJoining);
         break;
       case 'service':
         executive = await ServiceExecutive.findById(executiveId).lean();
         executiveName = executive?.name;
+        dateOfJoining = executive?.dateOfJoining;
+        console.log(`Service Executive ${executiveName} dateOfJoining:`, dateOfJoining);
         break;
       case 'account':
         executive = await Account.findById(executiveId).lean();
         executiveName = executive?.name;
+        dateOfJoining = executive?.dateOfJoining;
+        console.log(`Account ${executiveName} dateOfJoining:`, dateOfJoining);
         break;
       case 'field':
         executive = await FieldExecutive.findById(executiveId).lean();
@@ -174,11 +181,14 @@ router.get('/', async (req, res) => {
           executive = await FieldExecutive.findOne({ name: executiveId }).lean();
         }
         executiveName = executive?.name || executiveId;
+        dateOfJoining = executive?.joiningDate;
+        console.log(`Field Executive ${executiveName} joiningDate:`, dateOfJoining);
         break;
       default:
         return res.status(400).json({ error: 'Invalid executive type' });
     }
 
+    // If executive not found
     if (!executive && executiveType !== 'field') {
       return res.status(404).json({ error: 'Executive not found' });
     }
@@ -188,12 +198,41 @@ router.get('/', async (req, res) => {
       executive = {
         _id: executiveId,
         name: executiveName,
-        dateOfJoining: new Date('2024-01-01')
       };
-    } else if (executiveType === 'field' && executive) {
-      // For field executives, map joiningDate to dateOfJoining
-      executive.dateOfJoining = executive.joiningDate || new Date('2024-01-01');
+      dateOfJoining = null;
+      console.log(`Field executive ${executiveName} not found in DB, setting joiningDate to null`);
     }
+
+    // Try to get joining date from the Employee collection as fallback
+    if (!dateOfJoining && executiveName) {
+      try {
+        // Check if there's a generic Employee model
+        const Employee = require('../models/Employee');
+        const employee = await Employee.findOne({ name: executiveName }).lean();
+        if (employee && employee.joiningDate) {
+          dateOfJoining = employee.joiningDate;
+          console.log(`Found joiningDate in Employee collection for ${executiveName}:`, dateOfJoining);
+        }
+      } catch (err) {
+        console.log('Employee collection not found or error:', err.message);
+      }
+    }
+
+    // If still no joining date, try to get from the executive's document
+    if (!dateOfJoining && executive) {
+      // Check if the executive object has any date field
+      const possibleDateFields = ['joiningDate', 'dateOfJoining', 'createdAt', 'updatedAt'];
+      for (const field of possibleDateFields) {
+        if (executive[field] && executive[field] instanceof Date) {
+          dateOfJoining = executive[field];
+          console.log(`Found date from field ${field} for ${executiveName}:`, dateOfJoining);
+          break;
+        }
+      }
+    }
+
+    // Log final joining date for debugging
+    console.log(`Final joining date for ${executiveName}:`, dateOfJoining);
 
     // Determine date window
     let start, end;
@@ -201,9 +240,14 @@ router.get('/', async (req, res) => {
       start = new Date(startDate);
       end = new Date(endDate);
     } else {
-      start = executive.dateOfJoining
-        ? new Date(executive.dateOfJoining)
-        : new Date('2000-01-01');
+      // Use joining date if available, otherwise use a default date
+      if (dateOfJoining) {
+        start = new Date(dateOfJoining);
+        console.log(`Using joining date as start: ${start}`);
+      } else {
+        start = new Date('2000-01-01');
+        console.log(`No joining date found, using default start: ${start}`);
+      }
       end = new Date();
     }
     end.setHours(23, 59, 59, 999);
@@ -308,6 +352,18 @@ router.get('/', async (req, res) => {
         monthlyTargets[key].achieved += orderTotal;
         monthlyTargets[key].advance += Number(order.advance) || 0;
         monthlyTargets[key].orders += 1;
+      } else {
+        // Create a new entry for months that have orders but no targets
+        const [year, month] = key.split('-');
+        monthlyTargets[key] = {
+          target: 0,
+          achieved: (order.rows || []).reduce((sum, row) => sum + (Number(row.total) || 0), 0),
+          advance: Number(order.advance) || 0,
+          orders: 1,
+          prospects: 0,
+          month: parseInt(month),
+          year: parseInt(year)
+        };
       }
     });
 
@@ -325,13 +381,13 @@ router.get('/', async (req, res) => {
           achieved: 0,
           advance: 0,
           orders: 0,
-          prospects: 0,
+          prospects: 1,
           month: month,
           year: year
         };
+      } else {
+        monthlyTargets[key].prospects += 1;
       }
-      
-      monthlyTargets[key].prospects += 1;
     });
 
     // Calculate monthly metrics
@@ -352,7 +408,7 @@ router.get('/', async (req, res) => {
     const avgMonthlyProspects = Math.round(totalMonthlyProspects / monthDiff);
     const achievedPercentage = totalMonthlyTarget > 0
       ? Math.round((totalMonthlyAchieved / totalMonthlyTarget) * 100)
-      : 0;
+      : totalMonthlyAchieved > 0 ? 100 : 0;
 
     // Build detailed monthly data
     const detailedMonthlyData = months.map(m => ({
@@ -362,7 +418,7 @@ router.get('/', async (req, res) => {
       advance: m.advance,
       orders: m.orders,
       prospects: m.prospects,
-      percentage: m.target > 0 ? Math.round((m.achieved / m.target) * 100) : 0
+      percentage: m.target > 0 ? Math.round((m.achieved / m.target) * 100) : (m.achieved > 0 ? 100 : 0)
     }));
 
     // Sort monthly data by year and month (newest first)
@@ -372,12 +428,24 @@ router.get('/', async (req, res) => {
       return dateB - dateA;
     });
 
+    // Format the joining date for frontend
+    let formattedJoiningDate = null;
+    if (dateOfJoining) {
+      try {
+        formattedJoiningDate = new Date(dateOfJoining).toISOString();
+        console.log(`Formatted joining date for ${executiveName}:`, formattedJoiningDate);
+      } catch (err) {
+        console.error(`Error formatting joining date for ${executiveName}:`, err);
+        formattedJoiningDate = null;
+      }
+    }
+
     // Build response
     const performanceData = {
       executiveName: executiveName,
-      executiveId: executive._id,
+      executiveId: executive._id || executiveId,
       executiveType: executiveType,
-      dateOfJoining: executive.dateOfJoining || '2025-03-01',
+      dateOfJoining: formattedJoiningDate,
       avgMonthlyTarget,
       avgMonthlyOrders,
       avgMonthlyProspects,
@@ -394,6 +462,13 @@ router.get('/', async (req, res) => {
         byMonth: detailedMonthlyData
       }
     };
+
+    console.log(`Sending response for ${executiveName}:`, {
+      executiveName,
+      dateOfJoining: formattedJoiningDate,
+      totalMonthlyTarget,
+      totalMonthlyAchieved
+    });
 
     res.json(performanceData);
   } catch (err) {
@@ -515,5 +590,7 @@ router.get('/overall/all-time', async (req, res) => {
     });
   }
 });
+
+
 
 module.exports = router;
