@@ -452,11 +452,11 @@ const Ledger = () => {
       end: endDate.toLocaleDateString()
     };
   };
-
-  // Format currency for PDF
-  const formatCurrency = (amount) => {
-    return '₹ ' + parseFloat(amount).toFixed(2).replace(/\d(?=(\d{3})+(?!\d))/g, '$&,');
-  };
+const formatCurrency = (amount) => {
+  return 'Rs. ' + parseFloat(amount || 0)
+    .toFixed(2)
+    .replace(/\d(?=(\d{3})+(?!\d))/g, '$&,');
+};
 
   // PRINT FUNCTION
   const handlePrintClient = (business, clientData) => {

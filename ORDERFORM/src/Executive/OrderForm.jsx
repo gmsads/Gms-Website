@@ -30,6 +30,10 @@ function OrderForm({
   const [clientLocation, setClientLocation] = useState(existingData?.location || "");
   const [isNewFromExisting, setIsNewFromExisting] = useState(false);
 
+  // Customer special dates (optional)
+  const [birthDate, setBirthDate] = useState(existingData?.birthDate || "");
+  const [anniversaryDate, setAnniversaryDate] = useState(existingData?.anniversaryDate || "");
+
   // Lead Source states
   const [leadSources] = useState([
     'India Mart',
@@ -106,6 +110,15 @@ function OrderForm({
     };
   }
 
+  // Validate date is not in the future (optional)
+  const isValidDate = (dateString) => {
+    if (!dateString) return true;
+    const selectedDate = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return selectedDate <= today;
+  };
+
   // Handle lead source change
   const handleLeadSourceChange = (value) => {
     setLeadSource(value);
@@ -130,6 +143,14 @@ function OrderForm({
         } else if (Array.isArray(orderData.paymentMethods)) {
           paymentMethodDisplay = orderData.paymentMethods.join(', ');
         }
+      }
+
+      let specialDatesMessage = "";
+      if (orderData.birthDate) {
+        specialDatesMessage += `\nBirth Date: ${new Date(orderData.birthDate).toLocaleDateString()}`;
+      }
+      if (orderData.anniversaryDate) {
+        specialDatesMessage += `\nAnniversary: ${new Date(orderData.anniversaryDate).toLocaleDateString()}`;
       }
 
       const message = `🎉 *Order Confirmation* 🎉
@@ -162,6 +183,7 @@ ${orderData.upiId ? `📱 *UPI ID:* ${orderData.upiId}` : ''}
 ${orderData.bankName ? `🏛️ *Bank Name:* ${orderData.bankName}` : ''}
 ${orderData.transactionRef ? `🔗 *Transaction Ref:* ${orderData.transactionRef}` : ''}
 ${orderData.poNumber ? `📄 *PO Number:* ${orderData.poNumber}` : ''}
+${specialDatesMessage}
 
 Thank you for your business! We'll keep you updated on your order status.
 
@@ -430,6 +452,8 @@ Global Marketing Solutions Team`;
     setHasAdvanceApproval(false);
     setApprovalRequested(false);
     setApprovalReason("");
+    setBirthDate("");
+    setAnniversaryDate("");
 
     if (approvalPollingRef.current) {
       clearInterval(approvalPollingRef.current);
@@ -582,14 +606,16 @@ Global Marketing Solutions Team`;
       setBusiness((existingData.business || "").toUpperCase());
       setContactPerson(existingData.contactPerson || "");
       setClientLocation(existingData.location || "");
-      setLeadSource(existingData.leadSource || ''); // Set lead source
-      setOtherLeadSource(existingData.otherLeadSource || ''); // Set other lead source
+      setLeadSource(existingData.leadSource || '');
+      setOtherLeadSource(existingData.otherLeadSource || '');
       setContactNumber(`${existingData.contactCode || "+91"} ${existingData.phone || ""}`);
       setOrderDate(existingData.orderDate || new Date().toISOString().split("T")[0]);
       setClientType(existingData.clientType || "");
       setTarget(existingData.target || "");
       setDiscount(existingData.discount || 0);
       setCreatedBy(existingData.createdBy || "Admin");
+      setBirthDate(existingData.birthDate || "");
+      setAnniversaryDate(existingData.anniversaryDate || "");
 
       if (existingData.rows && existingData.rows.length > 0) {
         setRows(existingData.rows.map((row) => ({
@@ -741,6 +767,10 @@ Global Marketing Solutions Team`;
         target,
         clientType: clientType || "New",
 
+        // Add the new date fields
+        birthDate: birthDate || null,
+        anniversaryDate: anniversaryDate || null,
+
         // FIX: Store each requirement as a separate row in the rows array
         rows: rows
           .filter((row) => row.requirement) // Only include rows with requirements
@@ -821,7 +851,9 @@ Global Marketing Solutions Team`;
         upiId: selectedUpi,
         bankName: bankName,
         transactionRef: transactionRef,
-        poNumber: poNumber
+        poNumber: poNumber,
+        birthDate: birthDate,
+        anniversaryDate: anniversaryDate
       };
 
       sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
@@ -1109,7 +1141,7 @@ Global Marketing Solutions Team`;
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <h1 style={{ margin: '0 0 5px 0', color: '#1976d2', fontSize: '18px' }}>📋 ORDER DETAILS</h1>
+              <h1 style={{ margin: '0 0 5px 0', color: '#1976d2', fontSize: '18px' }}>ORDER DETAILS</h1>
               <div style={{ display: 'flex', gap: '15px' }}>
                 <div>
                   <div style={{ color: '#666', fontSize: '12px' }}>Order Date</div>
@@ -1142,7 +1174,7 @@ Global Marketing Solutions Team`;
                   whiteSpace: 'nowrap'
                 }}
               >
-                📝 Create New Order
+                Create New Order
               </button>
               <button
                 onClick={handlePrint}
@@ -1157,7 +1189,7 @@ Global Marketing Solutions Team`;
                   whiteSpace: 'nowrap'
                 }}
               >
-                🖨️ Print
+                Print
               </button>
             </div>
           </div>
@@ -1215,7 +1247,6 @@ Global Marketing Solutions Team`;
                 {existingData.executive}
               </div>
             </div>
-            {/* REMOVED: Sale Closed By display section */}
 
             {/* Lead Source display */}
             {existingData.leadSource && (
@@ -1247,6 +1278,45 @@ Global Marketing Solutions Team`;
             )}
           </div>
         </div>
+
+        {/* Special Dates Display */}
+        {(existingData.birthDate || existingData.anniversaryDate) && (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '12px',
+            padding: '12px',
+            backgroundColor: '#f9f9f9',
+            borderRadius: '6px',
+            marginBottom: '15px',
+            border: '1px solid #eee'
+          }}>
+            {existingData.birthDate && (
+              <div>
+                <div style={{ color: '#666', fontSize: '12px' }}>Birth Date</div>
+                <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
+                  {new Date(existingData.birthDate).toLocaleDateString('en-IN', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  })}
+                </div>
+              </div>
+            )}
+            {existingData.anniversaryDate && (
+              <div>
+                <div style={{ color: '#666', fontSize: '12px' }}>Anniversary Date</div>
+                <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>
+                  {new Date(existingData.anniversaryDate).toLocaleDateString('en-IN', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Requirements Table */}
         <div style={{
@@ -1529,7 +1599,7 @@ Global Marketing Solutions Team`;
               minWidth: '120px'
             }}
           >
-            ← Back to Search
+            Back to Search
           </button>
           <button
             onClick={createNewOrderFromExisting}
@@ -1545,7 +1615,7 @@ Global Marketing Solutions Team`;
               minWidth: '120px'
             }}
           >
-            📝 Create New Order
+            Create New Order
           </button>
           <button
             onClick={generateInvoice}
@@ -1561,7 +1631,7 @@ Global Marketing Solutions Team`;
               minWidth: '120px'
             }}
           >
-            🧾 Generate Invoice
+            Generate Invoice
           </button>
         </div>
 
@@ -1605,7 +1675,7 @@ Global Marketing Solutions Team`;
                 border: '1px solid #4caf50'
               }}>
                 <p style={{ margin: 0, color: '#2e7d32' }}>
-                  ✅ WhatsApp message has been sent to the customer!
+                  WhatsApp message has been sent to the customer!
                 </p>
               </div>
             )}
@@ -1742,7 +1812,7 @@ Global Marketing Solutions Team`;
             <select
               value={clientType}
               onChange={(e) => setClientType(e.target.value)}
-              disabled={isNewFromExisting}  // Make it disabled/read-only
+              disabled={isNewFromExisting}
               style={{ backgroundColor: isNewFromExisting ? '#f5f5f5' : 'white' }}
             >
               <option value="">Select</option>
@@ -1763,12 +1833,12 @@ Global Marketing Solutions Team`;
               onChange={(e) => handleBusinessChange(e.target.value)}
               placeholder="ENTER BUSINESS NAME"
               style={{ textTransform: 'uppercase' }}
-              readOnly={isNewFromExisting}  // Make it read-only
+              readOnly={isNewFromExisting}
               className={isNewFromExisting ? "readonly-field" : ""}
             />
           </label>
 
-          {/* Contact Person field - make it read-only when in new from existing mode */}
+          {/* Contact Person field */}
           <div style={{ flex: 1, minWidth: '200px' }}>
             <label>
               Contact Person:
@@ -1781,17 +1851,14 @@ Global Marketing Solutions Team`;
                   }
                 }}
                 placeholder="Contact person name"
-                readOnly={isNewFromExisting}  // Make it read-only
+                readOnly={isNewFromExisting}
                 className={isNewFromExisting ? "readonly-field" : ""}
               />
             </label>
           </div>
 
-          {/* UPDATED SECTION: Removed Sale Closed By field */}
           <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: '200px' }}>
-
-              {/* Contact Number field - make it read-only */}
               <label>
                 Contact Number:
                 <input
@@ -1804,7 +1871,7 @@ Global Marketing Solutions Team`;
                   }}
                   placeholder="+91 9876543210"
                   maxLength="14"
-                  readOnly={isNewFromExisting}  // Make it read-only
+                  readOnly={isNewFromExisting}
                   className={isNewFromExisting ? "readonly-field" : ""}
                 />
               </label>
@@ -1851,6 +1918,43 @@ Global Marketing Solutions Team`;
             </div>
           </div>
 
+          {/* Birth Date and Anniversary Date Fields - Normal style like other fields */}
+          <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '200px' }}>
+              <label>
+                Birth Date (Optional):
+                <input
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    if (isValidDate(newDate) || !newDate) {
+                      setBirthDate(newDate);
+                    } else {
+                      alert("Birth date cannot be in the future");
+                    }
+                  }}
+                />
+              </label>
+            </div>
+            <div style={{ flex: 1, minWidth: '200px' }}>
+              <label>
+                Anniversary Date (Optional):
+                <input
+                  type="date"
+                  value={anniversaryDate}
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    if (isValidDate(newDate) || !newDate) {
+                      setAnniversaryDate(newDate);
+                    } else {
+                      alert("Anniversary date cannot be in the future");
+                    }
+                  }}
+                />
+              </label>
+            </div>
+          </div>
 
           <div className="design-status-container" style={{ marginBottom: "16px" }}>
             <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
@@ -1934,135 +2038,144 @@ Global Marketing Solutions Team`;
       </div>
 
       <div className="rows-section">
-        <table>
-          <thead>
-            <tr>
-              <th>Requirement</th>
-              <th>Description</th>
-              <th>Quantity</th>
-              <th>Rate (₹)</th>
-              <th>Days</th>
-              <th>GST 18%</th>
-              <th>Total (₹)</th>
-              <th>Delivery Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => {
-              const isTimeBased = isTimeBasedRequirement(row.requirement);
-              return (
-                <tr key={index}>
-                  <td>
-                    <Select
-                      options={[
-                        { value: '', label: 'Select Requirement' },
-                        ...requirements.map(req => ({ value: req.name, label: req.name })),
-                        { value: 'other', label: 'Other (Specify)' }
-                      ]}
-                      value={row.requirement ? { value: row.requirement, label: row.requirement } : null}
-                      onChange={(selectedOption) => {
-                        const value = selectedOption ? selectedOption.value : '';
-                        handleRowChange(index, "requirement", value);
-                        if (value !== "other") handleRowChange(index, "customRequirement", "");
-                      }}
-                      isSearchable={true}
-                      placeholder="Search requirement..."
-                      styles={{
-                        control: (base) => ({
-                          ...base,
-                          minHeight: '32px',
-                          fontSize: '14px',
-                        }),
-                        menu: (base) => ({
-                          ...base,
-                          fontSize: '14px',
-                        }),
-                      }}
-                    />
-                    {row.requirement === "other" && (
+        <div className="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Requirement</th>
+                <th>Description</th>
+                <th>Quantity</th>
+                <th>Rate (₹)</th>
+                <th>Days</th>
+                <th>GST 18%</th>
+                <th>Total (₹)</th>
+                <th>Delivery Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => {
+                const isTimeBased = isTimeBasedRequirement(row.requirement);
+                return (
+                  <tr key={index}>
+                    <td data-label="Requirement">
+                      <div className="requirement-select-container">
+                        <Select
+                          options={[
+                            { value: '', label: 'Select Requirement' },
+                            ...requirements.map(req => ({ value: req.name, label: req.name })),
+                            { value: 'other', label: 'Other (Specify)' }
+                          ]}
+                          value={row.requirement ? { value: row.requirement, label: row.requirement } : null}
+                          onChange={(selectedOption) => {
+                            const value = selectedOption ? selectedOption.value : '';
+                            handleRowChange(index, "requirement", value);
+                            if (value !== "other") handleRowChange(index, "customRequirement", "");
+                          }}
+                          isSearchable={true}
+                          placeholder="Search requirement..."
+                          className="requirement-select"
+                          classNamePrefix="react-select"
+                          styles={{
+                            control: (base) => ({
+                              ...base,
+                              minHeight: '38px',
+                              fontSize: '14px',
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              fontSize: '14px',
+                              zIndex: 999,
+                            }),
+                            menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                          }}
+                          menuPortalTarget={document.body}
+                        />
+                        {row.requirement === "other" && (
+                          <input
+                            type="text"
+                            value={row.customRequirement || ""}
+                            onChange={(e) => handleRowChange(index, "customRequirement", e.target.value)}
+                            placeholder="Enter custom requirement"
+                            className="custom-requirement-input"
+                          />
+                        )}
+                      </div>
+                    </td>
+                    <td data-label="Description">
                       <input
                         type="text"
-                        value={row.customRequirement || ""}
-                        onChange={(e) => handleRowChange(index, "customRequirement", e.target.value)}
-                        placeholder="Enter custom requirement"
-                        style={{ marginTop: "5px", width: "100%" }}
+                        value={row.description}
+                        onChange={(e) => handleRowChange(index, "description", capitalizeFirst(e.target.value))}
                       />
-                    )}
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={row.description}
-                      onChange={(e) => handleRowChange(index, "description", capitalizeFirst(e.target.value))}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={row.quantity}
-                      onChange={(e) => handleRowChange(index, "quantity", e.target.value)}
-                      placeholder="0"
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={row.rate}
-                      onChange={(e) => handleRowChange(index, "rate", e.target.value)}
-                      placeholder="0.00"
-                    />
-                  </td>
-                  <td>
-                    {isTimeBased ? (
+                    </td>
+                    <td data-label="Quantity">
                       <input
                         type="text"
-                        value={row.days}
-                        onChange={(e) => handleRowChange(index, "days", e.target.value)}
-                        placeholder="1"
+                        value={row.quantity}
+                        onChange={(e) => handleRowChange(index, "quantity", e.target.value)}
+                        placeholder="0"
                       />
-                    ) : (
-                      <span>-</span>
-                    )}
-                  </td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={row.gstIncluded}
-                      onChange={(e) => handleRowChange(index, "gstIncluded", e.target.checked)}
-                    />
-                  </td>
-                  <td>₹{row.total}</td>
-                  <td>
-                    {isTimeBased ? (
-                      <>
-                        <div>Start Date:</div>
+                    </td>
+                    <td data-label="Rate (₹)">
+                      <input
+                        type="text"
+                        value={row.rate}
+                        onChange={(e) => handleRowChange(index, "rate", e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </td>
+                    <td data-label="Days">
+                      {isTimeBased ? (
+                        <input
+                          type="text"
+                          value={row.days}
+                          onChange={(e) => handleRowChange(index, "days", e.target.value)}
+                          placeholder="1"
+                        />
+                      ) : (
+                        <span>-</span>
+                      )}
+                    </td>
+                    <td data-label="GST 18%">
+                      <input
+                        type="checkbox"
+                        checked={row.gstIncluded}
+                        onChange={(e) => handleRowChange(index, "gstIncluded", e.target.checked)}
+                      />
+                    </td>
+                    <td data-label="Total (₹)">₹{row.total}</td>
+                    <td data-label="Delivery Date">
+                      {isTimeBased ? (
+                        <div className="date-range">
+                          <div>Start:</div>
+                          <input
+                            type="date"
+                            value={row.startDate}
+                            onChange={(e) => handleRowChange(index, "startDate", e.target.value)}
+                          />
+                          <div>End:</div>
+                          <input type="date" value={row.endDate} readOnly />
+                        </div>
+                      ) : (
                         <input
                           type="date"
-                          value={row.startDate}
-                          onChange={(e) => handleRowChange(index, "startDate", e.target.value)}
+                          value={row.deliveryDate}
+                          onChange={(e) => handleRowChange(index, "deliveryDate", e.target.value)}
                         />
-                        <div>End Date:</div>
-                        <input type="date" value={row.endDate} readOnly />
-                      </>
-                    ) : (
-                      <input
-                        type="date"
-                        value={row.deliveryDate}
-                        onChange={(e) => handleRowChange(index, "deliveryDate", e.target.value)}
-                      />
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        <button onClick={handleAddRow}>+ ADD ITEM</button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <button onClick={handleAddRow} className="add-item-btn">+ ADD ITEM</button>
       </div>
 
       <div className="payment-section">
-        <div style={{ display: 'flex', gap: '15px', marginBottom: '15px' }}>
-          <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '150px' }}>
             <label>
               Advance Date:
               <input
@@ -2072,7 +2185,7 @@ Global Marketing Solutions Team`;
               />
             </label>
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: '150px' }}>
             <label>
               Payment Date:
               <input
@@ -2085,7 +2198,7 @@ Global Marketing Solutions Team`;
         </div>
 
         <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: '120px' }}>
             <label>
               Advance (₹):
               <input
@@ -2102,19 +2215,19 @@ Global Marketing Solutions Team`;
               )}
             </label>
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: '120px' }}>
             <label>
               Balance (₹):
               <input type="text" value={balance} readOnly />
             </label>
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: '120px' }}>
             <label>
               Total (₹):
               <input type="text" value={total} readOnly />
             </label>
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: '120px' }}>
             <label>
               Discount (₹):
               <input
@@ -2125,7 +2238,7 @@ Global Marketing Solutions Team`;
               />
             </label>
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: '120px' }}>
             <label>
               Final Amount (₹):
               <input type="text" value={discountedTotal} readOnly />
@@ -2289,6 +2402,8 @@ Global Marketing Solutions Team`;
           justify-content: space-between;
           align-items: center;
           margin-bottom: 20px;
+          flex-wrap: wrap;
+          gap: 10px;
         }
         .print-actions {
           display: flex;
@@ -2319,7 +2434,7 @@ Global Marketing Solutions Team`;
           display: flex;
           justify-content: center;
           align-items: center;
-          zIndex: 1000;
+          z-index: 1000;
         }
         .success-modal {
           background: white;
@@ -2347,28 +2462,38 @@ Global Marketing Solutions Team`;
           margin-bottom: 15px;
         }
         input, select {
-          width: '100%';
+          width: 100%;
           padding: 8px;
           border: 1px solid #ddd;
           border-radius: 4px;
           margin-top: 5px;
+          box-sizing: border-box;
         }
         .error-input {
           border-color: red;
           background-color: #fff0f0;
         }
+        .rows-section {
+          overflow-x: auto;
+          margin-bottom: 20px;
+        }
+        .table-responsive {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
         .rows-section table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 15px;
+          min-width: 800px;
         }
         .rows-section th, .rows-section td {
           border: 1px solid #ddd;
           padding: 8px;
           text-align: left;
+          vertical-align: top;
         }
         .rows-section th {
-          background-color: navyblue;
+          background-color: #1a237e;
           color: white;
         }
         .rows-section button {
@@ -2386,7 +2511,7 @@ Global Marketing Solutions Team`;
         .payment-options {
           display: flex;
           flex-wrap: wrap;
-          gap: 10px;
+          gap: 15px;
           margin-top: 10px;
         }
         .form-actions {
@@ -2418,37 +2543,97 @@ Global Marketing Solutions Team`;
         .target-change-animation {
           animation: targetChange 1.5s ease;
         }
-
         .readonly-field {
-  background-color: #f5f5f5;
-  color: #666;
-  cursor: not-allowed;
-  border-color: #ddd;
-}
-
-select:disabled {
-  background-color: #f5f5f5;
-  color: #666;
-  cursor: not-allowed;
-}
-        .no-print {
-          /* This class hides elements during printing */
+          background-color: #f5f5f5;
+          color: #666;
+          cursor: not-allowed;
+          border-color: #ddd;
+        }
+        select:disabled {
+          background-color: #f5f5f5;
+          color: #666;
+          cursor: not-allowed;
+        }
+        .requirement-select-container {
+          min-width: 180px;
+        }
+        .custom-requirement-input {
+          margin-top: 5px;
+          width: 100%;
+        }
+        .date-range {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+        }
+        .date-range input {
+          width: 100%;
+          padding: 6px;
         }
         @keyframes targetChange {
           0% { background-color: #ffffcc; }
           100% { background-color: transparent; }
         }
+
+        /* Responsive Styles */
         @media (max-width: 768px) {
           .form-top {
             flex-direction: column;
           }
+          .left, .right {
+            min-width: auto;
+          }
           .payment-section > div {
             flex-direction: column;
           }
-          .left > div {
+          .payment-section > div > div {
+            min-width: auto;
+          }
+          .form-header {
             flex-direction: column;
+            align-items: flex-start;
+          }
+          .print-actions {
+            width: 100%;
+            justify-content: flex-start;
+          }
+          .rows-section th, .rows-section td {
+            padding: 6px;
+            font-size: 12px;
+          }
+          .rows-section input, .rows-section select {
+            font-size: 12px;
+            padding: 4px;
+          }
+          .requirement-select-container {
+            min-width: 140px;
           }
         }
+
+        @media (max-width: 480px) {
+          .rows-section th, .rows-section td {
+            padding: 4px;
+            font-size: 11px;
+          }
+          .rows-section input, .rows-section select {
+            font-size: 11px;
+            padding: 3px;
+          }
+          .requirement-select-container {
+            min-width: 120px;
+          }
+          .btn-primary, .btn-secondary, .btn-print, .btn-invoice {
+            padding: 6px 12px;
+            font-size: 12px;
+          }
+          .payment-options {
+            gap: 10px;
+          }
+          .payment-options label {
+            font-size: 12px;
+          }
+        }
+
         @media print {
           .no-print {
             display: none !important;

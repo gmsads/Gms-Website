@@ -12,6 +12,7 @@ function ViewOrders() {
   const [filteredOrders, setFilteredOrders] = useState([]); // Stores filtered orders based on search
   const [groupedOrders, setGroupedOrders] = useState({}); // Orders grouped by month
   const [searchTerm, setSearchTerm] = useState(''); // Search filter term
+  const [requirementFilter, setRequirementFilter] = useState(null); // NEW: Requirement filter from URL
   const [userRole, setUserRole] = useState(''); // Current user's role
   const [executiveName, setExecutiveName] = useState(''); // Current user's name
   const [editingOrder, setEditingOrder] = useState(null); // Order being edited
@@ -98,39 +99,7 @@ function ViewOrders() {
     }
   };
 
-  // Helper: Convert calendar month (0-11) to financial month (1-12 where 1=April)
-  const calendarToFinancialMonth = (calendarMonth) => {
-    if (calendarMonth >= 3) { // Apr to Dec
-      return calendarMonth - 2; // Apr=1, May=2, etc.
-    } else { // Jan to Mar
-      return calendarMonth + 10; // Jan=11, Feb=12, Mar=13? Actually Jan=11, Feb=12, Mar=13? Let's fix
-      // Jan (0) -> 11, Feb (1) -> 12, Mar (2) -> 13? Wait, Mar should be 12? Let's recalc
-      // Apr=1, May=2, Jun=3, Jul=4, Aug=5, Sep=6, Oct=7, Nov=8, Dec=9, Jan=10, Feb=11, Mar=12
-    }
-  };
-  
-  // Better: Get financial month (1-12 where 1=April) from date
-  const getFinancialMonthFromDate = (date) => {
-    const month = date.getMonth(); // 0-11 Jan=0
-    if (month >= 3) { // April to December
-      return month - 2; // Apr=1, May=2, Dec=10
-    } else { // January to March
-      return month + 10; // Jan=11, Feb=12, Mar=13? Actually Mar should be 12, Jan=10, Feb=11, Mar=12
-    }
-  };
-  
-  // Correct: Get financial month (1-12 where 1=April)
-  const getFinancialMonth = (date) => {
-    const month = date.getMonth(); // 0-11
-    if (month >= 3) {
-      return month - 2; // Apr=1, May=2, Jun=3, Jul=4, Aug=5, Sep=6, Oct=7, Nov=8, Dec=9
-    } else {
-      return month + 10; // Jan=11, Feb=12, Mar=13? Wait, that gives 13 for Mar. Let's fix:
-      // Jan=11, Feb=12, Mar=13 -> need Mar=12, Jan=10, Feb=11, Mar=12
-    }
-  };
-  
-  // Correct mapping:
+  // Get financial month (1-12 where 1=April)
   const getFinancialMonthCorrect = (date) => {
     const month = date.getMonth(); // 0=Jan, 1=Feb, 2=Mar, 3=Apr...
     if (month === 0) return 10; // Jan -> 10th month
@@ -148,41 +117,6 @@ function ViewOrders() {
     } else { // January to March
       return `${year - 1}-${year}`;
     }
-  };
-  
-  // Get financial year start date
-  const getFinancialYearStart = (financialYear) => {
-    const [startYear] = financialYear.split('-').map(Number);
-    return new Date(startYear, 3, 1); // April 1st
-  };
-  
-  // Get financial year end date
-  const getFinancialYearEnd = (financialYear) => {
-    const [_, endYear] = financialYear.split('-').map(Number);
-    return new Date(endYear, 2, 31, 23, 59, 59, 999); // March 31st
-  };
-  
-  // Get month start date for financial month
-  const getMonthStartDate = (financialYear, financialMonth) => {
-    const monthIndex = financialMonth - 1; // 0-11
-    let calendarMonth, year;
-    const [startYear, endYear] = financialYear.split('-').map(Number);
-    
-    if (monthIndex <= 8) { // Apr to Dec (0-8)
-      calendarMonth = monthIndex + 3; // Apr=3, May=4, etc.
-      year = startYear;
-    } else { // Jan to Mar (9-11)
-      calendarMonth = monthIndex - 9; // Jan=0, Feb=1, Mar=2
-      year = endYear;
-    }
-    
-    return new Date(year, calendarMonth, 1);
-  };
-  
-  // Get month end date for financial month
-  const getMonthEndDate = (financialYear, financialMonth) => {
-    const monthStart = getMonthStartDate(financialYear, financialMonth);
-    return new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
   };
 
   const location = useLocation();
@@ -713,7 +647,7 @@ function ViewOrders() {
                 <th>Quantity</th>
                 <th>Price / Piece</th>
                 <th>Amount</th>
-               </tr>
+              </tr>
             </thead>
             <tbody>
               ${order.rows.map((row, index) => `
@@ -723,10 +657,10 @@ function ViewOrders() {
                   <td style="text-align: right;">${row.quantity || 0}</td>
                   <td style="text-align: right;">${parseFloat(row.rate || 0).toFixed(2)}</td>
                   <td style="text-align: right;">${parseFloat(row.total || 0).toFixed(2)}</td>
-                 </tr>
+                </tr>
               `).join('')}
             </tbody>
-           </table>
+          </table>
         </div>
         
         <div style="margin-bottom: 10px; font-size: 10px;">
@@ -767,7 +701,7 @@ function ViewOrders() {
                     <th>Date</th>
                     <th>Amount</th>
                     <th>Method</th>
-                   </tr>
+                  </tr>
                 </thead>
                 <tbody>
                   ${order.paymentHistory.map(payment => `
@@ -835,7 +769,18 @@ function ViewOrders() {
     }, 10000);
   };
 
-  // ===== 6. NAVIGATION FUNCTION =====
+  // ===== 6. HELPER FUNCTION FOR TIME PERIOD TEXT =====
+  const getTimePeriodText = () => {
+    if (useDateRange && startDate && endDate) {
+      return `${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}`;
+    }
+    if (monthFilter !== null) {
+      return `${financialMonthLabels[monthFilter - 1]} ${financialYearFilter !== 'all' ? financialYearFilter : ''}`;
+    }
+    return financialYearFilter === 'all' ? 'All Financial Years' : `FY ${financialYearFilter}`;
+  };
+
+  // ===== 7. NAVIGATION FUNCTION =====
   const navigateToMonth = (direction) => {
     let newMonth = currentViewMonth;
     let newFinancialYear = financialYearFilter;
@@ -875,11 +820,12 @@ function ViewOrders() {
     params.delete('leadSource');
     params.delete('startDate');
     params.delete('endDate');
+    params.delete('requirement'); // NEW: Clear requirement filter
 
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
   };
 
-  // ===== 7. FIXED: FILTER ORDERS FUNCTION =====
+  // ===== 8. FIXED: FILTER ORDERS FUNCTION (UPDATED TO INCLUDE REQUIREMENT) =====
   const filterOrdersBySearchTerm = (order) => {
     if (!searchTerm || searchTerm.trim() === '') {
       return true;
@@ -910,7 +856,7 @@ function ViewOrders() {
       order.createdBy || ''
     ];
 
-    // Search in order rows
+    // Search in order rows - including requirement fields
     const rowFields = order.rows.flatMap(row => [
       row.description || '',
       row.requirement || '',
@@ -931,7 +877,7 @@ function ViewOrders() {
     );
   };
 
-  // ===== 8. GROUP ORDERS FUNCTION (by financial year months) =====
+  // ===== 9. GROUP ORDERS FUNCTION (by financial year months) =====
   const groupOrdersByMonth = (ordersToGroup) => {
     const grouped = {};
 
@@ -1013,26 +959,34 @@ function ViewOrders() {
     return grouped;
   };
 
-  // ===== 9. CALCULATE TOTALS FUNCTION =====
+  // ===== 10. FIXED: CALCULATE TOTALS FUNCTION - Uses filteredOrders =====
   const calculateTotals = () => {
     let totalAmount = 0;
     let totalReceived = 0;
     let totalBalance = 0;
 
+    // Use filteredOrders which already has all filters applied
     filteredOrders.forEach(order => {
+      // Calculate order total from rows
       const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
       totalAmount += orderTotal;
 
+      // Calculate advance paid
       const advanceReceived = parseFloat(order.advance) || 0;
+      
+      // Calculate payment history total
       let paymentHistoryTotal = 0;
-
       if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
         paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) =>
           sum + (parseFloat(payment.amount) || 0), 0);
       }
 
-      totalReceived += advanceReceived + paymentHistoryTotal;
-      const orderBalance = orderTotal - (advanceReceived + paymentHistoryTotal);
+      // Total received = advance + payment history
+      const received = advanceReceived + paymentHistoryTotal;
+      totalReceived += received;
+      
+      // Balance = order total - received
+      const orderBalance = orderTotal - received;
       totalBalance += orderBalance;
     });
 
@@ -1043,9 +997,10 @@ function ViewOrders() {
     };
   };
 
+  // Calculate totals using filtered orders
   const { totalAmount, totalReceived, totalBalance } = calculateTotals();
 
-  // ===== 10. USER INFO FUNCTION =====
+  // ===== 11. USER INFO FUNCTION =====
   const getUserInfo = () => {
     try {
       const role = localStorage.getItem('role') || '';
@@ -1063,7 +1018,7 @@ function ViewOrders() {
     }
   };
 
-  // ===== 11. FETCH ORDERS FUNCTION =====
+  // ===== 12. FETCH ORDERS FUNCTION =====
   const fetchOrders = async (role, name, month = null, financialYear = null, clientType = null, executive = null, executiveName = null, leadSource = null, useDateRangeFlag = false, startDateParam = null, endDateParam = null) => {
     setLoading(true);
     setError(null);
@@ -1148,7 +1103,20 @@ function ViewOrders() {
     }
   };
 
-  // ===== 12. APPLY FILTERS EFFECT =====
+  // ===== 13. CAPTURE REQUIREMENT FILTER FROM URL (NEW useEffect) =====
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const requirement = params.get('requirement');
+    if (requirement) {
+      setRequirementFilter(requirement);
+      setSearchTerm(requirement);
+      console.log('🎯 Filtering by requirement:', requirement);
+    } else {
+      setRequirementFilter(null);
+    }
+  }, [location.search]);
+
+  // ===== 14. APPLY FILTERS EFFECT =====
   useEffect(() => {
     if (!orders.length) {
       setFilteredOrders([]);
@@ -1165,19 +1133,106 @@ function ViewOrders() {
     // Then apply all other filters
     let filtered = visibilityFiltered;
 
+    // Apply client type filter
     if (clientTypeFilter) {
       filtered = filtered.filter(order => order.clientType === clientTypeFilter);
     }
 
+    // Apply lead source filter
     if (leadSourceFilter) {
       filtered = filtered.filter(order => order.leadSource === leadSourceFilter);
     }
 
+    // Apply executive filter
     if (appliedExecutiveFilters.executiveName) {
       filtered = filtered.filter(order => order.executive === appliedExecutiveFilters.executiveName);
     }
 
-    // Finally apply search filter
+    // Apply financial year and month filters (based on order date)
+    if (!useDateRange) {
+      filtered = filtered.filter(order => {
+        try {
+          let orderDate;
+          if (order.orderDate) {
+            if (typeof order.orderDate === 'string') {
+              if (order.orderDate.includes('-')) {
+                const parts = order.orderDate.split('-');
+                if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+                  orderDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                } else {
+                  orderDate = new Date(order.orderDate);
+                }
+              } else {
+                orderDate = new Date(order.orderDate);
+              }
+            } else {
+              orderDate = order.orderDate;
+            }
+          } else if (order.createdAt) {
+            orderDate = new Date(order.createdAt);
+          } else {
+            return false;
+          }
+
+          if (!orderDate || isNaN(orderDate.getTime())) return false;
+
+          const financialYear = getFinancialYearFromDate(orderDate);
+          const financialMonth = getFinancialMonthCorrect(orderDate);
+
+          // Check financial year filter
+          if (financialYearFilter !== 'all' && financialYear !== financialYearFilter) {
+            return false;
+          }
+
+          // Check month filter
+          if (monthFilter !== null && financialMonth !== monthFilter) {
+            return false;
+          }
+
+          return true;
+        } catch (err) {
+          console.error('Error filtering order by date:', order._id, err);
+          return false;
+        }
+      });
+    } else if (useDateRange && startDate && endDate) {
+      // Apply date range filter
+      filtered = filtered.filter(order => {
+        try {
+          let orderDate;
+          if (order.orderDate) {
+            if (typeof order.orderDate === 'string') {
+              if (order.orderDate.includes('-')) {
+                const parts = order.orderDate.split('-');
+                if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+                  orderDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                } else {
+                  orderDate = new Date(order.orderDate);
+                }
+              } else {
+                orderDate = new Date(order.orderDate);
+              }
+            } else {
+              orderDate = order.orderDate;
+            }
+          } else if (order.createdAt) {
+            orderDate = new Date(order.createdAt);
+          } else {
+            return false;
+          }
+
+          if (!orderDate || isNaN(orderDate.getTime())) return false;
+
+          const orderDateStr = orderDate.toISOString().split('T')[0];
+          return orderDateStr >= startDate && orderDateStr <= endDate;
+        } catch (err) {
+          console.error('Error filtering order by date range:', order._id, err);
+          return false;
+        }
+      });
+    }
+
+    // Finally apply search filter (includes requirement filter via searchTerm)
     if (searchTerm && searchTerm.trim() !== '') {
       filtered = filtered.filter(order => filterOrdersBySearchTerm(order));
     }
@@ -1187,7 +1242,7 @@ function ViewOrders() {
 
   }, [orders, searchTerm, clientTypeFilter, leadSourceFilter, appliedExecutiveFilters, executiveName, financialYearFilter, monthFilter, useDateRange, startDate, endDate]);
 
-  // ===== 13. LEAD SOURCE FILTER HANDLER =====
+  // ===== 15. LEAD SOURCE FILTER HANDLER =====
   const handleLeadSourceFilterSelect = (source) => {
     const params = new URLSearchParams(location.search);
 
@@ -1211,6 +1266,7 @@ function ViewOrders() {
     params.delete('weekCount');
     params.delete('startDate');
     params.delete('endDate');
+    params.delete('requirement'); // NEW: Clear requirement filter
 
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
 
@@ -1225,7 +1281,7 @@ function ViewOrders() {
     fetchOrders(role, name, month, financialYearParam, clientType, executive, executiveNameParam, source);
   };
 
-  // ===== 14. FINANCIAL YEAR CHANGE HANDLER =====
+  // ===== 16. FINANCIAL YEAR CHANGE HANDLER =====
   const handleFinancialYearChange = (e) => {
     const newFinancialYear = e.target.value;
     setFinancialYearFilter(newFinancialYear);
@@ -1243,6 +1299,7 @@ function ViewOrders() {
     params.delete('month');
     params.delete('startDate');
     params.delete('endDate');
+    params.delete('requirement'); // NEW: Clear requirement filter
     
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
 
@@ -1255,7 +1312,7 @@ function ViewOrders() {
     fetchOrders(role, name, month, newFinancialYear, clientType, executive, executiveNameParam, leadSource);
   };
 
-  // ===== 15. MONTH CHANGE HANDLER =====
+  // ===== 17. MONTH CHANGE HANDLER =====
   const handleMonthChange = (e) => {
     const newMonth = e.target.value ? parseInt(e.target.value) : null;
     setMonthFilter(newMonth);
@@ -1269,6 +1326,7 @@ function ViewOrders() {
     }
     params.delete('startDate');
     params.delete('endDate');
+    params.delete('requirement'); // NEW: Clear requirement filter
     
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
 
@@ -1281,7 +1339,7 @@ function ViewOrders() {
     fetchOrders(role, name, newMonth, financialYear, clientType, executive, executiveNameParam, leadSource);
   };
 
-  // ===== 16. CLEAR FILTERS FUNCTION =====
+  // ===== 18. CLEAR FILTERS FUNCTION (UPDATED) =====
   const clearAllFilters = () => {
     setMonthFilter(null);
     setFinancialYearFilter('all');
@@ -1295,6 +1353,7 @@ function ViewOrders() {
     });
     setMonthFilterInfo({ monthCount: 0, monthName: '', weekCount: 0 });
     setSearchTerm('');
+    setRequirementFilter(null); // NEW: Clear requirement filter
     setShowLeadSourceFilter(false);
     setStartDate('');
     setEndDate('');
@@ -1350,6 +1409,10 @@ function ViewOrders() {
 
   const clearSearchFilter = () => {
     setSearchTerm('');
+    setRequirementFilter(null); // NEW: Clear requirement filter
+    const params = new URLSearchParams(location.search);
+    params.delete('requirement');
+    navigate(`/admin-dashboard/view-orders?${params.toString()}`);
   };
 
   const clearDateRange = () => {
@@ -1371,18 +1434,25 @@ function ViewOrders() {
     fetchOrders(role, name, month, financialYear, clientType, executive, executiveNameParam, leadSource);
   };
 
-  // ===== 17. EDIT FUNCTIONS =====
+  // ===== 19. EDIT FUNCTIONS =====
   const handleEdit = (order) => {
     if (shouldSeeOnlyOwnOrders() && order.executive !== executiveName) {
       toast.error('You can only edit your own orders');
       return;
     }
 
+    // Calculate total amount from rows
+    const totalAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+    
     setEditingOrder({
       ...order,
       orderDate: formatDateForInput(order.orderDate),
       advanceDate: formatDateForInput(order.advanceDate),
       paymentDate: formatDateForInput(order.paymentDate),
+      advance: order.advance || 0,
+      balance: order.balance || 0,
+      discountedTotal: order.discountedTotal || totalAmount,
+      discount: order.discount || 0,
       rows: order.rows.map(row => ({
         ...row,
         deliveryDate: formatDateForInput(row.deliveryDate),
@@ -1406,25 +1476,41 @@ function ViewOrders() {
       const quantity = parseFloat(updatedRows[index].quantity) || 0;
       const rate = parseFloat(updatedRows[index].rate) || 0;
       updatedRows[index].total = (quantity * rate).toFixed(2);
-    }
-
-    if (field === 'discount') {
-      const discount = parseFloat(value) || 0;
-      const total = parseFloat(editingOrder.total) || 0;
+      
+      // Recalculate order totals when row changes
+      const newTotalAmount = updatedRows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+      const newDiscountedTotal = newTotalAmount - (parseFloat(editingOrder.discount) || 0);
+      const newBalance = newDiscountedTotal - (parseFloat(editingOrder.advance) || 0);
+      
       setEditingOrder(prev => ({
         ...prev,
-        discount,
-        discountedTotal: (total - discount).toFixed(2)
+        rows: updatedRows,
+        discountedTotal: newDiscountedTotal < 0 ? 0 : newDiscountedTotal,
+        balance: newBalance < 0 ? 0 : newBalance
       }));
+    } else {
+      setEditingOrder(prev => ({ ...prev, rows: updatedRows }));
     }
-
-    setEditingOrder(prev => ({ ...prev, rows: updatedRows }));
   };
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.put(API_ENDPOINTS.UPDATE_ORDER(editingOrder._id), editingOrder);
+      const updateData = {
+        ...editingOrder,
+        discount: parseFloat(editingOrder.discount) || 0,
+        advance: parseFloat(editingOrder.advance) || 0,
+        balance: parseFloat(editingOrder.balance) || 0,
+        discountedTotal: parseFloat(editingOrder.discountedTotal) || 0,
+        rows: editingOrder.rows.map(row => ({
+          ...row,
+          quantity: parseFloat(row.quantity) || 0,
+          rate: parseFloat(row.rate) || 0,
+          total: parseFloat(row.total) || 0
+        }))
+      };
+      
+      await axios.put(API_ENDPOINTS.UPDATE_ORDER(editingOrder._id), updateData);
       setShowModal(false);
 
       const { role, name } = getUserInfo();
@@ -1444,7 +1530,7 @@ function ViewOrders() {
     }
   };
 
-  // ===== 18. DELETE FUNCTIONS =====
+  // ===== 20. DELETE FUNCTIONS =====
   const confirmDelete = (orderId) => {
     const orderToDeleteObj = orders.find(order => order._id === orderId);
     if (shouldSeeOnlyOwnOrders() && orderToDeleteObj && orderToDeleteObj.executive !== executiveName) {
@@ -1511,7 +1597,6 @@ function ViewOrders() {
     }
   };
 
-  // ===== 19. PAYMENT FUNCTIONS =====
   const handleRecordPayment = async (order) => {
     if (shouldSeeOnlyOwnOrders() && order.executive !== executiveName) {
       toast.error('You can only record payments for your own orders');
@@ -1522,19 +1607,42 @@ function ViewOrders() {
       setPaymentLoading(true);
       setCurrentOrder(order);
 
+      const totalAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+      const finalAmount = parseFloat(order.discountedTotal) || totalAmount;
+      const advancePaid = parseFloat(order.advance) || 0;
+      
+      let paymentHistoryTotal = 0;
+      if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
+        paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) => 
+          sum + (parseFloat(payment.amount) || 0), 0);
+      }
+      
+      const totalPaid = advancePaid + paymentHistoryTotal;
+      const actualBalance = finalAmount - totalPaid;
+
+      console.log('Payment setup:', {
+        totalAmount,
+        finalAmount,
+        advancePaid,
+        paymentHistoryTotal,
+        totalPaid,
+        actualBalance,
+        orderBalance: order.balance
+      });
+
       const payments = [];
 
-      if (order.advance > 0) {
+      if (advancePaid > 0) {
         payments.push({
           date: order.advanceDate || order.orderDate,
-          amount: order.advance,
+          amount: advancePaid,
           method: 'Advance',
           reference: '',
           note: 'Initial advance payment'
         });
       }
 
-      if (order.paymentHistory) {
+      if (order.paymentHistory && order.paymentHistory.length > 0) {
         payments.push(...order.paymentHistory);
       }
 
@@ -1542,7 +1650,7 @@ function ViewOrders() {
 
       setPaymentData({
         date: new Date().toISOString().split('T')[0],
-        amount: order.balance > 0 ? order.balance.toString() : '',
+        amount: actualBalance > 0 ? actualBalance.toString() : '',
         method: 'Cash',
         reference: '',
         note: ''
@@ -1562,19 +1670,39 @@ function ViewOrders() {
       setPaymentLoading(true);
       setCurrentOrder(order);
 
+      const totalAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+      const finalAmount = parseFloat(order.discountedTotal) || totalAmount;
+      const advancePaid = parseFloat(order.advance) || 0;
+      
+      let paymentHistoryTotal = 0;
+      if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
+        paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) => 
+          sum + (parseFloat(payment.amount) || 0), 0);
+      }
+      
+      const totalPaid = advancePaid + paymentHistoryTotal;
+      const actualBalance = finalAmount - totalPaid;
+
+      const updatedOrder = {
+        ...order,
+        balance: actualBalance
+      };
+      
+      setCurrentOrder(updatedOrder);
+
       const payments = [];
 
-      if (order.advance > 0) {
+      if (advancePaid > 0) {
         payments.push({
           date: order.advanceDate || order.orderDate,
-          amount: order.advance,
+          amount: advancePaid,
           method: 'Advance',
           reference: '',
           note: 'Initial advance payment'
         });
       }
 
-      if (order.paymentHistory) {
+      if (order.paymentHistory && order.paymentHistory.length > 0) {
         payments.push(...order.paymentHistory);
       }
 
@@ -1648,17 +1776,17 @@ function ViewOrders() {
               <th>Method</th>
               <th>Reference</th>
               <th>Note</th>
-             </tr>
+            </tr>
           </thead>
           <tbody>
             ${paymentHistory.map((payment) => `
                <tr>
                 <td>${formatDate(payment.date)}</td>
-                <td>${parseFloat(payment.amount || 0).toLocaleString('en-IN')}</td>
+                <td style="text-align: right;">${parseFloat(payment.amount || 0).toLocaleString('en-IN')}</td>
                 <td>${payment.method}</td>
                 <td>${payment.reference || '-'}</td>
                 <td>${payment.note || '-'}</td>
-               </tr>
+                </tr>
             `).join('')}
             <tr class="total-row">
               <td colspan="5"><strong>Total Paid: ₹${paymentHistory.reduce((sum, payment) => sum + parseFloat(payment.amount || 0), 0).toLocaleString('en-IN')}</strong></td>
@@ -1746,7 +1874,7 @@ function ViewOrders() {
     setPaymentData(prev => ({ ...prev, [name]: value }));
   };
 
-  // ===== 20. EXPORT/IMPORT FUNCTIONS =====
+  // ===== 21. EXPORT/IMPORT FUNCTIONS =====
   const handleExportToExcel = () => {
     let ordersToExport = filteredOrders;
     if (shouldSeeOnlyOwnOrders()) {
@@ -1908,7 +2036,7 @@ function ViewOrders() {
     reader.readAsArrayBuffer(file);
   };
 
-  // ===== 21. USE EFFECTS =====
+  // ===== 22. USE EFFECTS =====
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const month = params.get('month');
@@ -1923,6 +2051,7 @@ function ViewOrders() {
     const monthCount = params.get('monthCount');
     const monthName = params.get('monthName');
     const weekCount = params.get('weekCount');
+    const requirement = params.get('requirement'); // NEW: Get requirement from URL
 
     if (month) {
       setMonthFilter(parseInt(month));
@@ -1946,6 +2075,12 @@ function ViewOrders() {
         monthName: monthName || '',
         weekCount: weekCount ? parseInt(weekCount) : 0
       });
+    }
+
+    // NEW: Set requirement filter if present
+    if (requirement) {
+      setRequirementFilter(requirement);
+      setSearchTerm(requirement);
     }
 
     if (executiveNameParam) {
@@ -1985,7 +2120,7 @@ function ViewOrders() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ===== 22. LOADING STATE =====
+  // ===== 23. LOADING STATE =====
   if (loading) {
     return (
       <div style={{
@@ -2003,7 +2138,7 @@ function ViewOrders() {
     );
   }
 
-  // ===== 23. ERROR STATE =====
+  // ===== 24. ERROR STATE =====
   if (error) {
     return (
       <div style={{
@@ -2051,7 +2186,7 @@ function ViewOrders() {
     );
   }
 
-  // ===== 24. MAIN RENDER =====
+  // ===== 25. MAIN RENDER =====
   return (
     <div style={{ padding: '20px', backgroundColor: '#f9f9f9', minHeight: '100vh' }}>
       <style>{responsiveStyles}</style>
@@ -2097,7 +2232,7 @@ function ViewOrders() {
             boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
           }}>
             <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>
-              Total Amount ({financialYearFilter === 'all' ? 'All FY' : financialYearFilter})
+              Total Amount ({getTimePeriodText()})
             </div>
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3498db' }}>₹{totalAmount}</div>
             <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
@@ -2115,7 +2250,7 @@ function ViewOrders() {
             boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
           }}>
             <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>
-              Total Received ({financialYearFilter === 'all' ? 'All FY' : financialYearFilter})
+              Total Received ({getTimePeriodText()})
             </div>
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#27ae60' }}>₹{totalReceived}</div>
           </div>
@@ -2130,7 +2265,7 @@ function ViewOrders() {
             boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
           }}>
             <div style={{ fontSize: '18px', marginBottom: '10px', color: '#333', fontWeight: 'bold' }}>
-              Total Balance ({financialYearFilter === 'all' ? 'All FY' : financialYearFilter})
+              Total Balance ({getTimePeriodText()})
             </div>
             <div style={{
               fontSize: '24px',
@@ -2143,7 +2278,7 @@ function ViewOrders() {
         </div>
       )}
 
-      {/* FILTER SECTION - COMPACT SINGLE LINE */}
+      {/* FILTER SECTION */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -2224,12 +2359,15 @@ function ViewOrders() {
                 setClientTypeFilter(null);
                 setLeadSourceFilter(null);
                 setFinancialYearFilter('all');
+                setRequirementFilter(null); // NEW: Clear requirement filter
+                setSearchTerm(''); // NEW: Clear search term
                 
                 const params = new URLSearchParams(location.search);
                 params.set('startDate', e.target.value);
                 params.set('endDate', endDate);
                 params.delete('month');
                 params.delete('financialYear');
+                params.delete('requirement');
                 navigate(`/admin-dashboard/view-orders?${params.toString()}`);
                 
                 const { role, name } = getUserInfo();
@@ -2259,12 +2397,15 @@ function ViewOrders() {
                 setClientTypeFilter(null);
                 setLeadSourceFilter(null);
                 setFinancialYearFilter('all');
+                setRequirementFilter(null); // NEW: Clear requirement filter
+                setSearchTerm(''); // NEW: Clear search term
                 
                 const params = new URLSearchParams(location.search);
                 params.set('startDate', startDate);
                 params.set('endDate', e.target.value);
                 params.delete('month');
                 params.delete('financialYear');
+                params.delete('requirement');
                 navigate(`/admin-dashboard/view-orders?${params.toString()}`);
                 
                 const { role, name } = getUserInfo();
@@ -2390,6 +2531,7 @@ function ViewOrders() {
                 params.delete('leadSource');
                 params.delete('startDate');
                 params.delete('endDate');
+                params.delete('requirement'); // NEW: Clear requirement filter
 
                 navigate(`/admin-dashboard/view-orders?${params.toString()}`);
                 
@@ -2454,7 +2596,7 @@ function ViewOrders() {
         </div>
       )}
 
-      {/* Filter Display */}
+      {/* Active Filters Display - NEW: Added Requirement Filter Display */}
       <div style={{
         display: 'flex',
         flexDirection: 'column',
@@ -2464,8 +2606,45 @@ function ViewOrders() {
         padding: '15px',
         borderRadius: '8px'
       }}>
-        {(monthFilter || clientTypeFilter || appliedExecutiveFilters.executiveName || leadSourceFilter || searchTerm) && (
+        {(monthFilter || clientTypeFilter || appliedExecutiveFilters.executiveName || leadSourceFilter || searchTerm || requirementFilter) && (
           <h3 style={{ margin: '0 0 10px 0' }}>Active Filters:</h3>
+        )}
+
+        {/* NEW: Requirement Filter Display */}
+        {requirementFilter && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: '#e8f5e9',
+            padding: '8px 12px',
+            borderRadius: '4px',
+            border: '1px solid #4caf50'
+          }}>
+            <span>
+              <strong>📦 Product/Requirement:</strong> {requirementFilter}
+            </span>
+            <button
+              onClick={() => {
+                const params = new URLSearchParams(location.search);
+                params.delete('requirement');
+                navigate(`/admin-dashboard/view-orders?${params.toString()}`);
+                setRequirementFilter(null);
+                setSearchTerm('');
+              }}
+              style={{
+                backgroundColor: '#f44336',
+                color: 'white',
+                border: 'none',
+                padding: '4px 8px',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+            >
+              Clear Filter
+            </button>
+          </div>
         )}
 
         {monthFilter && (
@@ -2588,7 +2767,7 @@ function ViewOrders() {
           </div>
         )}
 
-        {searchTerm && (
+        {searchTerm && !requirementFilter && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -2616,7 +2795,7 @@ function ViewOrders() {
           </div>
         )}
 
-        {(monthFilter || clientTypeFilter || appliedExecutiveFilters.executiveName || leadSourceFilter || searchTerm) && (
+        {(monthFilter || clientTypeFilter || appliedExecutiveFilters.executiveName || leadSourceFilter || searchTerm || requirementFilter) && (
           <button
             onClick={clearAllFilters}
             style={{
@@ -2986,7 +3165,9 @@ function ViewOrders() {
                             .filter(status => status)
                         )].join(', ');
                         
-                        const rowBgColor = orderIndex % 2 === 0 ? '#fdfdfd' : '#f5f9fa';
+                        // NEW: Check if this order matches the requirement filter for highlighting
+                        const isRequirementMatch = requirementFilter && combinedRequirements.toLowerCase().includes(requirementFilter.toLowerCase());
+                        const rowBgColor = isRequirementMatch ? '#fff9c4' : (orderIndex % 2 === 0 ? '#fdfdfd' : '#f5f9fa');
                         
                         return (
                           <tr key={order._id} style={{ backgroundColor: rowBgColor, borderBottom: '1px solid #eee' }}>
@@ -3241,77 +3422,67 @@ function ViewOrders() {
                                 {paymentLoading ? 'Loading...' : 'View Payments'}
                               </button>
 
-                              {order.balance <= 0 ? (
-                                <span style={{
-                                  backgroundColor: '#2ecc71',
+                              {order.balance > 0 && (
+                                <button
+                                  onClick={() => handleRecordPayment(order)}
+                                  disabled={paymentLoading}
+                                  style={{
+                                    backgroundColor: paymentLoading ? '#bdc3c7' : '#9b59b6',
+                                    color: 'white',
+                                    padding: '6px 12px',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    fontSize: '12px',
+                                    cursor: paymentLoading ? 'not-allowed' : 'pointer',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  {paymentLoading ? 'Loading...' : 'Record Payment'}
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleEdit(order)}
+                                style={{
+                                  backgroundColor: '#f39c12',
                                   color: 'white',
                                   padding: '6px 12px',
+                                  border: 'none',
                                   borderRadius: '4px',
                                   fontSize: '12px',
+                                  cursor: 'pointer',
                                   whiteSpace: 'nowrap'
-                                }}>
-                                  Paid
-                                </span>
-                              ) : (
-                                <>
-                                  <button
-                                    onClick={() => handleRecordPayment(order)}
-                                    disabled={paymentLoading}
-                                    style={{
-                                      backgroundColor: paymentLoading ? '#bdc3c7' : '#9b59b6',
-                                      color: 'white',
-                                      padding: '6px 12px',
-                                      border: 'none',
-                                      borderRadius: '4px',
-                                      fontSize: '12px',
-                                      cursor: paymentLoading ? 'not-allowed' : 'pointer',
-                                      whiteSpace: 'nowrap'
-                                    }}
-                                  >
-                                    {paymentLoading ? 'Loading...' : 'Record Payment'}
-                                  </button>
+                                }}
+                              >
+                                Edit
+                              </button>
 
-                                  <button
-                                    onClick={() => handleEdit(order)}
-                                    style={{
-                                      backgroundColor: '#f39c12',
-                                      color: 'white',
-                                      padding: '6px 12px',
-                                      border: 'none',
-                                      borderRadius: '4px',
-                                      fontSize: '12px',
-                                      cursor: 'pointer',
-                                      whiteSpace: 'nowrap'
-                                    }}
-                                  >
-                                    Edit
-                                  </button>
-
-                                  {canDeleteOrders() && (
-                                    <button
-                                      onClick={() => confirmDelete(order._id)}
-                                      style={{
-                                        backgroundColor: '#e74c3c',
-                                        color: 'white',
-                                        padding: '6px 12px',
-                                        border: 'none',
-                                        borderRadius: '4px',
-                                        fontSize: '12px',
-                                        cursor: 'pointer',
-                                        whiteSpace: 'nowrap'
-                                      }}
-                                    >
-                                      Delete
-                                    </button>
-                                  )}
-                                </>
+                              {canDeleteOrders() && (
+                                <button
+                                  onClick={() => confirmDelete(order._id)}
+                                  style={{
+                                    backgroundColor: '#e74c3c',
+                                    color: 'white',
+                                    padding: '6px 12px',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    fontSize: '12px',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  Delete
+                                </button>
                               )}
                             </td>
                           </tr>
                         );
                       } else {
                         return order.rows.map((row, rowIndex) => {
-                          const rowBgColor = (orderIndex + rowIndex) % 2 === 0 ? '#fdfdfd' : '#f5f9fa';
+                          // NEW: Check if this row matches the requirement filter for highlighting
+                          const requirementText = row.customRequirement || row.requirement || '';
+                          const isRequirementMatch = requirementFilter && requirementText.toLowerCase().includes(requirementFilter.toLowerCase());
+                          const rowBgColor = isRequirementMatch ? '#fff9c4' : ((orderIndex + rowIndex) % 2 === 0 ? '#fdfdfd' : '#f5f9fa');
 
                           return (
                             <tr
@@ -3570,70 +3741,57 @@ function ViewOrders() {
                                   {paymentLoading ? 'Loading...' : 'View Payments'}
                                 </button>
 
-                                {order.balance <= 0 ? (
-                                  <span style={{
-                                    backgroundColor: '#2ecc71',
+                                {order.balance > 0 && (
+                                  <button
+                                    onClick={() => handleRecordPayment(order)}
+                                    disabled={paymentLoading}
+                                    style={{
+                                      backgroundColor: paymentLoading ? '#bdc3c7' : '#9b59b6',
+                                      color: 'white',
+                                      padding: '6px 12px',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '12px',
+                                      cursor: paymentLoading ? 'not-allowed' : 'pointer',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    {paymentLoading ? 'Loading...' : 'Record Payment'}
+                                  </button>
+                                )}
+
+                                <button
+                                  onClick={() => handleEdit(order)}
+                                  style={{
+                                    backgroundColor: '#f39c12',
                                     color: 'white',
                                     padding: '6px 12px',
+                                    border: 'none',
                                     borderRadius: '4px',
                                     fontSize: '12px',
+                                    cursor: 'pointer',
                                     whiteSpace: 'nowrap'
-                                  }}>
-                                    Paid
-                                  </span>
-                                ) : (
-                                  <>
-                                    <button
-                                      onClick={() => handleRecordPayment(order)}
-                                      disabled={paymentLoading}
-                                      style={{
-                                        backgroundColor: paymentLoading ? '#bdc3c7' : '#9b59b6',
-                                        color: 'white',
-                                        padding: '6px 12px',
-                                        border: 'none',
-                                        borderRadius: '4px',
-                                        fontSize: '12px',
-                                        cursor: paymentLoading ? 'not-allowed' : 'pointer',
-                                        whiteSpace: 'nowrap'
-                                      }}
-                                    >
-                                      {paymentLoading ? 'Loading...' : 'Record Payment'}
-                                    </button>
+                                  }}
+                                >
+                                  Edit
+                                </button>
 
-                                    <button
-                                      onClick={() => handleEdit(order)}
-                                      style={{
-                                        backgroundColor: '#f39c12',
-                                        color: 'white',
-                                        padding: '6px 12px',
-                                        border: 'none',
-                                        borderRadius: '4px',
-                                        fontSize: '12px',
-                                        cursor: 'pointer',
-                                        whiteSpace: 'nowrap'
-                                      }}
-                                    >
-                                      Edit
-                                    </button>
-
-                                    {canDeleteOrders() && (
-                                      <button
-                                        onClick={() => confirmDelete(order._id)}
-                                        style={{
-                                          backgroundColor: '#e74c3c',
-                                          color: 'white',
-                                          padding: '6px 12px',
-                                          border: 'none',
-                                          borderRadius: '4px',
-                                          fontSize: '12px',
-                                          cursor: 'pointer',
-                                          whiteSpace: 'nowrap'
-                                        }}
-                                      >
-                                        Delete
-                                      </button>
-                                    )}
-                                  </>
+                                {canDeleteOrders() && (
+                                  <button
+                                    onClick={() => confirmDelete(order._id)}
+                                    style={{
+                                      backgroundColor: '#e74c3c',
+                                      color: 'white',
+                                      padding: '6px 12px',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      fontSize: '12px',
+                                      cursor: 'pointer',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    Delete
+                                  </button>
                                 )}
                               </td>
                             </tr>
@@ -3656,6 +3814,8 @@ function ViewOrders() {
         }}>
           <h3 style={{ color: '#666' }}>No orders found</h3>
           <p style={{ color: '#999' }}>
+            {requirementFilter && `for requirement: "${requirementFilter}"`}
+            {requirementFilter && (appliedExecutiveFilters.executiveName || monthFilter || clientTypeFilter || leadSourceFilter) && ' and '}
             {appliedExecutiveFilters.executiveName && `for executive: ${appliedExecutiveFilters.executiveName}`}
             {appliedExecutiveFilters.executiveName && (monthFilter || clientTypeFilter || leadSourceFilter) && ' and '}
             {monthFilter && `in ${financialMonthLabels[monthFilter - 1]}`}
@@ -3663,7 +3823,7 @@ function ViewOrders() {
             {clientTypeFilter && `with client type: ${clientTypeFilter}`}
             {clientTypeFilter && leadSourceFilter && ' and '}
             {leadSourceFilter && `with lead source: ${leadSourceFilter}`}
-            {searchTerm && ` matching "${searchTerm}"`}
+            {searchTerm && !requirementFilter && ` matching "${searchTerm}"`}
           </p>
           <p style={{ color: '#999' }}>Try adjusting your filters or importing orders</p>
         </div>
@@ -4207,54 +4367,108 @@ function ViewOrders() {
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '5px' }}>Discount</label>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  Discount (₹)
+                </label>
                 <input
                   name="discount"
                   type="number"
+                  step="0.01"
                   value={editingOrder.discount}
-                  onChange={(e) => handleEditChange(e)}
+                  onChange={(e) => {
+                    const discount = parseFloat(e.target.value) || 0;
+                    const totalAmount = editingOrder.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+                    const discountedTotal = totalAmount - discount;
+                    setEditingOrder(prev => ({ 
+                      ...prev, 
+                      discount: discount,
+                      discountedTotal: discountedTotal < 0 ? 0 : discountedTotal
+                    }));
+                  }}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '5px' }}>Final Amount</label>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  Final Amount (₹)
+                </label>
                 <input
                   name="discountedTotal"
                   type="number"
+                  step="0.01"
                   value={editingOrder.discountedTotal}
-                  readOnly
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    borderRadius: '4px',
-                    border: '1px solid #ccc',
-                    backgroundColor: '#f5f5f5',
-                    fontWeight: 'bold'
+                  onChange={(e) => {
+                    const newFinalAmount = parseFloat(e.target.value) || 0;
+                    const totalAmount = editingOrder.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+                    const newDiscount = totalAmount - newFinalAmount;
+                    setEditingOrder(prev => ({ 
+                      ...prev, 
+                      discountedTotal: newFinalAmount,
+                      discount: newDiscount < 0 ? 0 : newDiscount
+                    }));
                   }}
+                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
+                <small style={{ color: '#666', fontSize: '11px' }}>
+                  Total from items: ₹{editingOrder.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0).toFixed(2)}
+                </small>
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '5px' }}>Advance</label>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  Advance Paid (₹)
+                </label>
                 <input
                   name="advance"
                   type="number"
+                  step="0.01"
                   value={editingOrder.advance}
-                  onChange={handleEditChange}
+                  onChange={(e) => {
+                    const advance = parseFloat(e.target.value) || 0;
+                    const finalAmount = parseFloat(editingOrder.discountedTotal) || 0;
+                    const newBalance = finalAmount - advance;
+                    setEditingOrder(prev => ({ 
+                      ...prev, 
+                      advance: advance,
+                      balance: newBalance < 0 ? 0 : newBalance
+                    }));
+                  }}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '5px' }}>Balance</label>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  Balance (₹)
+                </label>
                 <input
                   name="balance"
                   type="number"
+                  step="0.01"
                   value={editingOrder.balance}
-                  onChange={handleEditChange}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                  onChange={(e) => {
+                    const balance = parseFloat(e.target.value) || 0;
+                    const finalAmount = parseFloat(editingOrder.discountedTotal) || 0;
+                    const newAdvance = finalAmount - balance;
+                    setEditingOrder(prev => ({ 
+                      ...prev, 
+                      balance: balance,
+                      advance: newAdvance < 0 ? 0 : newAdvance
+                    }));
+                  }}
+                  style={{ 
+                    width: '100%', 
+                    padding: '8px', 
+                    borderRadius: '4px', 
+                    border: '1px solid #ccc',
+                    backgroundColor: '#fff3e0',
+                    fontWeight: 'bold'
+                  }}
                 />
+                <small style={{ color: '#e74c3c', fontSize: '11px' }}>
+                  Warning: Manually editing balance may affect payment history
+                </small>
               </div>
 
               <div>
@@ -4294,20 +4508,16 @@ function ViewOrders() {
                   <option value="Cash">Cash</option>
                   <option value="Cheque">Cheque</option>
                   <option value="Bank Transfer">Bank Transfer</option>
-                  <optgroup label="UPI">
-                    <option value="9985330008@Chary">9985330008@Chary</option>
-                    <option value="9985330004@Swathi">9985330004@Swathi</option>
-                    <option value="9553146376@Laxmipathi">9553146376@Laxmipathi</option>
-                  </optgroup>
+                  <option value="UPI">UPI</option>
                   <option value="Other">Other</option>
                 </select>
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '5px' }}>Cheque Number</label>
+                <label style={{ display: 'block', marginBottom: '5px' }}>Cheque/Reference Number</label>
                 <input
                   name="chequeNumber"
-                  value={editingOrder.chequeNumber}
+                  value={editingOrder.chequeNumber || ''}
                   onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
@@ -4507,6 +4717,9 @@ function ViewOrders() {
             <p style={{ margin: '20px 0', fontSize: '16px' }}>
               Are you sure you want to delete this order?
             </p>
+            <p style={{ margin: '10px 0', fontSize: '14px', color: '#666' }}>
+              This will move the order to trash. You can restore it from trash if needed.
+            </p>
 
             <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '20px' }}>
               <button
@@ -4539,7 +4752,7 @@ function ViewOrders() {
                   fontWeight: 'bold'
                 }}
               >
-                Delete
+                Move to Trash
               </button>
             </div>
           </div>

@@ -227,8 +227,6 @@ router.get("/orders/payments-dashboard", async (req, res) => {
   }
 });
 // ============================
-// POST: Create new order (auto-generate orderNo)
-// ============================
 router.post("/submit", async (req, res) => {
   try {
     console.log("Received order data:", req.body);
@@ -256,24 +254,18 @@ router.post("/submit", async (req, res) => {
     const paddedNum = String(nextNumber).padStart(3, "0");
     const newOrderNo = `${orderPrefix}${paddedNum}`;
 
-    // FIXED: Ensure createdBy field is properly saved
     const orderData = {
       ...req.body,
       orderNo: newOrderNo,
-      // Ensure createdBy is always set from the request
-      createdBy: req.body.createdBy || req.body.executive // Fallback to executive if not provided
+      createdBy: req.body.createdBy || req.body.executive,
+      // Ensure date fields are properly handled
+      birthDate: req.body.birthDate || null,
+      anniversaryDate: req.body.anniversaryDate || null
     };
 
-    // NEW: Log lead source for debugging
-    console.log('Lead source in order data:', {
-      leadSource: req.body.leadSource,
-      otherLeadSource: req.body.otherLeadSource
-    });
-
-    console.log('Final order data to save:', orderData); // Debug log
+    console.log('Final order data to save:', orderData);
 
     const newOrder = new Order(orderData);
-
     await newOrder.save();
 
     res.json({ message: "Order saved successfully", order: newOrder });
@@ -284,30 +276,98 @@ router.post("/submit", async (req, res) => {
 });
 
 // ============================
-// UPDATE an existing order
+// UPDATE an existing order (ENHANCED - allows editing all fields including advance and balance)
 // ============================
 router.put("/orders/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    console.log("Updating order:", id, "with data:", req.body);
+    console.log("Updating order:", id, "with data:", JSON.stringify(req.body, null, 2));
 
-    // FIXED: Ensure createdBy field is preserved during update
+    // Get existing order
+    const existingOrder = await Order.findById(id);
+    if (!existingOrder) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    // Prepare update data
     const updateData = { ...req.body };
     
-    // If createdBy is not provided in update, preserve the existing one
+    // Preserve createdBy if not provided
     if (!updateData.createdBy) {
-      const existingOrder = await Order.findById(id);
-      if (existingOrder && existingOrder.createdBy) {
-        updateData.createdBy = existingOrder.createdBy;
+      updateData.createdBy = existingOrder.createdBy || existingOrder.executive;
+    }
+
+    // Calculate totals from rows if rows are being updated
+    if (updateData.rows && Array.isArray(updateData.rows)) {
+      let calculatedTotal = 0;
+      updateData.rows.forEach(row => {
+        // Recalculate row total if quantity and rate are present
+        if (row.quantity && row.rate) {
+          row.total = (parseFloat(row.quantity) * parseFloat(row.rate)).toFixed(2);
+        }
+        calculatedTotal += parseFloat(row.total) || 0;
+      });
+      
+      // Get discount from update or existing
+      const discount = parseFloat(updateData.discount) !== undefined 
+        ? parseFloat(updateData.discount) 
+        : parseFloat(existingOrder.discount) || 0;
+      
+      // Get final amount from update or calculate
+      const finalAmount = updateData.discountedTotal !== undefined 
+        ? parseFloat(updateData.discountedTotal) 
+        : (calculatedTotal - discount);
+      
+      // Get advance from update or existing
+      const advance = updateData.advance !== undefined 
+        ? parseFloat(updateData.advance) 
+        : parseFloat(existingOrder.advance) || 0;
+      
+      // Calculate balance
+      const balance = finalAmount - advance;
+      
+      updateData.discountedTotal = finalAmount < 0 ? 0 : finalAmount;
+      updateData.balance = balance < 0 ? 0 : balance;
+      
+      console.log("Recalculated values:", {
+        calculatedTotal,
+        discount,
+        finalAmount: updateData.discountedTotal,
+        advance,
+        balance: updateData.balance
+      });
+    } else {
+      // If rows not updated, still recalculate balance if advance or discountedTotal changed
+      if (updateData.advance !== undefined || updateData.discountedTotal !== undefined) {
+        const finalAmount = updateData.discountedTotal !== undefined 
+          ? parseFloat(updateData.discountedTotal) 
+          : parseFloat(existingOrder.discountedTotal) || 0;
+        
+        const advance = updateData.advance !== undefined 
+          ? parseFloat(updateData.advance) 
+          : parseFloat(existingOrder.advance) || 0;
+        
+        const balance = finalAmount - advance;
+        updateData.balance = balance < 0 ? 0 : balance;
+        
+        console.log("Recalculated balance:", {
+          finalAmount,
+          advance,
+          balance: updateData.balance
+        });
       }
     }
 
-    // NEW: Log lead source update
-    console.log('Lead source in update:', {
-      leadSource: updateData.leadSource,
-      otherLeadSource: updateData.otherLeadSource
+    // Log the update for audit purposes
+    console.log('Order update - fields being modified:', Object.keys(updateData));
+    console.log('Financial changes:', {
+      advance: updateData.advance,
+      balance: updateData.balance,
+      discount: updateData.discount,
+      discountedTotal: updateData.discountedTotal
     });
 
+    // Update the order
     const updatedOrder = await Order.findByIdAndUpdate(
       id,
       updateData,
@@ -318,10 +378,15 @@ router.put("/orders/:id", async (req, res) => {
       return res.status(404).json({ error: "Order not found" });
     }
 
-    res.json({ message: "Order updated successfully", order: updatedOrder });
+    console.log("Order updated successfully:", updatedOrder.orderNo);
+    
+    res.json({ 
+      message: "Order updated successfully", 
+      order: updatedOrder 
+    });
   } catch (err) {
     console.error("Error updating order:", err);
-    res.status(500).json({ error: "Failed to update order" });
+    res.status(500).json({ error: "Failed to update order: " + err.message });
   }
 });
 
@@ -762,6 +827,9 @@ router.get("/orders/:id/follow-ups", async (req, res) => {
 // ============================
 // RECORD PAYMENT for an order (COMPLETELY FIXED VERSION)
 // ============================
+// ============================
+// RECORD PAYMENT for an order (FIXED - handles edited orders)
+// ============================
 router.post("/orders/:id/record-payment", async (req, res) => {
   try {
     const { id } = req.params;
@@ -794,7 +862,8 @@ router.post("/orders/:id/record-payment", async (req, res) => {
     console.log("Order current state:", {
       advance: order.advance,
       balance: order.balance,
-      rows: order.rows ? order.rows.length : 0
+      discountedTotal: order.discountedTotal,
+      paymentHistoryCount: order.paymentHistory?.length || 0
     });
 
     // Calculate total order amount from rows
@@ -805,15 +874,18 @@ router.post("/orders/:id/record-payment", async (req, res) => {
       }, 0);
     }
     
-    console.log("Total order amount:", totalOrderAmount);
+    // Use discounted total if available, otherwise use total from rows
+    const finalAmount = parseFloat(order.discountedTotal) || totalOrderAmount;
+    console.log("Final amount (after discount):", finalAmount);
     
     // Get current advance (this is the total paid amount)
     const currentAdvance = parseFloat(order.advance) || 0;
     console.log("Current advance (total paid):", currentAdvance);
     
-    // Calculate current balance
-    const currentBalance = totalOrderAmount - currentAdvance;
+    // Calculate current balance properly
+    const currentBalance = finalAmount - currentAdvance;
     console.log("Current calculated balance:", currentBalance);
+    console.log("Order stored balance:", order.balance);
     
     // Validate payment amount
     const paymentAmount = parseFloat(amount);
@@ -829,7 +901,7 @@ router.post("/orders/:id/record-payment", async (req, res) => {
       console.log(`Payment amount ${paymentAmount} exceeds balance ${currentBalance}`);
       return res.status(400).json({ 
         success: false, 
-        error: `Payment amount (₹${paymentAmount}) exceeds balance (₹${currentBalance.toFixed(2)})` 
+        error: `Payment amount (₹${paymentAmount}) cannot exceed balance (₹${currentBalance.toFixed(2)})` 
       });
     }
 
@@ -838,15 +910,17 @@ router.post("/orders/:id/record-payment", async (req, res) => {
       amount: paymentAmount,
       method: method,
       date: date ? new Date(date) : new Date(),
-      note: note || 'Payment recorded from Ledger'
+      note: note || 'Payment recorded',
+      reference: upiNumber || chequeNumber || '',
+      createdAt: new Date()
     };
 
     // Add UPI or cheque details if provided
     if (method === 'UPI' && upiNumber) {
-      paymentRecord.upiNumber = upiNumber;
+      paymentRecord.reference = upiNumber;
     }
     if (method === 'Cheque' && chequeNumber) {
-      paymentRecord.chequeNumber = chequeNumber;
+      paymentRecord.reference = chequeNumber;
     }
 
     console.log("Creating payment record:", paymentRecord);
@@ -863,11 +937,11 @@ router.post("/orders/:id/record-payment", async (req, res) => {
     const newAdvance = currentAdvance + paymentAmount;
     order.advance = newAdvance;
     
-    // Calculate new balance
-    const newBalance = Math.max(0, totalOrderAmount - newAdvance);
+    // Calculate new balance based on final amount
+    const newBalance = Math.max(0, finalAmount - newAdvance);
     order.balance = newBalance;
     
-    // Update payment date
+    // Update payment date if this is the first payment or update to latest
     order.paymentDate = date ? new Date(date) : new Date();
 
     console.log("Before save - new values:", {
@@ -893,12 +967,7 @@ router.post("/orders/:id/record-payment", async (req, res) => {
         advance: savedOrder.advance,
         balance: savedOrder.balance,
         paymentHistory: savedOrder.paymentHistory,
-        paymentDate: savedOrder.paymentDate,
-        rows: savedOrder.rows,
-        business: savedOrder.business,
-        contactPerson: savedOrder.contactPerson,
-        phone: savedOrder.phone,
-        orderDate: savedOrder.orderDate
+        paymentDate: savedOrder.paymentDate
       }
     });
 
@@ -908,15 +977,9 @@ router.post("/orders/:id/record-payment", async (req, res) => {
     console.error("Error message:", err.message);
     console.error("Error stack:", err.stack);
     
-    // Send detailed error for debugging
     res.status(500).json({ 
       success: false, 
-      error: err.message || "Failed to record payment",
-      details: {
-        name: err.name,
-        message: err.message,
-        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-      }
+      error: err.message || "Failed to record payment"
     });
   }
 });

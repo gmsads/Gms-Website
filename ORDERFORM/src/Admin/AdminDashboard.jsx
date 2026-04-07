@@ -420,16 +420,20 @@ const NAV = [
   {
     key: 'sales', label: 'Sales', icon: '💼',
     items: [
-      { to: 'create-order',       label: 'Create Order',       emoji: '➕', badge: 'NEW' },
-      { to: 'advance-approvals',  label: 'Advance Approvals',  emoji: '✅' },
+      { to: 'create-order',       label: 'Create Sale',       emoji: '➕', badge: 'NEW' },
+   
       { to: 'view-orders',        label: 'View All Orders',    emoji: '📋' },
-      { to: 'parties',            label: 'Clients',            emoji: '👥' },
+      { to: 'parties',            label: 'Party',            emoji: '👥' },
       { to: 'quotation',          label: 'Quotation',          emoji: '💬' },
       { to: 'performance',        label: 'Performance',        emoji: '📈' },
-      { to: 'view-prospective',   label: 'View Prospects',     emoji: '🎯' },
-      { to: 'select-appointment', label: 'Appointments',       emoji: '📅' },
+   
+   
       { to: 'ledger',             label: 'Ledger',             emoji: '📒' },
       { to: 'purchase',           label: 'Purchase',           emoji: '🛒' },
+            { to: 'prospects',         label: 'Create Prospects',    emoji: '🎯' },
+   { to: 'view-prospective',   label: 'View Prospects',     emoji: '🎯' },
+      { to: 'appointments',      label: 'Create Appointments', emoji: '📅' },
+         { to: 'select-appointment', label: 'Appointments',       emoji: '📅' },
     ],
   },
   {
@@ -437,6 +441,7 @@ const NAV = [
     items: [
       { to: 'add-executive',     label: 'Add Employee',        emoji: '➕' },
       { to: 'Employees',         label: 'Employees',           emoji: '👨‍💼' },
+         { to: 'advance-approvals',  label: 'Advance Approvals',  emoji: '✅' },
       { to: 'tele-breaks',       label: 'Tele Breaks',         emoji: '☕' },
       { to: 'unit-attendance',   label: 'Unit Attendance',     emoji: '🕐' },
       { to: 'view-leaves',       label: 'View Leave Requests', emoji: '🏖️' },
@@ -461,7 +466,7 @@ const NAV = [
       { to: 'pending-service',   label: 'Pending Service',     emoji: '⏳' },
       { to: 'view-design',       label: 'View Design',         emoji: '🎨' },
       { to: 'design-report',     label: 'Design Reports',      emoji: '🗂️' },
-      { to: 'vendors',           label: 'Vendors',             emoji: '🏪' },
+     
     ],
   },
   {
@@ -470,13 +475,7 @@ const NAV = [
       { to: 'pending-payment',   label: 'Pending Payment',     emoji: '💳' },
       { to: 'view-expenses',     label: 'View Expenses',       emoji: '💸' },
       { to: 'inventory',         label: 'Inventory',           emoji: '📦' },
-    ],
-  },
-  {
-    key: 'clients', label: 'Clients', icon: '🤝',
-    items: [
-      { to: 'prospects',         label: 'Create Prospects',    emoji: '🎯' },
-      { to: 'appointments',      label: 'Create Appointments', emoji: '📅' },
+       { to: 'vendors',           label: 'Vendors',             emoji: '🏪' },
     ],
   },
   {
@@ -624,7 +623,7 @@ function Sidebar({ open, onClose }) {
         <div className="sb-footer">
           <div
             className="sb-user"
-            onClick={() => { handleNavigation('/admin-dashboard/profile'); }}
+            onClick={() => { handleNavigation('/'); }}
           >
             <div className="sb-avatar">{initials}</div>
             <div className="sb-user-info">
@@ -656,7 +655,8 @@ function AdminDashboard() {
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
-  
+  const [topProducts, setTopProducts] = useState(null);
+const [productsLoading, setProductsLoading] = useState(false);
   const [financialYear, setFinancialYear] = useState(() => {
     const currentDate = new Date();
     const currentMonth = currentDate.getMonth();
@@ -843,7 +843,35 @@ function AdminDashboard() {
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
   }, []);
-
+// Fetch top products data
+useEffect(() => {
+  const fetchTopProducts = async () => {
+    setProductsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (useDateRange && startDate && endDate) {
+        params.append('startDate', startDate);
+        params.append('endDate', endDate);
+      } else {
+        if (financialYear !== 'all') {
+          params.append('financialYear', financialYear);
+        }
+        if (selectedMonth !== null) {
+          params.append('month', selectedMonth + 1);
+        }
+      }
+    const response = await axios.get(`/api/dashboard/top-products?${params.toString()}`);
+setTopProducts(response.data);
+    } catch (err) {
+      console.error('Error fetching top products:', err);
+      setTopProducts(null);
+    } finally {
+      setProductsLoading(false);
+    }
+  };
+  
+  fetchTopProducts();
+}, [financialYear, selectedMonth, startDate, endDate, useDateRange]);
   const handleSearch = async () => {
     if (orderNumber.length !== 10) {
       setSearchError('Please enter exactly 10 digits');
@@ -1573,6 +1601,275 @@ function AdminDashboard() {
                   </div>
                 ) : (
                   <div style={styles.dashboardCards}>
+                 {/* Comparison Card - Compact Version */}
+<div 
+  style={{
+    ...styles.card,
+    ...(hoveredCard === 'comparison' ? styles.cardHover : {}),
+    backgroundColor: '#ffffff',
+    padding: '12px',
+    minHeight: 'auto',
+    height: 'auto'
+  }}
+  onMouseEnter={() => setHoveredCard('comparison')}
+  onMouseLeave={() => setHoveredCard(null)}
+>
+  <div style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '10px'
+  }}>
+    <div style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <span>📊</span> Last 3 Months
+    </div>
+    {comparisonData?.months && (
+      <div style={{
+        fontSize: '10px',
+        color: '#64748b',
+        background: '#f1f5f9',
+        padding: '2px 8px',
+        borderRadius: '12px'
+      }}>
+        {comparisonData.months[0]} - {comparisonData.months[comparisonData.months.length - 1]}
+      </div>
+    )}
+  </div>
+
+  {comparisonLoading ? (
+    <div style={{ textAlign: 'center', padding: '20px', color: '#64748b', fontSize: '12px' }}>
+      Loading...
+    </div>
+  ) : !comparisonData || !comparisonData.months || comparisonData.months.length === 0 ? (
+    <div style={{ textAlign: 'center', padding: '20px', color: '#64748b', fontSize: '12px' }}>
+      No data available
+    </div>
+  ) : (
+    <>
+      {/* Mini Stats Row */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        marginBottom: '12px',
+        background: '#f8fafc',
+        padding: '8px 12px',
+        borderRadius: '10px',
+        gap: '6px'
+      }}>
+        <div style={{ textAlign: 'center', flex: 1 }}>
+          <div style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
+            {comparisonData.ordersData.reduce((a, b) => a + b, 0)}
+          </div>
+          <div style={{ fontSize: '9px', color: '#64748b' }}>Orders</div>
+        </div>
+        <div style={{ width: '1px', background: '#e2e8f0' }} />
+        <div style={{ textAlign: 'center', flex: 1 }}>
+          <div style={{ fontSize: '14px', fontWeight: '700', color: '#059669' }}>
+            {(() => {
+              const total = comparisonData.amountData.reduce((a, b) => a + b, 0);
+              if (total >= 10000000) return `₹${(total / 10000000).toFixed(1)}Cr`;
+              if (total >= 100000) return `₹${(total / 100000).toFixed(1)}L`;
+              return `₹${(total / 1000).toFixed(0)}K`;
+            })()}
+          </div>
+          <div style={{ fontSize: '9px', color: '#64748b' }}>Revenue</div>
+        </div>
+        <div style={{ width: '1px', background: '#e2e8f0' }} />
+        <div style={{ textAlign: 'center', flex: 1 }}>
+          <div style={{ fontSize: '14px', fontWeight: '700', color: '#d97706' }}>
+            {(comparisonData.ordersData.reduce((a, b) => a + b, 0) / 3).toFixed(0)}
+          </div>
+          <div style={{ fontSize: '9px', color: '#64748b' }}>Monthly Avg</div>
+        </div>
+      </div>
+
+      {/* Compact Chart */}
+      <div style={{ height: '100px', marginBottom: '10px' }}>
+        <Bar
+          data={{
+            labels: comparisonData.months,
+            datasets: [
+              {
+                label: 'Orders',
+                data: comparisonData.ordersData,
+                backgroundColor: '#3b82f6',
+                borderRadius: 3,
+                barPercentage: 0.7,
+                categoryPercentage: 0.8,
+                yAxisID: 'y-orders'
+              },
+              {
+                label: 'Revenue',
+                data: comparisonData.amountData,
+                backgroundColor: '#f59e0b',
+                borderRadius: 3,
+                barPercentage: 0.7,
+                categoryPercentage: 0.8,
+                yAxisID: 'y-revenue'
+              }
+            ]
+          }}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'top',
+                labels: { boxWidth: 8, font: { size: 9 }, padding: 4 }
+              },
+              tooltip: {
+                bodyFont: { size: 11 },
+                callbacks: {
+                  label: (context) => {
+                    const label = context.dataset.label;
+                    const value = context.raw;
+                    if (label === 'Revenue') {
+                      if (value >= 10000000) return `Revenue: ₹${(value / 10000000).toFixed(2)}Cr`;
+                      if (value >= 100000) return `Revenue: ₹${(value / 100000).toFixed(2)}L`;
+                      return `Revenue: ₹${(value / 1000).toFixed(1)}K`;
+                    }
+                    return `Orders: ${value}`;
+                  }
+                }
+              }
+            },
+            scales: {
+              'y-orders': {
+                type: 'linear',
+                position: 'left',
+                beginAtZero: true,
+                grid: { display: false },
+                ticks: { font: { size: 8 }, stepSize: 1 }
+              },
+              'y-revenue': {
+                type: 'linear',
+                position: 'right',
+                beginAtZero: true,
+                grid: { drawOnChartArea: false },
+                ticks: {
+                  font: { size: 8 },
+                  callback: (v) => {
+                    if (v >= 10000000) return `${(v/10000000).toFixed(0)}Cr`;
+                    if (v >= 100000) return `${(v/100000).toFixed(0)}L`;
+                    if (v >= 1000) return `${(v/1000).toFixed(0)}K`;
+                    return v;
+                  }
+                }
+              },
+              x: {
+                grid: { display: false },
+                ticks: { font: { size: 9, weight: '500' }, color: '#334155' }
+              }
+            },
+            onClick: (_, elements) => {
+              if (elements.length > 0) {
+                const index = elements[0].index;
+                const month = comparisonData.rawData[index];
+                const queryParams = new URLSearchParams();
+                queryParams.append('month', month.month + 1);
+                queryParams.append('year', month.year);
+                if (financialYear !== 'all') queryParams.append('financialYear', financialYear);
+                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+              }
+            }
+          }}
+        />
+      </div>
+
+      {/* Compact Month Cards */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${Math.min(comparisonData.months.length, 3)}, 1fr)`,
+        gap: '6px',
+        marginBottom: '8px'
+      }}>
+        {comparisonData.rawData.slice(0, 3).map((month, index) => {
+          const prevMonth = index > 0 ? comparisonData.rawData[index - 1] : null;
+          const orderDiff = prevMonth ? month.orders - prevMonth.orders : 0;
+          const colors = ['#3b82f6', '#f59e0b', '#10b981'];
+
+          return (
+            <div
+              key={index}
+              onClick={() => {
+                const queryParams = new URLSearchParams();
+                queryParams.append('month', month.month + 1);
+                queryParams.append('year', month.year);
+                if (financialYear !== 'all') queryParams.append('financialYear', financialYear);
+                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+              }}
+              style={{
+                background: index === 2 ? '#f0f9ff' : '#f8fafc',
+                padding: '6px 2px',
+                borderRadius: '6px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                border: index === 2 ? `1px solid ${colors[index]}` : '1px solid #e2e8f0',
+                transition: 'all 0.2s'
+              }}
+            >
+              <div style={{ fontSize: '10px', fontWeight: '600', color: '#1e293b' }}>
+                {month.monthName}
+              </div>
+              <div style={{ fontSize: '14px', fontWeight: '700', color: colors[index] }}>
+                {month.orders}
+              </div>
+              <div style={{ fontSize: '9px', color: '#64748b' }}>
+                {(() => {
+                  if (month.amount >= 10000000) return `₹${(month.amount / 10000000).toFixed(1)}Cr`;
+                  if (month.amount >= 100000) return `₹${(month.amount / 100000).toFixed(1)}L`;
+                  return `₹${(month.amount / 1000).toFixed(0)}K`;
+                })()}
+              </div>
+              {index > 0 && (
+                <div style={{
+                  fontSize: '8px',
+                  marginTop: '3px',
+                  padding: '1px 4px',
+                  borderRadius: '10px',
+                  display: 'inline-block',
+                  background: orderDiff > 0 ? '#dcfce7' : orderDiff < 0 ? '#fee2e2' : '#f1f5f9',
+                  color: orderDiff > 0 ? '#166534' : orderDiff < 0 ? '#991b1b' : '#475569',
+                  fontWeight: '500'
+                }}>
+                  {orderDiff > 0 ? '↑' : orderDiff < 0 ? '↓' : '→'} {Math.abs(orderDiff)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Growth Indicator - Compact */}
+      {comparisonData.rawData.length >= 3 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: '#f1f5f9',
+          padding: '4px 8px',
+          borderRadius: '6px',
+          marginBottom: '4px'
+        }}>
+          <span style={{ fontSize: '9px', color: '#475569' }}>Growth:</span>
+          <span style={{
+            fontSize: '11px',
+            fontWeight: '600',
+            color: comparisonData.rawData[2].orders > comparisonData.rawData[0].orders ? '#059669' : '#dc2626'
+          }}>
+            {comparisonData.rawData[2].orders > comparisonData.rawData[0].orders ? '↑' : '↓'}
+            {Math.abs(((comparisonData.rawData[2].orders - comparisonData.rawData[0].orders) / comparisonData.rawData[0].orders * 100)).toFixed(0)}%
+          </span>
+        </div>
+      )}
+
+      <div style={{ fontSize: '8px', color: '#94a3b8', textAlign: 'center' }}>
+        Click for details
+      </div>
+    </>
+  )}
+</div>
+
                     <div 
                       style={{
                         ...styles.card,
@@ -1787,7 +2084,176 @@ function AdminDashboard() {
                         </button>
                       )}
                     </div>
-
+                    {/* Top Products Card - Most Ordered Items */}
+<div 
+  style={{
+    ...styles.card,
+    ...(hoveredCard === 'topProducts' ? styles.cardHover : {}),
+    minHeight: '300px',
+    padding: '15px'
+  }}
+  onMouseEnter={() => setHoveredCard('topProducts')}
+  onMouseLeave={() => setHoveredCard(null)}
+>
+  <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
+    🏆 Most Ordered Products
+  </div>
+  
+  {productsLoading ? (
+    <div style={styles.noDataMessage}>Loading...</div>
+  ) : !topProducts || !topProducts.topProducts || topProducts.topProducts.length === 0 ? (
+    <div style={styles.noDataMessage}>No data available</div>
+  ) : (
+    <>
+      {/* Bar Chart */}
+      <div style={{ height: '160px', cursor: 'pointer' }}>
+        <Bar
+          data={{
+            labels: topProducts.topProducts.map(p => p.name),
+            datasets: [
+              {
+                label: 'Orders',
+                data: topProducts.topProducts.map(p => p.count),
+                backgroundColor: [
+                  'rgba(255, 99, 132, 0.8)',
+                  'rgba(54, 162, 235, 0.8)',
+                  'rgba(255, 206, 86, 0.8)'
+                ],
+                borderRadius: 6,
+              }
+            ]
+          }}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  title: (tooltipItems) => topProducts.topProducts[tooltipItems[0].dataIndex].name,
+                  label: (context) => {
+                    const product = topProducts.topProducts[context.dataIndex];
+                    let amountDisplay = '';
+                    if (product.amount >= 10000000) {
+                      amountDisplay = `₹${(product.amount / 10000000).toFixed(2)} Cr`;
+                    } else if (product.amount >= 100000) {
+                      amountDisplay = `₹${(product.amount / 100000).toFixed(2)} L`;
+                    } else if (product.amount >= 1000) {
+                      amountDisplay = `₹${(product.amount / 1000).toFixed(1)} K`;
+                    } else {
+                      amountDisplay = `₹${product.amount}`;
+                    }
+                    return [
+                      `Orders: ${product.count}`,
+                      `Amount: ${amountDisplay}`
+                    ];
+                  }
+                }
+              }
+            },
+            onClick: (event, elements) => {
+              if (elements.length > 0) {
+                const product = topProducts.topProducts[elements[0].index];
+                const queryParams = new URLSearchParams();
+                queryParams.append('requirement', product.name);
+                if (selectedMonth !== null) {
+                  queryParams.append('month', selectedMonth + 1);
+                }
+                if (financialYear !== 'all') {
+                  queryParams.append('financialYear', financialYear);
+                }
+                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: { stepSize: 1, font: { size: 9 } },
+                grid: { display: false },
+                title: { display: false }
+              },
+              x: {
+                ticks: { font: { size: 10, weight: 'bold' } },
+                grid: { display: false }
+              }
+            }
+          }}
+        />
+      </div>
+      
+      {/* Small text for ranking, orders and amount */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-around', 
+        marginTop: '10px',
+        gap: '8px'
+      }}>
+        {topProducts.topProducts.map((product, index) => {
+          const colors = ['#ff4444', '#2196F3', '#ff9800'];
+          const ranks = ['🥇', '🥈', '🥉'];
+          
+          // Format amount display
+          let amountDisplay = '';
+          if (product.amount >= 10000000) {
+            amountDisplay = `₹${(product.amount / 10000000).toFixed(2)}Cr`;
+          } else if (product.amount >= 100000) {
+            amountDisplay = `₹${(product.amount / 100000).toFixed(2)}L`;
+          } else if (product.amount >= 1000) {
+            amountDisplay = `₹${(product.amount / 1000).toFixed(1)}K`;
+          } else {
+            amountDisplay = `₹${product.amount}`;
+          }
+          
+          return (
+            <div 
+              key={index}
+              onClick={() => {
+                const queryParams = new URLSearchParams();
+                queryParams.append('requirement', product.name);
+                if (selectedMonth !== null) {
+                  queryParams.append('month', selectedMonth + 1);
+                }
+                if (financialYear !== 'all') {
+                  queryParams.append('financialYear', financialYear);
+                }
+                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+              }}
+              style={{
+                flex: 1,
+                textAlign: 'center',
+                padding: '6px',
+                backgroundColor: '#f8f9fa',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#e9ecef';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#f8f9fa';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              <div style={{ fontSize: '14px' }}>{ranks[index]}</div>
+              <div style={{ fontSize: '10px', fontWeight: 'bold', color: colors[index], marginTop: '2px' }}>
+                {product.name.length > 12 ? product.name.substring(0, 10) + '..' : product.name}
+              </div>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', color: colors[index], marginTop: '2px' }}>
+                {product.count} orders
+              </div>
+              <div style={{ fontSize: '9px', color: '#666' }}>
+                {amountDisplay}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  )}
+</div>
+{/*pending payment */}
                     <div 
                       style={{
                         ...styles.card,
@@ -2149,7 +2615,7 @@ function AdminDashboard() {
                         )}
                       </div>
                     </div>
-
+{/*agent card */}
                     <div 
                       style={{
                         ...styles.card,
@@ -2301,323 +2767,7 @@ function AdminDashboard() {
                       )}
                     </div>
 
-                    <div 
-                      style={{
-                        ...styles.card,
-                        ...(hoveredCard === 'comparison' ? styles.cardHover : {}),
-                        backgroundColor: '#ffffff',
-                        padding: '16px'
-                      }}
-                      onMouseEnter={() => setHoveredCard('comparison')}
-                      onMouseLeave={() => setHoveredCard(null)}
-                    >
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '16px'
-                      }}>
-                        <div style={{ fontSize: '15px', fontWeight: '600', color: '#1e293b' }}>
-                          📊 Last 3 Months Comparison
-                        </div>
-
-                        {comparisonData?.months && (
-                          <div style={{
-                            fontSize: '12px',
-                            color: '#64748b',
-                            background: '#f1f5f9',
-                            padding: '4px 10px',
-                            borderRadius: '16px'
-                          }}>
-                            {comparisonData.months[0]} - {comparisonData.months[comparisonData.months.length - 1]}
-                          </div>
-                        )}
-                      </div>
-
-                      {comparisonLoading ? (
-                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
-                          Loading comparison data...
-                        </div>
-                      ) : !comparisonData || !comparisonData.months || comparisonData.months.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
-                          No comparison data available
-                        </div>
-                      ) : (
-                        <>
-                          <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            marginBottom: '20px',
-                            background: '#f8fafc',
-                            padding: '12px 16px',
-                            borderRadius: '12px',
-                            gap: '8px'
-                          }}>
-                            <div style={{ textAlign: 'center', flex: 1 }}>
-                              <div style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>
-                                {comparisonData.ordersData.reduce((a, b) => a + b, 0)}
-                              </div>
-                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                                Total Orders
-                              </div>
-                            </div>
-
-                            <div style={{ width: '1px', background: '#e2e8f0' }} />
-
-                            <div style={{ textAlign: 'center', flex: 1 }}>
-                              <div style={{ fontSize: '18px', fontWeight: '700', color: '#059669' }}>
-                                {(() => {
-                                  const total = comparisonData.amountData.reduce((a, b) => a + b, 0);
-                                  if (total >= 10000000) {
-                                    return `₹${(total / 10000000).toFixed(2)}Cr`;
-                                  } else if (total >= 100000) {
-                                    return `₹${(total / 100000).toFixed(2)}L`;
-                                  } else {
-                                    return `₹${(total / 1000).toFixed(1)}K`;
-                                  }
-                                })()}
-                              </div>
-                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                                Total Revenue
-                              </div>
-                            </div>
-
-                            <div style={{ width: '1px', background: '#e2e8f0' }} />
-
-                            <div style={{ textAlign: 'center', flex: 1 }}>
-                              <div style={{ fontSize: '18px', fontWeight: '700', color: '#d97706' }}>
-                                {(comparisonData.ordersData.reduce((a, b) => a + b, 0) / 3).toFixed(1)}
-                              </div>
-                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                                Monthly Avg
-                              </div>
-                            </div>
-                          </div>
-
-                          <div style={{ height: '160px', marginBottom: '16px' }}>
-                            <Bar
-                              data={{
-                                labels: comparisonData.months,
-                                datasets: [
-                                  {
-                                    label: 'Orders',
-                                    data: comparisonData.ordersData,
-                                    backgroundColor: '#3b82f6',
-                                    borderRadius: 4,
-                                    barPercentage: 0.6,
-                                    categoryPercentage: 0.8,
-                                    yAxisID: 'y-orders'
-                                  },
-                                  {
-                                    label: 'Revenue',
-                                    data: comparisonData.amountData,
-                                    backgroundColor: '#f59e0b',
-                                    borderRadius: 4,
-                                    barPercentage: 0.6,
-                                    categoryPercentage: 0.8,
-                                    yAxisID: 'y-revenue'
-                                  }
-                                ]
-                              }}
-                              options={{
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                plugins: {
-                                  legend: {
-                                    position: 'top',
-                                    labels: {
-                                      boxWidth: 10,
-                                      font: { size: 10 }
-                                    }
-                                  },
-                                  tooltip: {
-                                    callbacks: {
-                                      label: (context) => {
-                                        const label = context.dataset.label;
-                                        const value = context.raw;
-
-                                        if (label === 'Revenue') {
-                                          if (value >= 10000000) {
-                                            return `Revenue: ₹${(value / 10000000).toFixed(2)} Cr`;
-                                          } else if (value >= 100000) {
-                                            return `Revenue: ₹${(value / 100000).toFixed(2)} L`;
-                                          } else {
-                                            return `Revenue: ₹${(value / 1000).toFixed(1)} K`;
-                                          }
-                                        }
-                                        return `Orders: ${value}`;
-                                      }
-                                    }
-                                  }
-                                },
-                                scales: {
-                                  'y-orders': {
-                                    type: 'linear',
-                                    position: 'left',
-                                    beginAtZero: true,
-                                    grid: { color: '#e2e8f0', lineWidth: 0.5 },
-                                    title: { 
-                                      display: true, 
-                                      text: 'Orders',
-                                      font: { size: 9 }
-                                    },
-                                    ticks: {
-                                      font: { size: 8 },
-                                      stepSize: 1
-                                    }
-                                  },
-                                  'y-revenue': {
-                                    type: 'linear',
-                                    position: 'right',
-                                    beginAtZero: true,
-                                    grid: { drawOnChartArea: false },
-                                    title: { 
-                                      display: true, 
-                                      text: 'Revenue (₹)',
-                                      font: { size: 9 }
-                                    },
-                                    ticks: {
-                                      font: { size: 8 },
-                                      callback: function(value) {
-                                        if (value >= 10000000) {
-                                          return (value / 10000000).toFixed(1) + 'Cr';
-                                        } else if (value >= 100000) {
-                                          return (value / 100000).toFixed(1) + 'L';
-                                        } else if (value >= 1000) {
-                                          return (value / 1000).toFixed(1) + 'K';
-                                        }
-                                        return value;
-                                      }
-                                    }
-                                  },
-                                  x: {
-                                    grid: { display: false },
-                                    ticks: {
-                                      font: { size: 10, weight: '500' },
-                                      color: '#334155'
-                                    }
-                                  }
-                                },
-                                onClick: (_, elements) => {
-                                  if (elements.length > 0) {
-                                    const index = elements[0].index;
-                                    const month = comparisonData.rawData[index];
-                                    const queryParams = new URLSearchParams();
-                                    queryParams.append('month', month.month + 1);
-                                    queryParams.append('year', month.year);
-                                    if (financialYear !== 'all') {
-                                      queryParams.append('financialYear', financialYear);
-                                    }
-                                    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-                                  }
-                                }
-                              }}
-                            />
-                          </div>
-
-                          <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: `repeat(${comparisonData.months.length}, 1fr)`,
-                            gap: '10px',
-                            marginBottom: '12px'
-                          }}>
-                            {comparisonData.rawData.map((month, index) => {
-                              const prevMonth = index > 0 ? comparisonData.rawData[index - 1] : null;
-                              const orderDiff = prevMonth ? month.orders - prevMonth.orders : 0;
-                              const colors = ['#3b82f6', '#f59e0b', '#10b981'];
-
-                              return (
-                                <div
-                                  key={index}
-                                  onClick={() => {
-                                    const queryParams = new URLSearchParams();
-                                    queryParams.append('month', month.month + 1);
-                                    queryParams.append('year', month.year);
-                                    if (financialYear !== 'all') {
-                                      queryParams.append('financialYear', financialYear);
-                                    }
-                                    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-                                  }}
-                                  style={{
-                                    background: index === 2 ? '#f0f9ff' : '#f8fafc',
-                                    padding: '10px 4px',
-                                    borderRadius: '8px',
-                                    textAlign: 'center',
-                                    cursor: 'pointer',
-                                    border: index === 2 ? `1px solid ${colors[index]}` : '1px solid #e2e8f0',
-                                    transition: 'all 0.2s'
-                                  }}
-                                >
-                                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b', marginBottom: '4px' }}>
-                                    {month.monthName}
-                                  </div>
-
-                                  <div style={{ fontSize: '18px', fontWeight: '700', color: colors[index] }}>
-                                    {month.orders}
-                                  </div>
-
-                                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                                    {(() => {
-                                      if (month.amount >= 10000000) {
-                                        return `₹${(month.amount / 10000000).toFixed(2)}Cr`;
-                                      } else if (month.amount >= 100000) {
-                                        return `₹${(month.amount / 100000).toFixed(2)}L`;
-                                      } else {
-                                        return `₹${(month.amount / 1000).toFixed(1)}K`;
-                                      }
-                                    })()}
-                                  </div>
-
-                                  {index > 0 && (
-                                    <div style={{
-                                      fontSize: '10px',
-                                      marginTop: '4px',
-                                      padding: '2px 6px',
-                                      borderRadius: '12px',
-                                      display: 'inline-block',
-                                      background: orderDiff > 0 ? '#dcfce7' : orderDiff < 0 ? '#fee2e2' : '#f1f5f9',
-                                      color: orderDiff > 0 ? '#166534' : orderDiff < 0 ? '#991b1b' : '#475569',
-                                      fontWeight: '500'
-                                    }}>
-                                      {orderDiff > 0 ? '↑' : orderDiff < 0 ? '↓' : '→'} {Math.abs(orderDiff)}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          {comparisonData.rawData.length === 3 && (
-                            <div style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              background: '#f1f5f9',
-                              padding: '8px 12px',
-                              borderRadius: '8px',
-                              marginBottom: '8px'
-                            }}>
-                              <span style={{ fontSize: '12px', color: '#475569' }}>
-                                Overall Growth:
-                              </span>
-                              <span style={{
-                                fontSize: '14px',
-                                fontWeight: '600',
-                                color: comparisonData.rawData[2].orders > comparisonData.rawData[0].orders ? '#059669' : '#dc2626'
-                              }}>
-                                {comparisonData.rawData[2].orders > comparisonData.rawData[0].orders ? '↑' : '↓'}
-                                {Math.abs(((comparisonData.rawData[2].orders - comparisonData.rawData[0].orders) / comparisonData.rawData[0].orders * 100)).toFixed(1)}%
-                              </span>
-                            </div>
-                          )}
-
-                          <div style={{ fontSize: '10px', color: '#94a3b8', textAlign: 'center' }}>
-                            Click any month card or bar for details
-                          </div>
-                        </>
-                      )}
-                    </div>
-
+                  {/* Propective client */}
                     <div 
                       style={{
                         ...styles.card,
@@ -2670,6 +2820,7 @@ function AdminDashboard() {
                           : 0}
                       </div>
                     </div>
+
                   </div>
                 )}
               </>

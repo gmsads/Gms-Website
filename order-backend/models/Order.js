@@ -31,6 +31,9 @@ const orderSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // NEW: Customer special dates (optional)
+  birthDate: { type: Date, default: null },
+  anniversaryDate: { type: Date, default: null },
   // Client Info
   executive: { type: String, required: true },
   business: { type: String, required: true },

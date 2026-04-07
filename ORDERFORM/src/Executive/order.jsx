@@ -18,7 +18,10 @@ import TeleCRM from "./TeleCRM";
 import WhatsAppDashboard from "../Admin/WhatsApp";
 import { FaWhatsapp } from "react-icons/fa";
 import LeaveRequest from './LeaveRequest';
-import ViewRequest from './ViewLeaveRequests'
+import ViewRequest from './ViewLeaveRequests';
+// Import the new components
+import Parties from "../Admin/Parties";
+import Quotation from "../Admin/Quotation";
 
 function Admin() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
@@ -1256,7 +1259,7 @@ function Admin() {
         </div>
       </div>
 
-      {/* Sidebar - UPDATED WITH SCROLLING */}
+      {/* Sidebar - UPDATED WITH SCROLLING AND NEW MENU ITEMS */}
       <div className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
         <div className="sidebar-content" style={{
           height: '100%',
@@ -1273,12 +1276,14 @@ function Admin() {
               { key: "viewRecord", icon: "📈", text: "View Records" }, 
               { key: "order", icon: "📝", text: "Create Order ➕" },
               { key: "viewOrders", icon: "📋", text: "View Orders" },
+              { key: "parties", icon: "👥", text: "Parties" },
+              { key: "quotation", icon: "💬", text: "Quotation" },
               { key: "appointment", icon: "📅", text: "Create Appointment ➕" },
               { key: "viewAppointments", icon: "📂", text: "View Appointments" },
               { key: "prospective", icon: "🔍", text: "Create Prospects ➕" },
               { key: "viewProspects", icon: "👁️", text: "View Prospects" },
-             { key: "leave-request", icon: "📋", text: "Leave Request" },
-{ key: "view-leave", icon: "📂", text: "View Leave Request" },
+              { key: "leave-request", icon: "📋", text: "Leave Request" },
+              { key: "view-leave", icon: "📂", text: "View Leave Request" },
               { key: "price-list", icon: "💰", text: "Price List" },
               { key: "pending-payments", icon: "💰", text: "Pending Payments" },
               { key: "tele", icon: "📞", text: "Tele-CRM" },
@@ -1328,6 +1333,12 @@ function Admin() {
           {activeTab === "pending-payments" && (
             <PendingPayment executiveFilter={selectedExecutive} />
           )}
+          
+          {/* Parties Component */}
+          {activeTab === "parties" && <Parties executiveName={selectedExecutive} />}
+          
+          {/* Quotation Component */}
+          {activeTab === "quotation" && <Quotation executiveName={selectedExecutive} />}
 
           {activeTab === "order" && !showOrderForm && (
             <div className="phone-search-container">

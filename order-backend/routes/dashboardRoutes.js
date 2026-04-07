@@ -869,4 +869,222 @@ router.get('/comparison-data', async (req, res) => {
   }
 });
 
+// Top products analysis endpoint - shows which products are ordered most frequently
+router.get('/top-products', async (req, res) => {
+  try {
+    const { financialYear, month, startDate, endDate } = req.query;
+    
+    // Parse financial year
+    let selectedFinancialYear = null;
+    if (financialYear && financialYear !== 'all' && financialYear !== 'undefined' && financialYear !== 'null') {
+      selectedFinancialYear = financialYear;
+    }
+    
+    const selectedMonth = month && month !== 'undefined' && month !== 'null' ? parseInt(month) - 1 : null;
+    
+    // Parse date range if provided
+    let rangeStartDate = null;
+    let rangeEndDate = null;
+    
+    if (startDate && endDate && startDate !== 'undefined' && endDate !== 'undefined') {
+      rangeStartDate = new Date(startDate);
+      rangeStartDate.setHours(0, 0, 0, 0);
+      rangeEndDate = new Date(endDate);
+      rangeEndDate.setHours(23, 59, 59, 999);
+    }
+    
+    // Create date range
+    let startDateTime, endDateTime;
+    
+    if (rangeStartDate && rangeEndDate) {
+      startDateTime = rangeStartDate;
+      endDateTime = rangeEndDate;
+    } else if (selectedFinancialYear && selectedMonth !== null) {
+      const { startDate: fyStart, endDate: fyEnd } = getFinancialYearDates(selectedFinancialYear);
+      if (fyStart && fyEnd) {
+        if (selectedMonth >= 0 && selectedMonth <= 11) {
+          let calendarMonth;
+          let year;
+          if (selectedMonth <= 8) {
+            calendarMonth = selectedMonth + 3;
+            year = fyStart.getFullYear();
+          } else {
+            calendarMonth = selectedMonth - 9;
+            year = fyEnd.getFullYear();
+          }
+          startDateTime = new Date(year, calendarMonth, 1);
+          startDateTime.setHours(0, 0, 0, 0);
+          endDateTime = new Date(year, calendarMonth + 1, 1);
+          endDateTime.setHours(0, 0, 0, 0);
+        }
+      }
+    } else if (selectedFinancialYear) {
+      const { startDate: fyStart, endDate: fyEnd } = getFinancialYearDates(selectedFinancialYear);
+      if (fyStart && fyEnd) {
+        startDateTime = fyStart;
+        endDateTime = fyEnd;
+      }
+    } else {
+      startDateTime = new Date('2000-01-01');
+      startDateTime.setHours(0, 0, 0, 0);
+      endDateTime = new Date('2100-01-01');
+      endDateTime.setHours(0, 0, 0, 0);
+    }
+
+    // Fetch all requirements (products)
+    const Requirement = require('../models/Requirement');
+    const allRequirements = await Requirement.find({}).lean();
+    console.log(`Found ${allRequirements.length} requirements in database`);
+
+    // Fetch all orders
+    const orders = await Order.find({}).lean();
+    
+    // Filter orders by date
+    const filteredOrders = orders.filter(order => {
+      try {
+        let orderDate;
+        if (order.orderDate) {
+          if (typeof order.orderDate === 'string') {
+            if (order.orderDate.includes('-')) {
+              const parts = order.orderDate.split('-');
+              if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+                orderDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+              } else {
+                orderDate = new Date(order.orderDate);
+              }
+            } else {
+              orderDate = new Date(order.orderDate);
+            }
+          } else {
+            orderDate = order.orderDate;
+          }
+        } else if (order.createdAt) {
+          orderDate = new Date(order.createdAt);
+        } else {
+          return false;
+        }
+        
+        if (!orderDate || isNaN(orderDate.getTime())) return false;
+        return orderDate >= startDateTime && orderDate < endDateTime;
+      } catch (e) {
+        return false;
+      }
+    });
+
+    console.log(`Analyzing ${filteredOrders.length} orders for top products`);
+
+    // Initialize product counts and amounts
+    const productCounts = {};
+    const productAmount = {};
+    
+    // Initialize all requirements with zero counts
+    allRequirements.forEach(req => {
+      const productName = req.name || req.requirementName || req.title;
+      if (productName) {
+        productCounts[productName] = 0;
+        productAmount[productName] = 0;
+      }
+    });
+
+    // Process each order
+    filteredOrders.forEach(order => {
+      // Calculate the TOTAL ORDER AMOUNT (after discount)
+      let totalOrderAmount = 0;
+      
+      // Calculate total from rows
+      if (order.rows && Array.isArray(order.rows)) {
+        totalOrderAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+      }
+      
+      // Apply discount if any
+      const discount = parseFloat(order.discount) || 0;
+      const finalOrderAmount = totalOrderAmount - discount;
+      
+      // Track which products we've already counted for this order (to avoid double counting)
+      const productsFoundInThisOrder = new Set();
+      
+      if (order.rows && Array.isArray(order.rows)) {
+        order.rows.forEach(row => {
+          // Check what requirement/service is in this row
+          let foundProduct = null;
+          
+          // Check multiple possible fields for requirement
+          const possibleFields = ['requirement', 'product', 'service', 'itemName', 'description', 'name', 'type'];
+          
+          for (const field of possibleFields) {
+            if (row[field] && typeof row[field] === 'string') {
+              const rowValue = row[field].trim();
+              
+              // Try to match with requirements in database
+              for (const req of allRequirements) {
+                const reqName = req.name || req.requirementName || req.title;
+                if (reqName && rowValue.toLowerCase().includes(reqName.toLowerCase())) {
+                  foundProduct = reqName;
+                  break;
+                }
+              }
+              
+              // Also check exact matches
+              if (!foundProduct) {
+                for (const req of allRequirements) {
+                  const reqName = req.name || req.requirementName || req.title;
+                  if (reqName && rowValue.toLowerCase() === reqName.toLowerCase()) {
+                    foundProduct = reqName;
+                    break;
+                  }
+                }
+              }
+              
+              if (foundProduct) break;
+            }
+          }
+          
+          // If product found, count it and add amount (only once per order)
+          if (foundProduct && productCounts.hasOwnProperty(foundProduct)) {
+            if (!productsFoundInThisOrder.has(foundProduct)) {
+              productsFoundInThisOrder.add(foundProduct);
+              productCounts[foundProduct]++;
+              // Add the FULL ORDER AMOUNT for this product (not just row amount)
+              productAmount[foundProduct] += finalOrderAmount;
+            }
+          }
+        });
+      }
+    });
+
+    // Convert to array, filter out zero counts, and sort
+    const sortedProducts = Object.entries(productCounts)
+      .filter(([, count]) => count > 0)
+      .map(([name, count]) => ({
+        name,
+        count,
+        amount: productAmount[name]
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    // Get top 3 products
+    const top3Products = sortedProducts.slice(0, 3);
+    
+    console.log('=== TOP 3 PRODUCTS ===');
+    top3Products.forEach((p, i) => {
+      console.log(`${i+1}. ${p.name}: ${p.count} orders, Total Amount: ₹${p.amount.toFixed(2)}`);
+    });
+
+    res.json({
+      topProducts: top3Products,
+      allProducts: sortedProducts.slice(0, 10),
+      totalProducts: sortedProducts.length,
+      totalRequirements: allRequirements.length,
+      totalOrdersAnalyzed: filteredOrders.length,
+      timePeriod: {
+        financialYear: selectedFinancialYear || 'all',
+        month: selectedMonth !== null ? selectedMonth + 1 : null,
+      }
+    });
+
+  } catch (err) {
+    console.error('Error in /top-products:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 module.exports = router;

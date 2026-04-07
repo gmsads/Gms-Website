@@ -6,6 +6,15 @@ const PriceList = () => {
   const [customData, setCustomData] = useState([]);
   const [editingItem, setEditingItem] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareData, setShareData] = useState({
+    clientName: '',
+    phoneNumber: '',
+    priceListType: ''
+  });
+  const [sharedClients, setSharedClients] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [dateFilter, setDateFilter] = useState({ startDate: '', endDate: '' });
   
   // Form state
   const [formData, setFormData] = useState({
@@ -181,9 +190,31 @@ const PriceList = () => {
     }
   }, [selectedList]);
 
+  // Fetch shared clients history
+  useEffect(() => {
+    const fetchSharedClients = async () => {
+      try {
+        const response = await axios.get('/api/shared-clients');
+        setSharedClients(response.data);
+      } catch (err) {
+        console.error('Error fetching shared clients:', err);
+      }
+    };
+    
+    fetchSharedClients();
+  }, []);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleShareInputChange = (e) => {
+    const { name, value } = e.target;
+    setShareData(prev => ({
       ...prev,
       [name]: value
     }));
@@ -255,7 +286,6 @@ const PriceList = () => {
     
     setIsLoading(true);
     try {
-      // FIXED: Changed from '/api/priceitems' to '/api/price-items' to match other endpoints
       await axios.delete(`/api/price-items/${id}`);
       
       const response = await axios.get('/api/price-items', {
@@ -286,9 +316,164 @@ const PriceList = () => {
     }
   };
 
+  const generatePriceListText = (data, title) => {
+    let text = `*${title}*\n\n`;
+    text += `📋 *Price List - ${new Date().toLocaleDateString()}*\n\n`;
+    
+    data.forEach(item => {
+      if (item.sizes && item.sizes.length > 0) {
+        text += `*${item.slNo}. ${item.product}*\n`;
+        item.sizes.forEach(size => {
+          text += `   📏 Size: ${size.size}\n`;
+          if (size.color) text += `   🎨 Color: ${size.color}\n`;
+          text += `   💰 Price: ₹${size.price}\n`;
+          if (item.minQty) text += `   📦 Min Qty: ${item.minQty}\n`;
+          text += `   ---\n`;
+        });
+        text += `\n`;
+      } else if (item.price) {
+        text += `*${item.slNo}. ${item.product}*\n`;
+        text += `   💰 Price: ₹${item.price}\n`;
+        if (item.minQty) text += `   📦 Min Qty: ${item.minQty}\n`;
+        if (item.note) text += `   📝 Note: ${item.note}\n`;
+        text += `\n`;
+      } else {
+        text += `*${item.slNo}. ${item.product}*\n`;
+        text += `   📞 Contact for pricing\n\n`;
+      }
+    });
+    
+    text += `\n---\n`;
+    text += `📅 Generated on: ${new Date().toLocaleString()}\n`;
+    text += `💬 For inquiries, please contact us.\n`;
+    text += `✅ *Price valid until further notice*`;
+    
+    return encodeURIComponent(text);
+  };
+
+  const handleShareToWhatsApp = async () => {
+    if (!shareData.clientName || !shareData.phoneNumber) {
+      alert('Please enter client name and phone number');
+      return;
+    }
+
+    // Validate phone number
+    let phone = shareData.phoneNumber.replace(/\D/g, '');
+    if (phone.length === 10) {
+      phone = '91' + phone;
+    }
+    
+    let data, title;
+    if (shareData.priceListType === 'agent') {
+      data = agentData;
+      title = 'AGENT PRICE LIST';
+    } else if (shareData.priceListType === 'client') {
+      data = clientData;
+      title = 'CLIENT PRICE LIST';
+    } else {
+      data = customData;
+      title = 'CUSTOM PRICE LIST';
+    }
+    
+    const message = generatePriceListText(data, title);
+    const whatsappUrl = `https://wa.me/${phone}?text=${message}`;
+    
+    // Save to localStorage (since we're not using backend)
+    const existingClients = JSON.parse(localStorage.getItem('sharedClients') || '[]');
+    const newClient = {
+      id: Date.now(),
+      clientName: shareData.clientName,
+      phoneNumber: shareData.phoneNumber,
+      priceListType: shareData.priceListType,
+      sharedAt: new Date().toISOString()
+    };
+    existingClients.push(newClient);
+    localStorage.setItem('sharedClients', JSON.stringify(existingClients));
+    setSharedClients(existingClients);
+    
+    // Open WhatsApp
+    window.open(whatsappUrl, '_blank');
+    
+    // Reset and close modal
+    setShowShareModal(false);
+    setShareData({
+      clientName: '',
+      phoneNumber: '',
+      priceListType: ''
+    });
+    
+    alert('Price list shared successfully!');
+  };
+
+  const openShareModal = (listType) => {
+    setShareData({
+      ...shareData,
+      priceListType: listType
+    });
+    setShowShareModal(true);
+  };
+
+  const getFilteredClients = () => {
+    if (!dateFilter.startDate && !dateFilter.endDate) {
+      return sharedClients;
+    }
+    
+    return sharedClients.filter(client => {
+      const clientDate = new Date(client.sharedAt).toISOString().split('T')[0];
+      if (dateFilter.startDate && dateFilter.endDate) {
+        return clientDate >= dateFilter.startDate && clientDate <= dateFilter.endDate;
+      } else if (dateFilter.startDate) {
+        return clientDate >= dateFilter.startDate;
+      } else if (dateFilter.endDate) {
+        return clientDate <= dateFilter.endDate;
+      }
+      return true;
+    });
+  };
+
+  const getDailyStats = () => {
+    const stats = {};
+    sharedClients.forEach(client => {
+      const date = new Date(client.sharedAt).toISOString().split('T')[0];
+      if (!stats[date]) {
+        stats[date] = {
+          agent: 0,
+          client: 0,
+          custom: 0,
+          total: 0
+        };
+      }
+      stats[date][client.priceListType]++;
+      stats[date].total++;
+    });
+    return Object.entries(stats).map(([date, counts]) => ({ date, ...counts }));
+  };
+
   const renderTable = (data, title) => (
     <div style={{ flex: 2 }}>
-      <h3 style={{ textAlign: 'center', marginBottom: '20px', color: '#2c3e50' }}>{title}</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h3 style={{ textAlign: 'center', color: '#2c3e50', margin: 0 }}>{title}</h3>
+        {selectedList && (
+          <button
+            onClick={() => openShareModal(selectedList)}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#25D366',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontWeight: 'bold'
+            }}
+          >
+            <span>📱</span>
+            Share via WhatsApp
+          </button>
+        )}
+      </div>
       {isLoading ? (
         <div style={{ textAlign: 'center', padding: '20px' }}>Loading...</div>
       ) : (
@@ -569,6 +754,288 @@ const PriceList = () => {
     </div>
   );
 
+  const renderShareModal = () => {
+    if (!showShareModal) return null;
+    
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000
+      }}>
+        <div style={{
+          backgroundColor: 'white',
+          padding: '30px',
+          borderRadius: '8px',
+          width: '400px',
+          maxWidth: '90%'
+        }}>
+          <h3 style={{ marginBottom: '20px', color: '#2c3e50' }}>Share Price List via WhatsApp</h3>
+          
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Client Name*</label>
+            <input
+              type="text"
+              name="clientName"
+              value={shareData.clientName}
+              onChange={handleShareInputChange}
+              placeholder="Enter client name"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+          
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Phone Number*</label>
+            <input
+              type="tel"
+              name="phoneNumber"
+              value={shareData.phoneNumber}
+              onChange={handleShareInputChange}
+              placeholder="Enter 10-digit mobile number"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+          
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Price List Type</label>
+            <input
+              type="text"
+              value={shareData.priceListType === 'agent' ? 'Agent Price List' : shareData.priceListType === 'client' ? 'Client Price List' : 'Custom Price List'}
+              disabled
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '14px',
+                backgroundColor: '#f5f5f5'
+              }}
+            />
+          </div>
+          
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              onClick={handleShareToWhatsApp}
+              style={{
+                flex: 1,
+                padding: '12px',
+                backgroundColor: '#25D366',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: 'bold'
+              }}
+            >
+              📱 Share Now
+            </button>
+            <button
+              onClick={() => {
+                setShowShareModal(false);
+                setShareData({
+                  clientName: '',
+                  phoneNumber: '',
+                  priceListType: ''
+                });
+              }}
+              style={{
+                flex: 1,
+                padding: '12px',
+                backgroundColor: '#95a5a6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '16px'
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderHistory = () => {
+    if (!showHistory) return null;
+    
+    const filteredClients = getFilteredClients();
+    const dailyStats = getDailyStats();
+    
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000
+      }}>
+        <div style={{
+          backgroundColor: 'white',
+          padding: '30px',
+          borderRadius: '8px',
+          width: '90%',
+          maxWidth: '1000px',
+          maxHeight: '85%',
+          overflow: 'auto'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h3 style={{ color: '#2c3e50' }}>Shared Clients History</h3>
+            <button
+              onClick={() => setShowHistory(false)}
+              style={{
+                padding: '5px 10px',
+                backgroundColor: '#e74c3c',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Close
+            </button>
+          </div>
+          
+          {/* Daily Statistics Section */}
+          <div style={{ marginBottom: '30px' }}>
+            <h4 style={{ color: '#2c3e50', marginBottom: '15px' }}>Daily Statistics</h4>
+            {dailyStats.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#7f8c8d' }}>No data available</p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8f9fa' }}>
+                      <th style={{ padding: '12px', borderBottom: '1px solid #ddd' }}>Date</th>
+                      <th style={{ padding: '12px', borderBottom: '1px solid #ddd' }}>Agent List</th>
+                      <th style={{ padding: '12px', borderBottom: '1px solid #ddd' }}>Client List</th>
+                      <th style={{ padding: '12px', borderBottom: '1px solid #ddd' }}>Custom List</th>
+                      <th style={{ padding: '12px', borderBottom: '1px solid #ddd' }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyStats.map(stat => (
+                      <tr key={stat.date} style={{ borderBottom: '1px solid #ddd' }}>
+                        <td style={{ padding: '12px' }}>{stat.date}</td>
+                        <td style={{ padding: '12px' }}>{stat.agent || 0}</td>
+                        <td style={{ padding: '12px' }}>{stat.client || 0}</td>
+                        <td style={{ padding: '12px' }}>{stat.custom || 0}</td>
+                        <td style={{ padding: '12px', fontWeight: 'bold' }}>{stat.total}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          
+          {/* Filter Section */}
+          <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+            <h4 style={{ marginBottom: '10px' }}>Filter by Date</h4>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <input
+                type="date"
+                value={dateFilter.startDate}
+                onChange={(e) => setDateFilter({ ...dateFilter, startDate: e.target.value })}
+                style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+              <input
+                type="date"
+                value={dateFilter.endDate}
+                onChange={(e) => setDateFilter({ ...dateFilter, endDate: e.target.value })}
+                style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+              <button
+                onClick={() => setDateFilter({ startDate: '', endDate: '' })}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#95a5a6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Clear Filter
+              </button>
+            </div>
+          </div>
+          
+          {/* Clients List Section */}
+          <div>
+            <h4 style={{ color: '#2c3e50', marginBottom: '15px' }}>
+              Clients List {filteredClients.length > 0 && `(${filteredClients.length})`}
+            </h4>
+            {filteredClients.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#7f8c8d' }}>No clients found</p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8f9fa' }}>
+                      <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #e0e0e0' }}>Date & Time</th>
+                      <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #e0e0e0' }}>Client Name</th>
+                      <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #e0e0e0' }}>Phone Number</th>
+                      <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #e0e0e0' }}>Price List Type</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredClients.map((client) => (
+                      <tr key={client.id} style={{ borderBottom: '1px solid #e0e0e0' }}>
+                        <td style={{ padding: '12px' }}>{new Date(client.sharedAt).toLocaleString()}</td>
+                        <td style={{ padding: '12px' }}>{client.clientName}</td>
+                        <td style={{ padding: '12px' }}>{client.phoneNumber}</td>
+                        <td style={{ padding: '12px' }}>
+                          <span style={{
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            backgroundColor: client.priceListType === 'agent' ? '#3498db' : 
+                                           client.priceListType === 'client' ? '#2ecc71' : '#f39c12',
+                            color: 'white',
+                            fontSize: '12px'
+                          }}>
+                            {client.priceListType === 'agent' ? 'Agent' : 
+                             client.priceListType === 'client' ? 'Client' : 'Custom'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div style={{ 
       maxWidth: '1200px',
@@ -685,6 +1152,26 @@ const PriceList = () => {
         </div>
       </div>
       
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
+        <button
+          onClick={() => setShowHistory(true)}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#3498db',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <span>📊</span>
+          View Shared Clients History ({sharedClients.length})
+        </button>
+      </div>
+      
       <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
         {selectedList === 'agent' && renderTable(agentData, "AGENT PRICE LIST")}
         {selectedList === 'client' && renderTable(clientData, "CLIENT PRICE LIST")}
@@ -692,6 +1179,9 @@ const PriceList = () => {
         
         {(selectedList === 'custom' || selectedList === null) && renderForm()}
       </div>
+      
+      {renderShareModal()}
+      {renderHistory()}
     </div>
   );
 };

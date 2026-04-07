@@ -665,9 +665,9 @@ const Parties = () => {
       try {
         let response;
         if (mode === 'create') {
-          response = await axios.post('http://localhost:5000/api/parties', formData);
+          response = await axios.post('/api/parties', formData);
         } else {
-          response = await axios.put(`http://localhost:5000/api/parties/${party._id}`, formData);
+          response = await axios.put(`/api/parties/${party._id}`, formData);
         }
         
         onSuccess(response.data);
@@ -759,6 +759,7 @@ const Parties = () => {
           </div>
 
           <form onSubmit={handleSubmit} style={formStyle}>
+            
             {/* General Details */}
             <div style={{
               marginBottom: '24px',
