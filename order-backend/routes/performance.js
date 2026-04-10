@@ -138,7 +138,7 @@ router.get('/overall', async (req, res) => {
 });
 
 // ========================================
-// GET performance data for an executive - FIXED WITH .lean()
+// GET performance data for an executive - WITH CLIENT TYPE BREAKDOWN
 // ========================================
 router.get('/', async (req, res) => {
   try {
@@ -146,7 +146,6 @@ router.get('/', async (req, res) => {
 
     console.log('Performance API called with:', { executiveId, executiveType, startDate, endDate });
 
-    // Validate executiveId and executiveType
     if (!executiveId || !executiveType) {
       return res.status(400).json({ error: 'executiveId and executiveType are required' });
     }
@@ -155,25 +154,21 @@ router.get('/', async (req, res) => {
     let executiveName;
     let dateOfJoining = null;
     
-    // Find executive based on type
     switch(executiveType) {
       case 'executive':
         executive = await Executive.findById(executiveId).lean();
         executiveName = executive?.name;
         dateOfJoining = executive?.joiningDate;
-        console.log(`Executive ${executiveName} joiningDate:`, dateOfJoining);
         break;
       case 'service':
         executive = await ServiceExecutive.findById(executiveId).lean();
         executiveName = executive?.name;
         dateOfJoining = executive?.dateOfJoining;
-        console.log(`Service Executive ${executiveName} dateOfJoining:`, dateOfJoining);
         break;
       case 'account':
         executive = await Account.findById(executiveId).lean();
         executiveName = executive?.name;
         dateOfJoining = executive?.dateOfJoining;
-        console.log(`Account ${executiveName} dateOfJoining:`, dateOfJoining);
         break;
       case 'field':
         executive = await FieldExecutive.findById(executiveId).lean();
@@ -182,57 +177,35 @@ router.get('/', async (req, res) => {
         }
         executiveName = executive?.name || executiveId;
         dateOfJoining = executive?.joiningDate;
-        console.log(`Field Executive ${executiveName} joiningDate:`, dateOfJoining);
         break;
       default:
         return res.status(400).json({ error: 'Invalid executive type' });
     }
 
-    // If executive not found
     if (!executive && executiveType !== 'field') {
       return res.status(404).json({ error: 'Executive not found' });
     }
 
-    // If it's a field executive and we couldn't find it in DB, create a minimal object
     if (executiveType === 'field' && !executive) {
       executive = {
         _id: executiveId,
         name: executiveName,
       };
       dateOfJoining = null;
-      console.log(`Field executive ${executiveName} not found in DB, setting joiningDate to null`);
     }
 
-    // Try to get joining date from the Employee collection as fallback
+    // Try to get joining date from Employee collection as fallback
     if (!dateOfJoining && executiveName) {
       try {
-        // Check if there's a generic Employee model
         const Employee = require('../models/Employee');
         const employee = await Employee.findOne({ name: executiveName }).lean();
         if (employee && employee.joiningDate) {
           dateOfJoining = employee.joiningDate;
-          console.log(`Found joiningDate in Employee collection for ${executiveName}:`, dateOfJoining);
         }
       } catch (err) {
-        console.log('Employee collection not found or error:', err.message);
+        console.log('Employee collection not found:', err.message);
       }
     }
-
-    // If still no joining date, try to get from the executive's document
-    if (!dateOfJoining && executive) {
-      // Check if the executive object has any date field
-      const possibleDateFields = ['joiningDate', 'dateOfJoining', 'createdAt', 'updatedAt'];
-      for (const field of possibleDateFields) {
-        if (executive[field] && executive[field] instanceof Date) {
-          dateOfJoining = executive[field];
-          console.log(`Found date from field ${field} for ${executiveName}:`, dateOfJoining);
-          break;
-        }
-      }
-    }
-
-    // Log final joining date for debugging
-    console.log(`Final joining date for ${executiveName}:`, dateOfJoining);
 
     // Determine date window
     let start, end;
@@ -240,78 +213,22 @@ router.get('/', async (req, res) => {
       start = new Date(startDate);
       end = new Date(endDate);
     } else {
-      // Use joining date if available, otherwise use a default date
       if (dateOfJoining) {
         start = new Date(dateOfJoining);
-        console.log(`Using joining date as start: ${start}`);
       } else {
         start = new Date('2000-01-01');
-        console.log(`No joining date found, using default start: ${start}`);
       }
       end = new Date();
     }
     end.setHours(23, 59, 59, 999);
 
-    // Fetch data in parallel
-    const [prospects, reports, orders, targets] = await Promise.all([
-      ProspectiveClient.find({
-        ExcutiveName: executiveName,
-        createdAt: { $gte: start, $lte: end }
-      }),
-      Report.find({
-        executiveName: executiveName,
-        date: { $gte: start, $lte: end }
-      }).lean(),
-      Order.find({
-        executive: executiveName,
-        orderDate: { $gte: start, $lte: end }
-      }),
-      Target.find({
-        executiveName: executiveName,
-        $or: [
-          {
-            year: dayjs(start).format('YYYY'),
-            month: { $gte: dayjs(start).format('M') }
-          },
-          {
-            year: { 
-              $gt: dayjs(start).format('YYYY'),
-              $lt: dayjs(end).format('YYYY') 
-            }
-          },
-          {
-            year: dayjs(end).format('YYYY'),
-            month: { $lte: dayjs(end).format('M') }
-          }
-        ]
-      })
-    ]);
+    // Fetch orders for this executive
+    const orders = await Order.find({
+      executive: executiveName,
+      orderDate: { $gte: start, $lte: end }
+    });
 
-    // Calculate totals with proper validation
-    const totalCalls = safeSum(reports, 'totalCalls');
-    const totalWhatsapp = safeSum(reports, 'whatsapp');
-    const totalOrders = orders.length;
-    
-    const totalAchieved = orders.reduce((sum, order) => {
-      return sum + (order.rows || []).reduce((rowSum, row) => {
-        return rowSum + (Number(row.total) || 0);
-      }, 0);
-    }, 0);
-
-    // Calculate total advance amount
-    const totalAdvance = orders.reduce((sum, order) => {
-      return sum + (Number(order.advance) || 0);
-    }, 0);
-
-    // Calculate average call duration
-    const callDurations = reports.flatMap(r => 
-      Array.isArray(r.callDurations) ? r.callDurations : []
-    );
-    const avgCallDuration = callDurations.length > 0
-      ? callDurations.reduce((a, b) => a + (Number(b) || 0), 0) / callDurations.length
-      : 0;
-
-    // Helper function to get month-year key from date
+    // Helper function to get month-year key
     const getMonthYearKey = (date) => {
       const d = new Date(date);
       const month = d.getMonth() + 1;
@@ -319,123 +236,217 @@ router.get('/', async (req, res) => {
       return `${year}-${month}`;
     };
 
-    // Group targets by month-year and initialize order counts and prospects
-    const monthlyTargets = {};
-    targets.forEach(target => {
-      const key = `${target.year}-${target.month}`;
+    // Helper function to get client type category
+    const getClientTypeCategory = (clientType) => {
+      if (!clientType) return 'retail';
+      const type = clientType.toString().toLowerCase().trim();
+      if (type === 'retail' || type === 'new') return 'retail';
+      if (type === 'agent') return 'agent';
+      if (type === 'renewal') return 'renewal';
+      if (type === 'renewal-agent') return 'renewalAgent';
+      return 'retail';
+    };
+
+    // Fetch targets for this executive
+    const targets = await Target.find({
+      executiveName: executiveName
+    });
+
+    // Group data by month
+    const monthlyData = {};
+
+    // Process orders
+    orders.forEach(order => {
+      const orderDate = new Date(order.orderDate);
+      const key = getMonthYearKey(orderDate);
+      const clientType = getClientTypeCategory(order.clientType);
       
-      if (!monthlyTargets[key]) {
-        monthlyTargets[key] = {
+      // Calculate order total
+      const orderTotal = (order.rows || []).reduce((sum, row) => {
+        return sum + (Number(row.total) || 0);
+      }, 0);
+      
+      if (!monthlyData[key]) {
+        const month = orderDate.getMonth() + 1;
+        const year = orderDate.getFullYear();
+        monthlyData[key] = {
+          month: dayjs(`${year}-${month}-01`).format('MMM YYYY'),
           target: 0,
           achieved: 0,
           advance: 0,
           orders: 0,
           prospects: 0,
-          month: target.month,
-          year: target.year
+          totalAmount: 0,
+          retailCount: 0,
+          retailAmount: 0,
+          newCount: 0,
+          newAmount: 0,
+          agentCount: 0,
+          agentAmount: 0,
+          renewalCount: 0,
+          renewalAmount: 0,
+          renewalAgentCount: 0,
+          renewalAgentAmount: 0
         };
       }
       
-      monthlyTargets[key].target += Number(target.targetAmount) || 0;
+      // Add to total amount
+      monthlyData[key].totalAmount += orderTotal;
+      monthlyData[key].orders += 1;
+      
+      // Add to client type breakdown
+      if (clientType === 'retail') {
+        monthlyData[key].retailCount += 1;
+        monthlyData[key].retailAmount += orderTotal;
+        // Only Retail counts toward achieved
+        monthlyData[key].achieved += orderTotal;
+      } else if (clientType === 'new') {
+        monthlyData[key].newCount += 1;
+        monthlyData[key].newAmount += orderTotal;
+        // Only New counts toward achieved
+        monthlyData[key].achieved += orderTotal;
+      } else if (clientType === 'agent') {
+        monthlyData[key].agentCount += 1;
+        monthlyData[key].agentAmount += orderTotal;
+      } else if (clientType === 'renewal') {
+        monthlyData[key].renewalCount += 1;
+        monthlyData[key].renewalAmount += orderTotal;
+      } else if (clientType === 'renewalAgent') {
+        monthlyData[key].renewalAgentCount += 1;
+        monthlyData[key].renewalAgentAmount += orderTotal;
+      }
+      
+      // Add advance
+      monthlyData[key].advance += Number(order.advance) || 0;
     });
 
-    // Calculate achieved amounts, advance amounts and order counts by month
-    orders.forEach(order => {
-      const orderDate = new Date(order.orderDate);
-      const key = getMonthYearKey(orderDate);
-      
-      if (monthlyTargets[key]) {
-        const orderTotal = (order.rows || []).reduce((sum, row) => {
-          return sum + (Number(row.total) || 0);
-        }, 0);
-        
-        monthlyTargets[key].achieved += orderTotal;
-        monthlyTargets[key].advance += Number(order.advance) || 0;
-        monthlyTargets[key].orders += 1;
+    // Process targets
+    targets.forEach(target => {
+      const key = `${target.year}-${target.month}`;
+      if (monthlyData[key]) {
+        monthlyData[key].target += Number(target.targetAmount) || 0;
       } else {
-        // Create a new entry for months that have orders but no targets
-        const [year, month] = key.split('-');
-        monthlyTargets[key] = {
-          target: 0,
-          achieved: (order.rows || []).reduce((sum, row) => sum + (Number(row.total) || 0), 0),
-          advance: Number(order.advance) || 0,
-          orders: 1,
+        monthlyData[key] = {
+          month: dayjs(`${target.year}-${target.month}-01`).format('MMM YYYY'),
+          target: Number(target.targetAmount) || 0,
+          achieved: 0,
+          advance: 0,
+          orders: 0,
           prospects: 0,
-          month: parseInt(month),
-          year: parseInt(year)
+          totalAmount: 0,
+          retailCount: 0,
+          retailAmount: 0,
+          newCount: 0,
+          newAmount: 0,
+          agentCount: 0,
+          agentAmount: 0,
+          renewalCount: 0,
+          renewalAmount: 0,
+          renewalAgentCount: 0,
+          renewalAgentAmount: 0
         };
       }
     });
 
-    // Handle prospects - create entries and count
+    // Fetch prospects for this executive
+    const prospects = await ProspectiveClient.find({
+      ExcutiveName: executiveName,
+      createdAt: { $gte: start, $lte: end }
+    });
+
+    // Process prospects
     prospects.forEach(prospect => {
       const prospectDate = new Date(prospect.createdAt);
       const key = getMonthYearKey(prospectDate);
       
-      if (!monthlyTargets[key]) {
+      if (monthlyData[key]) {
+        monthlyData[key].prospects += 1;
+      } else {
         const month = prospectDate.getMonth() + 1;
         const year = prospectDate.getFullYear();
-        
-        monthlyTargets[key] = {
+        monthlyData[key] = {
+          month: dayjs(`${year}-${month}-01`).format('MMM YYYY'),
           target: 0,
           achieved: 0,
           advance: 0,
           orders: 0,
           prospects: 1,
-          month: month,
-          year: year
+          totalAmount: 0,
+          retailCount: 0,
+          retailAmount: 0,
+          newCount: 0,
+          newAmount: 0,
+          agentCount: 0,
+          agentAmount: 0,
+          renewalCount: 0,
+          renewalAmount: 0,
+          renewalAgentCount: 0,
+          renewalAgentAmount: 0
         };
-      } else {
-        monthlyTargets[key].prospects += 1;
       }
     });
 
-    // Calculate monthly metrics
-    const months = Object.values(monthlyTargets);
-    const totalMonthlyTarget = months.reduce((sum, m) => sum + m.target, 0);
-    const totalMonthlyAchieved = months.reduce((sum, m) => sum + m.achieved, 0);
-    const totalMonthlyAdvance = months.reduce((sum, m) => sum + m.advance, 0);
-    const totalMonthlyOrders = months.reduce((sum, m) => sum + m.orders, 0);
-    const totalMonthlyProspects = months.reduce((sum, m) => sum + m.prospects, 0);
-    
-    const monthDiff = Math.max(
-      1,
-      dayjs(end).diff(dayjs(start), 'month', true)
-    );
-    
-    const avgMonthlyTarget = Math.round(totalMonthlyTarget / monthDiff);
-    const avgMonthlyOrders = Math.round(totalMonthlyOrders / monthDiff);
-    const avgMonthlyProspects = Math.round(totalMonthlyProspects / monthDiff);
-    const achievedPercentage = totalMonthlyTarget > 0
-      ? Math.round((totalMonthlyAchieved / totalMonthlyTarget) * 100)
-      : totalMonthlyAchieved > 0 ? 100 : 0;
-
-    // Build detailed monthly data
-    const detailedMonthlyData = months.map(m => ({
-      month: dayjs(`${m.year}-${m.month}-01`).format('MMM YYYY'),
+    // Convert to array and calculate percentages
+    const detailedMonthlyData = Object.values(monthlyData).map(m => ({
+      month: m.month,
       target: m.target,
       achieved: m.achieved,
       advance: m.advance,
       orders: m.orders,
       prospects: m.prospects,
+      totalAmount: m.totalAmount,
+      retailCount: m.retailCount,
+      retailAmount: m.retailAmount,
+      newCount: m.newCount,
+      newAmount: m.newAmount,
+      agentCount: m.agentCount,
+      agentAmount: m.agentAmount,
+      renewalCount: m.renewalCount,
+      renewalAmount: m.renewalAmount,
+      renewalAgentCount: m.renewalAgentCount,
+      renewalAgentAmount: m.renewalAgentAmount,
       percentage: m.target > 0 ? Math.round((m.achieved / m.target) * 100) : (m.achieved > 0 ? 100 : 0)
     }));
 
-    // Sort monthly data by year and month (newest first)
+    // Sort by date (newest first)
     detailedMonthlyData.sort((a, b) => {
       const dateA = new Date(a.month);
       const dateB = new Date(b.month);
       return dateB - dateA;
     });
 
-    // Format the joining date for frontend
+    // Calculate totals
+    const totalMonthlyTarget = detailedMonthlyData.reduce((sum, m) => sum + m.target, 0);
+    const totalMonthlyAchieved = detailedMonthlyData.reduce((sum, m) => sum + m.achieved, 0);
+    const totalMonthlyAdvance = detailedMonthlyData.reduce((sum, m) => sum + m.advance, 0);
+    const totalMonthlyOrders = detailedMonthlyData.reduce((sum, m) => sum + m.orders, 0);
+    const totalMonthlyProspects = detailedMonthlyData.reduce((sum, m) => sum + m.prospects, 0);
+    const totalMonthlyAmount = detailedMonthlyData.reduce((sum, m) => sum + m.totalAmount, 0);
+    
+    const totalRetailCount = detailedMonthlyData.reduce((sum, m) => sum + m.retailCount, 0);
+    const totalRetailAmount = detailedMonthlyData.reduce((sum, m) => sum + m.retailAmount, 0);
+    const totalNewCount = detailedMonthlyData.reduce((sum, m) => sum + m.newCount, 0);
+    const totalNewAmount = detailedMonthlyData.reduce((sum, m) => sum + m.newAmount, 0);
+    const totalAgentCount = detailedMonthlyData.reduce((sum, m) => sum + m.agentCount, 0);
+    const totalAgentAmount = detailedMonthlyData.reduce((sum, m) => sum + m.agentAmount, 0);
+    const totalRenewalCount = detailedMonthlyData.reduce((sum, m) => sum + m.renewalCount, 0);
+    const totalRenewalAmount = detailedMonthlyData.reduce((sum, m) => sum + m.renewalAmount, 0);
+    const totalRenewalAgentCount = detailedMonthlyData.reduce((sum, m) => sum + m.renewalAgentCount, 0);
+    const totalRenewalAgentAmount = detailedMonthlyData.reduce((sum, m) => sum + m.renewalAgentAmount, 0);
+
+    const monthDiff = Math.max(1, dayjs(end).diff(dayjs(start), 'month', true));
+    const avgMonthlyTarget = Math.round(totalMonthlyTarget / monthDiff);
+    
+    const achievedPercentage = totalMonthlyTarget > 0
+      ? Math.round((totalMonthlyAchieved / totalMonthlyTarget) * 100)
+      : totalMonthlyAchieved > 0 ? 100 : 0;
+
+    // Format joining date
     let formattedJoiningDate = null;
     if (dateOfJoining) {
       try {
         formattedJoiningDate = new Date(dateOfJoining).toISOString();
-        console.log(`Formatted joining date for ${executiveName}:`, formattedJoiningDate);
       } catch (err) {
-        console.error(`Error formatting joining date for ${executiveName}:`, err);
         formattedJoiningDate = null;
       }
     }
@@ -447,28 +458,31 @@ router.get('/', async (req, res) => {
       executiveType: executiveType,
       dateOfJoining: formattedJoiningDate,
       avgMonthlyTarget,
-      avgMonthlyOrders,
-      avgMonthlyProspects,
       totalProspects: totalMonthlyProspects,
-      totalCalls,
-      totalWhatsapp,
-      totalOrders,
-      avgCallDuration: avgCallDuration.toFixed(2),
+      totalCalls: 0,
+      totalWhatsapp: 0,
+      totalOrders: totalMonthlyOrders,
+      avgCallDuration: '0',
       target: totalMonthlyTarget,
       achieved: totalMonthlyAchieved,
       advance: totalMonthlyAdvance,
+      totalAmount: totalMonthlyAmount,
       achievedPercentage,
+      // Client breakdown totals
+      retailCount: totalRetailCount,
+      retailAmount: totalRetailAmount,
+      newCount: totalNewCount,
+      newAmount: totalNewAmount,
+      agentCount: totalAgentCount,
+      agentAmount: totalAgentAmount,
+      renewalCount: totalRenewalCount,
+      renewalAmount: totalRenewalAmount,
+      renewalAgentCount: totalRenewalAgentCount,
+      renewalAgentAmount: totalRenewalAgentAmount,
       detailedData: {
         byMonth: detailedMonthlyData
       }
     };
-
-    console.log(`Sending response for ${executiveName}:`, {
-      executiveName,
-      dateOfJoining: formattedJoiningDate,
-      totalMonthlyTarget,
-      totalMonthlyAchieved
-    });
 
     res.json(performanceData);
   } catch (err) {

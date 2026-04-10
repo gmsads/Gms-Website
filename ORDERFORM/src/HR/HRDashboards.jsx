@@ -472,6 +472,12 @@ function HRDashboard() {
               >
                 ➕ Add New Employee
               </button>
+                  <button 
+                style={styles.actionButton}
+                onClick={() => navigate('hour')}
+              >
+           Create Hour Report ➕
+              </button>
               <button 
                 style={styles.actionButton}
                 onClick={() => navigate('employees')}
@@ -638,6 +644,16 @@ function HRDashboard() {
           >
          Create Report ➕
           </NavLink>
+           <NavLink
+            to="/hr-dashboard/hour"
+            end
+            style={linkStyle('hour')}
+            onMouseEnter={() => setHoveredItem('hour')}
+            onMouseLeave={() => setHoveredItem('')}
+            onClick={handleSidebarItemClick}
+          >
+         Create Hour Report ➕
+          </NavLink>
              <NavLink
             to="/hr-dashboard/daily-report"
             end
@@ -657,6 +673,16 @@ function HRDashboard() {
             onClick={handleSidebarItemClick}
           >
         Field Executive Report 
+          </NavLink>
+           <NavLink
+            to="/hr-dashboard/hour-reeport"
+            end
+            style={linkStyle('hour-reeport')}
+            onMouseEnter={() => setHoveredItem('hour-reeport')}
+            onMouseLeave={() => setHoveredItem('')}
+            onClick={handleSidebarItemClick}
+          >
+       View Hour Report 
           </NavLink>
            <NavLink
             to="/hr-dashboard/advance-approvals"

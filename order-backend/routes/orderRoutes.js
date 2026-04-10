@@ -2614,4 +2614,410 @@ router.get("/orders/pending-payments", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch pending payments" });
   }
 });
+
+// Get all settlements for an order
+router.get("/orders/:orderId/settlements", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    const order = await Order.findById(orderId).select('orderNo business executive settlements');
+    
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json({
+      success: true,
+      orderNo: order.orderNo,
+      business: order.business,
+      executive: order.executive,
+      settlements: order.settlements || []
+    });
+  } catch (err) {
+    console.error("Error fetching settlements:", err);
+    res.status(500).json({ error: "Failed to fetch settlements" });
+  }
+});
+// Record a settlement for an order
+router.post("/orders/:orderId/record-settlement", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { date, type, amount, reason, approvedBy, notes } = req.body;
+
+    console.log("========== SETTLEMENT RECORDING START ==========");
+    console.log("Order ID:", orderId);
+    console.log("Settlement data:", JSON.stringify(req.body, null, 2));
+
+    // Validate required fields
+    if (!amount || !type || !reason || !approvedBy) {
+      console.log("Missing required fields");
+      return res.status(400).json({ 
+        success: false, 
+        error: "Amount, type, reason and approvedBy are required" 
+      });
+    }
+
+    // Find the order
+    const order = await Order.findById(orderId);
+    if (!order) {
+      console.log("Order not found:", orderId);
+      return res.status(404).json({ 
+        success: false, 
+        error: "Order not found" 
+      });
+    }
+
+    console.log("Order found:", order.orderNo);
+    console.log("Order current state:", {
+      advance: order.advance,
+      balance: order.balance,
+      hasSettlements: order.settlements ? order.settlements.length : 0
+    });
+
+    // Check if order has pending balance
+    if (!order.balance || order.balance <= 0) {
+      console.log("Order has no pending balance");
+      return res.status(400).json({ 
+        success: false, 
+        error: "Order has no pending balance" 
+      });
+    }
+
+    const settlementAmount = parseFloat(amount);
+    if (isNaN(settlementAmount) || settlementAmount <= 0) {
+      console.log("Invalid settlement amount:", amount);
+      return res.status(400).json({ 
+        success: false, 
+        error: "Invalid settlement amount. Must be a positive number." 
+      });
+    }
+
+    if (settlementAmount > order.balance) {
+      console.log(`Settlement amount ${settlementAmount} exceeds balance ${order.balance}`);
+      return res.status(400).json({ 
+        success: false, 
+        error: `Settlement amount (₹${settlementAmount}) cannot exceed balance (₹${order.balance})` 
+      });
+    }
+
+    // Create settlement record
+    const settlementRecord = {
+      date: date ? new Date(date) : new Date(),
+      type: type,
+      amount: settlementAmount,
+      reason: reason,
+      approvedBy: approvedBy,
+      notes: notes || '',
+      createdBy: req.body.createdBy || 'System',
+      createdAt: new Date()
+    };
+
+    console.log("Creating settlement record:", settlementRecord);
+
+    // Initialize settlements array if it doesn't exist
+    if (!order.settlements) {
+      order.settlements = [];
+    }
+
+    // Add settlement to history
+    order.settlements.push(settlementRecord);
+    
+    // Update balance
+    const newBalance = Math.max(0, order.balance - settlementAmount);
+    order.balance = newBalance;
+
+    console.log("Before save - new values:", {
+      newBalance: order.balance,
+      settlementsCount: order.settlements.length
+    });
+
+    // Save the updated order
+    const savedOrder = await order.save();
+    console.log("Order saved successfully");
+
+    console.log("========== SETTLEMENT RECORDING END ==========");
+
+    // Return updated order
+    res.json({
+      success: true,
+      message: `Settlement of ₹${settlementAmount} recorded successfully`,
+      newBalance: savedOrder.balance,
+      settlement: settlementRecord,
+      order: {
+        _id: savedOrder._id,
+        orderNo: savedOrder.orderNo,
+        balance: savedOrder.balance,
+        settlements: savedOrder.settlements
+      }
+    });
+
+  } catch (err) {
+    console.error("========== SETTLEMENT RECORDING ERROR ==========");
+    console.error("Error name:", err.name);
+    console.error("Error message:", err.message);
+    console.error("Error stack:", err.stack);
+    
+    res.status(500).json({ 
+      success: false, 
+      error: err.message || "Failed to record settlement"
+    });
+  }
+});
+// GET orders with pending payments (balance > 0)
+router.get("/orders/pending-payments", async (req, res) => {
+  try {
+    const orders = await Order.find({ balance: { $gt: 0 } })
+      .sort({ orderDate: -1, createdAt: -1 });
+    res.json(orders);
+  } catch (err) {
+    console.error("Error fetching pending payments:", err);
+    res.status(500).json({ error: "Failed to fetch pending payments" });
+  }
+});
+
+// Get payments dashboard with follow-ups and settlements
+router.get('/payments-dashboard', async (req, res) => {
+  try {
+    const { executive, filterType, year, month, date } = req.query;
+    
+    let query = {};
+    
+    if (executive) {
+      query.executive = executive;
+    }
+    
+    // Date filtering
+    if (date) {
+      const startDate = new Date(date);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(date);
+      endDate.setHours(23, 59, 59, 999);
+      query.orderDate = { $gte: startDate, $lte: endDate };
+    } else if (year) {
+      const startYear = new Date(parseInt(year), 0, 1);
+      const endYear = new Date(parseInt(year), 11, 31, 23, 59, 59, 999);
+      query.orderDate = { $gte: startYear, $lte: endYear };
+      
+      if (month) {
+        const startMonth = new Date(parseInt(year), parseInt(month) - 1, 1);
+        const endMonth = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
+        query.orderDate = { $gte: startMonth, $lte: endMonth };
+      }
+    }
+    
+    // Fetch orders with all nested data
+    const orders = await Order.find(query).sort({ orderDate: -1 });
+    
+    // Calculate balances if needed
+    const ordersWithData = orders.map(order => {
+      const orderTotal = order.rows.reduce((sum, row) => sum + (row.total || 0), 0);
+      const totalPayments = (order.paymentHistory || []).reduce((sum, payment) => sum + payment.amount, 0);
+      const totalSettlements = (order.settlements || []).reduce((sum, settlement) => sum + settlement.amount, 0);
+      const advance = totalPayments + totalSettlements;
+      const balance = orderTotal - advance;
+      
+      return {
+        ...order.toObject(),
+        advance: advance,
+        balance: balance > 0 ? balance : 0,
+        payments: order.paymentHistory || [],
+        followUps: order.followUps || [],
+        settlements: order.settlements || []
+      };
+    });
+    
+    res.json(ordersWithData);
+  } catch (error) {
+    console.error('Error fetching payments dashboard:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Record payment
+router.post('/:id/record-payment', async (req, res) => {
+  try {
+    const { date, amount, method, reference, note } = req.body;
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    const payment = {
+      amount: parseFloat(amount),
+      method: method,
+      date: new Date(date),
+      transactionRef: reference,
+      note: note,
+      createdBy: req.body.createdBy || req.user?.username || 'System'
+    };
+    
+    // Add to payment history
+    if (!order.paymentHistory) order.paymentHistory = [];
+    order.paymentHistory.push(payment);
+    
+    // Recalculate advance and balance
+    const orderTotal = order.rows.reduce((sum, row) => sum + (row.total || 0), 0);
+    const totalPayments = order.paymentHistory.reduce((sum, p) => sum + p.amount, 0);
+    const totalSettlements = (order.settlements || []).reduce((sum, s) => sum + s.amount, 0);
+    const advance = totalPayments + totalSettlements;
+    const balance = orderTotal - advance;
+    
+    order.advance = advance;
+    order.balance = balance > 0 ? balance : 0;
+    
+    await order.save();
+    
+    res.json({ message: 'Payment recorded successfully', order });
+  } catch (error) {
+    console.error('Error recording payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Record settlement
+router.post('/:id/record-settlement', async (req, res) => {
+  try {
+    const { date, type, amount, reason, approvedBy, notes } = req.body;
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    const settlement = {
+      date: new Date(date),
+      type: type,
+      amount: parseFloat(amount),
+      reason: reason,
+      approvedBy: approvedBy,
+      notes: notes,
+      createdBy: req.body.createdBy || req.user?.username || 'System'
+    };
+    
+    if (!order.settlements) order.settlements = [];
+    order.settlements.push(settlement);
+    
+    // Recalculate advance and balance
+    const orderTotal = order.rows.reduce((sum, row) => sum + (row.total || 0), 0);
+    const totalPayments = (order.paymentHistory || []).reduce((sum, p) => sum + p.amount, 0);
+    const totalSettlements = order.settlements.reduce((sum, s) => sum + s.amount, 0);
+    const advance = totalPayments + totalSettlements;
+    const balance = orderTotal - advance;
+    
+    order.advance = advance;
+    order.balance = balance > 0 ? balance : 0;
+    
+    await order.save();
+    
+    res.json({ message: 'Settlement recorded successfully', order });
+  } catch (error) {
+    console.error('Error recording settlement:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add follow-up
+router.post('/:id/follow-up', async (req, res) => {
+  try {
+    const { date, description, nextFollowUpDate, status } = req.body;
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    const followUp = {
+      date: new Date(date),
+      description: description,
+      nextFollowUpDate: nextFollowUpDate ? new Date(nextFollowUpDate) : null,
+      status: status || 'Pending',
+      createdBy: req.body.createdBy || req.user?.username || 'System'
+    };
+    
+    if (!order.followUps) order.followUps = [];
+    order.followUps.push(followUp);
+    
+    // Update lastFollowUpDate
+    order.lastFollowUpDate = new Date(date);
+    
+    // Map follow-up status to existing enum
+    const statusMap = {
+      'Promise to Pay': 'promise-to-pay',
+      'Partial Payment': 'contacted',
+      'Not Reachable': 'not-reachable',
+      'Call Back Later': 'call-back-later',
+      'Resolved': 'resolved',
+      'Follow-up Done': 'follow-up-done',
+      'Pending': 'pending'
+    };
+    
+    if (statusMap[status]) {
+      order.followUpStatus = statusMap[status];
+    }
+    
+    await order.save();
+    
+    res.json({ message: 'Follow-up added successfully', followUp });
+  } catch (error) {
+    console.error('Error adding follow-up:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get order follow-ups
+router.get('/:id/follow-ups', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id).select('followUps business orderNo');
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    res.json({ 
+      followUps: order.followUps || [],
+      business: order.business,
+      orderNo: order.orderNo
+    });
+  } catch (error) {
+    console.error('Error fetching follow-ups:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get order settlements
+router.get('/:id/settlements', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id).select('settlements business orderNo');
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    res.json({ 
+      settlements: order.settlements || [],
+      business: order.business,
+      orderNo: order.orderNo
+    });
+  } catch (error) {
+    console.error('Error fetching settlements:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single order with all details
+router.get('/:id', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    res.json(order);
+  } catch (error) {
+    console.error('Error fetching order:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 module.exports = router;

@@ -21,14 +21,12 @@ const PerformanceView = () => {
   const [searchParams] = useSearchParams();
   const employeeNameFromUrl = searchParams.get('employee');
 
-  // Get user role from localStorage
   const userRole = localStorage.getItem('role') || '';
   const isAdmin = userRole === 'Admin';
   const isHR = userRole === 'HR';
   const isSalesManager = userRole === 'Sales Manager';
   const isServiceManager = userRole === 'Service Manager';
 
-  // Check if user has permission to navigate to orders/prospects
   const canNavigateToOrders = isAdmin || isSalesManager;
   const canNavigateToProspects = isAdmin || isSalesManager;
 
@@ -44,16 +42,25 @@ const PerformanceView = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [loadingExecutives, setLoadingExecutives] = useState(false);
 
-  // Salary-related states
   const [salaryData, setSalaryData] = useState(null);
   const [loadingSalary, setLoadingSalary] = useState(false);
   const [showSalaryModal, setShowSalaryModal] = useState(false);
   const [allEmployeesForSalary, setAllEmployeesForSalary] = useState([]);
 
-  // Filters - only one year filter now
-  const [yearlyFilter, setYearlyFilter] = useState({
-    year: new Date().getFullYear()
+  const financialMonthLabels = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+
+  const [financialYearFilter, setFinancialYearFilter] = useState(() => {
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth();
+    const currentYear = currentDate.getFullYear();
+    if (currentMonth >= 3) {
+      return `${currentYear}-${currentYear + 1}`;
+    } else {
+      return `${currentYear - 1}-${currentYear}`;
+    }
   });
+
+  const [selectedFinancialMonth, setSelectedFinancialMonth] = useState(null);
 
   const [manuallyEligibleMonths, setManuallyEligibleMonths] = useState(() => {
     try {
@@ -65,6 +72,48 @@ const PerformanceView = () => {
     }
   });
 
+  // Helper function to get financial year from date
+  const getFinancialYear = (date) => {
+    const month = date.getMonth();
+    const year = date.getFullYear();
+    if (month >= 3) {
+      return `${year}-${year + 1}`;
+    } else {
+      return `${year - 1}-${year}`;
+    }
+  };
+
+  // Helper function to get financial month (1-12 where 1=April)
+  const getFinancialMonth = (date) => {
+    const month = date.getMonth();
+    if (month === 0) return 10;
+    if (month === 1) return 11;
+    if (month === 2) return 12;
+    return month - 2;
+  };
+
+  // Helper function to get date range from financial year
+  const getDateRangeFromFinancialYear = (financialYear) => {
+    if (!financialYear || financialYear === 'all') return null;
+    const [startYear, endYear] = financialYear.split('-').map(Number);
+    const startDate = new Date(startYear, 3, 1);
+    const endDate = new Date(endYear, 2, 31, 23, 59, 59, 999);
+    return { startDate, endDate };
+  };
+
+  // Format currency for display (like ExecutiveDashboard)
+  const formatCurrency = (value) => {
+    if (!value || value === 0) return '₹0';
+    if (value >= 10000000) {
+      return `₹${(value / 10000000).toFixed(2)}Cr`;
+    } else if (value >= 100000) {
+      return `₹${(value / 100000).toFixed(2)}L`;
+    } else if (value >= 1000) {
+      return `₹${(value / 1000).toFixed(1)}K`;
+    }
+    return `₹${value.toLocaleString('en-IN')}`;
+  };
+
   useEffect(() => {
     try {
       localStorage.setItem('executiveIncentiveEligibility', JSON.stringify(manuallyEligibleMonths));
@@ -73,7 +122,6 @@ const PerformanceView = () => {
     }
   }, [manuallyEligibleMonths]);
 
-  // Format executives for dropdown
   const allExecutives = useMemo(() => {
     return executives.map(exec => ({
       ...exec,
@@ -94,234 +142,104 @@ const PerformanceView = () => {
     return allExecutives.find(exec => exec.value === selectedExecutive);
   }, [allExecutives, selectedExecutive]);
 
-  // Get executive monthly data for chart
-  const getExecutiveMonthlyData = useMemo(() => {
-    if (!performanceData?.detailedData?.byMonth || !selectedExecutive) {
-      return [];
-    }
-
-    const monthlyData = performanceData.detailedData.byMonth;
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
-    const filteredMonthlyData = monthlyData.filter(monthData => {
-      const [monthName, yearStr] = monthData.month.split(' ');
-      const year = parseInt(yearStr);
-      return year === yearlyFilter.year;
-    });
-    
-    const allMonthsData = monthNames.map((month, index) => {
-      const monthNum = index + 1;
-      const monthData = filteredMonthlyData.find(m => {
-        const [mName] = m.month.split(' ');
-        const mMonthIndex = new Date(`${mName} 1, 2000`).getMonth();
-        return mMonthIndex === index;
-      });
-      
+  // Calculate totals with proper breakdown
+  const calculateTotals = useMemo(() => {
+    if (!performanceData?.detailedData?.byMonth) {
       return {
-        month: month,
-        monthNum: monthNum,
-        target: monthData?.target || 0,
-        achieved: monthData?.achieved || 0,
-        percentage: monthData?.percentage || 0,
-        orders: monthData?.orders || 0,
-        prospects: monthData?.prospects || 0,
-        advance: monthData?.advance || 0,
-        hasData: !!monthData
+        target: 0,
+        achieved: 0,
+        advance: 0,
+        remaining: 0,
+        totalOrders: 0,
+        totalProspects: 0,
+        totalAmount: 0,
+        retailCount: 0,
+        retailAmount: 0,
+        newCount: 0,
+        newAmount: 0,
+        agentCount: 0,
+        agentAmount: 0,
+        renewalCount: 0,
+        renewalAmount: 0,
+        renewalAgentCount: 0,
+        renewalAgentAmount: 0
       };
-    });
-    
-    return allMonthsData;
-  }, [performanceData, selectedExecutive, yearlyFilter.year]);
-
-  const calculateYearlyData = useMemo(() => {
-    if (!performanceData || !performanceData.detailedData?.byMonth) {
-      return null;
     }
     
     const monthlyData = performanceData.detailedData.byMonth;
     const filteredMonths = monthlyData.filter(monthData => {
-      const [_, yearStr] = monthData.month.split(' ');
+      const [monthName, yearStr] = monthData.month.split(' ');
       const year = parseInt(yearStr);
-      return yearlyFilter.year ? year === yearlyFilter.year : true;
+      const monthIndex = new Date(`${monthName} 1, ${yearStr}`).getMonth();
+      const date = new Date(year, monthIndex, 1);
+      const financialYear = getFinancialYear(date);
+      
+      if (financialYearFilter !== 'all' && financialYear !== financialYearFilter) {
+        return false;
+      }
+      if (selectedFinancialMonth !== null) {
+        const financialMonth = getFinancialMonth(date);
+        if (financialMonth !== selectedFinancialMonth) return false;
+      }
+      return true;
     });
     
     const totals = filteredMonths.reduce((acc, month) => ({
       target: acc.target + (month.target || 0),
       achieved: acc.achieved + (month.achieved || 0),
       advance: acc.advance + (month.advance || 0),
-      orders: acc.orders + (month.orders || 0),
-      prospects: acc.prospects + (month.prospects || 0)
-    }), { target: 0, achieved: 0, advance: 0, orders: 0, prospects: 0 });
-    
-    const percentage = totals.target > 0 
-      ? (totals.achieved / totals.target) * 100 
-      : totals.achieved > 0 ? 100 : 0;
-    
-    return {
-      target: totals.target,
-      achieved: totals.achieved,
-      advance: totals.advance,
-      totalOrders: totals.orders,
-      totalProspects: totals.prospects,
-      achievedPercentage: percentage
-    };
-  }, [performanceData, yearlyFilter.year]);
-
-  const overallBalance = useMemo(() => {
-    if (!performanceData) return 0;
-    if (calculateYearlyData) {
-      return calculateYearlyData.achieved - calculateYearlyData.advance;
-    }
-    const achieved = performanceData.achieved || 0;
-    const advance = performanceData.advance || 0;
-    return achieved - advance;
-  }, [performanceData, calculateYearlyData]);
-
-  const getCurrentPerformancePercentage = () => {
-    if (!performanceData) return 0;
-    if (calculateYearlyData) {
-      return calculateYearlyData.achievedPercentage || 0;
-    }
-    return performanceData.achievedPercentage || 0;
-  };
-
-  const getTargetAmount = () => {
-    if (!performanceData) return 0;
-    if (calculateYearlyData) {
-      return calculateYearlyData.target || 0;
-    }
-    return performanceData.target || 0;
-  };
-
-  const getAchievedAmount = () => {
-    if (!performanceData) return 0;
-    if (calculateYearlyData) {
-      return calculateYearlyData.achieved || 0;
-    }
-    return performanceData.achieved || 0;
-  };
-
-  const getAdvanceAmount = () => {
-    if (!performanceData) return 0;
-    if (calculateYearlyData) {
-      return calculateYearlyData.advance || 0;
-    }
-    return performanceData.advance || 0;
-  };
-
-  const getTotalOrders = () => {
-    if (!performanceData) return 0;
-    if (calculateYearlyData) {
-      return calculateYearlyData.totalOrders || 0;
-    }
-    return performanceData.totalOrders || 0;
-  };
-
-  const calculateMonthlyBalance = (monthData) => {
-    const achieved = monthData.achieved || 0;
-    const advance = monthData.advance || 0;
-    return achieved - advance;
-  };
-
-  const meetsIncentiveCriteria = (monthData) => {
-    const targetAchieved = monthData.percentage >= 100;
-    const minimumOrders = (monthData.orders || 0) >= 10;
-    return targetAchieved || minimumOrders;
-  };
-
-  const calculateEligibilityGap = (monthData) => {
-    const currentPercentage = monthData.percentage || 0;
-    const currentOrders = monthData.orders || 0;
-    const targetNeeded = Math.max(0, 100 - currentPercentage);
-    const ordersNeeded = Math.max(0, 10 - currentOrders);
-    
-    return {
-      targetNeeded,
-      ordersNeeded,
-      meetsTargetCriteria: currentPercentage >= 100,
-      meetsOrderCriteria: currentOrders >= 10
-    };
-  };
-
-  const handleToggleEligibility = (monthKey, monthData) => {
-    setManuallyEligibleMonths(prev => {
-      const newState = { ...prev };
-      const executiveName = performanceData?.executiveName || 'unknown';
-      const uniqueKey = `${executiveName}_${monthKey}`;
-      
-      if (!newState[uniqueKey]) {
-        const gap = calculateEligibilityGap(monthData);
-        newState[uniqueKey] = {
-          eligible: true,
-          executiveName: executiveName,
-          month: monthKey,
-          criteria: {
-            targetRequired: 100,
-            targetAchieved: monthData.percentage || 0,
-            ordersRequired: 10,
-            ordersAchieved: monthData.orders || 0,
-            meetsTarget: gap.meetsTargetCriteria,
-            meetsOrders: gap.meetsOrderCriteria,
-            dateMarked: new Date().toISOString()
-          }
-        };
-      }
-      return newState;
+      totalOrders: acc.totalOrders + (month.orders || 0),
+      totalProspects: acc.totalProspects + (month.prospects || 0),
+      totalAmount: acc.totalAmount + (month.totalAmount || 0),
+      retailCount: acc.retailCount + (month.retailCount || 0),
+      retailAmount: acc.retailAmount + (month.retailAmount || 0),
+      newCount: acc.newCount + (month.newCount || 0),
+      newAmount: acc.newAmount + (month.newAmount || 0),
+      agentCount: acc.agentCount + (month.agentCount || 0),
+      agentAmount: acc.agentAmount + (month.agentAmount || 0),
+      renewalCount: acc.renewalCount + (month.renewalCount || 0),
+      renewalAmount: acc.renewalAmount + (month.renewalAmount || 0),
+      renewalAgentCount: acc.renewalAgentCount + (month.renewalAgentCount || 0),
+      renewalAgentAmount: acc.renewalAgentAmount + (month.renewalAgentAmount || 0)
+    }), {
+      target: 0,
+      achieved: 0,
+      advance: 0,
+      totalOrders: 0,
+      totalProspects: 0,
+      totalAmount: 0,
+      retailCount: 0,
+      retailAmount: 0,
+      newCount: 0,
+      newAmount: 0,
+      agentCount: 0,
+      agentAmount: 0,
+      renewalCount: 0,
+      renewalAmount: 0,
+      renewalAgentCount: 0,
+      renewalAgentAmount: 0
     });
-  };
-
-  const isMonthEligible = (monthKey) => {
-    if (!performanceData?.executiveName) return false;
-    const executiveName = performanceData.executiveName;
-    const uniqueKey = `${executiveName}_${monthKey}`;
-    return !!manuallyEligibleMonths[uniqueKey];
-  };
-
-  const incentiveSummary = useMemo(() => {
-    if (!performanceData?.executiveName) {
-      return {
-        totalEligibleMonths: 0,
-        totalIncentiveAmount: 0,
-        averageMonthlyIncentive: 0
-      };
-    }
-    const executiveName = performanceData.executiveName;
-    const eligibleMonths = Object.values(manuallyEligibleMonths).filter(
-      month => month.executiveName === executiveName
-    );
+    
     return {
-      totalEligibleMonths: eligibleMonths.length,
-      totalIncentiveAmount: 0,
-      averageMonthlyIncentive: 0
+      ...totals,
+      remaining: Math.max(0, totals.target - totals.achieved),
+      achievedPercentage: totals.target > 0 ? (totals.achieved / totals.target) * 100 : (totals.achieved > 0 ? 100 : 0)
     };
-  }, [manuallyEligibleMonths, performanceData]);
+  }, [performanceData, financialYearFilter, selectedFinancialMonth]);
 
-  // Enhanced fetchSalaryData function
+  const overallBalance = calculateTotals.achieved - calculateTotals.advance;
+
   const fetchSalaryData = async (employeeId, employeeName) => {
     if (!employeeId) return;
     
     setLoadingSalary(true);
     try {
-      console.log('========== FETCHING SALARY DATA ==========');
-      console.log('Employee ID:', employeeId);
-      console.log('Employee Name:', employeeName || 'Not provided');
-      
       let response;
       try {
         response = await axios.get(`/api/salaries/${employeeId}`);
-        console.log('✅ Salary found by ID:', response.data);
       } catch (idError) {
-        console.log('❌ Failed to fetch by ID:', idError.response?.status);
-        
         if (employeeName) {
-          try {
-            console.log('Trying to fetch by employee name:', employeeName);
-            response = await axios.get(`/api/salaries/${encodeURIComponent(employeeName)}`);
-            console.log('✅ Salary found by name:', response.data);
-          } catch (nameError) {
-            console.log('❌ Failed to fetch by name:', nameError.response?.status);
-            throw new Error('Salary not found for this employee');
-          }
+          response = await axios.get(`/api/salaries/${encodeURIComponent(employeeName)}`);
         } else {
           throw new Error('Salary not found');
         }
@@ -329,16 +247,9 @@ const PerformanceView = () => {
       
       if (response && response.data) {
         setSalaryData(response.data);
-        console.log('Salary data set successfully:', {
-          basicSalary: response.data.basicSalary,
-          paymentHistoryCount: response.data.paymentHistory?.length || 0,
-          paymentHistory: response.data.paymentHistory
-        });
       } else {
-        console.log('No salary data in response');
         setSalaryData(null);
       }
-      
     } catch (error) {
       console.error('Error fetching salary data:', error);
       setSalaryData(null);
@@ -347,67 +258,54 @@ const PerformanceView = () => {
     }
   };
 
-  // Function to calculate total salary received in selected year
   const calculateTotalSalaryReceived = () => {
     if (!salaryData || !salaryData.paymentHistory) return 0;
-    const year = yearlyFilter.year;
-    if (!year) return 0;
-    const yearStr = year.toString();
+    if (financialYearFilter === 'all') return 0;
+    
+    const [startYear, endYear] = financialYearFilter.split('-').map(Number);
     const total = salaryData.paymentHistory
-      .filter(payment => payment.month && payment.month.startsWith(yearStr))
+      .filter(payment => {
+        if (!payment.month) return false;
+        const [year, month] = payment.month.split('-');
+        const paymentYear = parseInt(year);
+        const paymentMonth = parseInt(month);
+        
+        if (paymentMonth >= 4) {
+          return paymentYear === startYear;
+        } else {
+          return paymentYear === endYear;
+        }
+      })
       .reduce((sum, payment) => sum + (payment.amount || 0), 0);
     return total;
   };
 
-  // Function to get formatted salary string
   const getFormattedSalaryInfo = () => {
-    console.log('=== getFormattedSalaryInfo Debug ===');
-    console.log('salaryData:', salaryData);
-    console.log('yearlyFilter.year:', yearlyFilter.year);
-    
-    if (!salaryData) {
-      console.log('No salaryData object');
-      return { total: 0, monthsCount: 0, formattedString: 'Not Configured' };
-    }
-    
-    if (!salaryData.paymentHistory) {
-      console.log('No paymentHistory in salaryData');
-      return { total: 0, monthsCount: 0, formattedString: 'Not Configured' };
-    }
-    
-    if (!Array.isArray(salaryData.paymentHistory)) {
-      console.log('paymentHistory is not an array');
-      return { total: 0, monthsCount: 0, formattedString: 'Not Configured' };
-    }
-    
-    if (salaryData.paymentHistory.length === 0) {
-      console.log('paymentHistory is empty');
+    if (!salaryData || !salaryData.paymentHistory || !Array.isArray(salaryData.paymentHistory)) {
       return { total: 0, monthsCount: 0, formattedString: 'Not Configured' };
     }
 
-    const year = yearlyFilter.year;
-    if (!year) {
-      console.log('No year selected');
+    if (financialYearFilter === 'all') {
       return { total: 0, monthsCount: 0, formattedString: 'Not Configured' };
     }
 
-    const yearStr = year.toString();
-    console.log('Filtering payments for year:', yearStr);
-    console.log('All payments:', salaryData.paymentHistory);
+    const [startYear, endYear] = financialYearFilter.split('-').map(Number);
     
-    const paymentsInYear = salaryData.paymentHistory.filter(payment => {
+    const paymentsInFinancialYear = salaryData.paymentHistory.filter(payment => {
       if (!payment.month) return false;
-      const matches = payment.month.startsWith(yearStr);
-      if (matches) console.log('Matched payment:', payment);
-      return matches;
+      const [year, month] = payment.month.split('-');
+      const paymentYear = parseInt(year);
+      const paymentMonth = parseInt(month);
+      
+      if (paymentMonth >= 4) {
+        return paymentYear === startYear;
+      } else {
+        return paymentYear === endYear;
+      }
     });
-    
-    console.log('Payments in year:', paymentsInYear);
 
-    const total = paymentsInYear.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-    const monthsCount = paymentsInYear.length;
-
-    console.log('Total calculated:', total, 'Months count:', monthsCount);
+    const total = paymentsInFinancialYear.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+    const monthsCount = paymentsInFinancialYear.length;
 
     if (total === 0 || monthsCount === 0) {
       return { total: 0, monthsCount: 0, formattedString: 'Not Configured' };
@@ -416,32 +314,16 @@ const PerformanceView = () => {
     return {
       total: total,
       monthsCount: monthsCount,
-      formattedString: `₹${total.toLocaleString('en-IN')} (${monthsCount} month${monthsCount > 1 ? 's' : ''})`
+      formattedString: `${formatCurrency(total)} (${monthsCount} month${monthsCount > 1 ? 's' : ''})`
     };
   };
 
-  // Function to get total salary digits count
-  const getTotalSalaryDigits = () => {
-    const { total } = getFormattedSalaryInfo();
-    if (total === 0) return 0;
-    return total.toString().replace(/[^0-9]/g, '').length;
-  };
-
-  // Function to check if salary is configured
-  const isSalaryConfigured = () => {
-    const { total, monthsCount } = getFormattedSalaryInfo();
-    return salaryData && salaryData.basicSalary && salaryData.basicSalary > 0 && total > 0 && monthsCount > 0;
-  };
-
-  // Function to open salary modal
   const handleSalaryClick = () => {
     setShowSalaryModal(true);
   };
 
-  // Function to close salary modal
   const handleCloseSalaryModal = async () => {
     setShowSalaryModal(false);
-    // Refresh salary data when modal closes
     if (selectedExecutive) {
       const [executiveType, executiveId] = selectedExecutive.split('_');
       const executive = allExecutives.find(exec => exec.value === selectedExecutive);
@@ -455,25 +337,28 @@ const PerformanceView = () => {
     setLoading(true);
     try {
       const [executiveType, executiveId] = executiveValue.split('_');
-      
       const executive = allExecutives.find(exec => exec.value === executiveValue);
       const executiveName = executive?.name || '';
-      
-      console.log('Fetching performance for:', { executiveType, executiveId, executiveName });
       
       const params = {
         executiveId,
         executiveType,
-        ...(dateRange.startDate && { startDate: dateRange.startDate }),
-        ...(dateRange.endDate && { endDate: dateRange.endDate })
       };
+      
+      if (financialYearFilter !== 'all') {
+        const dateRangeFromFY = getDateRangeFromFinancialYear(financialYearFilter);
+        if (dateRangeFromFY) {
+          params.startDate = dateRangeFromFY.startDate.toISOString().split('T')[0];
+          params.endDate = dateRangeFromFY.endDate.toISOString().split('T')[0];
+        }
+      } else if (dateRange.startDate && dateRange.endDate) {
+        params.startDate = dateRange.startDate;
+        params.endDate = dateRange.endDate;
+      }
 
       const res = await axios.get('/api/performance', { params });
       setPerformanceData(res.data);
-
       await fetchSalaryData(executiveId, executiveName);
-      
-      console.log('Completed fetching all data');
 
     } catch (error) {
       console.error('Error fetching performance data:', error);
@@ -482,6 +367,12 @@ const PerformanceView = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedExecutive) {
+      fetchPerformanceData(selectedExecutive);
+    }
+  }, [financialYearFilter, selectedFinancialMonth]);
 
   useEffect(() => {
     if (employeeNameFromUrl && allExecutives.length > 0) {
@@ -522,22 +413,30 @@ const PerformanceView = () => {
     fetchAllExecutives();
   }, []);
 
-  const handleYearlyFilterChange = (e) => {
-    const { name, value } = e.target;
-    const newYear = value ? parseInt(value) : '';
-    setYearlyFilter(prev => ({
-      ...prev,
-      [name]: newYear
-    }));
+  const financialYearOptions = () => {
+    const currentYear = new Date().getFullYear();
+    const options = [];
+    for (let i = -3; i <= 3; i++) {
+      const startYear = currentYear + i;
+      const endYear = startYear + 1;
+      options.push({
+        value: `${startYear}-${endYear}`,
+        label: `FY ${startYear}-${endYear}`
+      });
+    }
+    return options;
   };
 
-  const yearOptions = [
-    { value: '', label: 'All Years' },
-    ...Array.from({ length: 6 }, (_, i) => ({
-      value: new Date().getFullYear() - 4 + i,
-      label: (new Date().getFullYear() - 4 + i).toString()
-    }))
-  ];
+  const handleYearlyFilterChange = (e) => {
+    const { value } = e.target;
+    setFinancialYearFilter(value);
+    setSelectedFinancialMonth(null);
+  };
+
+  const handleFinancialMonthChange = (e) => {
+    const value = e.target.value;
+    setSelectedFinancialMonth(value ? parseInt(value) : null);
+  };
 
   const formatPercentage = (percentage) => {
     if (!percentage || percentage <= 0) return '0%';
@@ -547,9 +446,412 @@ const PerformanceView = () => {
     return `${percentage.toFixed(1)}%`;
   };
 
+  const handleMonthClick = (monthData) => {
+    if (!canNavigateToOrders) {
+      alert('You do not have permission to view order details');
+      return;
+    }
+    
+    let monthStr, financialYear;
+    if (monthData.displayMonth) {
+      const parts = monthData.displayMonth.split(' ');
+      monthStr = parts[0];
+      financialYear = parts[1];
+    } else {
+      const [m, y] = monthData.month.split(' ');
+      monthStr = m;
+      financialYear = getFinancialYear(new Date(parseInt(y), 0, 1));
+    }
+    
+    const financialMonthNumber = financialMonthLabels.indexOf(monthStr) + 1;
+    
+    let calendarMonth;
+    if (financialMonthNumber <= 9) {
+      calendarMonth = financialMonthNumber + 2;
+    } else {
+      calendarMonth = financialMonthNumber - 10;
+    }
+    
+    const startYear = parseInt(financialYear.split('-')[0]);
+    
+    const [executiveType, executiveId] = selectedExecutive.split('_');
+    
+    navigate(`/admin-dashboard/view-orders?month=${calendarMonth + 1}&year=${startYear}&financialYear=${financialYear}&financialMonth=${financialMonthNumber}&executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
+  };
+
+  const handleTotalOrdersClick = () => {
+    if (!canNavigateToOrders) {
+      alert('You do not have permission to view order details');
+      return;
+    }
+    const [executiveType, executiveId] = selectedExecutive.split('_');
+    
+    let queryParams = `executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`;
+    
+    if (financialYearFilter !== 'all') {
+      queryParams += `&financialYear=${financialYearFilter}`;
+    }
+    if (selectedFinancialMonth !== null) {
+      queryParams += `&financialMonth=${selectedFinancialMonth}`;
+    }
+    
+    navigate(`/admin-dashboard/view-orders?${queryParams}`);
+  };
+
+  const handleTotalProspectsClick = () => {
+    if (!canNavigateToProspects) {
+      alert('You do not have permission to view prospect details');
+      return;
+    }
+    const [executiveType, executiveId] = selectedExecutive.split('_');
+    navigate(`/admin-dashboard/view-prospective?executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
+  };
+
+  const handleMonthlyProspectsClick = (monthData) => {
+    if (!canNavigateToProspects) {
+      alert('You do not have permission to view prospect details');
+      return;
+    }
+    
+    let monthStr, yearStr;
+    if (monthData.displayMonth) {
+      const parts = monthData.displayMonth.split(' ');
+      monthStr = parts[0];
+      yearStr = parts[1].split('-')[0];
+    } else {
+      const [m, y] = monthData.month.split(' ');
+      monthStr = m;
+      yearStr = y;
+    }
+    
+    const monthIndex = new Date(`${monthStr} 1, ${yearStr}`).getMonth();
+    const year = parseInt(yearStr);
+    const [executiveType, executiveId] = selectedExecutive.split('_');
+    navigate(`/admin-dashboard/view-prospective?month=${monthIndex + 1}&year=${year}&executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedExecutive) {
+      alert('Please select an executive');
+      return;
+    }
+    await fetchPerformanceData(selectedExecutive);
+  };
+
+  const handleDateChange = (e) => {
+    const { name, value } = e.target;
+    setDateRange(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const getSegmentColor = (segment) => {
+    switch(segment) {
+      case 0: return '#e74c3c';
+      case 1: return '#f1c40f';
+      case 2: return '#f39c12';
+      case 3: return '#2ecc71';
+      case 4: return '#9b59b6';
+      case 5: return '#ff69b4';
+      default: return '#ecf0f1';
+    }
+  };
+
+  const getPerformanceColor = (percentage) => {
+    if (percentage >= 150) return '#ff69b4';
+    if (percentage >= 100) return '#9b59b6';
+    if (percentage >= 75) return '#2ecc71';
+    if (percentage >= 50) return '#f39c12';
+    if (percentage >= 35) return '#f1c40f';
+    return '#e74c3c';
+  };
+
+  const getYTickFormatter = (data) => {
+    if (!data || data.length === 0) return (value) => `₹${value}`;
+    const maxValue = Math.max(
+      ...data.map(item => Math.max(item.target || 0, item.achieved || 0))
+    );
+    if (maxValue >= 1000000) {
+      return (value) => {
+        if (value >= 10000000) return `₹${(value/10000000).toFixed(1)}Cr`;
+        if (value >= 100000) return `₹${(value/100000).toFixed(1)}L`;
+        return `₹${(value/1000).toFixed(0)}k`;
+      };
+    } else if (maxValue >= 100000) {
+      return (value) => `₹${(value/100000).toFixed(1)}L`;
+    } else if (maxValue >= 10000) {
+      return (value) => `₹${(value/1000).toFixed(0)}k`;
+    } else {
+      return (value) => `₹${value.toLocaleString('en-IN')}`;
+    }
+  };
+
+  const getYAxisProps = (data) => {
+    if (!data || data.length === 0) return { domain: [0, 100000], tickCount: 6 };
+    const maxValue = Math.max(
+      ...data.map(item => Math.max(item.target || 0, item.achieved || 0))
+    );
+    const niceMax = Math.ceil(maxValue / 50000) * 50000;
+    const tickCount = Math.min(6, Math.max(3, Math.ceil(niceMax / 50000)));
+    return {
+      domain: [0, niceMax],
+      tickCount: tickCount
+    };
+  };
+
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      const target = payload[0]?.value || 0;
+      const achieved = payload[1]?.value || 0;
+      return (
+        <div style={{
+          backgroundColor: 'white',
+          padding: '10px',
+          border: '1px solid #ddd',
+          borderRadius: '6px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          maxWidth: '280px',
+          fontSize: '13px'
+        }}>
+          <p style={{ margin: '0 0 5px 0', fontWeight: '600', color: '#2c3e50' }}>{label}</p>
+          <p style={{ margin: '2px 0', color: '#3498db' }}>Target: {formatCurrency(target)}</p>
+          <p style={{ margin: '2px 0', color: '#2ecc71' }}>Achieved (Retail+New): {formatCurrency(achieved)}</p>
+          <p style={{ margin: '5px 0 0 0', fontSize: '10px', color: '#666', fontStyle: 'italic' }}>
+            ✓ Only Retail & New orders count toward target
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const getChartSubtitle = () => {
+    if (!selectedExecutiveObj?.name) {
+      return 'Select an executive to view monthly performance';
+    }
+    const executiveName = selectedExecutiveObj?.name || 'Selected Executive';
+    const yearText = financialYearFilter !== 'all' ? `FY ${financialYearFilter}` : 'All Financial Years';
+    const monthText = selectedFinancialMonth ? ` - ${financialMonthLabels[selectedFinancialMonth - 1]}` : '';
+    return `${executiveName} - Monthly Performance for ${yearText}${monthText}`;
+  };
+
+  const renderExecutiveMonthlyChart = () => {
+    if (!selectedExecutive) {
+      return (
+        <div style={styles.noDataText}>
+          Please select an executive from the form below to view monthly performance
+        </div>
+      );
+    }
+    
+    const monthlyData = performanceData?.detailedData?.byMonth || [];
+    
+    const filteredMonthlyData = monthlyData.filter(monthData => {
+      const [monthName, yearStr] = monthData.month.split(' ');
+      const year = parseInt(yearStr);
+      const monthIndex = new Date(`${monthName} 1, ${yearStr}`).getMonth();
+      const date = new Date(year, monthIndex, 1);
+      const financialYear = getFinancialYear(date);
+      const financialMonth = getFinancialMonth(date);
+      
+      if (financialYearFilter !== 'all' && financialYear !== financialYearFilter) {
+        return false;
+      }
+      if (selectedFinancialMonth !== null && financialMonth !== selectedFinancialMonth) {
+        return false;
+      }
+      return true;
+    });
+    
+    filteredMonthlyData.sort((a, b) => {
+      const dateA = new Date(a.month);
+      const dateB = new Date(b.month);
+      return dateA - dateB;
+    });
+    
+    const chartData = filteredMonthlyData.map(monthData => {
+      const [monthName, yearStr] = monthData.month.split(' ');
+      const monthIndex = new Date(`${monthName} 1, ${yearStr}`).getMonth();
+      const date = new Date(parseInt(yearStr), monthIndex, 1);
+      const financialMonth = getFinancialMonth(date);
+      const financialYear = getFinancialYear(date);
+      
+      return {
+        ...monthData,
+        displayMonth: `${financialMonthLabels[financialMonth - 1]} ${financialYear}`,
+        targetAmount: monthData.target || 0,
+        achievedAmount: monthData.achieved || 0
+      };
+    });
+    
+    if (chartData.length === 0) {
+      return (
+        <div style={styles.noDataText}>
+          No performance data available for the selected financial {financialYearFilter !== 'all' ? `year ${financialYearFilter}` : 'period'}
+        </div>
+      );
+    }
+    
+    const yAxisProps = getYAxisProps(chartData);
+    const yTickFormatter = getYTickFormatter(chartData);
+    
+    return (
+      <div>
+        <div style={styles.chartSubtitle}>{getChartSubtitle()}</div>
+        <ResponsiveContainer width="100%" height={400}>
+          <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 30 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis 
+              dataKey="displayMonth" 
+              angle={-45} 
+              textAnchor="end" 
+              height={70} 
+              tick={{ fontSize: 11 }} 
+            />
+            <YAxis 
+              tickFormatter={yTickFormatter} 
+              tick={{ fontSize: 12 }} 
+              domain={yAxisProps.domain} 
+              tickCount={yAxisProps.tickCount} 
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend wrapperStyle={{ paddingTop: '10px' }} />
+            <Bar dataKey="targetAmount" name="Target Amount" fill="#3498db" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="achievedAmount" name="Achieved (Retail+New)" fill="#2ecc71" radius={[4, 4, 0, 0]}>
+              {chartData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.hasData ? getPerformanceColor((entry.achievedAmount / entry.targetAmount) * 100) : '#ecf0f1'} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+        <div style={{ 
+          textAlign: 'center', 
+          marginTop: '10px', 
+          fontSize: '12px', 
+          color: '#666',
+          backgroundColor: '#e8f5e9',
+          padding: '8px',
+          borderRadius: '6px',
+          display: 'inline-block',
+          width: 'auto',
+          marginLeft: 'auto',
+          marginRight: 'auto'
+        }}>
+          📊 Note: Only <strong>Retail</strong> and <strong>New</strong> client orders count toward target achievement
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', marginTop: '15px', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}><div style={{ width: '12px', height: '12px', backgroundColor: '#e74c3c', marginRight: '4px' }}></div><span style={{ fontSize: '11px' }}>0-35%</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}><div style={{ width: '12px', height: '12px', backgroundColor: '#f1c40f', marginRight: '4px' }}></div><span style={{ fontSize: '11px' }}>35-50%</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}><div style={{ width: '12px', height: '12px', backgroundColor: '#f39c12', marginRight: '4px' }}></div><span style={{ fontSize: '11px' }}>50-75%</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}><div style={{ width: '12px', height: '12px', backgroundColor: '#2ecc71', marginRight: '4px' }}></div><span style={{ fontSize: '11px' }}>75-100%</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}><div style={{ width: '12px', height: '12px', backgroundColor: '#9b59b6', marginRight: '4px' }}></div><span style={{ fontSize: '11px' }}>100-150% (1.0x-1.5x)</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}><div style={{ width: '12px', height: '12px', backgroundColor: '#ff69b4', marginRight: '4px' }}></div><span style={{ fontSize: '11px' }}>150%+ (1.5x+)</span></div>
+        </div>
+      </div>
+    );
+  };
+
+  // Compact Performance Box Component (no remaining display)
+  const renderPerformanceBox = (percentage) => {
+    if (!percentage || percentage <= 0) {
+      return (
+        <div>
+          <div style={styles.performanceBox}>
+            <div style={{ ...styles.performanceSegment, width: '100%', backgroundColor: '#ecf0f1' }} />
+          </div>
+          <div style={{ textAlign: 'center', marginTop: '8px', fontWeight: '600', fontSize: '14px', color: '#2c3e50' }}>
+            Performance: 0%
+          </div>
+        </div>
+      );
+    }
+    
+    const segments = [
+      { min: 0, max: 35, color: getSegmentColor(0) },
+      { min: 35, max: 50, color: getSegmentColor(1) },
+      { min: 50, max: 75, color: getSegmentColor(2) },
+      { min: 75, max: 100, color: getSegmentColor(3) },
+      { min: 100, max: 150, color: getSegmentColor(4) },
+      { min: 150, max: 200, color: getSegmentColor(5) }
+    ];
+    
+    return (
+      <div>
+        <div style={styles.performanceBox}>
+          {segments.map((segment, index) => {
+            const segmentWidth = segment.max - segment.min;
+            const isActive = percentage >= segment.min;
+            const isPartial = percentage > segment.min && percentage < segment.max;
+            const fillWidth = isPartial ? ((percentage - segment.min) / segmentWidth) * 100 : (percentage >= segment.max ? 100 : 0);
+            return (
+              <div key={index} style={{
+                ...styles.performanceSegment,
+                width: `${segmentWidth}%`,
+                backgroundColor: isActive ? segment.color : '#ecf0f1',
+                backgroundImage: isPartial ? `linear-gradient(to right, ${segment.color} 0%, ${segment.color} ${fillWidth}%, #ecf0f1 ${fillWidth}%, #ecf0f1 100%)` : 'none'
+              }}>
+                {isActive && !isPartial && segment.max <= 150 && (
+                  <span>{segment.max === 150 ? '1.5x' : segment.max === 100 ? '1.0x' : `${segment.max}%`}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ textAlign: 'center', marginTop: '8px', fontWeight: '600', fontSize: '14px', color: '#2c3e50' }}>
+          Performance: {formatPercentage(percentage)}
+        </div>
+      </div>
+    );
+  };
+
+  const renderFinancialYearFilter = () => {
+    return (
+      <div style={styles.yearlyFilterContainer}>
+        <div style={styles.yearlyFilterGroup}>
+          <label htmlFor="financialYear" style={styles.label}>Filter by Financial Year</label>
+          <select 
+            name="financialYear" 
+            value={financialYearFilter} 
+            onChange={handleYearlyFilterChange} 
+            style={styles.select}
+          >
+            <option value="all">All Financial Years</option>
+            {financialYearOptions().map(option => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </div>
+        
+        {financialYearFilter !== 'all' && (
+          <div style={styles.yearlyFilterGroup}>
+            <label htmlFor="financialMonth" style={styles.label}>Filter by Month (Optional)</label>
+            <select 
+              name="financialMonth" 
+              value={selectedFinancialMonth || ''} 
+              onChange={handleFinancialMonthChange} 
+              style={styles.select}
+            >
+              <option value="">All Months</option>
+              {financialMonthLabels.map((month, index) => (
+                <option key={index + 1} value={index + 1}>{month}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const getYearFilterDisplayText = () => {
+    if (financialYearFilter === 'all') return 'All Financial Years';
+    return `FY ${financialYearFilter}`;
+  };
+
   const styles = {
     container: {
-      maxWidth: '1200px',
+      maxWidth: '1400px',
       margin: '0 auto',
       padding: '20px',
       fontFamily: 'Arial, sans-serif',
@@ -651,14 +953,14 @@ const PerformanceView = () => {
     },
     cardGrid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
       gap: '20px',
       marginTop: '20px'
     },
     card: {
       backgroundColor: 'white',
       borderRadius: '8px',
-      padding: '20px',
+      padding: '15px',
       boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
       borderTop: '4px solid #3498db',
       transition: 'transform 0.2s, box-shadow 0.2s',
@@ -667,9 +969,9 @@ const PerformanceView = () => {
     },
     cardTitle: {
       marginTop: '0',
-      marginBottom: '15px',
+      marginBottom: '12px',
       color: '#34495e',
-      fontSize: '18px',
+      fontSize: '16px',
       fontWeight: '600',
       wordWrap: 'break-word'
     },
@@ -677,8 +979,8 @@ const PerformanceView = () => {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: '12px',
-      paddingBottom: '12px',
+      marginBottom: '8px',
+      paddingBottom: '8px',
       borderBottom: '1px solid #f1f1f1',
       flexWrap: 'wrap',
       gap: '8px'
@@ -687,8 +989,8 @@ const PerformanceView = () => {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: '12px',
-      paddingBottom: '12px',
+      marginBottom: '8px',
+      paddingBottom: '8px',
       borderBottom: '1px solid #f1f1f1',
       cursor: canNavigateToOrders ? 'pointer' : 'not-allowed',
       transition: 'background-color 0.2s',
@@ -699,16 +1001,15 @@ const PerformanceView = () => {
     cardLabel: {
       color: '#7f8c8d',
       fontWeight: '500',
-      fontSize: '14px',
+      fontSize: '13px',
       flexShrink: 0
     },
     cardValue: {
       fontWeight: '600',
       color: '#2c3e50',
       textAlign: 'right',
-      fontSize: '14px',
-      wordBreak: 'break-word',
-      maxWidth: '60%'
+      fontSize: '13px',
+      wordBreak: 'break-word'
     },
     balanceValue: {
       fontWeight: '600',
@@ -719,7 +1020,7 @@ const PerformanceView = () => {
       marginTop: '25px'
     },
     monthlyHeader: {
-      fontSize: '20px',
+      fontSize: '18px',
       marginBottom: '15px',
       color: '#2c3e50',
       borderBottom: '1px solid #eee',
@@ -727,13 +1028,13 @@ const PerformanceView = () => {
     },
     monthlyGrid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
       gap: '20px'
     },
     monthlyCard: {
       backgroundColor: 'white',
       borderRadius: '8px',
-      padding: '20px',
+      padding: '15px',
       boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
       borderTop: '4px solid #2ecc71',
       position: 'relative',
@@ -742,12 +1043,12 @@ const PerformanceView = () => {
     },
     performanceBox: {
       width: '100%',
-      height: '50px',
+      height: '40px',
       backgroundColor: '#ecf0f1',
       borderRadius: '8px',
       overflow: 'hidden',
       position: 'relative',
-      margin: '15px 0',
+      margin: '10px 0',
       border: '1px solid #ddd',
       display: 'flex'
     },
@@ -760,7 +1061,47 @@ const PerformanceView = () => {
       color: 'white',
       transition: 'width 0.5s ease',
       position: 'relative',
-      fontSize: '12px'
+      fontSize: '11px'
+    },
+    clientBreakdown: {
+      backgroundColor: '#f8f9fa',
+      borderRadius: '6px',
+      padding: '10px',
+      marginTop: '10px',
+      border: '1px solid #e9ecef'
+    },
+    clientBreakdownTitle: {
+      fontSize: '12px',
+      fontWeight: '600',
+      color: '#495057',
+      marginBottom: '8px',
+      borderBottom: '1px solid #dee2e6',
+      paddingBottom: '5px'
+    },
+    clientBreakdownItem: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      fontSize: '12px',
+      padding: '4px 0',
+      borderBottom: '1px dotted #e9ecef'
+    },
+    targetBox: {
+      backgroundColor: '#e3f2fd',
+      borderRadius: '6px',
+      padding: '10px',
+      marginBottom: '10px',
+      textAlign: 'center'
+    },
+    targetValue: {
+      fontSize: '18px',
+      fontWeight: 'bold',
+      color: '#1976d2'
+    },
+    achievedValue: {
+      fontSize: '16px',
+      fontWeight: 'bold',
+      color: '#4CAF50'
     },
     searchContainer: {
       position: 'relative',
@@ -816,105 +1157,6 @@ const PerformanceView = () => {
       borderRadius: '6px',
       border: '1px solid #ddd',
       fontSize: '14px'
-    },
-    incentiveCard: {
-      backgroundColor: '#fff3cd',
-      border: '2px solid #ffc107',
-      borderRadius: '8px',
-      padding: '15px',
-      marginBottom: '15px'
-    },
-    incentiveHeader: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '10px',
-      marginBottom: '12px'
-    },
-    incentiveTitle: {
-      fontSize: '20px',
-      fontWeight: '600',
-      color: '#856404',
-      margin: 0
-    },
-    incentiveAmount: {
-      fontSize: '24px',
-      fontWeight: 'bold',
-      color: '#28a745',
-      textAlign: 'center'
-    },
-    makeEligibleButton: {
-      backgroundColor: '#28a745',
-      color: 'white',
-      border: 'none',
-      padding: '8px 16px',
-      borderRadius: '4px',
-      cursor: 'pointer',
-      fontSize: '14px',
-      fontWeight: '600',
-      marginTop: '10px',
-      width: '100%'
-    },
-    eligibleBadge: {
-      backgroundColor: '#28a745',
-      color: 'white',
-      padding: '4px 8px',
-      borderRadius: '12px',
-      fontSize: '12px',
-      fontWeight: '600',
-      position: 'absolute',
-      top: '10px',
-      right: '10px'
-    },
-    incentiveEligibilitySection: {
-      marginTop: '15px',
-      padding: '12px',
-      backgroundColor: '#f8f9fa',
-      borderRadius: '6px',
-      border: '1px solid #dee2e6'
-    },
-    gapInfo: {
-      fontSize: '13px',
-      color: '#dc3545',
-      marginBottom: '6px',
-      textAlign: 'center',
-      fontWeight: '600'
-    },
-    criteriaMetInfo: {
-      fontSize: '14px',
-      color: '#28a745',
-      marginBottom: '6px',
-      textAlign: 'center',
-      fontWeight: '600'
-    },
-    chartContainer: {
-      backgroundColor: 'white',
-      padding: '20px',
-      borderRadius: '8px',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-      marginBottom: '25px',
-      marginTop: '25px'
-    },
-    chartTitle: {
-      fontSize: '22px',
-      marginTop: '0',
-      marginBottom: '15px',
-      color: '#2c3e50',
-      borderBottom: '1px solid #eee',
-      paddingBottom: '10px',
-      textAlign: 'center'
-    },
-    chartSubtitle: {
-      textAlign: 'center',
-      color: '#7f8c8d',
-      marginBottom: '20px',
-      fontSize: '16px'
-    },
-    noDataText: {
-      textAlign: 'center',
-      padding: '30px',
-      color: '#95a5a6',
-      fontSize: '16px',
-      fontStyle: 'italic'
     },
     yearlyFilterContainer: {
       display: 'flex',
@@ -978,13 +1220,35 @@ const PerformanceView = () => {
     dateInputContainer: {
       flex: '1'
     },
-    permissionMessage: {
-      fontSize: '12px',
-      color: '#e74c3c',
-      marginTop: '2px',
-      marginBottom: '8px',
-      fontStyle: 'italic',
-      textAlign: 'right'
+    chartContainer: {
+      backgroundColor: 'white',
+      padding: '20px',
+      borderRadius: '8px',
+      boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
+      marginBottom: '25px',
+      marginTop: '25px'
+    },
+    chartTitle: {
+      fontSize: '22px',
+      marginTop: '0',
+      marginBottom: '15px',
+      color: '#2c3e50',
+      borderBottom: '1px solid #eee',
+      paddingBottom: '10px',
+      textAlign: 'center'
+    },
+    chartSubtitle: {
+      textAlign: 'center',
+      color: '#7f8c8d',
+      marginBottom: '20px',
+      fontSize: '14px'
+    },
+    noDataText: {
+      textAlign: 'center',
+      padding: '30px',
+      color: '#95a5a6',
+      fontSize: '16px',
+      fontStyle: 'italic'
     },
     modalOverlay: {
       position: 'fixed',
@@ -1023,359 +1287,30 @@ const PerformanceView = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!selectedExecutive) {
-      alert('Please select an executive');
-      return;
-    }
-    await fetchPerformanceData(selectedExecutive);
-  };
-
-  const handleDateChange = (e) => {
-    const { name, value } = e.target;
-    setDateRange(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleMonthClick = (monthData) => {
-    if (!canNavigateToOrders) {
-      alert('You do not have permission to view order details');
-      return;
-    }
-    const [monthStr, yearStr] = monthData.month.split(' ');
-    const monthIndex = new Date(`${monthStr} 1, ${yearStr}`).getMonth();
-    const year = parseInt(yearStr);
-    const [executiveType, executiveId] = selectedExecutive.split('_');
-    navigate(`/admin-dashboard/view-orders?month=${monthIndex + 1}&year=${year}&executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
-  };
-
-  const handleTotalOrdersClick = () => {
-    if (!canNavigateToOrders) {
-      alert('You do not have permission to view order details');
-      return;
-    }
-    const [executiveType, executiveId] = selectedExecutive.split('_');
-    navigate(`/admin-dashboard/view-orders?executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
-  };
-
-  const handleTotalProspectsClick = () => {
-    if (!canNavigateToProspects) {
-      alert('You do not have permission to view prospect details');
-      return;
-    }
-    const [executiveType, executiveId] = selectedExecutive.split('_');
-    navigate(`/admin-dashboard/view-prospective?executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
-  };
-
-  const handleMonthlyProspectsClick = (monthData) => {
-    if (!canNavigateToProspects) {
-      alert('You do not have permission to view prospect details');
-      return;
-    }
-    const [monthStr, yearStr] = monthData.month.split(' ');
-    const monthIndex = new Date(`${monthStr} 1, ${yearStr}`).getMonth();
-    const year = parseInt(yearStr);
-    const [executiveType, executiveId] = selectedExecutive.split('_');
-    navigate(`/admin-dashboard/view-prospective?month=${monthIndex + 1}&year=${year}&executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
-  };
-
-  const getSegmentColor = (segment) => {
-    switch(segment) {
-      case 0: return '#e74c3c';
-      case 1: return '#f1c40f';
-      case 2: return '#f39c12';
-      case 3: return '#2ecc71';
-      case 4: return '#9b59b6';
-      case 5: return '#ff69b4';
-      default: return '#ecf0f1';
-    }
-  };
-
-  const getPerformanceColor = (percentage) => {
-    if (percentage >= 150) return '#ff69b4';
-    if (percentage >= 100) return '#9b59b6';
-    if (percentage >= 75) return '#2ecc71';
-    if (percentage >= 50) return '#f39c12';
-    if (percentage >= 35) return '#f1c40f';
-    return '#e74c3c';
-  };
-
-  const getYTickFormatter = (data) => {
-    if (!data || data.length === 0) return (value) => `₹${value}`;
-    const maxValue = Math.max(
-      ...data.map(item => Math.max(item.target || 0, item.achieved || 0))
-    );
-    if (maxValue >= 1000000) {
-      return (value) => {
-        if (value >= 10000000) return `₹${(value/10000000).toFixed(1)}Cr`;
-        if (value >= 100000) return `₹${(value/100000).toFixed(1)}L`;
-        return `₹${(value/1000).toFixed(0)}k`;
-      };
-    } else if (maxValue >= 100000) {
-      return (value) => `₹${(value/100000).toFixed(1)}L`;
-    } else if (maxValue >= 10000) {
-      return (value) => `₹${(value/1000).toFixed(0)}k`;
-    } else {
-      return (value) => `₹${value.toLocaleString('en-IN')}`;
-    }
-  };
-
-  const getYAxisProps = (data) => {
-    if (!data || data.length === 0) return { domain: [0, 100000], tickCount: 6 };
-    const maxValue = Math.max(
-      ...data.map(item => Math.max(item.target || 0, item.achieved || 0))
-    );
-    const niceMax = Math.ceil(maxValue / 50000) * 50000;
-    const tickCount = Math.min(6, Math.max(3, Math.ceil(niceMax / 50000)));
-    return {
-      domain: [0, niceMax],
-      tickCount: tickCount
-    };
-  };
-
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      const target = payload[0]?.value || 0;
-      const achieved = payload[1]?.value || 0;
-      return (
-        <div style={{
-          backgroundColor: 'white',
-          padding: '10px',
-          border: '1px solid #ddd',
-          borderRadius: '6px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          maxWidth: '250px',
-          fontSize: '13px'
-        }}>
-          <p style={{ margin: '0 0 5px 0', fontWeight: '600', color: '#2c3e50' }}>{label}</p>
-          <p style={{ margin: '2px 0', color: '#3498db' }}>Target: ₹{target?.toLocaleString('en-IN') || 0}</p>
-          <p style={{ margin: '2px 0', color: '#2ecc71' }}>Achieved: ₹{achieved?.toLocaleString('en-IN') || 0}</p>
-          <p style={{ margin: '2px 0', color: '#e74c3c' }}>Balance: ₹{(achieved - target)?.toLocaleString('en-IN') || 0}</p>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const getChartSubtitle = () => {
-    if (!selectedExecutiveObj?.name) {
-      return 'Select an executive to view monthly performance';
-    }
-    const executiveName = selectedExecutiveObj?.name || 'Selected Executive';
-    const yearText = yearlyFilter.year ? yearlyFilter.year.toString() : 'All Years';
-    return `${executiveName} - Monthly Performance for ${yearText}`;
-  };
-
-  const renderExecutiveMonthlyChart = () => {
-    if (!selectedExecutive) {
-      return (
-        <div style={styles.noDataText}>
-          Please select an executive from the form below to view monthly performance
-        </div>
-      );
-    }
-    if (getExecutiveMonthlyData.length === 0) {
-      return (
-        <div style={styles.noDataText}>
-          No performance data available for the selected executive
-        </div>
-      );
-    }
-    const chartData = getExecutiveMonthlyData;
-    const yAxisProps = getYAxisProps(chartData);
-    const yTickFormatter = getYTickFormatter(chartData);
-    return (
-      <div>
-        <div style={styles.chartSubtitle}>{getChartSubtitle()}</div>
-        <ResponsiveContainer width="100%" height={400}>
-          <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 30 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis dataKey="month" angle={0} textAnchor="middle" height={50} tick={{ fontSize: 12 }} />
-            <YAxis tickFormatter={yTickFormatter} tick={{ fontSize: 12 }} domain={yAxisProps.domain} tickCount={yAxisProps.tickCount} />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend wrapperStyle={{ paddingTop: '10px' }} />
-            <Bar dataKey="target" name="Target Amount" fill="#3498db" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="achieved" name="Achieved Amount" fill="#2ecc71" radius={[4, 4, 0, 0]}>
-              {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.hasData ? getPerformanceColor(entry.percentage) : '#ecf0f1'} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', marginTop: '15px', gap: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}><div style={{ width: '12px', height: '12px', backgroundColor: '#e74c3c', marginRight: '4px' }}></div><span style={{ fontSize: '11px' }}>0-35%</span></div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}><div style={{ width: '12px', height: '12px', backgroundColor: '#f1c40f', marginRight: '4px' }}></div><span style={{ fontSize: '11px' }}>35-50%</span></div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}><div style={{ width: '12px', height: '12px', backgroundColor: '#f39c12', marginRight: '4px' }}></div><span style={{ fontSize: '11px' }}>50-75%</span></div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}><div style={{ width: '12px', height: '12px', backgroundColor: '#2ecc71', marginRight: '4px' }}></div><span style={{ fontSize: '11px' }}>75-100%</span></div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}><div style={{ width: '12px', height: '12px', backgroundColor: '#9b59b6', marginRight: '4px' }}></div><span style={{ fontSize: '11px' }}>100-150% (1.0x-1.5x)</span></div>
-          <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}><div style={{ width: '12px', height: '12px', backgroundColor: '#ff69b4', marginRight: '4px' }}></div><span style={{ fontSize: '11px' }}>150%+ (1.5x+)</span></div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderPerformanceBox = (percentage) => {
-    if (!percentage || percentage <= 0) {
-      return (
-        <div>
-          <div style={styles.performanceBox}>
-            <div style={{ ...styles.performanceSegment, width: '100%', backgroundColor: '#ecf0f1' }} />
-          </div>
-          <div style={{ textAlign: 'center', marginTop: '12px', fontWeight: '600', fontSize: '16px', color: '#2c3e50', wordBreak: 'break-word' }}>
-            Current Performance: 0%
-            {yearlyFilter.year && <span style={styles.yearBadge}>{yearlyFilter.year}</span>}
-          </div>
-        </div>
-      );
-    }
-    const segments = [
-      { min: 0, max: 35, color: getSegmentColor(0) },
-      { min: 35, max: 50, color: getSegmentColor(1) },
-      { min: 50, max: 75, color: getSegmentColor(2) },
-      { min: 75, max: 100, color: getSegmentColor(3) },
-      { min: 100, max: 150, color: getSegmentColor(4) },
-      { min: 150, max: 200, color: getSegmentColor(5) }
-    ];
-    return (
-      <div>
-        <div style={styles.performanceBox}>
-          {segments.map((segment, index) => {
-            const segmentWidth = segment.max - segment.min;
-            const isActive = percentage >= segment.min;
-            const isPartial = percentage > segment.min && percentage < segment.max;
-            const fillWidth = isPartial ? ((percentage - segment.min) / segmentWidth) * 100 : (percentage >= segment.max ? 100 : 0);
-            return (
-              <div key={index} style={{
-                ...styles.performanceSegment,
-                width: `${segmentWidth}%`,
-                backgroundColor: isActive ? segment.color : '#ecf0f1',
-                backgroundImage: isPartial ? `linear-gradient(to right, ${segment.color} 0%, ${segment.color} ${fillWidth}%, #ecf0f1 ${fillWidth}%, #ecf0f1 100%)` : 'none'
-              }}>
-                {isActive && !isPartial && segment.max <= 150 && (
-                  <span>{segment.max === 150 ? '1.5x' : segment.max === 100 ? '1.0x' : `${segment.max}%`}</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ textAlign: 'center', marginTop: '12px', fontWeight: '600', fontSize: '16px', color: '#2c3e50', wordBreak: 'break-word' }}>
-          Current Performance: {formatPercentage(percentage)}
-          {yearlyFilter.year && <span style={styles.yearBadge}>{yearlyFilter.year}</span>}
-        </div>
-      </div>
-    );
-  };
-
-  const renderYearlyFilter = () => {
-    return (
-      <div style={styles.yearlyFilterContainer}>
-        <div style={styles.yearlyFilterGroup}>
-          <label htmlFor="year" style={styles.label}>Filter Monthly Data by Year</label>
-          <select name="year" value={yearlyFilter.year} onChange={handleYearlyFilterChange} style={styles.select}>
-            {yearOptions.map(option => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-    );
-  };
-
-  const renderIncentiveInfo = () => {
-    if (incentiveSummary.totalEligibleMonths === 0) return null;
-    return (
-      <div style={styles.incentiveCard}>
-        <div style={styles.incentiveHeader}>
-          <h3 style={styles.incentiveTitle}>🎯 Incentive Summary</h3>
-          <div style={styles.incentiveAmount}>{incentiveSummary.totalEligibleMonths} Month(s) Eligible</div>
-        </div>
-        <div style={{ textAlign: 'center', color: '#856404', fontSize: '14px' }}>
-          {incentiveSummary.totalEligibleMonths} month(s) marked eligible for incentive processing
-        </div>
-      </div>
-    );
-  };
-
-  const renderMonthlyTargets = () => {
-    if (!performanceData?.detailedData?.byMonth) return null;
-    const sortedMonths = [...performanceData.detailedData.byMonth].sort((a, b) => {
-      const [aMonth, aYear] = a.month.split(' ');
-      const [bMonth, bYear] = b.month.split(' ');
-      const aDate = new Date(`${aMonth} 1, ${aYear}`);
-      const bDate = new Date(`${bMonth} 1, ${bYear}`);
-      return bDate - aDate;
-    });
-    const filteredMonths = sortedMonths.filter(monthData => {
-      if (!yearlyFilter.year) return true;
-      const [_, yearStr] = monthData.month.split(' ');
-      const year = parseInt(yearStr);
-      return year === yearlyFilter.year;
-    });
-    if (filteredMonths.length === 0) {
-      return (
-        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '30px', color: '#95a5a6', fontSize: '16px', fontStyle: 'italic' }}>
-          No monthly data available for {yearlyFilter.year || 'the selected period'}
-        </div>
-      );
-    }
-    return filteredMonths.map((monthData, index) => {
-      const percentage = monthData.percentage || 0;
-      const balance = calculateMonthlyBalance(monthData);
-      const monthKey = monthData.month;
-      const isManuallyEligible = isMonthEligible(monthKey);
-      const meetsCriteria = meetsIncentiveCriteria(monthData);
-      const gap = calculateEligibilityGap(monthData);
-      return (
-        <div key={index} style={styles.monthlyCard}>
-          {isManuallyEligible && <span style={styles.eligibleBadge}>✅ Eligible</span>}
-          <h3 style={styles.cardTitle}>{monthData.month}</h3>
-          {renderPerformanceBox(percentage)}
-          <div style={styles.cardItem}><span style={styles.cardLabel}>Target Amount:</span><span style={styles.cardValue}>₹{monthData.target?.toLocaleString('en-IN') || '0'}</span></div>
-          <div style={styles.cardItem}><span style={styles.cardLabel}>Achieved Amount:</span><span style={styles.cardValue}>₹{monthData.achieved?.toLocaleString('en-IN') || '0'}</span></div>
-          <div style={styles.cardItem}><span style={styles.cardLabel}>Advance Amount:</span><span style={styles.cardValue}>₹{monthData.advance?.toLocaleString('en-IN') || '0'}</span></div>
-          <div style={styles.cardItem}><span style={styles.cardLabel}>Balance Amount:</span><span style={{ ...styles.cardValue, color: balance >= 0 ? '#27ae60' : '#e74c3c' }}>₹{balance.toLocaleString('en-IN')}</span></div>
-          <div style={{ ...styles.clickableCardItem, cursor: canNavigateToOrders ? 'pointer' : 'not-allowed', opacity: canNavigateToOrders ? 1 : 0.7 }} onClick={() => canNavigateToOrders ? handleMonthClick(monthData) : null}>
-            <span style={styles.cardLabel}>Total Orders:</span><span style={styles.cardValue}>{monthData.orders || '0'}</span>
-          </div>
-          <div style={{ ...styles.clickableCardItem, cursor: canNavigateToProspects ? 'pointer' : 'not-allowed', opacity: canNavigateToProspects ? 1 : 0.7 }} onClick={() => canNavigateToProspects ? handleMonthlyProspectsClick(monthData) : null}>
-            <span style={styles.cardLabel}>Monthly Prospects:</span><span style={styles.cardValue}>{monthData.prospects || '0'}</span>
-          </div>
-          <div style={styles.incentiveEligibilitySection}>
-            {isManuallyEligible ? (
-              <div style={{ textAlign: 'center', color: '#28a745', fontWeight: '600', fontSize: '14px' }}>✅ Already Marked Eligible for Incentive</div>
-            ) : (
-              <>
-                {gap.meetsTargetCriteria && <div style={styles.criteriaMetInfo}>✅ Target Achieved: {formatPercentage(percentage)} (Required: 100%)</div>}
-                {gap.meetsOrderCriteria && <div style={styles.criteriaMetInfo}>✅ Orders Completed: {monthData.orders || 0} (Required: 10)</div>}
-                {!meetsCriteria && (
-                  <>
-                    {!gap.meetsTargetCriteria && <div style={styles.gapInfo}>📊 Need {gap.targetNeeded.toFixed(1)}% more to reach target</div>}
-                    {!gap.meetsOrderCriteria && <div style={styles.gapInfo}>📦 Need {gap.ordersNeeded} more orders to reach minimum</div>}
-                  </>
-                )}
-                <button onClick={() => handleToggleEligibility(monthKey, monthData)} disabled={!meetsCriteria} style={{ ...styles.makeEligibleButton, ...(!meetsCriteria ? { backgroundColor: '#6c757d', cursor: 'not-allowed' } : {}) }}>
-                  {meetsCriteria ? 'Make Eligible for Incentive' : 'Criteria Not Met'}
-                </button>
-                <div style={{ fontSize: '12px', color: '#6c757d', textAlign: 'center', marginTop: '8px' }}>Eligibility requires: 100% Target OR 10+ Orders</div>
-              </>
-            )}
-          </div>
-        </div>
-      );
-    });
-  };
-
-  const getYearFilterDisplayText = () => {
-    if (!yearlyFilter.year) return 'All Years';
-    return yearlyFilter.year.toString();
-  };
-
   return (
     <div style={styles.container}>
       <h1 style={styles.heading}>Executive Performance Dashboard</h1>
+
+      {/* Info Banner */}
+      <div style={{
+        backgroundColor: '#e8f5e9',
+        borderLeft: '4px solid #4CAF50',
+        padding: '10px 16px',
+        marginBottom: '20px',
+        borderRadius: '8px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        flexWrap: 'wrap'
+      }}>
+        <span style={{ fontSize: '18px' }}>📊</span>
+        <div>
+          <strong style={{ color: '#2e7d32' }}>Target Calculation:</strong>
+          <span style={{ marginLeft: '8px', color: '#555', fontSize: '13px' }}>
+            Only <strong style={{ color: '#4CAF50' }}>Retail</strong> and <strong style={{ color: '#8BC34A' }}>New</strong> client orders count toward target achievement.
+          </span>
+        </div>
+      </div>
 
       <div style={styles.chartContainer}>
         <h2 style={styles.chartTitle}>Monthly Performance Chart</h2>
@@ -1449,14 +1384,15 @@ const PerformanceView = () => {
               )}
             </h2>
             <div style={styles.yearFilterDisplay}>
-              <span style={styles.yearFilterLabel}>Year Filter:</span>
+              <span style={styles.yearFilterLabel}>Financial Year:</span>
               <span>{getYearFilterDisplayText()}</span>
+              {selectedFinancialMonth && <span style={styles.yearBadge}>{financialMonthLabels[selectedFinancialMonth - 1]}</span>}
             </div>
           </div>
 
-          {renderYearlyFilter()}
-          {renderIncentiveInfo()}
+          {renderFinancialYearFilter()}
 
+          {/* Performance Summary Cards - Compact */}
           <div style={styles.cardGrid}>
             <div style={styles.card}>
               <h3 style={styles.cardTitle}>Executive Information</h3>
@@ -1466,74 +1402,27 @@ const PerformanceView = () => {
               </div>
               <div style={styles.cardItem}>
                 <span style={styles.cardLabel}>Avg. Monthly Target:</span>
-                <span style={styles.cardValue}>₹{(performanceData.avgMonthlyTarget || 0).toLocaleString('en-IN')}</span>
+                <span style={styles.cardValue}>{formatCurrency(performanceData.avgMonthlyTarget || 0)}</span>
               </div>
               <div style={{ 
-  ...styles.cardItem, 
-  cursor: 'pointer', 
-  backgroundColor: loadingSalary ? '#f8f9fa' : 'transparent', 
-  transition: 'all 0.2s', 
-  borderRadius: '6px', 
-  flexDirection: 'column', 
-  alignItems: 'stretch',
-  padding: '12px'
-}}>
-  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '8px' }}>
-    <span style={styles.cardLabel}>💰 Salary Received ({yearlyFilter.year || 'All Years'}):</span>
-    <span style={{ ...styles.cardValue, fontWeight: 'bold', color: '#27ae60' }}>
-      {loadingSalary ? 'Loading...' : (() => { 
-        const salaryInfo = getFormattedSalaryInfo(); 
-        return salaryInfo.total > 0 ? `${salaryInfo.formattedString}` : 'Not Configured'; 
-      })()}
-    </span>
-  </div>
-  
-  {!loadingSalary && salaryData && salaryData.basicSalary > 0 && (
-    <div 
-      style={{ 
-        fontSize: '12px', 
-        color: '#7f8c8d', 
-        textAlign: 'center', 
-        marginTop: '5px',
-        padding: '8px',
-        backgroundColor: '#f8f9fa',
-        borderRadius: '6px',
-        cursor: 'pointer'
-      }} 
-      onClick={handleSalaryClick}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>💰 Basic Salary:</span>
-        <strong style={{ color: '#27ae60' }}>₹{salaryData.basicSalary.toLocaleString('en-IN')}</strong>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-        <span>📊 Total Paid ({yearlyFilter.year || 'All Years'}):</span>
-        <strong style={{ color: '#3498db' }}>₹{calculateTotalSalaryReceived().toLocaleString('en-IN')}</strong>
-      </div>
-      <div style={{ fontSize: '10px', color: '#95a5a6', marginTop: '6px', textAlign: 'center' }}>
-        ⚡ Click to view/edit full salary details
-      </div>
-    </div>
-  )}
-  
-  {!loadingSalary && !salaryData && (
-    <div 
-      style={{ 
-        fontSize: '12px', 
-        color: '#e74c3c', 
-        textAlign: 'center', 
-        marginTop: '8px',
-        padding: '8px',
-        backgroundColor: '#fee',
-        borderRadius: '6px',
-        cursor: 'pointer'
-      }} 
-      onClick={handleSalaryClick}
-    >
-      ⚠️ No salary record found. Click to configure.
-    </div>
-  )}
-</div>
+                cursor: 'pointer', 
+                backgroundColor: loadingSalary ? '#f8f9fa' : 'transparent', 
+                borderRadius: '6px', 
+                padding: '8px',
+                marginTop: '5px'
+              }} onClick={handleSalaryClick}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                  <span style={styles.cardLabel}>💰 Salary:</span>
+                  <span style={{ fontWeight: 'bold', color: '#27ae60', fontSize: '13px' }}>
+                    {loadingSalary ? 'Loading...' : getFormattedSalaryInfo().formattedString}
+                  </span>
+                </div>
+                {!loadingSalary && salaryData && salaryData.basicSalary > 0 && (
+                  <div style={{ fontSize: '11px', color: '#7f8c8d', textAlign: 'center', padding: '6px', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
+                    Basic: {formatCurrency(salaryData.basicSalary)} | Paid: {formatCurrency(calculateTotalSalaryReceived())}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div style={styles.card}>
@@ -1543,25 +1432,142 @@ const PerformanceView = () => {
               </div>
               <div style={styles.cardItem}><span style={styles.cardLabel}>Total Calls:</span><span style={styles.cardValue}>{performanceData.totalCalls || 0}</span></div>
               <div style={styles.cardItem}><span style={styles.cardLabel}>Total WhatsApp:</span><span style={styles.cardValue}>{performanceData.totalWhatsapp || 0}</span></div>
-              <div style={styles.cardItem}><span style={styles.cardLabel}>Avg. Call Duration:</span><span style={styles.cardValue}>{performanceData.avgCallDuration ? `${parseFloat(performanceData.avgCallDuration).toFixed(1)} mins` : 'N/A'}</span></div>
             </div>
 
+            {/* Target Card - Compact */}
             <div style={{ ...styles.card, borderTop: '4px solid #2ecc71' }}>
-              <h3 style={styles.cardTitle}>Overall Performance</h3>
-              {renderPerformanceBox(getCurrentPerformancePercentage())}
-              <div style={styles.cardItem}><span style={styles.cardLabel}>Total Target:</span><span style={styles.cardValue}>₹{getTargetAmount().toLocaleString('en-IN')}</span></div>
-              <div style={styles.cardItem}><span style={styles.cardLabel}>Total Achieved:</span><span style={styles.cardValue}>₹{getAchievedAmount().toLocaleString('en-IN')}</span></div>
-              <div style={styles.cardItem}><span style={styles.cardLabel}>Total Advance:</span><span style={styles.cardValue}>₹{getAdvanceAmount().toLocaleString('en-IN')}</span></div>
-              <div style={styles.cardItem}><span style={styles.cardLabel}>Balance Amount:</span><span style={styles.balanceValue}>₹{overallBalance.toLocaleString('en-IN')}</span></div>
+              <h3 style={styles.cardTitle}>🎯 Target - {selectedFinancialMonth ? financialMonthLabels[selectedFinancialMonth - 1] : 'Yearly'}</h3>
+              
+              <div style={styles.targetBox}>
+                <div style={styles.cardItem}>
+                  <span style={styles.cardLabel}>Target:</span>
+                  <span style={styles.targetValue}>{formatCurrency(calculateTotals.target)}</span>
+                </div>
+                <div style={styles.cardItem}>
+                  <span style={styles.cardLabel}>Achieved:</span>
+                  <span style={styles.achievedValue}>{formatCurrency(calculateTotals.achieved)}</span>
+                </div>
+              </div>
+              
+              {renderPerformanceBox(calculateTotals.achievedPercentage)}
+              
+              <div style={styles.cardItem}>
+                <span style={styles.cardLabel}>Advance:</span>
+                <span style={styles.cardValue}>{formatCurrency(calculateTotals.advance)}</span>
+              </div>
+              <div style={styles.cardItem}>
+                <span style={styles.cardLabel}>Balance:</span>
+                <span style={styles.balanceValue}>{formatCurrency(overallBalance)}</span>
+              </div>
               <div style={{ ...styles.clickableCardItem, cursor: canNavigateToOrders ? 'pointer' : 'not-allowed', opacity: canNavigateToOrders ? 1 : 0.7 }} onClick={canNavigateToOrders ? handleTotalOrdersClick : null}>
-                <span style={styles.cardLabel}>Total Orders:</span><span style={styles.cardValue}>{getTotalOrders() || '0'}</span>
+                <span style={styles.cardLabel}>Total Orders:</span>
+                <span style={styles.cardValue}>{calculateTotals.totalOrders || '0'}</span>
+              </div>
+              
+              {/* Client Breakdown - Compact */}
+              <div style={styles.clientBreakdown}>
+                <div style={styles.clientBreakdownTitle}>📋 Client Breakdown:</div>
+                
+                <div style={styles.clientBreakdownItem}>
+                  <span>Total:</span>
+                  <span>{calculateTotals.totalOrders} orders</span>
+                  <span>{formatCurrency(calculateTotals.totalAmount)}</span>
+                </div>
+                
+                <div style={styles.clientBreakdownItem}>
+                  <span>Retail:</span>
+                  <span>{calculateTotals.retailCount} orders</span>
+                  <span>{formatCurrency(calculateTotals.retailAmount)}</span>
+                </div>
+                
+                <div style={styles.clientBreakdownItem}>
+                  <span>New:</span>
+                  <span>{calculateTotals.newCount} orders</span>
+                  <span>{formatCurrency(calculateTotals.newAmount)}</span>
+                </div>
+                
+                <div style={styles.clientBreakdownItem}>
+                  <span>Agent:</span>
+                  <span>{calculateTotals.agentCount} orders</span>
+                  <span>{formatCurrency(calculateTotals.agentAmount)}</span>
+                </div>
+                
+                <div style={styles.clientBreakdownItem}>
+                  <span>Renewal:</span>
+                  <span>{calculateTotals.renewalCount} orders</span>
+                  <span>{formatCurrency(calculateTotals.renewalAmount)}</span>
+                </div>
+                
+                <div style={styles.clientBreakdownItem}>
+                  <span>Renewal-Agent:</span>
+                  <span>{calculateTotals.renewalAgentCount} orders</span>
+                  <span>{formatCurrency(calculateTotals.renewalAgentAmount)}</span>
+                </div>
               </div>
             </div>
           </div>
 
           <div style={styles.monthlySection}>
-            <h3 style={styles.monthlyHeader}>Monthly Performance Breakdown for {yearlyFilter.year || 'All Years'}</h3>
-            <div style={styles.monthlyGrid}>{renderMonthlyTargets()}</div>
+            <h3 style={styles.monthlyHeader}>Monthly Breakdown</h3>
+            <div style={styles.monthlyGrid}>
+              {performanceData?.detailedData?.byMonth
+                ?.filter(monthData => {
+                  const [monthName, yearStr] = monthData.month.split(' ');
+                  const year = parseInt(yearStr);
+                  const monthIndex = new Date(`${monthName} 1, ${yearStr}`).getMonth();
+                  const date = new Date(year, monthIndex, 1);
+                  const financialYear = getFinancialYear(date);
+                  const financialMonth = getFinancialMonth(date);
+                  
+                  if (financialYearFilter !== 'all' && financialYear !== financialYearFilter) return false;
+                  if (selectedFinancialMonth !== null && financialMonth !== selectedFinancialMonth) return false;
+                  return true;
+                })
+                .map((monthData, index) => {
+                  const [monthName, yearStr] = monthData.month.split(' ');
+                  const monthIndex = new Date(`${monthName} 1, ${yearStr}`).getMonth();
+                  const date = new Date(parseInt(yearStr), monthIndex, 1);
+                  const financialMonth = getFinancialMonth(date);
+                  const financialYear = getFinancialYear(date);
+                  const displayMonth = `${financialMonthLabels[financialMonth - 1]} ${financialYear}`;
+                  
+                  const target = monthData.target || 0;
+                  const achieved = monthData.achieved || 0;
+                  const percentage = target > 0 ? (achieved / target) * 100 : (achieved > 0 ? 100 : 0);
+                  
+                  return (
+                    <div key={index} style={styles.monthlyCard}>
+                      <h3 style={styles.cardTitle}>{displayMonth}</h3>
+                      
+                      <div style={styles.targetBox}>
+                        <div style={styles.cardItem}>
+                          <span>Target:</span>
+                          <span style={styles.targetValue}>{formatCurrency(target)}</span>
+                        </div>
+                        <div style={styles.cardItem}>
+                          <span>Achieved:</span>
+                          <span style={styles.achievedValue}>{formatCurrency(achieved)}</span>
+                        </div>
+                      </div>
+                      
+                      {renderPerformanceBox(percentage)}
+                      
+                      <div style={styles.cardItem}>
+                        <span>Advance:</span>
+                        <span>{formatCurrency(monthData.advance || 0)}</span>
+                      </div>
+                      <div style={{ ...styles.clickableCardItem, cursor: canNavigateToOrders ? 'pointer' : 'not-allowed', opacity: canNavigateToOrders ? 1 : 0.7 }} onClick={() => canNavigateToOrders ? handleMonthClick({ ...monthData, displayMonth }) : null}>
+                        <span>Orders:</span>
+                        <span>{monthData.orders || 0}</span>
+                      </div>
+                      <div style={{ ...styles.clickableCardItem, cursor: canNavigateToProspects ? 'pointer' : 'not-allowed', opacity: canNavigateToProspects ? 1 : 0.7 }} onClick={() => canNavigateToProspects ? handleMonthlyProspectsClick({ ...monthData, displayMonth }) : null}>
+                        <span>Prospects:</span>
+                        <span>{monthData.prospects || 0}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
           </div>
         </div>
       )}
@@ -1580,47 +1586,8 @@ const PerformanceView = () => {
         @media (max-width: 768px) {
           .recharts-wrapper { overflow-x: auto; }
           .recharts-surface { min-width: 500px; }
-          div[style*="max-width: 1200px"] { padding: 15px !important; }
-          div[style*="padding: 20px"] { padding: 15px !important; }
-          h1[style*="font-size: 28px"] { font-size: 24px !important; }
-          div[style*="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))"] { grid-template-columns: 1fr !important; }
-          div[style*="grid-template-columns: repeat(auto-fill, minmax(350px, 1fr))"] { grid-template-columns: 1fr !important; }
+          div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
         }
-        @media (max-width: 480px) {
-          .recharts-surface { min-width: 400px; }
-          h1[style*="font-size: 28px"] { font-size: 22px !important; }
-          div[style*="height: 50px"], div[style*="height: 40px"] { height: 35px !important; }
-        }
-          // Update the cardItem style in your styles object
-cardItem: {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: '12px',
-  paddingBottom: '12px',
-  borderBottom: '1px solid #f1f1f1',
-  flexWrap: 'wrap',
-  gap: '8px'
-},
-
-// Add this new style for the salary details container
-salaryDetailsContainer: {
-  backgroundColor: '#f8f9fa',
-  borderRadius: '8px',
-  padding: '12px',
-  marginTop: '8px',
-  cursor: 'pointer',
-  transition: 'all 0.2s ease'
-},
-
-// Update cardValue to remove max-width restriction
-cardValue: {
-  fontWeight: '600',
-  color: '#2c3e50',
-  textAlign: 'right',
-  fontSize: '14px',
-  wordBreak: 'break-word'
-},
       `}</style>
     </div>
   );

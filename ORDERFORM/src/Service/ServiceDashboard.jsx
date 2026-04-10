@@ -1217,22 +1217,7 @@ const showErrorMessage = (error) => {
               >
                 Create Expense ➕
               </NavLink>
-              <NavLink
-                to="/service-dashboard/field-executive"
-                style={({ isActive }) => ({
-                  padding: '12px 40px',
-                  cursor: 'pointer',
-                  color: 'white',
-                  textDecoration: 'none',
-                  display: 'block',
-                  fontSize: '14px',
-                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
-                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
-                })}
-                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
-              >
-               Field Visits
-              </NavLink>
+             
               
               
               <NavLink
@@ -1458,7 +1443,7 @@ const showErrorMessage = (error) => {
                 })}
                 onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
               >
-                Create Report ➕
+                Create Hour Report ➕
               </NavLink>
               
               <NavLink

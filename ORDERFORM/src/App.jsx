@@ -170,6 +170,8 @@ function App() {
           <Route index element={<HRDashboard />} />
           
           {/* Using existing Admin components for HR */}
+          <Route path="hour" element={<Hourrecord />} />
+          <Route path="hour-reeport" element={<HourReport />} />
           <Route path="fieldvisitsadmin" element={<FieldVisitsAdmin/>} />
           <Route path="daily-report" element={<DailyReport />} />
           <Route path="employees" element={<Employees />} />
@@ -492,6 +494,7 @@ function App() {
           <Route path="assigned-designs" element={<AssignedDesigns />} />
           <Route path="greetingdesignform" element={<GreetingdesignForm />} />
           <Route path="start-design" element={<StartDesign />} />
+             <Route path="hour" element={<Hourrecord />} />
         </Route>
         
         {/* Digital Marketing Dashboard Route */}

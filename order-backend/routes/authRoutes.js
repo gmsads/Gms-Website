@@ -1506,4 +1506,73 @@ router.get("/debug/service-manager/:name", async (req, res) => {
   }
 });
 
+router.get('/api/price-items', async (req, res) => {
+  try {
+    const { listType } = req.query;
+    const query = listType ? { listType } : {};
+    const priceItems = await PriceItem.find(query).sort({ createdAt: -1 });
+    res.json(priceItems);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Create a new price item (Admin only)
+router.post('/api/price-items', async (req, res) => {
+  const { product, sizes, minQty, listType } = req.body;
+  
+  // Check if user is Admin (you should implement proper auth middleware)
+  const userRole = req.headers['user-role'];
+  if (userRole !== 'Admin') {
+    return res.status(403).json({ message: 'Only Admin can add price items' });
+  }
+
+  try {
+    const newItem = new PriceItem({
+      product,
+      sizes,
+      minQty,
+      listType
+    });
+
+    const savedItem = await newItem.save();
+    res.status(201).json(savedItem);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Update a price item (Admin only)
+router.put('/api/price-items/:id', async (req, res) => {
+  const userRole = req.headers['user-role'];
+  if (userRole !== 'Admin') {
+    return res.status(403).json({ message: 'Only Admin can update price items' });
+  }
+
+  try {
+    const updatedItem = await PriceItem.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+    res.json(updatedItem);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Delete a price item (Admin only)
+router.delete('/api/price-items/:id', async (req, res) => {
+  const userRole = req.headers['user-role'];
+  if (userRole !== 'Admin') {
+    return res.status(403).json({ message: 'Only Admin can delete price items' });
+  }
+
+  try {
+    await PriceItem.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Item deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 module.exports = router;

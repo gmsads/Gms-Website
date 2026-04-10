@@ -421,7 +421,7 @@ const NAV = [
     key: 'sales', label: 'Sales', icon: '💼',
     items: [
       { to: 'create-order',       label: 'Create Sale',       emoji: '➕', badge: 'NEW' },
-   
+   { to: 'price-list', label: 'Pricelist', emoji: '🧾' },
       { to: 'view-orders',        label: 'View All Orders',    emoji: '📋' },
       { to: 'parties',            label: 'Party',            emoji: '👥' },
       { to: 'quotation',          label: 'Quotation',          emoji: '💬' },
@@ -457,6 +457,8 @@ const NAV = [
       { to: 'daily-report',      label: 'Daily Report',        emoji: '📄' },
       { to: 'view-hrreport',     label: 'HR Report',           emoji: '👔' },
       { to: 'fieldvisitsadmin',  label: 'Field Visits',        emoji: '🗺️' },
+          { to: 'hour-reeport',  label: 'Hour Report',        emoji: '📊' },
+
     ],
   },
   {

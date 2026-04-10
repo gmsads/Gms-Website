@@ -8,70 +8,126 @@ import { toast } from 'react-toastify';
 // Main ViewOrders component function
 function ViewOrders() {
   // ===== 1. ALL STATE VARIABLES FIRST =====
-  const [orders, setOrders] = useState([]); // Stores all orders
-  const [filteredOrders, setFilteredOrders] = useState([]); // Stores filtered orders based on search
-  const [groupedOrders, setGroupedOrders] = useState({}); // Orders grouped by month
-  const [searchTerm, setSearchTerm] = useState(''); // Search filter term
-  const [requirementFilter, setRequirementFilter] = useState(null); // NEW: Requirement filter from URL
-  const [userRole, setUserRole] = useState(''); // Current user's role
-  const [executiveName, setExecutiveName] = useState(''); // Current user's name
-  const [editingOrder, setEditingOrder] = useState(null); // Order being edited
-  const [showModal, setShowModal] = useState(false); // Edit modal visibility
-  const [orderToDelete, setOrderToDelete] = useState(null); // Order marked for deletion
-  const [showPaymentsModal, setShowPaymentsModal] = useState(false); // Payments modal visibility
-  const [paymentData, setPaymentData] = useState({ // Payment form data
-    date: new Date().toISOString().split('T')[0], // Default to today's date
-    amount: '', // Payment amount
-    method: 'Cash', // Payment method
-    reference: '', // Payment reference
-    note: '' // Payment notes
+  const [orders, setOrders] = useState([]);
+  const [filteredOrders, setFilteredOrders] = useState([]);
+  const [groupedOrders, setGroupedOrders] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [requirementFilter, setRequirementFilter] = useState(null);
+  const [userRole, setUserRole] = useState('');
+  const [executiveName, setExecutiveName] = useState('');
+  const [editingOrder, setEditingOrder] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState(null);
+  const [showPaymentsModal, setShowPaymentsModal] = useState(false);
+  const [paymentData, setPaymentData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    amount: '',
+    method: 'Cash',
+    reference: '',
+    note: ''
   });
-  const [currentOrder, setCurrentOrder] = useState(null); // Order currently being viewed
-  const [paymentHistory, setPaymentHistory] = useState([]); // Payment history for current order
+  const [currentOrder, setCurrentOrder] = useState(null);
+  const [paymentHistory, setPaymentHistory] = useState([]);
   const [financialYearFilter, setFinancialYearFilter] = useState(() => {
-    // Get current financial year
     const currentDate = new Date();
-    const currentMonth = currentDate.getMonth(); // 0-11, Jan=0
+    const currentMonth = currentDate.getMonth();
     const currentYear = currentDate.getFullYear();
-    if (currentMonth >= 0 && currentMonth <= 2) {
-      return `${currentYear - 1}-${currentYear}`;
+    if (currentMonth >= 3 && currentMonth <= 11) {
+      return `${currentYear}-${currentYear + 1}`;
     }
-    return `${currentYear}-${currentYear + 1}`;
-  }); // Financial year filter
-  const [monthFilter, setMonthFilter] = useState(null); // Month filter (financial month 1-12 where 1=April)
-  const [loading, setLoading] = useState(false); // Loading state
-  const [error, setError] = useState(null); // Error state
-  const [paymentLoading, setPaymentLoading] = useState(false); // Payment processing state
-  const [clientTypeFilter, setClientTypeFilter] = useState(null); // Client type filter
-  const [appliedExecutiveFilters, setAppliedExecutiveFilters] = useState({ // Executive filters
-    executive: '', // Executive type
-    executiveType: '', // Executive category
-    executiveName: '' // Executive name
+    return `${currentYear - 1}-${currentYear}`;
   });
-  const [showDeleteModal, setShowDeleteModal] = useState(false); // Delete confirmation modal
-  const [leadSourceFilter, setLeadSourceFilter] = useState(null); // Lead source filter
-  const [showLeadSourceFilter, setShowLeadSourceFilter] = useState(false); // Lead source filter dropdown
-  const leadSourceFilterRef = useRef(null); // Ref for click outside detection
-  const [startDate, setStartDate] = useState(''); // Date range filter start
-  const [endDate, setEndDate] = useState(''); // Date range filter end
-  const [useDateRange, setUseDateRange] = useState(false); // Whether date range is active
-  const [currentViewMonth, setCurrentViewMonth] = useState(null); // Current month being viewed (financial month 1-12)
+  const [monthFilter, setMonthFilter] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [clientTypeFilter, setClientTypeFilter] = useState(null);
+  const [appliedExecutiveFilters, setAppliedExecutiveFilters] = useState({
+    executive: '',
+    executiveType: '',
+    executiveName: ''
+  });
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [leadSourceFilter, setLeadSourceFilter] = useState(null);
+  const [showLeadSourceFilter, setShowLeadSourceFilter] = useState(false);
+  const leadSourceFilterRef = useRef(null);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [useDateRange, setUseDateRange] = useState(false);
+  const [currentViewMonth, setCurrentViewMonth] = useState(null);
   const [currentViewYear, setCurrentViewYear] = useState(() => {
     const currentDate = new Date();
     const currentMonth = currentDate.getMonth();
     const currentYear = currentDate.getFullYear();
-    if (currentMonth >= 0 && currentMonth <= 2) {
-      return currentYear - 1;
+    if (currentMonth >= 3 && currentMonth <= 11) {
+      return currentYear;
     }
-    return currentYear;
-  }); // Current year being viewed
-  const [monthFilterInfo, setMonthFilterInfo] = useState({ // Month filter information
-    monthCount: 0, // Number of orders in month
-    monthName: '', // Month name
-    weekCount: 0 // Number of orders in week
+    return currentYear - 1;
+  });
+  const [monthFilterInfo, setMonthFilterInfo] = useState({
+    monthCount: 0,
+    monthName: '',
+    weekCount: 0
   });
 
-  // ===== 2. CONSTANTS =====
+  // ===== 2. FINANCIAL YEAR HELPER FUNCTIONS =====
+  const financialMonthLabels = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+
+  // Convert calendar month (1-12) to financial month (1-12 where 1=April)
+  const calendarToFinancialMonth = (calendarMonth) => {
+    if (calendarMonth >= 4) {
+      return calendarMonth - 3;
+    } else {
+      return calendarMonth + 9;
+    }
+  };
+
+  // Convert calendar month to financial year string
+  const calendarToFinancialYear = (calendarMonth, calendarYear) => {
+    if (calendarMonth >= 4) {
+      return `${calendarYear}-${calendarYear + 1}`;
+    } else {
+      return `${calendarYear - 1}-${calendarYear}`;
+    }
+  };
+// Add this after leadSources constant (around line 95)
+const upiOptions = [
+  '9985330008@Chary',
+  '9985330004@Swathi',
+  'globalmarketingsolutions@idbi',
+  '9985403636@Vinay'
+];
+  // Convert financial month (1-12) to calendar month (1-12)
+  const financialToCalendarMonth = (financialMonth, financialYear) => {
+    const startYear = parseInt(financialYear.split('-')[0]);
+    if (financialMonth <= 9) {
+      return financialMonth + 3;
+    } else {
+      return financialMonth - 9;
+    }
+  };
+
+  // Get financial year from date
+  const getFinancialYearFromDate = (date) => {
+    const month = date.getMonth();
+    const year = date.getFullYear();
+    if (month >= 3) {
+      return `${year}-${year + 1}`;
+    } else {
+      return `${year - 1}-${year}`;
+    }
+  };
+
+  // Get financial month from date
+  const getFinancialMonthFromDate = (date) => {
+    const month = date.getMonth();
+    if (month === 0) return 10;
+    if (month === 1) return 11;
+    if (month === 2) return 12;
+    return month - 2;
+  };
+
+  // ===== 3. CONSTANTS =====
   const leadSources = [
     'India Mart',
     'Just Dial',
@@ -82,42 +138,6 @@ function ViewOrders() {
     'Walk-in',
     'Other Specify'
   ];
-
-  // Financial year month labels (April to March)
-  const financialMonthLabels = [
-    'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
-    'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'
-  ];
-
-  // Helper: Convert financial month (1-12 where 1=April) to calendar month (0-11)
-  const financialToCalendarMonth = (financialMonth, financialYear) => {
-    const monthIndex = financialMonth - 1; // 0-11 financial index
-    if (monthIndex <= 8) { // Apr to Dec
-      return monthIndex + 3; // Apr=3, May=4, etc.
-    } else { // Jan to Mar
-      return monthIndex - 9; // Jan=0, Feb=1, Mar=2
-    }
-  };
-
-  // Get financial month (1-12 where 1=April)
-  const getFinancialMonthCorrect = (date) => {
-    const month = date.getMonth(); // 0=Jan, 1=Feb, 2=Mar, 3=Apr...
-    if (month === 0) return 10; // Jan -> 10th month
-    if (month === 1) return 11; // Feb -> 11th month
-    if (month === 2) return 12; // Mar -> 12th month
-    return month - 2; // Apr=1, May=2, Jun=3, Jul=4, Aug=5, Sep=6, Oct=7, Nov=8, Dec=9
-  };
-  
-  // Get financial year from date
-  const getFinancialYearFromDate = (date) => {
-    const month = date.getMonth(); // 0-11
-    const year = date.getFullYear();
-    if (month >= 3) { // April to December
-      return `${year}-${year + 1}`;
-    } else { // January to March
-      return `${year - 1}-${year}`;
-    }
-  };
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -194,7 +214,7 @@ function ViewOrders() {
     }
   `;
 
-  // ===== 3. HELPER FUNCTIONS =====
+  // ===== 4. HELPER FUNCTIONS =====
   const shouldShowSummaryCards = () => {
     const rolesThatCanSeeCards = ['Admin', 'Account', 'Service Executive'];
     return rolesThatCanSeeCards.includes(userRole);
@@ -219,7 +239,7 @@ function ViewOrders() {
     return rolesThatCanImport.includes(userRole);
   };
 
-  // ===== 4. DATE FORMATTING FUNCTIONS =====
+  // ===== 5. DATE FORMATTING FUNCTIONS =====
   const formatDate = (dateString) => {
     if (!dateString) return '';
 
@@ -302,7 +322,7 @@ function ViewOrders() {
     }
   };
 
-  // ===== 5. PRINT FUNCTION =====
+  // ===== 6. PRINT FUNCTION =====
   const handlePrintOrder = (order) => {
     const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
     const advancePaid = parseFloat(order.advance) || 0;
@@ -769,7 +789,7 @@ function ViewOrders() {
     }, 10000);
   };
 
-  // ===== 6. HELPER FUNCTION FOR TIME PERIOD TEXT =====
+  // ===== 7. HELPER FUNCTION FOR TIME PERIOD TEXT =====
   const getTimePeriodText = () => {
     if (useDateRange && startDate && endDate) {
       return `${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}`;
@@ -780,7 +800,7 @@ function ViewOrders() {
     return financialYearFilter === 'all' ? 'All Financial Years' : `FY ${financialYearFilter}`;
   };
 
-  // ===== 7. NAVIGATION FUNCTION =====
+  // ===== 8. NAVIGATION FUNCTION =====
   const navigateToMonth = (direction) => {
     let newMonth = currentViewMonth;
     let newFinancialYear = financialYearFilter;
@@ -788,7 +808,6 @@ function ViewOrders() {
     if (direction === 'next') {
       if (newMonth === 12) {
         newMonth = 1;
-        // Move to next financial year
         const [startYear, endYear] = newFinancialYear.split('-').map(Number);
         newFinancialYear = `${startYear + 1}-${endYear + 1}`;
       } else {
@@ -797,7 +816,6 @@ function ViewOrders() {
     } else if (direction === 'prev') {
       if (newMonth === 1) {
         newMonth = 12;
-        // Move to previous financial year
         const [startYear, endYear] = newFinancialYear.split('-').map(Number);
         newFinancialYear = `${startYear - 1}-${endYear - 1}`;
       } else {
@@ -820,12 +838,12 @@ function ViewOrders() {
     params.delete('leadSource');
     params.delete('startDate');
     params.delete('endDate');
-    params.delete('requirement'); // NEW: Clear requirement filter
+    params.delete('requirement');
 
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
   };
 
-  // ===== 8. FIXED: FILTER ORDERS FUNCTION (UPDATED TO INCLUDE REQUIREMENT) =====
+  // ===== 9. FILTER ORDERS FUNCTION =====
   const filterOrdersBySearchTerm = (order) => {
     if (!searchTerm || searchTerm.trim() === '') {
       return true;
@@ -833,7 +851,6 @@ function ViewOrders() {
 
     const term = searchTerm.toLowerCase().trim();
 
-    // Search in main order fields
     const mainFields = [
       order.executive || '',
       order.business || '',
@@ -856,7 +873,6 @@ function ViewOrders() {
       order.createdBy || ''
     ];
 
-    // Search in order rows - including requirement fields
     const rowFields = order.rows.flatMap(row => [
       row.description || '',
       row.requirement || '',
@@ -877,7 +893,7 @@ function ViewOrders() {
     );
   };
 
-  // ===== 9. GROUP ORDERS FUNCTION (by financial year months) =====
+  // ===== 10. GROUP ORDERS FUNCTION =====
   const groupOrdersByMonth = (ordersToGroup) => {
     const grouped = {};
 
@@ -907,11 +923,9 @@ function ViewOrders() {
 
         if (!orderDate || isNaN(orderDate.getTime())) return;
 
-        // Get financial year and month
         const financialYear = getFinancialYearFromDate(orderDate);
-        const financialMonth = getFinancialMonthCorrect(orderDate);
+        const financialMonth = getFinancialMonthFromDate(orderDate);
         
-        // Check if we should include this order based on filters
         if (!useDateRange) {
           if (financialYearFilter !== 'all' && financialYear !== financialYearFilter) return;
           if (monthFilter !== null && financialMonth !== monthFilter) return;
@@ -959,33 +973,27 @@ function ViewOrders() {
     return grouped;
   };
 
-  // ===== 10. FIXED: CALCULATE TOTALS FUNCTION - Uses filteredOrders =====
+  // ===== 11. CALCULATE TOTALS FUNCTION =====
   const calculateTotals = () => {
     let totalAmount = 0;
     let totalReceived = 0;
     let totalBalance = 0;
 
-    // Use filteredOrders which already has all filters applied
     filteredOrders.forEach(order => {
-      // Calculate order total from rows
       const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
       totalAmount += orderTotal;
 
-      // Calculate advance paid
       const advanceReceived = parseFloat(order.advance) || 0;
       
-      // Calculate payment history total
       let paymentHistoryTotal = 0;
       if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
         paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) =>
           sum + (parseFloat(payment.amount) || 0), 0);
       }
 
-      // Total received = advance + payment history
       const received = advanceReceived + paymentHistoryTotal;
       totalReceived += received;
       
-      // Balance = order total - received
       const orderBalance = orderTotal - received;
       totalBalance += orderBalance;
     });
@@ -997,10 +1005,9 @@ function ViewOrders() {
     };
   };
 
-  // Calculate totals using filtered orders
   const { totalAmount, totalReceived, totalBalance } = calculateTotals();
 
-  // ===== 11. USER INFO FUNCTION =====
+  // ===== 12. USER INFO FUNCTION =====
   const getUserInfo = () => {
     try {
       const role = localStorage.getItem('role') || '';
@@ -1018,7 +1025,7 @@ function ViewOrders() {
     }
   };
 
-  // ===== 12. FETCH ORDERS FUNCTION =====
+  // ===== 13. FETCH ORDERS FUNCTION =====
   const fetchOrders = async (role, name, month = null, financialYear = null, clientType = null, executive = null, executiveName = null, leadSource = null, useDateRangeFlag = false, startDateParam = null, endDateParam = null) => {
     setLoading(true);
     setError(null);
@@ -1103,7 +1110,96 @@ function ViewOrders() {
     }
   };
 
-  // ===== 13. CAPTURE REQUIREMENT FILTER FROM URL (NEW useEffect) =====
+  // ===== 14. NEW: Handle URL parameters from PerformanceView (FINANCIAL YEAR FIX) =====
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    
+    const financialYearFromUrl = params.get('financialYear');
+    const financialMonthFromUrl = params.get('financialMonth');
+    const calendarMonthFromUrl = params.get('month');
+    const calendarYearFromUrl = params.get('year');
+    const executiveFromUrl = params.get('executive');
+    const executiveNameFromUrl = params.get('executiveName');
+    const requirement = params.get('requirement');
+    
+    console.log('🔍 ViewOrders received URL params:', {
+      financialYearFromUrl,
+      financialMonthFromUrl,
+      calendarMonthFromUrl,
+      calendarYearFromUrl,
+      executiveFromUrl,
+      executiveNameFromUrl,
+      requirement
+    });
+    
+    // Handle requirement filter
+    if (requirement) {
+      setRequirementFilter(requirement);
+      setSearchTerm(requirement);
+    }
+    
+    // CASE 1: Financial year and month provided directly (from PerformanceView)
+    if (financialYearFromUrl) {
+      console.log('📅 Setting financial year filter from URL:', financialYearFromUrl);
+      setFinancialYearFilter(financialYearFromUrl);
+      
+      if (financialMonthFromUrl) {
+        const financialMonthNum = parseInt(financialMonthFromUrl);
+        console.log('📅 Setting financial month filter from URL:', financialMonthNum);
+        setMonthFilter(financialMonthNum);
+        setCurrentViewMonth(financialMonthNum);
+      }
+    } 
+    // CASE 2: Calendar month/year provided (convert to financial)
+    else if (calendarMonthFromUrl && calendarYearFromUrl) {
+      const calendarMonth = parseInt(calendarMonthFromUrl);
+      const calendarYear = parseInt(calendarYearFromUrl);
+      
+      let financialMonth;
+      let financialYear;
+      
+      if (calendarMonth >= 4) {
+        financialMonth = calendarMonth - 3;
+        financialYear = `${calendarYear}-${calendarYear + 1}`;
+      } else {
+        financialMonth = calendarMonth + 9;
+        financialYear = `${calendarYear - 1}-${calendarYear}`;
+      }
+      
+      console.log('🔄 Converted calendar to financial:', {
+        calendarMonth,
+        calendarYear,
+        financialMonth,
+        financialYear
+      });
+      
+      setFinancialYearFilter(financialYear);
+      setMonthFilter(financialMonth);
+      setCurrentViewMonth(financialMonth);
+    }
+    
+    // Handle executive filter
+    if (executiveNameFromUrl) {
+      console.log('👤 Setting executive filter from URL:', executiveNameFromUrl);
+      setAppliedExecutiveFilters({
+        executive: executiveFromUrl || '',
+        executiveType: '',
+        executiveName: decodeURIComponent(executiveNameFromUrl)
+      });
+    }
+    
+    // Fetch orders with the filters
+    const { role, name } = getUserInfo();
+    const month = monthFilter;
+    const financialYear = financialYearFilter;
+    const clientType = params.get('clientType');
+    const leadSource = params.get('leadSource');
+    
+    fetchOrders(role, name, month, financialYear, clientType, executiveFromUrl, executiveNameFromUrl, leadSource);
+    
+  }, [location.search]);
+
+  // ===== 15. CAPTURE REQUIREMENT FILTER FROM URL =====
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const requirement = params.get('requirement');
@@ -1116,7 +1212,7 @@ function ViewOrders() {
     }
   }, [location.search]);
 
-  // ===== 14. APPLY FILTERS EFFECT =====
+  // ===== 16. APPLY FILTERS EFFECT =====
   useEffect(() => {
     if (!orders.length) {
       setFilteredOrders([]);
@@ -1124,31 +1220,25 @@ function ViewOrders() {
       return;
     }
 
-    // First filter by executive visibility rules
     let visibilityFiltered = orders;
     if (shouldSeeOnlyOwnOrders()) {
       visibilityFiltered = orders.filter(order => order.executive === executiveName);
     }
 
-    // Then apply all other filters
     let filtered = visibilityFiltered;
 
-    // Apply client type filter
     if (clientTypeFilter) {
       filtered = filtered.filter(order => order.clientType === clientTypeFilter);
     }
 
-    // Apply lead source filter
     if (leadSourceFilter) {
       filtered = filtered.filter(order => order.leadSource === leadSourceFilter);
     }
 
-    // Apply executive filter
     if (appliedExecutiveFilters.executiveName) {
       filtered = filtered.filter(order => order.executive === appliedExecutiveFilters.executiveName);
     }
 
-    // Apply financial year and month filters (based on order date)
     if (!useDateRange) {
       filtered = filtered.filter(order => {
         try {
@@ -1177,14 +1267,12 @@ function ViewOrders() {
           if (!orderDate || isNaN(orderDate.getTime())) return false;
 
           const financialYear = getFinancialYearFromDate(orderDate);
-          const financialMonth = getFinancialMonthCorrect(orderDate);
+          const financialMonth = getFinancialMonthFromDate(orderDate);
 
-          // Check financial year filter
           if (financialYearFilter !== 'all' && financialYear !== financialYearFilter) {
             return false;
           }
 
-          // Check month filter
           if (monthFilter !== null && financialMonth !== monthFilter) {
             return false;
           }
@@ -1196,7 +1284,6 @@ function ViewOrders() {
         }
       });
     } else if (useDateRange && startDate && endDate) {
-      // Apply date range filter
       filtered = filtered.filter(order => {
         try {
           let orderDate;
@@ -1232,7 +1319,6 @@ function ViewOrders() {
       });
     }
 
-    // Finally apply search filter (includes requirement filter via searchTerm)
     if (searchTerm && searchTerm.trim() !== '') {
       filtered = filtered.filter(order => filterOrdersBySearchTerm(order));
     }
@@ -1242,7 +1328,7 @@ function ViewOrders() {
 
   }, [orders, searchTerm, clientTypeFilter, leadSourceFilter, appliedExecutiveFilters, executiveName, financialYearFilter, monthFilter, useDateRange, startDate, endDate]);
 
-  // ===== 15. LEAD SOURCE FILTER HANDLER =====
+  // ===== 17. LEAD SOURCE FILTER HANDLER =====
   const handleLeadSourceFilterSelect = (source) => {
     const params = new URLSearchParams(location.search);
 
@@ -1266,7 +1352,7 @@ function ViewOrders() {
     params.delete('weekCount');
     params.delete('startDate');
     params.delete('endDate');
-    params.delete('requirement'); // NEW: Clear requirement filter
+    params.delete('requirement');
 
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
 
@@ -1281,12 +1367,11 @@ function ViewOrders() {
     fetchOrders(role, name, month, financialYearParam, clientType, executive, executiveNameParam, source);
   };
 
-  // ===== 16. FINANCIAL YEAR CHANGE HANDLER =====
+  // ===== 18. FINANCIAL YEAR CHANGE HANDLER =====
   const handleFinancialYearChange = (e) => {
     const newFinancialYear = e.target.value;
     setFinancialYearFilter(newFinancialYear);
     
-    // Clear month filter when changing financial year
     setMonthFilter(null);
     setCurrentViewMonth(null);
 
@@ -1299,7 +1384,7 @@ function ViewOrders() {
     params.delete('month');
     params.delete('startDate');
     params.delete('endDate');
-    params.delete('requirement'); // NEW: Clear requirement filter
+    params.delete('requirement');
     
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
 
@@ -1312,7 +1397,7 @@ function ViewOrders() {
     fetchOrders(role, name, month, newFinancialYear, clientType, executive, executiveNameParam, leadSource);
   };
 
-  // ===== 17. MONTH CHANGE HANDLER =====
+  // ===== 19. MONTH CHANGE HANDLER =====
   const handleMonthChange = (e) => {
     const newMonth = e.target.value ? parseInt(e.target.value) : null;
     setMonthFilter(newMonth);
@@ -1326,7 +1411,7 @@ function ViewOrders() {
     }
     params.delete('startDate');
     params.delete('endDate');
-    params.delete('requirement'); // NEW: Clear requirement filter
+    params.delete('requirement');
     
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
 
@@ -1339,7 +1424,7 @@ function ViewOrders() {
     fetchOrders(role, name, newMonth, financialYear, clientType, executive, executiveNameParam, leadSource);
   };
 
-  // ===== 18. CLEAR FILTERS FUNCTION (UPDATED) =====
+  // ===== 20. CLEAR FILTERS FUNCTION =====
   const clearAllFilters = () => {
     setMonthFilter(null);
     setFinancialYearFilter('all');
@@ -1353,7 +1438,7 @@ function ViewOrders() {
     });
     setMonthFilterInfo({ monthCount: 0, monthName: '', weekCount: 0 });
     setSearchTerm('');
-    setRequirementFilter(null); // NEW: Clear requirement filter
+    setRequirementFilter(null);
     setShowLeadSourceFilter(false);
     setStartDate('');
     setEndDate('');
@@ -1409,7 +1494,7 @@ function ViewOrders() {
 
   const clearSearchFilter = () => {
     setSearchTerm('');
-    setRequirementFilter(null); // NEW: Clear requirement filter
+    setRequirementFilter(null);
     const params = new URLSearchParams(location.search);
     params.delete('requirement');
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
@@ -1434,14 +1519,13 @@ function ViewOrders() {
     fetchOrders(role, name, month, financialYear, clientType, executive, executiveNameParam, leadSource);
   };
 
-  // ===== 19. EDIT FUNCTIONS =====
+  // ===== 21. EDIT FUNCTIONS =====
   const handleEdit = (order) => {
     if (shouldSeeOnlyOwnOrders() && order.executive !== executiveName) {
       toast.error('You can only edit your own orders');
       return;
     }
 
-    // Calculate total amount from rows
     const totalAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
     
     setEditingOrder({
@@ -1477,7 +1561,6 @@ function ViewOrders() {
       const rate = parseFloat(updatedRows[index].rate) || 0;
       updatedRows[index].total = (quantity * rate).toFixed(2);
       
-      // Recalculate order totals when row changes
       const newTotalAmount = updatedRows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
       const newDiscountedTotal = newTotalAmount - (parseFloat(editingOrder.discount) || 0);
       const newBalance = newDiscountedTotal - (parseFloat(editingOrder.advance) || 0);
@@ -1530,7 +1613,7 @@ function ViewOrders() {
     }
   };
 
-  // ===== 20. DELETE FUNCTIONS =====
+  // ===== 22. DELETE FUNCTIONS =====
   const confirmDelete = (orderId) => {
     const orderToDeleteObj = orders.find(order => order._id === orderId);
     if (shouldSeeOnlyOwnOrders() && orderToDeleteObj && orderToDeleteObj.executive !== executiveName) {
@@ -1597,6 +1680,7 @@ function ViewOrders() {
     }
   };
 
+  // ===== 23. PAYMENT FUNCTIONS =====
   const handleRecordPayment = async (order) => {
     if (shouldSeeOnlyOwnOrders() && order.executive !== executiveName) {
       toast.error('You can only record payments for your own orders');
@@ -1874,7 +1958,7 @@ function ViewOrders() {
     setPaymentData(prev => ({ ...prev, [name]: value }));
   };
 
-  // ===== 21. EXPORT/IMPORT FUNCTIONS =====
+  // ===== 24. EXPORT/IMPORT FUNCTIONS =====
   const handleExportToExcel = () => {
     let ordersToExport = filteredOrders;
     if (shouldSeeOnlyOwnOrders()) {
@@ -2036,91 +2120,7 @@ function ViewOrders() {
     reader.readAsArrayBuffer(file);
   };
 
-  // ===== 22. USE EFFECTS =====
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const month = params.get('month');
-    const financialYear = params.get('financialYear');
-    const clientType = params.get('clientType');
-    const executive = params.get('executive');
-    const executiveType = params.get('executiveType');
-    const executiveNameParam = params.get('executiveName');
-    const leadSource = params.get('leadSource');
-    const startDateParam = params.get('startDate');
-    const endDateParam = params.get('endDate');
-    const monthCount = params.get('monthCount');
-    const monthName = params.get('monthName');
-    const weekCount = params.get('weekCount');
-    const requirement = params.get('requirement'); // NEW: Get requirement from URL
-
-    if (month) {
-      setMonthFilter(parseInt(month));
-      setCurrentViewMonth(parseInt(month));
-    }
-    if (financialYear) {
-      setFinancialYearFilter(financialYear);
-    }
-    if (clientType) setClientTypeFilter(clientType);
-    if (leadSource) setLeadSourceFilter(leadSource);
-    
-    if (startDateParam && endDateParam) {
-      setStartDate(startDateParam);
-      setEndDate(endDateParam);
-      setUseDateRange(true);
-    }
-
-    if (monthCount || monthName || weekCount) {
-      setMonthFilterInfo({
-        monthCount: monthCount ? parseInt(monthCount) : 0,
-        monthName: monthName || '',
-        weekCount: weekCount ? parseInt(weekCount) : 0
-      });
-    }
-
-    // NEW: Set requirement filter if present
-    if (requirement) {
-      setRequirementFilter(requirement);
-      setSearchTerm(requirement);
-    }
-
-    if (executiveNameParam) {
-      console.log('🎯 Setting executive filter from performance view:', executiveNameParam);
-      setAppliedExecutiveFilters({
-        executive: executive || '',
-        executiveType: executiveType || '',
-        executiveName: executiveNameParam ? decodeURIComponent(executiveNameParam) : ''
-      });
-    } else if (executive || executiveType || executiveNameParam) {
-      setAppliedExecutiveFilters({
-        executive,
-        executiveType,
-        executiveName: executiveNameParam ? decodeURIComponent(executiveNameParam) : ''
-      });
-    }
-
-    const businessFilter = location.state?.businessFilter;
-    if (businessFilter) {
-      setSearchTerm(businessFilter);
-    }
-
-    const { role, name } = getUserInfo();
-    fetchOrders(role, name, month, financialYear, clientType, executive, executiveNameParam, leadSource, 
-                !!(startDateParam && endDateParam), startDateParam, endDateParam);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search, location.state]);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (leadSourceFilterRef.current && !leadSourceFilterRef.current.contains(event.target)) {
-        setShowLeadSourceFilter(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // ===== 23. LOADING STATE =====
+  // ===== 25. LOADING STATE =====
   if (loading) {
     return (
       <div style={{
@@ -2138,7 +2138,7 @@ function ViewOrders() {
     );
   }
 
-  // ===== 24. ERROR STATE =====
+  // ===== 26. ERROR STATE =====
   if (error) {
     return (
       <div style={{
@@ -2186,7 +2186,7 @@ function ViewOrders() {
     );
   }
 
-  // ===== 25. MAIN RENDER =====
+  // ===== 27. MAIN RENDER =====
   return (
     <div style={{ padding: '20px', backgroundColor: '#f9f9f9', minHeight: '100vh' }}>
       <style>{responsiveStyles}</style>
@@ -2359,8 +2359,8 @@ function ViewOrders() {
                 setClientTypeFilter(null);
                 setLeadSourceFilter(null);
                 setFinancialYearFilter('all');
-                setRequirementFilter(null); // NEW: Clear requirement filter
-                setSearchTerm(''); // NEW: Clear search term
+                setRequirementFilter(null);
+                setSearchTerm('');
                 
                 const params = new URLSearchParams(location.search);
                 params.set('startDate', e.target.value);
@@ -2397,8 +2397,8 @@ function ViewOrders() {
                 setClientTypeFilter(null);
                 setLeadSourceFilter(null);
                 setFinancialYearFilter('all');
-                setRequirementFilter(null); // NEW: Clear requirement filter
-                setSearchTerm(''); // NEW: Clear search term
+                setRequirementFilter(null);
+                setSearchTerm('');
                 
                 const params = new URLSearchParams(location.search);
                 params.set('startDate', startDate);
@@ -2531,7 +2531,7 @@ function ViewOrders() {
                 params.delete('leadSource');
                 params.delete('startDate');
                 params.delete('endDate');
-                params.delete('requirement'); // NEW: Clear requirement filter
+                params.delete('requirement');
 
                 navigate(`/admin-dashboard/view-orders?${params.toString()}`);
                 
@@ -2596,7 +2596,7 @@ function ViewOrders() {
         </div>
       )}
 
-      {/* Active Filters Display - NEW: Added Requirement Filter Display */}
+      {/* Active Filters Display */}
       <div style={{
         display: 'flex',
         flexDirection: 'column',
@@ -2610,7 +2610,6 @@ function ViewOrders() {
           <h3 style={{ margin: '0 0 10px 0' }}>Active Filters:</h3>
         )}
 
-        {/* NEW: Requirement Filter Display */}
         {requirementFilter && (
           <div style={{
             display: 'flex',
@@ -3007,7 +3006,6 @@ function ViewOrders() {
       {Object.entries(groupedOrders).length > 0 ? (
         Object.entries(groupedOrders)
           .sort(([keyA], [keyB]) => {
-            // Sort by financial year and month (newest first)
             const [yearA, monthA] = keyA.split('-');
             const [yearB, monthB] = keyB.split('-');
             if (yearA !== yearB) return yearB.localeCompare(yearA);
@@ -3165,7 +3163,6 @@ function ViewOrders() {
                             .filter(status => status)
                         )].join(', ');
                         
-                        // NEW: Check if this order matches the requirement filter for highlighting
                         const isRequirementMatch = requirementFilter && combinedRequirements.toLowerCase().includes(requirementFilter.toLowerCase());
                         const rowBgColor = isRequirementMatch ? '#fff9c4' : (orderIndex % 2 === 0 ? '#fdfdfd' : '#f5f9fa');
                         
@@ -3479,7 +3476,6 @@ function ViewOrders() {
                         );
                       } else {
                         return order.rows.map((row, rowIndex) => {
-                          // NEW: Check if this row matches the requirement filter for highlighting
                           const requirementText = row.customRequirement || row.requirement || '';
                           const isRequirementMatch = requirementFilter && requirementText.toLowerCase().includes(requirementFilter.toLowerCase());
                           const rowBgColor = isRequirementMatch ? '#fff9c4' : ((orderIndex + rowIndex) % 2 === 0 ? '#fdfdfd' : '#f5f9fa');
@@ -4021,46 +4017,36 @@ function ViewOrders() {
                   </select>
                 </div>
 
-                {paymentData.method === 'UPI' && (
-                  <div style={{ marginBottom: '15px' }}>
-                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>UPI ID *</label>
-                    <select
-                      name="reference"
-                      value={paymentData.reference}
-                      onChange={handlePaymentChange}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '4px'
-                      }}
-                      required
-                    >
-                      <option value="">Select UPI ID</option>
-                      <option value="9985330008@Chary">9985330008@Chary</option>
-                      <option value="9985330004@Swathi">9985330004@Swathi</option>
-                      <option value="globalmarketingsolutions@idbi">globalmarketingsolutions@idbi</option>
-                      <option value="9985403636@Vinay">9985403636@Vinay</option>                     
-                      <option value="other">Other UPI</option>
-                    </select>
-                    {paymentData.reference === 'other' && (
-                      <input
-                        type="text"
-                        placeholder="Enter UPI ID"
-                        onChange={(e) => setPaymentData(prev => ({ ...prev, reference: e.target.value }))}
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          border: '1px solid #ddd',
-                          borderRadius: '4px',
-                          marginTop: '5px'
-                        }}
-                        required
-                      />
-                    )}
-                  </div>
-                )}
-
+              {paymentData.method === 'UPI' && (
+  <div style={{ marginBottom: '15px' }}>
+    <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>UPI ID *</label>
+    <select
+      name="reference"
+      value={paymentData.reference}
+      onChange={handlePaymentChange}
+      style={{
+        width: '100%',
+        padding: '8px',
+        border: '1px solid #ddd',
+        borderRadius: '4px',
+        fontSize: '14px'
+      }}
+      required
+    >
+      <option value="">-- Select UPI ID --</option>
+      <option value="9985330008@Chary">9985330008@Chary</option>
+      <option value="9985330004@Swathi">9985330004@Swathi</option>
+      <option value="globalmarketingsolutions@idbi">globalmarketingsolutions@idbi</option>
+      <option value="9985403636@Vinay">9985403636@Vinay</option>
+     
+    </select>
+    
+  
+    <div style={{ fontSize: '11px', color: '#666', marginTop: '5px' }}>
+      📱 Select UPI ID for payment collection
+    </div>
+  </div>
+)}
                 {paymentData.method === 'Cheque' && (
                   <div style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Cheque Number *</label>
