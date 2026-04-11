@@ -7,15 +7,15 @@ import jsPDF from 'jspdf';
 // Import html2canvas for converting HTML content to canvas/images
 import html2canvas from 'html2canvas';
 // Import your logo and signature from assets folder
-import companyLogo from '../assets/logo.png';
+import companyLogo from '../assets/logo-1.png';
 import companySignature from '../assets/sign.png';
 
 // Configure the base URL for API requests
 const API_BASE_URL = '/api';
 // Create an axios instance with custom configuration
 const api = axios.create({
-  baseURL: API_BASE_URL, // Set base URL for all requests
-  timeout: 10000, // Set timeout to 10 seconds
+  baseURL: API_BASE_URL,
+  timeout: 10000,
 });
 
 // Main Quotation component function
@@ -44,11 +44,11 @@ const Quotation = () => {
   const [savedQuotation, setSavedQuotation] = useState(null);
   // State for hover effects on buttons
   const [hoverStates, setHoverStates] = useState({
-    addItem: false, // Hover state for add item button
-    submitButton: false, // Hover state for submit button
-    downloadButton: false, // Hover state for download button
-    printButton: false, // Hover state for print button
-    removeButtons: {} // Hover states for remove buttons (dynamic)
+    addItem: false,
+    submitButton: false,
+    downloadButton: false,
+    printButton: false,
+    removeButtons: {}
   });
   // State to control visibility of "View Quotations" modal
   const [showViewQuotations, setShowViewQuotations] = useState(false);
@@ -64,6 +64,9 @@ const Quotation = () => {
   // State to check if images are loaded
   const [logoLoaded, setLogoLoaded] = useState(false);
   const [signatureLoaded, setSignatureLoaded] = useState(false);
+  // State for logo URL
+  const [logoUrl, setLogoUrl] = useState(null);
+  const [signatureUrl, setSignatureUrl] = useState(null);
 
   // Tax options configuration with rates and labels - Only GST 18%
   const taxOptions = [
@@ -72,35 +75,43 @@ const Quotation = () => {
 
   // State for quotation header information
   const [quotationHeader, setQuotationHeader] = useState({
-    quotationNo: '', // Quotation number
-    validFor: '10', // Validity period in days
-    poNo: '', // Purchase order number
-    quotationDate: new Date().toISOString().split('T')[0], // Current date
-    validityDate: '' // Calculated validity date
+    quotationNo: '',
+    validFor: '10',
+    poNo: '',
+    quotationDate: new Date().toISOString().split('T')[0],
+    validityDate: ''
   });
 
   // State for quotation data and calculations
   const [quotationData, setQuotationData] = useState({
-    items: [], // Array of quotation items
-    subtotal: 0, // Total before discounts and taxes
-    discount: 0, // Total discount amount
-    tax: 0, // Total tax amount
-    taxableAmount: 0, // Amount subject to tax
-    totalAmount: 0, // Final total amount
-    additionalCharges: 0, // Sum of additional charges
-    autoRoundOff: 0 // Auto round off amount
+    items: [],
+    subtotal: 0,
+    discount: 0,
+    tax: 0,
+    taxableAmount: 0,
+    totalAmount: 0,
+    additionalCharges: 0,
+    autoRoundOff: 0
   });
 
-  // Effect to preload images
+  // Effect to preload images and convert to data URLs
   useEffect(() => {
     const preloadImages = async () => {
       try {
         // Preload logo
         const logoImg = new Image();
+        logoImg.crossOrigin = 'anonymous';
         logoImg.src = companyLogo;
         logoImg.onload = () => {
           console.log('Logo loaded successfully');
           setLogoLoaded(true);
+          const canvas = document.createElement('canvas');
+          canvas.width = logoImg.naturalWidth;
+          canvas.height = logoImg.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(logoImg, 0, 0);
+          const dataUrl = canvas.toDataURL('image/png');
+          setLogoUrl(dataUrl);
         };
         logoImg.onerror = () => {
           console.error('Failed to load logo');
@@ -109,10 +120,18 @@ const Quotation = () => {
 
         // Preload signature
         const signatureImg = new Image();
+        signatureImg.crossOrigin = 'anonymous';
         signatureImg.src = companySignature;
         signatureImg.onload = () => {
           console.log('Signature loaded successfully');
           setSignatureLoaded(true);
+          const canvas = document.createElement('canvas');
+          canvas.width = signatureImg.naturalWidth;
+          canvas.height = signatureImg.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(signatureImg, 0, 0);
+          const dataUrl = canvas.toDataURL('image/png');
+          setSignatureUrl(dataUrl);
         };
         signatureImg.onerror = () => {
           console.error('Failed to load signature');
@@ -430,28 +449,8 @@ const Quotation = () => {
     }
 
     try {
-      // Create temporary image elements to get base64 data
-      const logoBase64 = await new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = companyLogo;
-        img.onload = () => {
-          const base64 = convertImageToBase64(img);
-          resolve(base64 || '');
-        };
-        img.onerror = () => resolve('');
-      });
-
-      const signatureBase64 = await new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = companySignature;
-        img.onload = () => {
-          const base64 = convertImageToBase64(img);
-          resolve(base64 || '');
-        };
-        img.onerror = () => resolve('');
-      });
+      const logoBase64 = logoUrl || '';
+      const signatureBase64 = signatureUrl || '';
 
       const printContent = document.createElement('div');
       printContent.style.cssText = `
@@ -466,14 +465,59 @@ const Quotation = () => {
 
       const party = parties.find(p => p._id === selectedParty);
       
-      // Fallback for missing images
       const logoFallback = `<div style="height: 80px; width: 80px; background: #2c3e50; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: bold; font-size: 14px;">GMS</div>`;
       const signatureFallback = `<div style="height: 60px; display: flex; align-items: center; justify-content: center; color: #2c3e50; font-style: italic;">Signature</div>`;
 
-      printContent.innerHTML = `
+      printContent.innerHTML = generateQuotationHTML(quotationHeader, party, quotationData.items, additionalCharges, notes, terms, logoBase64, signatureBase64);
+
+      document.body.appendChild(printContent);
+      
+      const canvas = await html2canvas(printContent, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
+      });
+      
+      document.body.removeChild(printContent);
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210;
+      const pageHeight = 297;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+      
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      
+      pdf.save(`quotation_${quotationHeader.quotationNo}.pdf`);
+      
+    } catch (error) {
+      console.error('PDF Generation Error:', error);
+      alert('Error creating PDF. Please try again.');
+    }
+  };
+
+  // Function to generate quotation HTML for both PDF and View
+  const generateQuotationHTML = (header, party, items, charges, notesText, termsText, logoBase64, signatureBase64) => {
+    const logoFallback = `<div style="height: 80px; width: 80px; background: #2c3e50; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: bold; font-size: 14px;">GMS</div>`;
+    const signatureFallback = `<div style="height: 60px; display: flex; align-items: center; justify-content: center; color: #2c3e50; font-style: italic;">Signature</div>`;
+
+    return `
+      <div style="font-family: Arial, sans-serif;">
         <!-- Header section -->
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; border-bottom: 2px solid #3498db; padding-bottom: 15px;">
-          <!-- Logo section -->
           <div style="flex: 1;">
             <div style="display: flex; align-items: center;">
               ${logoBase64 ? `<img src="${logoBase64}" alt="Company Logo" style="height: 80px; width: auto; margin-right: 15px; border-radius: 8px; max-width: 150px; object-fit: contain;" />` : logoFallback}
@@ -483,22 +527,19 @@ const Quotation = () => {
               </div>
             </div>
           </div>
-          <!-- Title section -->
           <div style="text-align: center; flex: 1;">
             <h2 style="margin: 5px 0 0 0; color: #2c3e50; font-size: 28px; font-weight: bold;">QUOTATION</h2>
           </div>
-          <!-- Empty section for layout balance -->
-          <div style="flex: 1; text-align: right;">
-          </div>
+          <div style="flex: 1; text-align: right;"></div>
         </div>
         
         <!-- Quotation details section -->
         <div style="display: flex; justify-content: space-between; margin-bottom: 25px;">
           <div style="flex: 1;">
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Quotation No:</strong> ${quotationHeader.quotationNo}</p>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Date:</strong> ${quotationHeader.quotationDate}</p>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Valid Until:</strong> ${quotationHeader.validityDate}</p>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>PO No:</strong> ${quotationHeader.poNo || 'N/A'}</p>
+            <p style="margin: 5px 0; font-size: 14px;"><strong>Quotation No:</strong> ${header.quotationNo}</p>
+            <p style="margin: 5px 0; font-size: 14px;"><strong>Date:</strong> ${header.quotationDate}</p>
+            <p style="margin: 5px 0; font-size: 14px;"><strong>Valid Until:</strong> ${header.validityDate}</p>
+            <p style="margin: 5px 0; font-size: 14px;"><strong>PO No:</strong> ${header.poNo || 'N/A'}</p>
           </div>
           <div style="flex: 1; text-align: right;">
             <p style="margin: 5px 0; font-size: 14px;"><strong>GLOBAL MARKETING SOLUTIONS</strong></p>
@@ -529,10 +570,10 @@ const Quotation = () => {
               <th style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 12px;">Unit</th>
               <th style="padding: 10px; border: 1px solid #ddd; text-align: right; font-size: 12px;">Price (₹)</th>
               <th style="padding: 10px; border: 1px solid #ddd; text-align: right; font-size: 12px;">Amount (₹)</th>
-            </tr>
+             </tr>
           </thead>
           <tbody>
-            ${quotationData.items.map((item, index) => `
+            ${items.map((item, index) => `
               <tr>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-size: 12px;">${index + 1}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; font-size: 12px;">
@@ -554,17 +595,17 @@ const Quotation = () => {
             <h3 style="margin-top: 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 8px; font-size: 16px;">SUMMARY</h3>
             <div style="display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px;">
               <span>Subtotal:</span>
-              <span>₹${quotationData.subtotal.toFixed(2)}</span>
+              <span>₹${items.reduce((sum, item) => sum + (item.quantity * item.price), 0).toFixed(2)}</span>
             </div>
             <div style="display: flex; justify-content: space-between; margin: 10px 0; color: #e74c3c; font-size: 13px;">
               <span>Discount:</span>
-              <span>-₹${quotationData.discount.toFixed(2)}</span>
+              <span>-₹${items.reduce((sum, item) => sum + (item.discountAmount || 0), 0).toFixed(2)}</span>
             </div>
             <div style="display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px;">
               <span>Tax (18% GST):</span>
-              <span>₹${quotationData.tax.toFixed(2)}</span>
+              <span>₹${items.reduce((sum, item) => sum + (item.taxAmount || 0), 0).toFixed(2)}</span>
             </div>
-            ${additionalCharges.map(charge => charge.amount > 0 ? `
+            ${charges.map(charge => charge.amount > 0 ? `
               <div style="display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px;">
                 <span>${charge.description}:</span>
                 <span>₹${parseFloat(charge.amount).toFixed(2)}</span>
@@ -573,24 +614,27 @@ const Quotation = () => {
             <hr style="border-top: 2px solid #2c3e50; margin: 15px 0;">
             <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; color: #2c3e50;">
               <span>Total Amount:</span>
-              <span>₹${quotationData.totalAmount.toFixed(2)}</span>
+              <span>₹${(items.reduce((sum, item) => sum + (item.quantity * item.price), 0) - 
+                items.reduce((sum, item) => sum + (item.discountAmount || 0), 0) + 
+                items.reduce((sum, item) => sum + (item.taxAmount || 0), 0) + 
+                charges.reduce((sum, charge) => sum + parseFloat(charge.amount || 0), 0)).toFixed(2)}</span>
             </div>
           </div>
         </div>
         
         <!-- Terms and conditions section -->
-        ${terms ? `
+        ${termsText ? `
           <div style="margin-top: 30px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
             <h3 style="color: #2c3e50; margin-bottom: 10px; border-bottom: 1px solid #3498db; padding-bottom: 5px; font-size: 16px;">Terms & Conditions:</h3>
-            <p style="font-size: 12px; line-height: 1.5;">${terms.replace(/\n/g, '<br>')}</p>
+            <p style="font-size: 12px; line-height: 1.5;">${termsText.replace(/\n/g, '<br>')}</p>
           </div>
         ` : ''}
         
         <!-- Notes section -->
-        ${notes ? `
+        ${notesText ? `
           <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
             <h3 style="color: #2c3e50; margin-bottom: 8px; font-size: 14px;">Notes:</h3>
-            <p style="font-size: 12px;">${notes}</p>
+            <p style="font-size: 12px;">${notesText}</p>
           </div>
         ` : ''}
         
@@ -614,73 +658,15 @@ const Quotation = () => {
             </div>
           </div>
         </div>
-      `;
-
-      document.body.appendChild(printContent);
-      
-      const canvas = await html2canvas(printContent, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        allowTaint: true,
-        backgroundColor: '#ffffff'
-      });
-      
-      document.body.removeChild(printContent);
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 210;
-      const pageHeight = 297;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      // Handle multi-page PDF if content is too long
-      let heightLeft = imgHeight;
-      let position = 0;
-      
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-      
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-      
-      pdf.save(`quotation_${quotationHeader.quotationNo}.pdf`);
-      
-    } catch (error) {
-      console.error('PDF Generation Error:', error);
-      alert('Error creating PDF. Please try again.');
-    }
+      </div>
+    `;
   };
 
   // Function to download specific quotation as PDF
   const downloadQuotationPDF = async (quotation) => {
     try {
-      // Create temporary image elements to get base64 data
-      const logoBase64 = await new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = companyLogo;
-        img.onload = () => {
-          const base64 = convertImageToBase64(img);
-          resolve(base64 || '');
-        };
-        img.onerror = () => resolve('');
-      });
-
-      const signatureBase64 = await new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = companySignature;
-        img.onload = () => {
-          const base64 = convertImageToBase64(img);
-          resolve(base64 || '');
-        };
-        img.onerror = () => resolve('');
-      });
+      const logoBase64 = logoUrl || '';
+      const signatureBase64 = signatureUrl || '';
 
       const printContent = document.createElement('div');
       printContent.style.cssText = `
@@ -695,144 +681,16 @@ const Quotation = () => {
 
       const party = quotation.partyDetails || quotation.partyId;
       
-      // Fallback for missing images
-      const logoFallback = `<div style="height: 80px; width: 80px; background: #2c3e50; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: bold; font-size: 14px;">GMS</div>`;
-      const signatureFallback = `<div style="height: 60px; display: flex; align-items: center; justify-content: center; color: #2c3e50; font-style: italic;">Signature</div>`;
-
-      printContent.innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; border-bottom: 2px solid #3498db; padding-bottom: 15px;">
-          <div style="flex: 1;">
-            <div style="display: flex; align-items: center;">
-              ${logoBase64 ? `<img src="${logoBase64}" alt="Company Logo" style="height: 80px; width: auto; margin-right: 15px; border-radius: 8px; max-width: 150px; object-fit: contain;" />` : logoFallback}
-              <div>
-                <h1 style="margin: 0; color: #2c3e50; font-size: 24px; font-weight: bold;">GLOBAL MARKETING SOLUTIONS</h1>
-                <p style="margin: 5px 0 0 0; color: #7f8c8d; font-size: 14px;">One Stop Solution For Your Problem</p>
-              </div>
-            </div>
-          </div>
-          <div style="text-align: center; flex: 1;">
-            <h2 style="margin: 5px 0 0 0; color: #2c3e50; font-size: 28px; font-weight: bold;">QUOTATION</h2>
-          </div>
-          <div style="flex: 1; text-align: right;">
-          </div>
-        </div>
-        
-        <div style="display: flex; justify-content: space-between; margin-bottom: 25px;">
-          <div style="flex: 1;">
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Quotation No:</strong> ${quotation.quotationNo}</p>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Date:</strong> ${quotation.quotationDate}</p>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Valid Until:</strong> ${quotation.validityDate}</p>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>PO No:</strong> ${quotation.poNo || 'N/A'}</p>
-          </div>
-          <div style="flex: 1; text-align: right;">
-            <p style="margin: 5px 0; font-size: 14px;"><strong>GLOBAL MARKETING SOLUTIONS</strong></p>
-            <p style="margin: 5px 0; font-size: 14px;">Champagne Branch</p>
-            <p style="margin: 5px 0; font-size: 14px;">A/C: 9127000007166090</p>
-            <p style="margin: 5px 0; font-size: 14px;">IFSC: UTIB0001336</p>
-          </div>
-        </div>
-        
-        ${party ? `
-          <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
-            <h3 style="color: #2c3e50; margin-bottom: 10px; border-bottom: 1px solid #3498db; padding-bottom: 5px; font-size: 16px;">Bill To:</h3>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>${party.partyName}</strong></p>
-            ${party.mobileNumber ? `<p style="margin: 4px 0; font-size: 14px;">Mobile: ${party.mobileNumber}</p>` : ''}
-            ${party.billingAddress ? `<p style="margin: 4px 0; font-size: 14px;">${party.billingAddress}</p>` : ''}
-            ${party.gstin ? `<p style="margin: 4px 0; font-size: 14px;">GSTIN: ${party.gstin}</p>` : ''}
-          </div>
-        ` : ''}
-        
-        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px;">
-          <thead>
-            <tr style="background-color: #2c3e50; color: white;">
-              <th style="padding: 10px; border: 1px solid #ddd; text-align: left; font-size: 12px;">#</th>
-              <th style="padding: 10px; border: 1px solid #ddd; text-align: left; font-size: 12px;">Item Description</th>
-              <th style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 12px;">Qty</th>
-              <th style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 12px;">Unit</th>
-              <th style="padding: 10px; border: 1px solid #ddd; text-align: right; font-size: 12px;">Price (₹)</th>
-              <th style="padding: 10px; border: 1px solid #ddd; text-align: right; font-size: 12px;">Amount (₹)</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${quotation.items.map((item, index) => `
-              <tr>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-size: 12px;">${index + 1}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; font-size: 12px;">
-                  <strong>${item.name}</strong>
-                  ${item.description ? `<br><small style="color: #666; font-size: 11px;">${item.description}</small>` : ''}
-                </td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-size: 12px;">${item.quantity}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-size: 12px;">${item.unit}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-size: 12px;">₹${item.price.toFixed(2)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-size: 12px;">₹${item.amount.toFixed(2)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        
-        <div style="display: flex; justify-content: flex-end; margin-top: 25px;">
-          <div style="background: #f8f9fa; padding: 20px; border: 2px solid #3498db; border-radius: 8px; width: 300px;">
-            <h3 style="margin-top: 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 8px; font-size: 16px;">SUMMARY</h3>
-            <div style="display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px;">
-              <span>Subtotal:</span>
-              <span>₹${quotation.summary?.subtotal?.toFixed(2) || '0.00'}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin: 10px 0; color: #e74c3c; font-size: 13px;">
-              <span>Discount:</span>
-              <span>-₹${quotation.summary?.discount?.toFixed(2) || '0.00'}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px;">
-              <span>Tax (18% GST):</span>
-              <span>₹${quotation.summary?.tax?.toFixed(2) || '0.00'}</span>
-            </div>
-            ${quotation.additionalCharges?.map(charge => charge.amount > 0 ? `
-              <div style="display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px;">
-                <span>${charge.description}:</span>
-                <span>₹${parseFloat(charge.amount).toFixed(2)}</span>
-              </div>
-            ` : '').join('')}
-            <hr style="border-top: 2px solid #2c3e50; margin: 15px 0;">
-            <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; color: #2c3e50;">
-              <span>Total Amount:</span>
-              <span>₹${quotation.summary?.totalAmount?.toFixed(2) || '0.00'}</span>
-            </div>
-          </div>
-        </div>
-        
-        ${quotation.terms ? `
-          <div style="margin-top: 30px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
-            <h3 style="color: #2c3e50; margin-bottom: 10px; border-bottom: 1px solid #3498db; padding-bottom: 5px; font-size: 16px;">Terms & Conditions:</h3>
-            <p style="font-size: 12px; line-height: 1.5;">${quotation.terms.replace(/\n/g, '<br>')}</p>
-          </div>
-        ` : ''}
-        
-        ${quotation.notes ? `
-          <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
-            <h3 style="color: #2c3e50; margin-bottom: 8px; font-size: 14px;">Notes:</h3>
-            <p style="font-size: 12px;">${quotation.notes}</p>
-          </div>
-        ` : ''}
-        
-        <div style="margin-top: 40px; padding-top: 15px; border-top: 2px solid #3498db;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="text-align: center; flex: 1;">
-              <p style="font-size: 14px; margin-bottom: 8px;">Thank you for your business!</p>
-              <p style="font-size: 12px;"><strong>Authorized Signatory</strong><br>Global Marketing Solutions</p>
-            </div>
-            <div style="flex: 1; text-align: center;">
-              ${signatureBase64 ? `<img src="${signatureBase64}" alt="Signature" style="max-height: 60px; max-width: 200px; object-fit: contain;" />` : signatureFallback}
-            </div>
-            <div style="flex: 1; text-align: right;">
-              <div style="font-size: 10px; color: #95a5a6;">
-                <p>GLOBAL MARKETING SOLUTIONS</p>
-                <p>Champagne Branch</p>
-                <p>Phone: +91 XXXXX XXXXX</p>
-                <p>Email: info@globalmarketingsolutions.com</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
+      printContent.innerHTML = generateQuotationHTML(
+        quotation, 
+        party, 
+        quotation.items, 
+        quotation.additionalCharges || [], 
+        quotation.notes || '', 
+        quotation.terms || '', 
+        logoBase64, 
+        signatureBase64
+      );
 
       document.body.appendChild(printContent);
       
@@ -873,7 +731,7 @@ const Quotation = () => {
     }
   };
 
-  // Function to view quotation details
+  // Function to view quotation details in professional format
   const viewQuotation = (quotation) => {
     setSelectedQuotation(quotation);
     setShowQuotationDetails(true);
@@ -894,273 +752,38 @@ const Quotation = () => {
     const printWindow = window.open('', '_blank');
     const party = parties.find(p => p._id === selectedParty);
     
-    // Convert imported images to data URLs for print
-    const getImageDataUrl = (imgSrc) => {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = imgSrc;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-          resolve(canvas.toDataURL('image/png'));
-        };
-        img.onerror = () => resolve('');
-      });
-    };
+    const logoDataUrl = logoUrl || '';
+    const signatureDataUrl = signatureUrl || '';
 
-    // Generate print content
-    const generatePrintContent = async () => {
-      const logoDataUrl = await getImageDataUrl(companyLogo);
-      const signatureDataUrl = await getImageDataUrl(companySignature);
-
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Quotation ${quotationHeader.quotationNo}</title>
-          <style>
-            body { 
-              font-family: Arial, sans-serif; 
-              margin: 15px; 
-              color: #333;
-              font-size: 12px;
-            }
-            .header { 
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-              border-bottom: 2px solid #3498db; 
-              padding-bottom: 15px;
-              margin-bottom: 15px;
-            }
-            .logo-container {
-              flex: 1;
-              display: flex;
-              align-items: center;
-            }
-            .logo {
-              height: 70px;
-              width: auto;
-              margin-right: 12px;
-              border-radius: 6px;
-              max-width: 120px;
-              object-fit: contain;
-            }
-            .company-info {
-              flex: 1;
-            }
-            .company-name { 
-              font-size: 20px; 
-              font-weight: bold; 
-              color: #2c3e50;
-              margin: 0;
-            }
-            .company-tagline {
-              font-size: 12px;
-              color: #7f8c8d;
-              margin: 3px 0 0 0;
-            }
-            .title-container {
-              text-align: center;
-              flex: 1;
-            }
-            .quotation-title { 
-              font-size: 24px; 
-              color: #2c3e50;
-              font-weight: bold;
-              margin: 0;
-            }
-            .details-section { 
-              display: flex; 
-              justify-content: space-between; 
-              margin-bottom: 15px;
-            }
-            .party-details, .quotation-details { 
-              width: 48%; 
-            }
-            .party-details {
-              background: #f8f9fa;
-              padding: 12px;
-              border-radius: 6px;
-              border: 1px solid #e9ecef;
-            }
-            table { 
-              width: 100%; 
-              border-collapse: collapse; 
-              margin: 15px 0;
-              font-size: 11px;
-            }
-            th { 
-              background-color: #2c3e50; 
-              color: white; 
-              padding: 8px; 
-              text-align: left;
-              border: 1px solid #ddd;
-            }
-            td { 
-              padding: 6px; 
-              border: 1px solid #ddd;
-            }
-            .summary { 
-              float: right; 
-              width: 280px; 
-              border: 2px solid #3498db; 
-              padding: 15px; 
-              background-color: #f8f9fa;
-              border-radius: 6px;
-              font-size: 11px;
-            }
-            .total { 
-              font-weight: bold; 
-              font-size: 14px; 
-              border-top: 2px solid #2c3e50; 
-              padding-top: 8px;
-              color: #2c3e50;
-            }
-            .footer { 
-              margin-top: 30px; 
-              text-align: center; 
-              color: #7f8c8d;
-              padding-top: 12px;
-              border-top: 2px solid #3498db;
-              font-size: 10px;
-            }
-            .signature-container {
-              text-align: center;
-              margin-top: 20px;
-            }
-            .signature {
-              max-height: 50px;
-              max-width: 150px;
-              object-fit: contain;
-            }
-            @media print {
-              body { margin: 0; }
-              .no-print { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="logo-container">
-              ${logoDataUrl ? `<img src="${logoDataUrl}" alt="Company Logo" class="logo" />` : '<div style="height: 70px; width: 70px; background: #2c3e50; color: white; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-weight: bold; font-size: 12px; margin-right: 12px;">GMS</div>'}
-              <div class="company-info">
-                <h1 class="company-name">GLOBAL MARKETING SOLUTIONS</h1>
-                <p class="company-tagline">One Stop Solution For Your Problem</p>
-              </div>
-            </div>
-            <div class="title-container">
-              <div class="quotation-title">QUOTATION</div>
-            </div>
-            <div style="flex: 1;">
-              <!-- Empty for balance -->
-            </div>
-          </div>
-
-          <div class="details-section">
-            <div class="quotation-details">
-              <strong>Quotation Details:</strong><br>
-              Quotation No: ${quotationHeader.quotationNo || 'N/A'}<br>
-              Date: ${quotationHeader.quotationDate || 'N/A'}<br>
-              Valid Until: ${quotationHeader.validityDate || 'N/A'}<br>
-              PO No: ${quotationHeader.poNo || 'N/A'}
-            </div>
-            <div class="party-details">
-              <strong>Bill To:</strong><br>
-              ${party ? `
-                ${party.partyName || ''}<br>
-                ${party.billingAddress || ''}<br>
-                ${party.gstin ? 'GSTIN: ' + party.gstin : ''}<br>
-                ${party.mobileNumber ? 'Mobile: ' + party.mobileNumber : ''}
-              ` : 'No party selected'}
-            </div>
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Item Description</th>
-                <th>Qty</th>
-                <th>Unit</th>
-                <th>Rate (₹)</th>
-                <th>Amount (₹)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${quotationData.items.map((item, index) => `
-                <tr>
-                  <td>${index + 1}</td>
-                  <td>${item.name}${item.description ? '<br><small style="color: #666;">' + item.description + '</small>' : ''}</td>
-                  <td>${item.quantity}</td>
-                  <td>${item.unit}</td>
-                  <td>${item.price.toFixed(2)}</td>
-                  <td>${item.amount.toFixed(2)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-
-          <div class="summary">
-            <strong style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 8px; display: block; margin-bottom: 12px;">SUMMARY</strong>
-            Subtotal: ₹${quotationData.subtotal.toFixed(2)}<br>
-            Discount: -₹${quotationData.discount.toFixed(2)}<br>
-            Tax (18% GST): ₹${quotationData.tax.toFixed(2)}<br>
-            ${additionalCharges.map(charge => 
-              charge.description && charge.amount ? 
-              `${charge.description}: ₹${parseFloat(charge.amount).toFixed(2)}<br>` : ''
-            ).join('')}
-            <div class="total">Total Amount: ₹${quotationData.totalAmount.toFixed(2)}</div>
-          </div>
-
-          <div style="clear: both;"></div>
-
-          ${terms ? `
-            <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef;">
-              <strong>Terms & Conditions:</strong><br>
-              ${terms.replace(/\n/g, '<br>')}
-            </div>
-          ` : ''}
-
-          ${notes ? `
-            <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef;">
-              <strong>Notes:</strong><br>
-              ${notes}
-            </div>
-          ` : ''}
-
-          <div class="footer">
-            <div class="signature-container">
-              ${signatureDataUrl ? `<img src="${signatureDataUrl}" alt="Signature" class="signature" />` : ''}
-            </div>
-            <p>Thank you for your business!</p>
-            <p><strong>Authorized Signatory</strong><br>Global Marketing Solutions</p>
-            <div style="margin-top: 15px;">
-              <p>GLOBAL MARKETING SOLUTIONS • Champagne Branch</p>
-              <p>Phone: +91 XXXXX XXXXX • Email: info@globalmarketingsolutions.com</p>
-            </div>
-          </div>
-
-          <div class="no-print" style="margin-top: 15px; text-align: center;">
-            <button onclick="window.print()" style="padding: 8px 16px; background: #3498db; color: white; border: none; cursor: pointer; font-size: 11px;">
-              Print Quotation
-            </button>
-            <button onclick="window.close()" style="padding: 8px 16px; background: #95a5a6; color: white; border: none; cursor: pointer; margin-left: 8px; font-size: 11px;">
-              Close
-            </button>
-          </div>
-        </body>
-        </html>
-      `);
-      
-      printWindow.document.close();
-    };
-
-    generatePrintContent();
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Quotation ${quotationHeader.quotationNo}</title>
+        <style>
+          body { 
+            font-family: Arial, sans-serif; 
+            margin: 0;
+            padding: 20px;
+            color: #333;
+          }
+          @media print {
+            body { margin: 0; padding: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        ${generateQuotationHTML(quotationHeader, party, quotationData.items, additionalCharges, notes, terms, logoDataUrl, signatureDataUrl)}
+        <div class="no-print" style="margin-top: 20px; text-align: center;">
+          <button onclick="window.print()" style="padding: 10px 20px; background: #3498db; color: white; border: none; cursor: pointer; margin-right: 10px;">Print</button>
+          <button onclick="window.close()" style="padding: 10px 20px; background: #95a5a6; color: white; border: none; cursor: pointer;">Close</button>
+        </div>
+      </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
   };
 
   // Filter requirements based on search term
@@ -1228,18 +851,59 @@ const Quotation = () => {
         marginBottom: '20px',
         gap: isMobile ? '12px' : '0'
       }}>
-        {/* Main title */}
-        <h1 style={{ 
-          color: '#2c3e50', 
-          fontSize: isMobile ? '22px' : '28px', 
-          fontWeight: '700',
-          margin: 0,
-          textAlign: isMobile ? 'center' : 'left'
+        {/* Company Logo and Title Header */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+          flex: 1
         }}>
-          Create Quotation
-        </h1>
+          {logoUrl ? (
+            <img 
+              src={logoUrl} 
+              alt="Company Logo" 
+              style={{
+                height: isMobile ? '50px' : '70px',
+                width: 'auto',
+                borderRadius: '8px',
+                objectFit: 'contain'
+              }}
+            />
+          ) : (
+            <div style={{
+              height: isMobile ? '50px' : '70px',
+              width: isMobile ? '50px' : '70px',
+              background: '#2c3e50',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '8px',
+              fontWeight: 'bold',
+              fontSize: isMobile ? '12px' : '14px'
+            }}>
+              GMS
+            </div>
+          )}
+          <div>
+            <h1 style={{ 
+              color: '#2c3e50', 
+              fontSize: isMobile ? '18px' : '22px', 
+              fontWeight: '700',
+              margin: 0
+            }}>
+              GLOBAL MARKETING SOLUTIONS
+            </h1>
+            <p style={{
+              margin: '4px 0 0 0',
+              color: '#7f8c8d',
+              fontSize: isMobile ? '11px' : '13px'
+            }}>
+              One Stop Solution For Your Problem
+            </p>
+          </div>
+        </div>
         
-        {/* View quotations button */}
         <button 
           onClick={() => {
             setShowViewQuotations(true);
@@ -1253,6 +917,7 @@ const Quotation = () => {
         </button>
       </div>
 
+      {/* Rest of the form - keeping the same as before */}
       {/* Main quotation form card */}
       <div style={cardStyle}>
         <div style={{
@@ -1498,7 +1163,7 @@ const Quotation = () => {
         </div>
       </div>
 
-      {/* Items Section Card */}
+      {/* Items Section Card - Keeping the same as before */}
       <div style={cardStyle}>
         <div>
           <h2 style={{
@@ -1521,7 +1186,6 @@ const Quotation = () => {
                   marginBottom: '12px',
                   backgroundColor: '#f8f9fa'
                 }}>
-                  {/* Item header with name and remove button */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
                     <div>
                       <strong style={{ fontSize: '14px' }}>{item.name}</strong>
@@ -1547,7 +1211,6 @@ const Quotation = () => {
                     </button>
                   </div>
                   
-                  {/* Item details grid */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '13px' }}>
                     <div>Qty: {item.quantity} {item.unit}</div>
                     <div>Price: ₹{item.price.toFixed(2)}</div>
@@ -1558,7 +1221,6 @@ const Quotation = () => {
                     </div>
                   </div>
                   
-                  {/* Description input */}
                   <div style={{ marginTop: '8px' }}>
                     <input
                       type="text"
@@ -1578,7 +1240,6 @@ const Quotation = () => {
               ))}
             </div>
           ) : (
-            /* Desktop table view */
             <table style={{
               width: '100%',
               borderCollapse: 'collapse',
@@ -1590,310 +1251,58 @@ const Quotation = () => {
             }}>
               <thead>
                 <tr>
-                  <th style={{
-                    border: '1px solid #dee2e6',
-                    padding: '16px 12px',
-                    textAlign: 'left',
-                    backgroundColor: '#2c3e50',
-                    fontWeight: '600',
-                    color: 'white',
-                    fontSize: '14px'
-                  }}>NO</th>
-                  <th style={{
-                    border: '1px solid #dee2e6',
-                    padding: '16px 12px',
-                    textAlign: 'left',
-                    backgroundColor: '#2c3e50',
-                    fontWeight: '600',
-                    color: 'white',
-                    fontSize: '14px'
-                  }}>ITEMS/SERVICES</th>
-                  <th style={{
-                    border: '1px solid #dee2e6',
-                    padding: '16px 12px',
-                    textAlign: 'left',
-                    backgroundColor: '#2c3e50',
-                    fontWeight: '600',
-                    color: 'white',
-                    fontSize: '14px'
-                  }}>QTY</th>
-                  <th style={{
-                    border: '1px solid #dee2e6',
-                    padding: '16px 12px',
-                    textAlign: 'left',
-                    backgroundColor: '#2c3e50',
-                    fontWeight: '600',
-                    color: 'white',
-                    fontSize: '14px'
-                  }}>PRICE/ITEM (₹)</th>
-                  <th style={{
-                    border: '1px solid #dee2e6',
-                    padding: '16px 12px',
-                    textAlign: 'left',
-                    backgroundColor: '#2c3e50',
-                    fontWeight: '600',
-                    color: 'white',
-                    fontSize: '14px'
-                  }}>DISCOUNT</th>
-                  <th style={{
-                    border: '1px solid #dee2e6',
-                    padding: '16px 12px',
-                    textAlign: 'left',
-                    backgroundColor: '#2c3e50',
-                    fontWeight: '600',
-                    color: 'white',
-                    fontSize: '14px'
-                  }}>TAX</th>
-                  <th style={{
-                    border: '1px solid #dee2e6',
-                    padding: '16px 12px',
-                    textAlign: 'left',
-                    backgroundColor: '#2c3e50',
-                    fontWeight: '600',
-                    color: 'white',
-                    fontSize: '14px'
-                  }}>AMOUNT (₹)</th>
-                  <th style={{
-                    border: '1px solid #dee2e6',
-                    padding: '16px 12px',
-                    textAlign: 'left',
-                    backgroundColor: '#2c3e50',
-                    fontWeight: '600',
-                    color: 'white',
-                    fontSize: '14px'
-                  }}>ACTION</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '16px 12px', textAlign: 'left', backgroundColor: '#2c3e50', fontWeight: '600', color: 'white', fontSize: '14px' }}>NO</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '16px 12px', textAlign: 'left', backgroundColor: '#2c3e50', fontWeight: '600', color: 'white', fontSize: '14px' }}>ITEMS/SERVICES</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '16px 12px', textAlign: 'left', backgroundColor: '#2c3e50', fontWeight: '600', color: 'white', fontSize: '14px' }}>QTY</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '16px 12px', textAlign: 'left', backgroundColor: '#2c3e50', fontWeight: '600', color: 'white', fontSize: '14px' }}>PRICE/ITEM (₹)</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '16px 12px', textAlign: 'left', backgroundColor: '#2c3e50', fontWeight: '600', color: 'white', fontSize: '14px' }}>DISCOUNT</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '16px 12px', textAlign: 'left', backgroundColor: '#2c3e50', fontWeight: '600', color: 'white', fontSize: '14px' }}>TAX</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '16px 12px', textAlign: 'left', backgroundColor: '#2c3e50', fontWeight: '600', color: 'white', fontSize: '14px' }}>AMOUNT (₹)</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '16px 12px', textAlign: 'left', backgroundColor: '#2c3e50', fontWeight: '600', color: 'white', fontSize: '14px' }}>ACTION</th>
                 </tr>
               </thead>
               <tbody>
                 {quotationData.items.map((item, index) => (
                   <React.Fragment key={item.id}>
-                    {/* Main item row */}
                     <tr>
-                      <td style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        fontSize: '14px'
-                      }}>{index + 1}</td>
-                      <td style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        fontSize: '14px'
-                      }}>
+                      <td style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', fontSize: '14px' }}>{index + 1}</td>
+                      <td style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', fontSize: '14px' }}>
                         <div>
                           <strong>{item.name}</strong>
-                          {item.description && <div style={{
-                            fontSize: '12px',
-                            color: '#6c757d',
-                            marginTop: '4px',
-                            fontStyle: 'italic'
-                          }}>{item.description}</div>}
+                          {item.description && <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '4px', fontStyle: 'italic' }}>{item.description}</div>}
                         </div>
                       </td>
-                      <td style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        fontSize: '14px'
-                      }}>
-                        <input
-                          type="number"
-                          value={item.quantity || ''}
-                          onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-                          min="1"
-                          style={{
-                            width: '80px',
-                            padding: '8px',
-                            border: '2px solid #e9ecef',
-                            borderRadius: '4px',
-                            fontSize: '14px',
-                            outline: 'none',
-                            transition: 'border-color 0.3s ease'
-                          }}
-                          onFocus={(e) => e.target.style.borderColor = '#3498db'}
-                          onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-                        />
-                        <span style={{
-                          marginLeft: '8px',
-                          color: '#6c757d',
-                          fontSize: '12px',
-                          fontWeight: '500'
-                        }}>{item.unit}</span>
+                      <td style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', fontSize: '14px' }}>
+                        <input type="number" value={item.quantity || ''} onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)} min="1" style={{ width: '80px', padding: '8px', border: '2px solid #e9ecef', borderRadius: '4px', fontSize: '14px', outline: 'none' }} onFocus={(e) => e.target.style.borderColor = '#3498db'} onBlur={(e) => e.target.style.borderColor = '#e9ecef'} />
+                        <span style={{ marginLeft: '8px', color: '#6c757d', fontSize: '12px', fontWeight: '500' }}>{item.unit}</span>
                       </td>
-                      <td style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        fontSize: '14px'
-                      }}>
-                        <input
-                          type="number"
-                          value={item.price || ''}
-                          onChange={(e) => updateItem(index, 'price', parseFloat(e.target.value) || 0)}
-                          style={{
-                            width: '80px',
-                            padding: '8px',
-                            border: '2px solid #e9ecef',
-                            borderRadius: '4px',
-                            fontSize: '14px',
-                            outline: 'none',
-                            transition: 'border-color 0.3s ease'
-                          }}
-                          onFocus={(e) => e.target.style.borderColor = '#3498db'}
-                          onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-                        />
+                      <td style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', fontSize: '14px' }}>
+                        <input type="number" value={item.price || ''} onChange={(e) => updateItem(index, 'price', parseFloat(e.target.value) || 0)} style={{ width: '80px', padding: '8px', border: '2px solid #e9ecef', borderRadius: '4px', fontSize: '14px', outline: 'none' }} onFocus={(e) => e.target.style.borderColor = '#3498db'} onBlur={(e) => e.target.style.borderColor = '#e9ecef'} />
                       </td>
-                      <td style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        fontSize: '14px'
-                      }}>
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px'
-                        }}>
-                          <input
-                            type="number"
-                            value={item.discount || ''}
-                            onChange={(e) => updateItem(index, 'discount', parseFloat(e.target.value) || 0)}
-                            style={{
-                              width: '80px',
-                              padding: '8px',
-                              border: '2px solid #e9ecef',
-                              borderRadius: '4px',
-                              fontSize: '14px',
-                              outline: 'none',
-                              transition: 'border-color 0.3s ease'
-                            }}
-                            onFocus={(e) => e.target.style.borderColor = '#3498db'}
-                            onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-                          />
-                          <select
-                            value={item.discountType}
-                            onChange={(e) => updateItem(index, 'discountType', e.target.value)}
-                            style={{
-                              padding: '8px',
-                              border: '2px solid #e9ecef',
-                              borderRadius: '4px',
-                              fontSize: '12px',
-                              backgroundColor: 'white',
-                              outline: 'none',
-                              transition: 'border-color 0.3s ease'
-                            }}
-                            onFocus={(e) => e.target.style.borderColor = '#3498db'}
-                            onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-                          >
+                      <td style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', fontSize: '14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <input type="number" value={item.discount || ''} onChange={(e) => updateItem(index, 'discount', parseFloat(e.target.value) || 0)} style={{ width: '80px', padding: '8px', border: '2px solid #e9ecef', borderRadius: '4px', fontSize: '14px', outline: 'none' }} onFocus={(e) => e.target.style.borderColor = '#3498db'} onBlur={(e) => e.target.style.borderColor = '#e9ecef'} />
+                          <select value={item.discountType} onChange={(e) => updateItem(index, 'discountType', e.target.value)} style={{ padding: '8px', border: '2px solid #e9ecef', borderRadius: '4px', fontSize: '12px', backgroundColor: 'white', outline: 'none' }} onFocus={(e) => e.target.style.borderColor = '#3498db'} onBlur={(e) => e.target.style.borderColor = '#e9ecef' }>
                             <option value="percentage">%</option>
                             <option value="fixed">₹</option>
                           </select>
                         </div>
                       </td>
-                      <td style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        fontSize: '14px'
-                      }}>
-                        <select
-                          value={item.tax}
-                          onChange={(e) => updateItem(index, 'tax', parseFloat(e.target.value) || 0)}
-                          style={{
-                            padding: '8px',
-                            border: '2px solid #e9ecef',
-                            borderRadius: '4px',
-                            fontSize: '12px',
-                            backgroundColor: 'white',
-                            outline: 'none',
-                            transition: 'border-color 0.3s ease',
-                            width: '100%'
-                          }}
-                          onFocus={(e) => e.target.style.borderColor = '#3498db'}
-                          onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-                        >
-                          {taxOptions.map((option, idx) => (
-                            <option key={idx} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
+                      <td style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', fontSize: '14px' }}>
+                        <select value={item.tax} onChange={(e) => updateItem(index, 'tax', parseFloat(e.target.value) || 0)} style={{ padding: '8px', border: '2px solid #e9ecef', borderRadius: '4px', fontSize: '12px', backgroundColor: 'white', outline: 'none', width: '100%' }} onFocus={(e) => e.target.style.borderColor = '#3498db'} onBlur={(e) => e.target.style.borderColor = '#e9ecef' }>
+                          {taxOptions.map((option, idx) => (<option key={idx} value={option.value}>{option.label}</option>))}
                         </select>
                       </td>
-                      <td style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        fontSize: '14px'
-                      }}>₹{(item.amount || 0).toFixed(2)}</td>
-                      <td style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        fontSize: '14px'
-                      }}>
-                        <button 
-                          onClick={() => removeItem(index)}
-                          style={{
-                            backgroundColor: hoverStates.removeButtons[index] ? '#c0392b' : '#e74c3c',
-                            color: 'white',
-                            border: 'none',
-                            padding: '8px 16px',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: '500',
-                            transition: 'background-color 0.3s ease'
-                          }}
-                          onMouseEnter={() => setHoverStates(prev => ({
-                            ...prev,
-                            removeButtons: { ...prev.removeButtons, [index]: true }
-                          }))}
-                          onMouseLeave={() => setHoverStates(prev => ({
-                            ...prev,
-                            removeButtons: { ...prev.removeButtons, [index]: false }
-                          }))}
-                        >
-                          Remove
-                        </button>
+                      <td style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', fontSize: '14px' }}>₹{(item.amount || 0).toFixed(2)}</td>
+                      <td style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', fontSize: '14px' }}>
+                        <button onClick={() => removeItem(index)} style={{ backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}>Remove</button>
                       </td>
                     </tr>
-                    {/* Description Row */}
                     <tr>
-                      <td colSpan="8" style={{
-                        border: '1px solid #dee2e6',
-                        padding: '12px',
-                        backgroundColor: '#f8f9fa'
-                      }}>
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '12px'
-                        }}>
-                          <span style={{
-                            fontSize: '13px',
-                            fontWeight: '600',
-                            color: '#2c3e50',
-                            minWidth: '100px'
-                          }}>Description:</span>
-                          <input
-                            type="text"
-                            value={item.description || ''}
-                            onChange={(e) => updateItem(index, 'description', e.target.value)}
-                            placeholder="Enter item description..."
-                            style={{
-                              flex: 1,
-                              padding: '10px 12px',
-                              border: '2px solid #e9ecef',
-                              borderRadius: '6px',
-                              fontSize: '14px',
-                              backgroundColor: 'white',
-                              transition: 'border-color 0.3s ease',
-                              outline: 'none'
-                            }}
-                            onFocus={(e) => e.target.style.borderColor = '#3498db'}
-                            onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-                          />
+                      <td colSpan="8" style={{ border: '1px solid #dee2e6', padding: '12px', backgroundColor: '#f8f9fa' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#2c3e50', minWidth: '100px' }}>Description:</span>
+                          <input type="text" value={item.description || ''} onChange={(e) => updateItem(index, 'description', e.target.value)} placeholder="Enter item description..." style={{ flex: 1, padding: '10px 12px', border: '2px solid #e9ecef', borderRadius: '6px', fontSize: '14px', backgroundColor: 'white', outline: 'none' }} onFocus={(e) => e.target.style.borderColor = '#3498db'} onBlur={(e) => e.target.style.borderColor = '#e9ecef'} />
                         </div>
                       </td>
                     </tr>
@@ -1903,27 +1312,13 @@ const Quotation = () => {
             </table>
           )}
 
-          {/* Add Item Button */}
-          <button 
-            onClick={() => setShowAddItems(true)}
-            style={{
-              ...buttonStyle('#27ae60'),
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              marginTop: '10px'
-            }}
-            onMouseEnter={() => setHoverStates(prev => ({ ...prev, addItem: true }))}
-            onMouseLeave={() => setHoverStates(prev => ({ ...prev, addItem: false }))}
-          >
-            <span style={{ fontSize: '18px' }}>+</span>
-            Add Item
+          <button onClick={() => setShowAddItems(true)} style={{ ...buttonStyle('#27ae60'), display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '10px' }}>
+            <span style={{ fontSize: '18px' }}>+</span> Add Item
           </button>
         </div>
       </div>
 
-      {/* Summary Section Card */}
+      {/* Summary Section Card - Keeping the same as before */}
       <div style={cardStyle}>
         <div style={{
           display: 'grid',
@@ -1931,754 +1326,167 @@ const Quotation = () => {
           gap: isMobile ? '20px' : '40px',
           marginTop: '0'
         }}>
-          {/* Left side - Additional Information */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px'
-          }}>
-            <h2 style={{
-              marginBottom: '16px',
-              color: '#2c3e50',
-              fontSize: isMobile ? '18px' : '20px',
-              fontWeight: '600',
-              borderBottom: '2px solid #3498db',
-              paddingBottom: '8px'
-            }}>Additional Information</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <h2 style={{ marginBottom: '16px', color: '#2c3e50', fontSize: isMobile ? '18px' : '20px', fontWeight: '600', borderBottom: '2px solid #3498db', paddingBottom: '8px' }}>Additional Information</h2>
             
-            {/* Notes section */}
             <div style={{ margin: '0' }}>
-              <h3 style={{
-                marginBottom: '12px',
-                color: '#34495e',
-                fontSize: isMobile ? '15px' : '16px',
-                fontWeight: '600'
-              }}>Notes</h3>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  border: '2px solid #e9ecef',
-                  borderRadius: '6px',
-                  resize: 'vertical',
-                  fontFamily: 'inherit',
-                  fontSize: isMobile ? '13px' : '14px',
-                  outline: 'none',
-                  transition: 'border-color 0.3s ease',
-                  minHeight: '100px'
-                }}
-                rows="3"
-                placeholder="Add any additional notes here..."
-                onFocus={(e) => e.target.style.borderColor = '#3498db'}
-                onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-              />
+              <h3 style={{ marginBottom: '12px', color: '#34495e', fontSize: isMobile ? '15px' : '16px', fontWeight: '600' }}>Notes</h3>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} style={{ width: '100%', padding: '12px', border: '2px solid #e9ecef', borderRadius: '6px', resize: 'vertical', fontFamily: 'inherit', fontSize: isMobile ? '13px' : '14px', outline: 'none', minHeight: '100px' }} rows="3" placeholder="Add any additional notes here..." onFocus={(e) => e.target.style.borderColor = '#3498db'} onBlur={(e) => e.target.style.borderColor = '#e9ecef'} />
             </div>
             
-            {/* Add Additional Charges button */}
-            <button 
-              onClick={addAdditionalCharge}
-              style={buttonStyle('#6c757d')}
-            >
-              + Add Additional Charges
-            </button>
+            <button onClick={addAdditionalCharge} style={buttonStyle('#6c757d')}>+ Add Additional Charges</button>
             
-            {/* Terms and Conditions section */}
             <div style={{ margin: '0' }}>
-              <h3 style={{
-                marginBottom: '12px',
-                color: '#34495e',
-                fontSize: isMobile ? '15px' : '16px',
-                fontWeight: '600'
-              }}>Terms and Conditions</h3>
-              <textarea
-                value={terms}
-                onChange={(e) => setTerms(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  border: '2px solid #e9ecef',
-                  borderRadius: '6px',
-                  resize: 'vertical',
-                  fontFamily: 'inherit',
-                  fontSize: isMobile ? '13px' : '14px',
-                  outline: 'none',
-                  transition: 'border-color 0.3s ease',
-                  minHeight: '120px'
-                }}
-                rows="4"
-                onFocus={(e) => e.target.style.borderColor = '#3498db'}
-                onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-              />
+              <h3 style={{ marginBottom: '12px', color: '#34495e', fontSize: isMobile ? '15px' : '16px', fontWeight: '600' }}>Terms and Conditions</h3>
+              <textarea value={terms} onChange={(e) => setTerms(e.target.value)} style={{ width: '100%', padding: '12px', border: '2px solid #e9ecef', borderRadius: '6px', resize: 'vertical', fontFamily: 'inherit', fontSize: isMobile ? '13px' : '14px', outline: 'none', minHeight: '120px' }} rows="4" onFocus={(e) => e.target.style.borderColor = '#3498db'} onBlur={(e) => e.target.style.borderColor = '#e9ecef'} />
             </div>
             
-            {/* Authorized signatory note */}
-            <div style={{
-              marginTop: '30px',
-              fontWeight: '600',
-              color: '#2c3e50',
-              fontSize: isMobile ? '13px' : '14px',
-              textAlign: 'center',
-              padding: '16px',
-              backgroundColor: '#f8f9fa',
-              borderRadius: '6px',
-              border: '1px dashed #dee2e6'
-            }}>
+            <div style={{ marginTop: '30px', fontWeight: '600', color: '#2c3e50', fontSize: isMobile ? '13px' : '14px', textAlign: 'center', padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '6px', border: '1px dashed #dee2e6' }}>
               Authorized signatory for Global Marketing Solutions
             </div>
           </div>
 
-          {/* Right side - Summary Panel */}
-          <div style={{
-            backgroundColor: '#f8f9fa',
-            padding: isMobile ? '16px' : '24px',
-            borderRadius: '8px',
-            border: '1px solid #e9ecef'
-          }}>
-            <h3 style={{
-              marginBottom: '12px',
-              color: '#34495e',
-              fontSize: isMobile ? '15px' : '16px',
-              fontWeight: '600'
-            }}>Summary</h3>
+          <div style={{ backgroundColor: '#f8f9fa', padding: isMobile ? '16px' : '24px', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+            <h3 style={{ marginBottom: '12px', color: '#34495e', fontSize: isMobile ? '15px' : '16px', fontWeight: '600' }}>Summary</h3>
             
-            {/* Subtotal */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '12px 0',
-              borderBottom: '1px solid #dee2e6',
-              fontSize: isMobile ? '13px' : '14px'
-            }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #dee2e6', fontSize: isMobile ? '13px' : '14px' }}>
               <span>SUBTOTAL</span>
               <span>₹{quotationData.subtotal.toFixed(2)}</span>
             </div>
 
-            {/* Additional Charges */}
             {additionalCharges.map((charge, index) => (
-              <div key={charge.id} style={{
-                display: 'flex',
-                flexDirection: isMobile ? 'column' : 'row',
-                justifyContent: 'space-between',
-                padding: '10px 0',
-                gap: '8px',
-                alignItems: isMobile ? 'stretch' : 'center'
-              }}>
-                <input
-                  type="text"
-                  placeholder="Charge description"
-                  value={charge.description}
-                  onChange={(e) => updateAdditionalCharge(index, 'description', e.target.value)}
-                  style={{
-                    padding: '8px 12px',
-                    border: '2px solid #e9ecef',
-                    borderRadius: '4px',
-                    fontSize: isMobile ? '13px' : '14px',
-                    outline: 'none',
-                    transition: 'border-color 0.3s ease',
-                    flex: isMobile ? 'none' : '2'
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = '#3498db'}
-                  onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-                />
+              <div key={charge.id} style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', padding: '10px 0', gap: '8px', alignItems: isMobile ? 'stretch' : 'center' }}>
+                <input type="text" placeholder="Charge description" value={charge.description} onChange={(e) => updateAdditionalCharge(index, 'description', e.target.value)} style={{ padding: '8px 12px', border: '2px solid #e9ecef', borderRadius: '4px', fontSize: isMobile ? '13px' : '14px', outline: 'none', flex: isMobile ? 'none' : '2' }} onFocus={(e) => e.target.style.borderColor = '#3498db'} onBlur={(e) => e.target.style.borderColor = '#e9ecef'} />
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <input
-                    type="number"
-                    value={charge.amount || ''}
-                    onChange={(e) => updateAdditionalCharge(index, 'amount', parseFloat(e.target.value) || 0)}
-                    style={{
-                      padding: '8px 12px',
-                      border: '2px solid #e9ecef',
-                      borderRadius: '4px',
-                      fontSize: isMobile ? '13px' : '14px',
-                      outline: 'none',
-                      transition: 'border-color 0.3s ease',
-                      flex: '1'
-                    }}
-                    onFocus={(e) => e.target.style.borderColor = '#3498db'}
-                    onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-                  />
-                  <button 
-                    onClick={() => removeAdditionalCharge(index)}
-                    style={{
-                      backgroundColor: '#e74c3c',
-                      color: 'white',
-                      border: 'none',
-                      padding: '6px 12px',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      transition: 'background-color 0.3s ease',
-                      minWidth: '32px'
-                    }}
-                    onMouseEnter={(e) => e.target.style.backgroundColor = '#c0392b'}
-                    onMouseLeave={(e) => e.target.style.backgroundColor = '#e74c3c'}
-                  >
-                    ×
-                  </button>
+                  <input type="number" value={charge.amount || ''} onChange={(e) => updateAdditionalCharge(index, 'amount', parseFloat(e.target.value) || 0)} style={{ padding: '8px 12px', border: '2px solid #e9ecef', borderRadius: '4px', fontSize: isMobile ? '13px' : '14px', outline: 'none', flex: '1' }} onFocus={(e) => e.target.style.borderColor = '#3498db'} onBlur={(e) => e.target.style.borderColor = '#e9ecef'} />
+                  <button onClick={() => removeAdditionalCharge(index)} style={{ backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>×</button>
                 </div>
               </div>
             ))}
 
-            {/* Taxable Amount */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '12px 0',
-              borderBottom: '1px solid #dee2e6',
-              fontSize: isMobile ? '13px' : '14px'
-            }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #dee2e6', fontSize: isMobile ? '13px' : '14px' }}>
               <span>Taxable Amount</span>
               <span>₹{quotationData.taxableAmount.toFixed(2)}</span>
             </div>
 
-            {/* Discount */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '12px 0',
-              borderBottom: '1px solid #dee2e6',
-              color: '#e74c3c',
-              fontWeight: '500',
-              fontSize: isMobile ? '13px' : '14px'
-            }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #dee2e6', color: '#e74c3c', fontWeight: '500', fontSize: isMobile ? '13px' : '14px' }}>
               <span>Discount</span>
               <span>- ₹{quotationData.discount.toFixed(2)}</span>
             </div>
 
-            {/* Tax */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '12px 0',
-              borderBottom: '1px solid #dee2e6',
-              fontSize: isMobile ? '13px' : '14px'
-            }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #dee2e6', fontSize: isMobile ? '13px' : '14px' }}>
               <span>Tax (18% GST)</span>
               <span>₹{quotationData.tax.toFixed(2)}</span>
             </div>
 
-            {/* Additional Charges Total */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '12px 0',
-              borderBottom: '1px solid #dee2e6',
-              fontSize: isMobile ? '13px' : '14px'
-            }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #dee2e6', fontSize: isMobile ? '13px' : '14px' }}>
               <span>Additional Charges</span>
               <span>₹{quotationData.additionalCharges.toFixed(2)}</span>
             </div>
 
-            {/* Total Amount */}
-            <div style={{
-              fontWeight: '700',
-              fontSize: isMobile ? '16px' : '18px',
-              color: '#2c3e50',
-              borderTop: '2px solid #2c3e50',
-              marginTop: '12px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '16px 0'
-            }}>
+            <div style={{ fontWeight: '700', fontSize: isMobile ? '16px' : '18px', color: '#2c3e50', borderTop: '2px solid #2c3e50', marginTop: '12px', display: 'flex', justifyContent: 'space-between', padding: '16px 0' }}>
               <span>Total Amount</span>
               <span>₹{quotationData.totalAmount.toFixed(2)}</span>
             </div>
 
-            {/* Action Buttons */}
-            <div style={{
-              display: 'flex',
-              flexDirection: isMobile ? 'column' : 'row',
-              gap: '12px',
-              justifyContent: 'center',
-              marginTop: '24px',
-              flexWrap: 'wrap'
-            }}>
-              {/* Save Quotation Button */}
-              <button 
-                onClick={submitQuotation}
-                disabled={isSubmitting}
-                style={{
-                  ...buttonStyle(isSubmitting ? '#95a5a6' : '#27ae60'),
-                  opacity: isSubmitting ? 0.7 : 1
-                }}
-                onMouseEnter={(e) => !isSubmitting && (e.target.style.backgroundColor = '#219a52')}
-                onMouseLeave={(e) => !isSubmitting && (e.target.style.backgroundColor = '#27ae60')}
-              >
-                {isSubmitting ? 'Saving...' : 'Save Quotation'}
-              </button>
-              
-              {/* Download PDF Button */}
-              <button 
-                onClick={downloadPDF}
-                style={buttonStyle('#3498db')}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'}
-              >
-                Download PDF
-              </button>
-              
-              {/* Print Button */}
-              <button 
-                onClick={printQuotation}
-                style={buttonStyle('#9b59b6')}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#8e44ad'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#9b59b6'}
-              >
-                Print
-              </button>
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '12px', justifyContent: 'center', marginTop: '24px', flexWrap: 'wrap' }}>
+              <button onClick={submitQuotation} disabled={isSubmitting} style={{ ...buttonStyle(isSubmitting ? '#95a5a6' : '#27ae60'), opacity: isSubmitting ? 0.7 : 1 }}>{isSubmitting ? 'Saving...' : 'Save Quotation'}</button>
+              <button onClick={downloadPDF} style={buttonStyle('#3498db')}>Download PDF</button>
+              <button onClick={printQuotation} style={buttonStyle('#9b59b6')}>Print</button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Add Items Modal */}
+      {/* Add Items Modal - Keeping the same */}
       {showAddItems && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.6)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-          padding: isMobile ? '10px' : '20px'
-        }}>
-          <div style={{
-            background: 'white',
-            padding: '0',
-            borderRadius: '12px',
-            width: '95%',
-            maxWidth: isMobile ? '100%' : '1100px',
-            maxHeight: isMobile ? '90vh' : '85vh',
-            overflow: 'hidden',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
-          }}>
-            {/* Modal Header */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: isMobile ? '16px' : '24px',
-              borderBottom: '1px solid #e9ecef',
-              backgroundColor: '#f8f9fa'
-            }}>
-              <h2 style={{ 
-                margin: 0, 
-                color: '#2c3e50', 
-                fontSize: isMobile ? '18px' : '20px', 
-                fontWeight: '600' 
-              }}>Add Items to Quotation</h2>
-              <button 
-                onClick={() => {
-                  setShowAddItems(false);
-                  setSearchTerm('');
-                }}
-                style={{ 
-                  background: 'none', 
-                  border: 'none', 
-                  fontSize: '24px', 
-                  cursor: 'pointer',
-                  color: '#6c757d',
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'background-color 0.3s ease'
-                }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#e9ecef'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-              >
-                ×
-              </button>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: isMobile ? '10px' : '20px' }}>
+          <div style={{ background: 'white', padding: '0', borderRadius: '12px', width: '95%', maxWidth: isMobile ? '100%' : '1100px', maxHeight: isMobile ? '90vh' : '85vh', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isMobile ? '16px' : '24px', borderBottom: '1px solid #e9ecef', backgroundColor: '#f8f9fa' }}>
+              <h2 style={{ margin: 0, color: '#2c3e50', fontSize: isMobile ? '18px' : '20px', fontWeight: '600' }}>Add Items to Quotation</h2>
+              <button onClick={() => { setShowAddItems(false); setSearchTerm(''); }} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#6c757d', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
             </div>
             
-            {/* Search Input */}
-            <div style={{
-              padding: isMobile ? '16px' : '20px 24px',
-              borderBottom: '1px solid #e9ecef'
-            }}>
-              <input
-                type="text"
-                placeholder="Search items by name, code, or description..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: isMobile ? '10px 12px' : '12px 16px',
-                  border: '2px solid #e9ecef',
-                  borderRadius: '8px',
-                  fontSize: isMobile ? '13px' : '14px',
-                  outline: 'none',
-                  transition: 'border-color 0.3s ease'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#3498db'}
-                onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-              />
+            <div style={{ padding: isMobile ? '16px' : '20px 24px', borderBottom: '1px solid #e9ecef' }}>
+              <input type="text" placeholder="Search items by name, code, or description..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ width: '100%', padding: isMobile ? '10px 12px' : '12px 16px', border: '2px solid #e9ecef', borderRadius: '8px', fontSize: isMobile ? '13px' : '14px', outline: 'none' }} onFocus={(e) => e.target.style.borderColor = '#3498db'} onBlur={(e) => e.target.style.borderColor = '#e9ecef'} />
             </div>
 
-            {/* Items List */}
-            <div style={{
-              maxHeight: isMobile ? '300px' : '400px',
-              overflowY: 'auto'
-            }}>
+            <div style={{ maxHeight: isMobile ? '300px' : '400px', overflowY: 'auto' }}>
               {isMobile ? (
-                /* Mobile list view for items */
                 <div style={{ padding: '16px' }}>
                   {filteredRequirements.length > 0 ? (
                     filteredRequirements.map((req, index) => (
-                      <div key={req._id || index} style={{
-                        border: '1px solid #dee2e6',
-                        borderRadius: '8px',
-                        padding: '12px',
-                        marginBottom: '12px',
-                        backgroundColor: index % 2 === 0 ? 'white' : '#f8f9fa'
-                      }}>
-                        <div style={{ marginBottom: '8px' }}>
-                          <strong style={{ fontSize: '14px' }}>{req.itemName || req.name || 'Unnamed Item'}</strong>
-                          {req.itemCode && (
-                            <div style={{ fontSize: '12px', color: '#6c757d' }}>Code: {req.itemCode}</div>
-                          )}
-                        </div>
-                        {req.description && (
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
-                            {req.description}
-                          </div>
-                        )}
-                        <div style={{ 
-                          display: 'grid', 
-                          gridTemplateColumns: '1fr 1fr', 
-                          gap: '8px', 
-                          fontSize: '12px',
-                          marginBottom: '12px'
-                        }}>
+                      <div key={req._id || index} style={{ border: '1px solid #dee2e6', borderRadius: '8px', padding: '12px', marginBottom: '12px', backgroundColor: index % 2 === 0 ? 'white' : '#f8f9fa' }}>
+                        <div style={{ marginBottom: '8px' }}><strong style={{ fontSize: '14px' }}>{req.itemName || req.name || 'Unnamed Item'}</strong>{req.itemCode && <div style={{ fontSize: '12px', color: '#6c757d' }}>Code: {req.itemCode}</div>}</div>
+                        {req.description && <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>{req.description}</div>}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', marginBottom: '12px' }}>
                           <div>Price: ₹{req.salesPrice || req.price || '0.00'}</div>
                           <div>Stock: {req.currentStock || '0'}</div>
                           <div>Unit: {req.unit || 'PCS'}</div>
                         </div>
-                        <button 
-                          onClick={() => addItemToQuotation(req)}
-                          style={{
-                            backgroundColor: '#27ae60',
-                            color: 'white',
-                            border: 'none',
-                            padding: '8px 16px',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: '500',
-                            width: '100%'
-                          }}
-                        >
-                          Add to Quote
-                        </button>
+                        <button onClick={() => addItemToQuotation(req)} style={{ backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '500', width: '100%' }}>Add to Quote</button>
                       </div>
                     ))
                   ) : (
-                    <div style={{
-                      textAlign: 'center',
-                      padding: '40px 20px',
-                      color: '#6c757d',
-                      fontSize: '14px'
-                    }}>
-                      {requirements.length === 0 ? 
-                        'No requirements found in the system. Please add some items first.' : 
-                        'No items match your search. Try different keywords.'
-                      }
+                    <div style={{ textAlign: 'center', padding: '40px 20px', color: '#6c757d', fontSize: '14px' }}>
+                      {requirements.length === 0 ? 'No requirements found in the system. Please add some items first.' : 'No items match your search. Try different keywords.'}
                     </div>
                   )}
                 </div>
               ) : (
-                /* Desktop table view */
-                <table style={{
-                  width: '100%',
-                  borderCollapse: 'collapse'
-                }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr>
-                      <th style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        backgroundColor: '#34495e',
-                        fontWeight: '600',
-                        color: 'white',
-                        fontSize: '13px'
-                      }}>ITEM NAME</th>
-                      <th style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        backgroundColor: '#34495e',
-                        fontWeight: '600',
-                        color: 'white',
-                        fontSize: '13px'
-                      }}>ITEM CODE</th>
-                      <th style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        backgroundColor: '#34495e',
-                        fontWeight: '600',
-                        color: 'white',
-                        fontSize: '13px'
-                      }}>DESCRIPTION</th>
-                      <th style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        backgroundColor: '#34495e',
-                        fontWeight: '600',
-                        color: 'white',
-                        fontSize: '13px'
-                      }}>SALES PRICE (₹)</th>
-                      <th style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        backgroundColor: '#34495e',
-                        fontWeight: '600',
-                        color: 'white',
-                        fontSize: '13px'
-                      }}>CURRENT STOCK</th>
-                      <th style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        backgroundColor: '#34495e',
-                        fontWeight: '600',
-                        color: 'white',
-                        fontSize: '13px'
-                      }}>UNIT</th>
-                      <th style={{
-                        border: '1px solid #dee2e6',
-                        padding: '14px 12px',
-                        textAlign: 'left',
-                        backgroundColor: '#34495e',
-                        fontWeight: '600',
-                        color: 'white',
-                        fontSize: '13px'
-                      }}>ACTION</th>
+                      <th style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', backgroundColor: '#34495e', fontWeight: '600', color: 'white', fontSize: '13px' }}>ITEM NAME</th>
+                      <th style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', backgroundColor: '#34495e', fontWeight: '600', color: 'white', fontSize: '13px' }}>ITEM CODE</th>
+                      <th style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', backgroundColor: '#34495e', fontWeight: '600', color: 'white', fontSize: '13px' }}>DESCRIPTION</th>
+                      <th style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', backgroundColor: '#34495e', fontWeight: '600', color: 'white', fontSize: '13px' }}>SALES PRICE (₹)</th>
+                      <th style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', backgroundColor: '#34495e', fontWeight: '600', color: 'white', fontSize: '13px' }}>CURRENT STOCK</th>
+                      <th style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', backgroundColor: '#34495e', fontWeight: '600', color: 'white', fontSize: '13px' }}>UNIT</th>
+                      <th style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', backgroundColor: '#34495e', fontWeight: '600', color: 'white', fontSize: '13px' }}>ACTION</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredRequirements.length > 0 ? (
                       filteredRequirements.map((req, index) => (
                         <tr key={req._id || index} style={{ backgroundColor: index % 2 === 0 ? 'white' : '#f8f9fa' }}>
-                          <td style={{
-                            border: '1px solid #dee2e6',
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontSize: '13px'
-                          }}>
-                            <strong>{req.itemName || req.name || 'Unnamed Item'}</strong>
-                          </td>
-                          <td style={{
-                            border: '1px solid #dee2e6',
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontSize: '13px'
-                          }}>{req.itemCode || req.code || '-'}</td>
-                          <td style={{
-                            border: '1px solid #dee2e6',
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontSize: '13px'
-                          }}>{req.description || '-'}</td>
-                          <td style={{
-                            border: '1px solid #dee2e6',
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontSize: '13px'
-                          }}>₹{req.salesPrice || req.price || '0.00'}</td>
-                          <td style={{
-                            border: '1px solid #dee2e6',
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontSize: '13px'
-                          }}>{req.currentStock || '0'}</td>
-                          <td style={{
-                            border: '1px solid #dee2e6',
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontSize: '13px'
-                          }}>{req.unit || 'PCS'}</td>
-                          <td style={{
-                            border: '1px solid #dee2e6',
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontSize: '13px'
-                          }}>
-                            <button 
-                              onClick={() => addItemToQuotation(req)}
-                              style={{
-                                backgroundColor: '#27ae60',
-                                color: 'white',
-                                border: 'none',
-                                padding: '8px 16px',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '12px',
-                                fontWeight: '500',
-                                transition: 'background-color 0.3s ease'
-                              }}
-                              onMouseEnter={(e) => e.target.style.backgroundColor = '#219a52'}
-                              onMouseLeave={(e) => e.target.style.backgroundColor = '#27ae60'}
-                            >
-                              Add to Quote
-                            </button>
+                          <td style={{ border: '1px solid #dee2e6', padding: '12px', textAlign: 'left', fontSize: '13px' }}><strong>{req.itemName || req.name || 'Unnamed Item'}</strong></td>
+                          <td style={{ border: '1px solid #dee2e6', padding: '12px', textAlign: 'left', fontSize: '13px' }}>{req.itemCode || req.code || '-'}</td>
+                          <td style={{ border: '1px solid #dee2e6', padding: '12px', textAlign: 'left', fontSize: '13px' }}>{req.description || '-'}</td>
+                          <td style={{ border: '1px solid #dee2e6', padding: '12px', textAlign: 'left', fontSize: '13px' }}>₹{req.salesPrice || req.price || '0.00'}</td>
+                          <td style={{ border: '1px solid #dee2e6', padding: '12px', textAlign: 'left', fontSize: '13px' }}>{req.currentStock || '0'}</td>
+                          <td style={{ border: '1px solid #dee2e6', padding: '12px', textAlign: 'left', fontSize: '13px' }}>{req.unit || 'PCS'}</td>
+                          <td style={{ border: '1px solid #dee2e6', padding: '12px', textAlign: 'left', fontSize: '13px' }}>
+                            <button onClick={() => addItemToQuotation(req)} style={{ backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '500' }}>Add to Quote</button>
                           </td>
                         </tr>
                       ))
                     ) : (
-                      <tr>
-                        <td style={{ 
-                          border: '1px solid #dee2e6',
-                          padding: '12px',
-                          textAlign: 'left',
-                          fontSize: '13px',
-                        }} colSpan="7">
-                          {requirements.length === 0 ? 
-                            'No requirements found in the system. Please add some items first.' : 
-                            'No items match your search. Try different keywords.'
-                          }
-                        </td>
-                      </tr>
+                      <tr><td colSpan="7" style={{ border: '1px solid #dee2e6', padding: '12px', textAlign: 'left', fontSize: '13px' }}>{requirements.length === 0 ? 'No requirements found in the system. Please add some items first.' : 'No items match your search. Try different keywords.'}</td></tr>
                     )}
                   </tbody>
                 </table>
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '12px',
-              padding: isMobile ? '16px' : '20px 24px',
-              borderTop: '1px solid #e9ecef',
-              backgroundColor: '#f8f9fa'
-            }}>
-              <button 
-                onClick={() => {
-                  setShowAddItems(false);
-                  setSearchTerm('');
-                }}
-                style={buttonStyle('#6c757d')}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#5a6268'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#6c757d'}
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={() => {
-                  setShowAddItems(false);
-                  setSearchTerm('');
-                }}
-                style={buttonStyle('#3498db')}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'}
-              >
-                Done
-              </button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', padding: isMobile ? '16px' : '20px 24px', borderTop: '1px solid #e9ecef', backgroundColor: '#f8f9fa' }}>
+              <button onClick={() => { setShowAddItems(false); setSearchTerm(''); }} style={buttonStyle('#6c757d')}>Cancel</button>
+              <button onClick={() => { setShowAddItems(false); setSearchTerm(''); }} style={buttonStyle('#3498db')}>Done</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Success Modal */}
+      {/* Success Modal - Keeping the same */}
       {showSuccessModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.6)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-          padding: isMobile ? '10px' : '20px'
-        }}>
-          <div style={{
-            background: 'white',
-            padding: isMobile ? '20px' : '30px',
-            borderRadius: '12px',
-            width: '90%',
-            maxWidth: isMobile ? '100%' : '500px',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-            textAlign: 'center'
-          }}>
-            {/* Success Icon */}
-            <div style={{
-              width: isMobile ? '50px' : '60px',
-              height: isMobile ? '50px' : '60px',
-              backgroundColor: '#27ae60',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 20px',
-              fontSize: isMobile ? '24px' : '30px',
-              color: 'white'
-            }}>
-              ✓
-            </div>
-            
-            {/* Success Message */}
-            <h2 style={{
-              margin: '0 0 15px 0',
-              color: '#2c3e50',
-              fontSize: isMobile ? '20px' : '24px',
-              fontWeight: '600'
-            }}>
-              Quotation Saved Successfully!
-            </h2>
-            
-            <p style={{
-              margin: '0 0 25px 0',
-              color: '#7f8c8d',
-              fontSize: isMobile ? '14px' : '16px',
-              lineHeight: '1.5'
-            }}>
-              Your quotation <strong>{savedQuotation?.quotationNo}</strong> has been saved successfully.
-            </p>
-            
-            {/* Action Buttons */}
-            <div style={{
-              display: 'flex',
-              flexDirection: isMobile ? 'column' : 'row',
-              gap: '12px',
-              justifyContent: 'center',
-              flexWrap: 'wrap'
-            }}>
-              <button 
-                onClick={() => setShowSuccessModal(false)}
-                style={buttonStyle('#3498db')}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'}
-              >
-                Continue
-              </button>
-              
-              <button 
-                onClick={() => {
-                  setShowSuccessModal(false);
-                  downloadPDF();
-                }}
-                style={buttonStyle('#27ae60')}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#219a52'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#27ae60'}
-              >
-                Download PDF
-              </button>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: isMobile ? '10px' : '20px' }}>
+          <div style={{ background: 'white', padding: isMobile ? '20px' : '30px', borderRadius: '12px', width: '90%', maxWidth: isMobile ? '100%' : '500px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', textAlign: 'center' }}>
+            <div style={{ width: isMobile ? '50px' : '60px', height: isMobile ? '50px' : '60px', backgroundColor: '#27ae60', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: isMobile ? '24px' : '30px', color: 'white' }}>✓</div>
+            <h2 style={{ margin: '0 0 15px 0', color: '#2c3e50', fontSize: isMobile ? '20px' : '24px', fontWeight: '600' }}>Quotation Saved Successfully!</h2>
+            <p style={{ margin: '0 0 25px 0', color: '#7f8c8d', fontSize: isMobile ? '14px' : '16px', lineHeight: '1.5' }}>Your quotation <strong>{savedQuotation?.quotationNo}</strong> has been saved successfully.</p>
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button onClick={() => setShowSuccessModal(false)} style={buttonStyle('#3498db')}>Continue</button>
+              <button onClick={() => { setShowSuccessModal(false); downloadPDF(); }} style={buttonStyle('#27ae60')}>Download PDF</button>
             </div>
           </div>
         </div>
@@ -2686,307 +1494,60 @@ const Quotation = () => {
 
       {/* View Quotations Modal */}
       {showViewQuotations && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.6)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-          padding: isMobile ? '10px' : '20px'
-        }}>
-          <div style={{
-            background: 'white',
-            padding: '0',
-            borderRadius: '12px',
-            width: '95%',
-            maxWidth: isMobile ? '100%' : '1200px',
-            maxHeight: isMobile ? '90vh' : '85vh',
-            overflow: 'hidden',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
-          }}>
-            {/* Modal Header */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: isMobile ? '16px' : '24px',
-              borderBottom: '1px solid #e9ecef',
-              backgroundColor: '#f8f9fa'
-            }}>
-              <h2 style={{ 
-                margin: 0, 
-                color: '#2c3e50', 
-                fontSize: isMobile ? '18px' : '20px', 
-                fontWeight: '600' 
-              }}>All Quotations</h2>
-              <button 
-                onClick={() => setShowViewQuotations(false)}
-                style={{ 
-                  background: 'none', 
-                  border: 'none', 
-                  fontSize: '24px', 
-                  cursor: 'pointer',
-                  color: '#6c757d',
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'background-color 0.3s ease'
-                }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#e9ecef'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-              >
-                ×
-              </button>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: isMobile ? '10px' : '20px' }}>
+          <div style={{ background: 'white', padding: '0', borderRadius: '12px', width: '95%', maxWidth: isMobile ? '100%' : '1200px', maxHeight: isMobile ? '90vh' : '85vh', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isMobile ? '16px' : '24px', borderBottom: '1px solid #e9ecef', backgroundColor: '#f8f9fa' }}>
+              <h2 style={{ margin: 0, color: '#2c3e50', fontSize: isMobile ? '18px' : '20px', fontWeight: '600' }}>All Quotations</h2>
+              <button onClick={() => setShowViewQuotations(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#6c757d', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
             </div>
             
-            {/* Quotations List */}
-            <div style={{
-              maxHeight: isMobile ? '400px' : '500px',
-              overflowY: 'auto',
-              padding: isMobile ? '12px' : '20px'
-            }}>
+            <div style={{ maxHeight: isMobile ? '400px' : '500px', overflowY: 'auto', padding: isMobile ? '12px' : '20px' }}>
               {allQuotations.length > 0 ? (
                 isMobile ? (
-                  /* Mobile list view for quotations */
                   <div>
                     {allQuotations.map((quotation, index) => (
-                      <div key={quotation._id} style={{
-                        border: '1px solid #dee2e6',
-                        borderRadius: '8px',
-                        padding: '12px',
-                        marginBottom: '12px',
-                        backgroundColor: index % 2 === 0 ? 'white' : '#f8f9fa'
-                      }}>
+                      <div key={quotation._id} style={{ border: '1px solid #dee2e6', borderRadius: '8px', padding: '12px', marginBottom: '12px', backgroundColor: index % 2 === 0 ? 'white' : '#f8f9fa' }}>
                         <div style={{ marginBottom: '8px' }}>
                           <strong style={{ fontSize: '14px' }}>{quotation.quotationNo}</strong>
-                          <div style={{ fontSize: '12px', color: '#6c757d' }}>
-                            {quotation.partyDetails?.partyName || quotation.partyId?.partyName || 'N/A'}
-                          </div>
+                          <div style={{ fontSize: '12px', color: '#6c757d' }}>{quotation.partyDetails?.partyName || quotation.partyId?.partyName || 'N/A'}</div>
                         </div>
-                        <div style={{ 
-                          display: 'grid', 
-                          gridTemplateColumns: '1fr 1fr', 
-                          gap: '8px', 
-                          fontSize: '12px',
-                          marginBottom: '12px'
-                        }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', marginBottom: '12px' }}>
                           <div>Date: {new Date(quotation.quotationDate).toLocaleDateString()}</div>
                           <div>Total: ₹{quotation.summary?.totalAmount?.toFixed(2) || '0.00'}</div>
-                          <div>
-                            Status: <span style={{
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              fontSize: '11px',
-                              fontWeight: '500',
-                              backgroundColor: 
-                                quotation.status === 'draft' ? '#f39c12' :
-                                quotation.status === 'sent' ? '#3498db' :
-                                quotation.status === 'accepted' ? '#27ae60' :
-                                quotation.status === 'rejected' ? '#e74c3c' : '#95a5a6',
-                              color: 'white'
-                            }}>
-                              {quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1)}
-                            </span>
-                          </div>
+                          <div>Status: <span style={{ padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: '500', backgroundColor: quotation.status === 'draft' ? '#f39c12' : quotation.status === 'sent' ? '#3498db' : quotation.status === 'accepted' ? '#27ae60' : quotation.status === 'rejected' ? '#e74c3c' : '#95a5a6', color: 'white' }}>{quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1)}</span></div>
                         </div>
                         <div style={{ display: 'flex', gap: '8px' }}>
-                          <button 
-                            onClick={() => viewQuotation(quotation)}
-                            style={{
-                              backgroundColor: '#3498db',
-                              color: 'white',
-                              border: 'none',
-                              padding: '6px 12px',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              flex: 1
-                            }}
-                          >
-                            View
-                          </button>
-                          <button 
-                            onClick={() => downloadQuotationPDF(quotation)}
-                            style={{
-                              backgroundColor: '#27ae60',
-                              color: 'white',
-                              border: 'none',
-                              padding: '6px 12px',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              flex: 1
-                            }}
-                          >
-                            Download
-                          </button>
+                          <button onClick={() => viewQuotation(quotation)} style={{ backgroundColor: '#3498db', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', flex: 1 }}>View</button>
+                          <button onClick={() => downloadQuotationPDF(quotation)} style={{ backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', flex: 1 }}>Download</button>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  /* Desktop table view */
-                  <table style={{
-                    width: '100%',
-                    borderCollapse: 'collapse'
-                  }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
-                        <th style={{
-                          border: '1px solid #dee2e6',
-                          padding: '14px 12px',
-                          textAlign: 'left',
-                          backgroundColor: '#34495e',
-                          fontWeight: '600',
-                          color: 'white',
-                          fontSize: '13px'
-                        }}>Quotation No</th>
-                        <th style={{
-                          border: '1px solid #dee2e6',
-                          padding: '14px 12px',
-                          textAlign: 'left',
-                          backgroundColor: '#34495e',
-                          fontWeight: '600',
-                          color: 'white',
-                          fontSize: '13px'
-                        }}>Party Name</th>
-                        <th style={{
-                          border: '1px solid #dee2e6',
-                          padding: '14px 12px',
-                          textAlign: 'left',
-                          backgroundColor: '#34495e',
-                          fontWeight: '600',
-                          color: 'white',
-                          fontSize: '13px'
-                        }}>Date</th>
-                        <th style={{
-                          border: '1px solid #dee2e6',
-                          padding: '14px 12px',
-                          textAlign: 'left',
-                          backgroundColor: '#34495e',
-                          fontWeight: '600',
-                          color: 'white',
-                          fontSize: '13px'
-                        }}>Total Amount</th>
-                        <th style={{
-                          border: '1px solid #dee2e6',
-                          padding: '14px 12px',
-                          textAlign: 'left',
-                          backgroundColor: '#34495e',
-                          fontWeight: '600',
-                          color: 'white',
-                          fontSize: '13px'
-                        }}>Status</th>
-                        <th style={{
-                          border: '1px solid #dee2e6',
-                          padding: '14px 12px',
-                          textAlign: 'left',
-                          backgroundColor: '#34495e',
-                          fontWeight: '600',
-                          color: 'white',
-                          fontSize: '13px'
-                        }}>Actions</th>
+                        <th style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', backgroundColor: '#34495e', fontWeight: '600', color: 'white', fontSize: '13px' }}>Quotation No</th>
+                        <th style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', backgroundColor: '#34495e', fontWeight: '600', color: 'white', fontSize: '13px' }}>Party Name</th>
+                        <th style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', backgroundColor: '#34495e', fontWeight: '600', color: 'white', fontSize: '13px' }}>Date</th>
+                        <th style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', backgroundColor: '#34495e', fontWeight: '600', color: 'white', fontSize: '13px' }}>Total Amount</th>
+                        <th style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', backgroundColor: '#34495e', fontWeight: '600', color: 'white', fontSize: '13px' }}>Status</th>
+                        <th style={{ border: '1px solid #dee2e6', padding: '14px 12px', textAlign: 'left', backgroundColor: '#34495e', fontWeight: '600', color: 'white', fontSize: '13px' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {allQuotations.map((quotation, index) => (
                         <tr key={quotation._id} style={{ backgroundColor: index % 2 === 0 ? 'white' : '#f8f9fa' }}>
-                          <td style={{
-                            border: '1px solid #dee2e6',
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontSize: '13px'
-                          }}>
-                            <strong>{quotation.quotationNo}</strong>
+                          <td style={{ border: '1px solid #dee2e6', padding: '12px', textAlign: 'left', fontSize: '13px' }}><strong>{quotation.quotationNo}</strong></td>
+                          <td style={{ border: '1px solid #dee2e6', padding: '12px', textAlign: 'left', fontSize: '13px' }}>{quotation.partyDetails?.partyName || quotation.partyId?.partyName || 'N/A'}</td>
+                          <td style={{ border: '1px solid #dee2e6', padding: '12px', textAlign: 'left', fontSize: '13px' }}>{new Date(quotation.quotationDate).toLocaleDateString()}</td>
+                          <td style={{ border: '1px solid #dee2e6', padding: '12px', textAlign: 'left', fontSize: '13px' }}>₹{quotation.summary?.totalAmount?.toFixed(2) || '0.00'}</td>
+                          <td style={{ border: '1px solid #dee2e6', padding: '12px', textAlign: 'left', fontSize: '13px' }}>
+                            <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '500', backgroundColor: quotation.status === 'draft' ? '#f39c12' : quotation.status === 'sent' ? '#3498db' : quotation.status === 'accepted' ? '#27ae60' : quotation.status === 'rejected' ? '#e74c3c' : '#95a5a6', color: 'white' }}>{quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1)}</span>
                           </td>
-                          <td style={{
-                            border: '1px solid #dee2e6',
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontSize: '13px'
-                          }}>
-                            {quotation.partyDetails?.partyName || quotation.partyId?.partyName || 'N/A'}
-                          </td>
-                          <td style={{
-                            border: '1px solid #dee2e6',
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontSize: '13px'
-                          }}>
-                            {new Date(quotation.quotationDate).toLocaleDateString()}
-                          </td>
-                          <td style={{
-                            border: '1px solid #dee2e6',
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontSize: '13px'
-                          }}>
-                            ₹{quotation.summary?.totalAmount?.toFixed(2) || '0.00'}
-                          </td>
-                          <td style={{
-                            border: '1px solid #dee2e6',
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontSize: '13px'
-                          }}>
-                            <span style={{
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              fontSize: '12px',
-                              fontWeight: '500',
-                              backgroundColor: 
-                                quotation.status === 'draft' ? '#f39c12' :
-                                quotation.status === 'sent' ? '#3498db' :
-                                quotation.status === 'accepted' ? '#27ae60' :
-                                quotation.status === 'rejected' ? '#e74c3c' : '#95a5a6',
-                              color: 'white'
-                            }}>
-                              {quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1)}
-                            </span>
-                          </td>
-                          <td style={{
-                            border: '1px solid #dee2e6',
-                            padding: '12px',
-                            textAlign: 'left',
-                            fontSize: '13px'
-                          }}>
-                            <button 
-                              onClick={() => viewQuotation(quotation)}
-                              style={{
-                                backgroundColor: '#3498db',
-                                color: 'white',
-                                border: 'none',
-                                padding: '6px 12px',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '12px',
-                                marginRight: '8px'
-                              }}
-                            >
-                              View
-                            </button>
-                            <button 
-                              onClick={() => downloadQuotationPDF(quotation)}
-                              style={{
-                                backgroundColor: '#27ae60',
-                                color: 'white',
-                                border: 'none',
-                                padding: '6px 12px',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '12px'
-                              }}
-                            >
-                              Download
-                            </button>
+                          <td style={{ border: '1px solid #dee2e6', padding: '12px', textAlign: 'left', fontSize: '13px' }}>
+                            <button onClick={() => viewQuotation(quotation)} style={{ backgroundColor: '#3498db', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', marginRight: '8px' }}>View</button>
+                            <button onClick={() => downloadQuotationPDF(quotation)} style={{ backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Download</button>
                           </td>
                         </tr>
                       ))}
@@ -2994,298 +1555,190 @@ const Quotation = () => {
                   </table>
                 )
               ) : (
-                <div style={{
-                  textAlign: 'center',
-                  padding: '40px',
-                  color: '#6c757d',
-                  fontSize: isMobile ? '14px' : '16px'
-                }}>
-                  No quotations found. Create your first quotation to see it here.
-                </div>
+                <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d', fontSize: isMobile ? '14px' : '16px' }}>No quotations found. Create your first quotation to see it here.</div>
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              padding: isMobile ? '16px' : '20px 24px',
-              borderTop: '1px solid #e9ecef',
-              backgroundColor: '#f8f9fa'
-            }}>
-              <button 
-                onClick={() => setShowViewQuotations(false)}
-                style={buttonStyle('#3498db')}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'}
-              >
-                Close
-              </button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: isMobile ? '16px' : '20px 24px', borderTop: '1px solid #e9ecef', backgroundColor: '#f8f9fa' }}>
+              <button onClick={() => setShowViewQuotations(false)} style={buttonStyle('#3498db')}>Close</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Quotation Details Modal */}
+      {/* Quotation Details Modal - Professional Layout with Logo and Signature */}
       {showQuotationDetails && selectedQuotation && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.6)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-          padding: isMobile ? '10px' : '20px'
-        }}>
-          <div style={{
-            background: 'white',
-            padding: '0',
-            borderRadius: '12px',
-            width: '95%',
-            maxWidth: isMobile ? '100%' : '900px',
-            maxHeight: isMobile ? '90vh' : '85vh',
-            overflow: 'hidden',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
-          }}>
-            {/* Modal Header */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: isMobile ? '16px' : '24px',
-              borderBottom: '1px solid #e9ecef',
-              backgroundColor: '#f8f9fa'
-            }}>
-              <h2 style={{ 
-                margin: 0, 
-                color: '#2c3e50', 
-                fontSize: isMobile ? '18px' : '20px', 
-                fontWeight: '600' 
-              }}>Quotation Details - {selectedQuotation.quotationNo}</h2>
-              <button 
-                onClick={() => setShowQuotationDetails(false)}
-                style={{ 
-                  background: 'none', 
-                  border: 'none', 
-                  fontSize: '24px', 
-                  cursor: 'pointer',
-                  color: '#6c757d',
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'background-color 0.3s ease'
-                }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#e9ecef'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-              >
-                ×
-              </button>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: isMobile ? '10px' : '20px' }}>
+          <div style={{ background: 'white', padding: '0', borderRadius: '12px', width: '95%', maxWidth: isMobile ? '100%' : '1100px', maxHeight: isMobile ? '90vh' : '85vh', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isMobile ? '16px' : '24px', borderBottom: '1px solid #e9ecef', backgroundColor: '#f8f9fa' }}>
+              <h2 style={{ margin: 0, color: '#2c3e50', fontSize: isMobile ? '18px' : '20px', fontWeight: '600' }}>Quotation Details - {selectedQuotation.quotationNo}</h2>
+              <button onClick={() => setShowQuotationDetails(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#6c757d', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
             </div>
             
-            {/* Quotation Details Content */}
-            <div style={{
-              maxHeight: isMobile ? '400px' : '500px',
-              overflowY: 'auto',
-              padding: isMobile ? '16px' : '24px'
-            }}>
-              {/* Quotation Header Info */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-                gap: '20px',
-                marginBottom: '24px',
-                padding: '16px',
-                backgroundColor: '#f8f9fa',
-                borderRadius: '8px',
-                border: '1px solid #e9ecef'
-              }}>
-                <div>
-                  <h3 style={{ margin: '0 0 12px 0', color: '#2c3e50', fontSize: '16px' }}>Quotation Information</h3>
-                  <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
-                    <div><strong>Quotation No:</strong> {selectedQuotation.quotationNo}</div>
-                    <div><strong>Date:</strong> {selectedQuotation.quotationDate}</div>
-                    <div><strong>Valid Until:</strong> {selectedQuotation.validityDate}</div>
-                    <div><strong>PO No:</strong> {selectedQuotation.poNo || 'N/A'}</div>
-                    <div><strong>Status:</strong> 
-                      <span style={{
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        fontWeight: '500',
-                        backgroundColor: 
-                          selectedQuotation.status === 'draft' ? '#f39c12' :
-                          selectedQuotation.status === 'sent' ? '#3498db' :
-                          selectedQuotation.status === 'accepted' ? '#27ae60' :
-                          selectedQuotation.status === 'rejected' ? '#e74c3c' : '#95a5a6',
-                        color: 'white',
-                        marginLeft: '8px'
-                      }}>
-                        {selectedQuotation.status?.charAt(0).toUpperCase() + selectedQuotation.status?.slice(1)}
-                      </span>
+            <div style={{ maxHeight: isMobile ? '400px' : '500px', overflowY: 'auto', padding: isMobile ? '16px' : '24px' }}>
+              {/* Professional Quotation Layout */}
+              {(() => {
+                const party = selectedQuotation.partyDetails || selectedQuotation.partyId;
+                const logoDataUrl = logoUrl || '';
+                const signatureDataUrl = signatureUrl || '';
+                const logoFallback = '<div style="height: 70px; width: 70px; background: #2c3e50; color: white; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-weight: bold; font-size: 12px;">GMS</div>';
+                const signatureFallback = '<div style="height: 50px; display: flex; align-items: center; justify-content: center; color: #2c3e50; font-style: italic;">Signature</div>';
+                
+                return (
+                  <div style={{ fontFamily: 'Arial, sans-serif' }}>
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px', borderBottom: '2px solid #3498db', paddingBottom: '15px' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          {logoDataUrl ? 
+                            <img src={logoDataUrl} alt="Company Logo" style={{ height: '70px', width: 'auto', marginRight: '15px', borderRadius: '6px', maxWidth: '120px', objectFit: 'contain' }} /> : 
+                            <div dangerouslySetInnerHTML={{ __html: logoFallback }} />
+                          }
+                          <div>
+                            <h1 style={{ margin: 0, color: '#2c3e50', fontSize: '20px', fontWeight: 'bold' }}>GLOBAL MARKETING SOLUTIONS</h1>
+                            <p style={{ margin: '5px 0 0 0', color: '#7f8c8d', fontSize: '12px' }}>One Stop Solution For Your Problem</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'center', flex: 1 }}>
+                        <h2 style={{ margin: 0, color: '#2c3e50', fontSize: '24px', fontWeight: 'bold' }}>QUOTATION</h2>
+                      </div>
+                      <div style={{ flex: 1 }}></div>
+                    </div>
+                    
+                    {/* Quotation and Party Details */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+                      <div>
+                        <p style={{ margin: '5px 0', fontSize: '13px' }}><strong>Quotation No:</strong> {selectedQuotation.quotationNo}</p>
+                        <p style={{ margin: '5px 0', fontSize: '13px' }}><strong>Date:</strong> {selectedQuotation.quotationDate}</p>
+                        <p style={{ margin: '5px 0', fontSize: '13px' }}><strong>Valid Until:</strong> {selectedQuotation.validityDate}</p>
+                        <p style={{ margin: '5px 0', fontSize: '13px' }}><strong>PO No:</strong> {selectedQuotation.poNo || 'N/A'}</p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ margin: '5px 0', fontSize: '13px' }}><strong>GLOBAL MARKETING SOLUTIONS</strong></p>
+                        <p style={{ margin: '5px 0', fontSize: '13px' }}>Champagne Branch</p>
+                        <p style={{ margin: '5px 0', fontSize: '13px' }}>A/C: 9127000007166090</p>
+                        <p style={{ margin: '5px 0', fontSize: '13px' }}>IFSC: UTIB0001336</p>
+                      </div>
+                    </div>
+                    
+                    {/* Party Details */}
+                    {party && (
+                      <div style={{ marginBottom: '20px', padding: '12px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef' }}>
+                        <h3 style={{ color: '#2c3e50', marginBottom: '8px', borderBottom: '1px solid #3498db', paddingBottom: '5px', fontSize: '14px' }}>Bill To:</h3>
+                        <p style={{ margin: '4px 0', fontSize: '13px' }}><strong>{party.partyName}</strong></p>
+                        {party.mobileNumber && <p style={{ margin: '4px 0', fontSize: '13px' }}>Mobile: {party.mobileNumber}</p>}
+                        {party.billingAddress && <p style={{ margin: '4px 0', fontSize: '13px' }}>{party.billingAddress}</p>}
+                        {party.gstin && <p style={{ margin: '4px 0', fontSize: '13px' }}>GSTIN: {party.gstin}</p>}
+                      </div>
+                    )}
+                    
+                    {/* Items Table */}
+                    <table style={{ width: '100%', borderCollapse: 'collapse', margin: '15px 0', fontSize: '12px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#2c3e50', color: 'white' }}>
+                          <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>#</th>
+                          <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Item Description</th>
+                          <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'center' }}>Qty</th>
+                          <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'center' }}>Unit</th>
+                          <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>Price (₹)</th>
+                          <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>Amount (₹)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedQuotation.items.map((item, index) => (
+                          <tr key={index}>
+                            <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>{index + 1}</td>
+                            <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                              <strong>{item.name}</strong>
+                              {item.description && <div style={{ fontSize: '11px', color: '#666', marginTop: '3px' }}>{item.description}</div>}
+                            </td>
+                            <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>{item.quantity}</td>
+                            <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>{item.unit}</td>
+                            <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>₹{item.price.toFixed(2)}</td>
+                            <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>₹{item.amount.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    
+                    {/* Summary */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                      <div style={{ background: '#f8f9fa', padding: '15px', border: '2px solid #3498db', borderRadius: '6px', width: '280px' }}>
+                        <h3 style={{ marginTop: 0, color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '8px', fontSize: '14px' }}>SUMMARY</h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0', fontSize: '12px' }}>
+                          <span>Subtotal:</span>
+                          <span>₹{selectedQuotation.summary?.subtotal?.toFixed(2) || '0.00'}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0', color: '#e74c3c', fontSize: '12px' }}>
+                          <span>Discount:</span>
+                          <span>-₹{selectedQuotation.summary?.discount?.toFixed(2) || '0.00'}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0', fontSize: '12px' }}>
+                          <span>Tax (18% GST):</span>
+                          <span>₹{selectedQuotation.summary?.tax?.toFixed(2) || '0.00'}</span>
+                        </div>
+                        {selectedQuotation.additionalCharges?.map((charge, idx) => charge.amount > 0 && (
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0', fontSize: '12px' }}>
+                            <span>{charge.description}:</span>
+                            <span>₹{parseFloat(charge.amount).toFixed(2)}</span>
+                          </div>
+                        ))}
+                        <hr style={{ borderTop: '2px solid #2c3e50', margin: '12px 0' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 'bold', color: '#2c3e50' }}>
+                          <span>Total Amount:</span>
+                          <span>₹{selectedQuotation.summary?.totalAmount?.toFixed(2) || '0.00'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Terms */}
+                    {selectedQuotation.terms && (
+                      <div style={{ marginTop: '25px', padding: '12px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef' }}>
+                        <h3 style={{ color: '#2c3e50', marginBottom: '8px', borderBottom: '1px solid #3498db', paddingBottom: '5px', fontSize: '14px' }}>Terms & Conditions:</h3>
+                        <p style={{ fontSize: '12px', lineHeight: '1.5', whiteSpace: 'pre-line' }}>{selectedQuotation.terms}</p>
+                      </div>
+                    )}
+                    
+                    {/* Notes */}
+                    {selectedQuotation.notes && (
+                      <div style={{ marginTop: '15px', padding: '10px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef' }}>
+                        <h3 style={{ color: '#2c3e50', marginBottom: '6px', fontSize: '13px' }}>Notes:</h3>
+                        <p style={{ fontSize: '12px' }}>{selectedQuotation.notes}</p>
+                      </div>
+                    )}
+                    
+                    {/* Footer with Signature */}
+                    <div style={{ marginTop: '35px', paddingTop: '12px', borderTop: '2px solid #3498db' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ textAlign: 'center', flex: 1 }}>
+                          <p style={{ fontSize: '12px', marginBottom: '6px' }}>Thank you for your business!</p>
+                          <p style={{ fontSize: '11px' }}><strong>Authorized Signatory</strong><br />Global Marketing Solutions</p>
+                        </div>
+                        <div style={{ flex: 1, textAlign: 'center' }}>
+                          {signatureDataUrl ? 
+                            <img src={signatureDataUrl} alt="Signature" style={{ maxHeight: '50px', maxWidth: '150px', objectFit: 'contain' }} /> : 
+                            <div dangerouslySetInnerHTML={{ __html: signatureFallback }} />
+                          }
+                        </div>
+                        <div style={{ flex: 1, textAlign: 'right' }}>
+                          <div style={{ fontSize: '9px', color: '#95a5a6' }}>
+                            <p>GLOBAL MARKETING SOLUTIONS</p>
+                            <p>Champagne Branch</p>
+                            <p>Phone: +91 XXXXX XXXXX</p>
+                            <p>Email: info@globalmarketingsolutions.com</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div>
-                  <h3 style={{ margin: '0 0 12px 0', color: '#2c3e50', fontSize: '16px' }}>Party Information</h3>
-                  <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
-                    <div><strong>Party:</strong> {selectedQuotation.partyDetails?.partyName || selectedQuotation.partyId?.partyName || 'N/A'}</div>
-                    {selectedQuotation.partyDetails?.mobileNumber && (
-                      <div><strong>Mobile:</strong> {selectedQuotation.partyDetails.mobileNumber}</div>
-                    )}
-                    {selectedQuotation.partyDetails?.billingAddress && (
-                      <div><strong>Address:</strong> {selectedQuotation.partyDetails.billingAddress}</div>
-                    )}
-                    {selectedQuotation.partyDetails?.gstin && (
-                      <div><strong>GSTIN:</strong> {selectedQuotation.partyDetails.gstin}</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Items Table */}
-              <h3 style={{ margin: '0 0 16px 0', color: '#2c3e50', fontSize: '16px' }}>Items</h3>
-              <div style={{
-                overflowX: 'auto',
-                marginBottom: '24px'
-              }}>
-                <table style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  fontSize: '14px'
-                }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#34495e', color: 'white' }}>
-                      <th style={{ padding: '12px', border: '1px solid #dee2e6', textAlign: 'left' }}>#</th>
-                      <th style={{ padding: '12px', border: '1px solid #dee2e6', textAlign: 'left' }}>Item Name</th>
-                      <th style={{ padding: '12px', border: '1px solid #dee2e6', textAlign: 'center' }}>Qty</th>
-                      <th style={{ padding: '12px', border: '1px solid #dee2e6', textAlign: 'center' }}>Unit</th>
-                      <th style={{ padding: '12px', border: '1px solid #dee2e6', textAlign: 'right' }}>Price (₹)</th>
-                      <th style={{ padding: '12px', border: '1px solid #dee2e6', textAlign: 'right' }}>Amount (₹)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedQuotation.items.map((item, index) => (
-                      <tr key={index} style={{ backgroundColor: index % 2 === 0 ? 'white' : '#f8f9fa' }}>
-                        <td style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'center' }}>{index + 1}</td>
-                        <td style={{ padding: '10px', border: '1px solid #dee2e6' }}>
-                          <div><strong>{item.name}</strong></div>
-                          {item.description && (
-                            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>{item.description}</div>
-                          )}
-                        </td>
-                        <td style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'center' }}>{item.quantity}</td>
-                        <td style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'center' }}>{item.unit}</td>
-                        <td style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'right' }}>₹{item.price.toFixed(2)}</td>
-                        <td style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'right' }}>₹{item.amount.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Summary Section */}
-              <div style={{
-                backgroundColor: '#f8f9fa',
-                padding: '20px',
-                borderRadius: '8px',
-                border: '1px solid #e9ecef',
-                marginBottom: '24px'
-              }}>
-                <h3 style={{ margin: '0 0 16px 0', color: '#2c3e50', fontSize: '16px' }}>Summary</h3>
-                <div style={{ display: 'grid', gap: '8px', fontSize: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Subtotal:</span>
-                    <span>₹{selectedQuotation.summary?.subtotal?.toFixed(2) || '0.00'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#e74c3c' }}>
-                    <span>Discount:</span>
-                    <span>-₹{selectedQuotation.summary?.discount?.toFixed(2) || '0.00'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Tax (18% GST):</span>
-                    <span>₹{selectedQuotation.summary?.tax?.toFixed(2) || '0.00'}</span>
-                  </div>
-                  {selectedQuotation.additionalCharges?.map((charge, index) => (
-                    charge.amount > 0 && (
-                      <div key={index} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>{charge.description}:</span>
-                        <span>₹{parseFloat(charge.amount).toFixed(2)}</span>
-                      </div>
-                    )
-                  ))}
-                  <hr style={{ border: 'none', borderTop: '2px solid #2c3e50', margin: '12px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '16px', color: '#2c3e50' }}>
-                    <span>Total Amount:</span>
-                    <span>₹{selectedQuotation.summary?.totalAmount?.toFixed(2) || '0.00'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Notes and Terms */}
-              {selectedQuotation.notes && (
-                <div style={{ marginBottom: '16px' }}>
-                  <h3 style={{ margin: '0 0 8px 0', color: '#2c3e50', fontSize: '16px' }}>Notes</h3>
-                  <div style={{
-                    padding: '12px',
-                    backgroundColor: '#f8f9fa',
-                    borderRadius: '6px',
-                    border: '1px solid #e9ecef',
-                    fontSize: '14px'
-                  }}>
-                    {selectedQuotation.notes}
-                  </div>
-                </div>
-              )}
-
-              {selectedQuotation.terms && (
-                <div>
-                  <h3 style={{ margin: '0 0 8px 0', color: '#2c3e50', fontSize: '16px' }}>Terms & Conditions</h3>
-                  <div style={{
-                    padding: '12px',
-                    backgroundColor: '#f8f9fa',
-                    borderRadius: '6px',
-                    border: '1px solid #e9ecef',
-                    fontSize: '14px',
-                    whiteSpace: 'pre-line'
-                  }}>
-                    {selectedQuotation.terms}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
-            {/* Modal Footer */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '12px',
-              padding: isMobile ? '16px' : '20px 24px',
-              borderTop: '1px solid #e9ecef',
-              backgroundColor: '#f8f9fa'
-            }}>
-              <button 
-                onClick={() => setShowQuotationDetails(false)}
-                style={buttonStyle('#6c757d')}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#5a6268'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#6c757d'}
-              >
-                Close
-              </button>
-              <button 
-                onClick={() => downloadQuotationPDF(selectedQuotation)}
-                style={buttonStyle('#27ae60')}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#219a52'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#27ae60'}
-              >
-                Download PDF
-              </button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', padding: isMobile ? '16px' : '20px 24px', borderTop: '1px solid #e9ecef', backgroundColor: '#f8f9fa' }}>
+              <button onClick={() => setShowQuotationDetails(false)} style={buttonStyle('#6c757d')}>Close</button>
+              <button onClick={() => downloadQuotationPDF(selectedQuotation)} style={buttonStyle('#27ae60')}>Download PDF</button>
             </div>
           </div>
         </div>
@@ -3294,5 +1747,4 @@ const Quotation = () => {
   );
 };
 
-// Export the component as default
 export default Quotation;

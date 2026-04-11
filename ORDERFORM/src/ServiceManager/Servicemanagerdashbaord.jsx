@@ -10,6 +10,8 @@ import {
   Tooltip as ChartJSTooltip,
   Legend as ChartJSLegend
 } from 'chart.js';
+// Import the logo
+import GMSLogo from '../assets/GMS_LOGO_.png';
 
 // Register ChartJS components
 ChartJS.register(ArcElement, ChartJSTooltip, ChartJSLegend);
@@ -35,6 +37,14 @@ const ServiceManagerDashboard = ({ loggedInUser }) => {
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const isDashboardHome = location.pathname === '/service-manager-dashboard';
+
+  // Handle logo click - Navigate to dashboard and close sidebar on mobile
+  const handleLogoClick = () => {
+    navigate('/service-manager-dashboard');
+    if (window.innerWidth <= 768 && sidebarOpen) {
+      setSidebarOpen(false);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -175,14 +185,13 @@ const ServiceManagerDashboard = ({ loggedInUser }) => {
       zIndex: 2,
       boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
     },
-    menuButton: {
-      fontSize: '24px',
+    logoIcon: {
+      width: '75px',
+      height: '75px',
       cursor: 'pointer',
-      padding: '8px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minWidth: '40px',
+      objectFit: 'contain',
+      marginRight: '15px',
+      borderRadius: '14px',
     },
     welcomeText: {
       background: 'linear-gradient(to right, #ff7e5f, #feb47b)',
@@ -323,9 +332,20 @@ const ServiceManagerDashboard = ({ loggedInUser }) => {
       <AutoLogout />
       {/* Navbar */}
       <div style={styles.navbar}>
-        <div style={styles.menuButton} onClick={toggleSidebar}>
-          {sidebarOpen ? '☰' : '≡'}
-        </div>
+        {/* Logo in place of menu icon */}
+        <img 
+          src={GMSLogo} 
+          alt="GMS Logo" 
+          style={styles.logoIcon}
+          onClick={handleLogoClick}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.transition = 'transform 0.2s';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+        />
         <div style={styles.welcomeText}>SERVICE MANAGEMENT DASHBOARD</div>
         <div style={styles.profileIcon}>
           {loggedInUser?.charAt(0).toUpperCase() || 'S'}

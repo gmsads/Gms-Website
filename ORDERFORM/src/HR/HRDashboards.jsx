@@ -3,6 +3,8 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import AutoLogout from "../mainpage/AutoLogout";
 import axios from 'axios';
+// Import the logo
+import GMSLogo from '../assets/GMS_LOGO_.png';
 
 function HRDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
@@ -130,13 +132,13 @@ function HRDashboard() {
   };
 
   const styles = {
-   container: {
-  display: 'flex',
-  minHeight: '100vh',
-  height: '100vh', // Add fixed height
-  position: 'relative',
-  overflow: 'hidden', // Prevent double scrollbars
-},
+    container: {
+      display: 'flex',
+      minHeight: '100vh',
+      height: '100vh',
+      position: 'relative',
+      overflow: 'hidden',
+    },
     sidebar: {
       width: sidebarOpen ? '220px' : '0',
       backgroundColor: '#003366',
@@ -178,7 +180,6 @@ function HRDashboard() {
       overflowY: 'auto',
       backgroundColor: '#f4f4f4',
       boxSizing: 'border-box',
-      
     },
     navbar: {
       position: 'fixed',
@@ -201,6 +202,14 @@ function HRDashboard() {
       cursor: 'pointer',
       display: window.innerWidth <= 768 ? 'block' : 'none',
     },
+    logoIcon: {
+      width: '75px',
+      height: '75px',
+      cursor: 'pointer',
+      objectFit: 'contain',
+      marginRight: '15px',
+      borderRadius: '14px',
+    },
     brand: {
       fontSize: 'clamp(16px, 4vw, 22px)',
       fontWeight: 'bold',
@@ -208,6 +217,7 @@ function HRDashboard() {
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       maxWidth: '60%',
+      cursor: 'pointer',
     },
     hrDetailsCard: {
       backgroundColor: 'white',
@@ -368,7 +378,16 @@ function HRDashboard() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-  // Render HR details (dashboard view) - MOVED NAME BESIDE WELCOME
+  
+  // Handle logo click - Navigate to dashboard and close sidebar on mobile
+  const handleLogoClick = () => {
+    navigate('/hr-dashboard');
+    if (window.innerWidth <= 768 && sidebarOpen) {
+      setSidebarOpen(false);
+    }
+  };
+  
+  // Render HR details (dashboard view)
   const renderHRDetails = () => {
     if (!hrData) return null;
 
@@ -418,16 +437,15 @@ function HRDashboard() {
           </div>
         </div>
 
-        {/* HR Dashboard Card - NAME MOVED BESIDE WELCOME */}
+        {/* HR Dashboard Card */}
         <div style={styles.hrDetailsCard}>
           <div style={styles.hrHeader}>
             <h1 style={styles.hrTitle}>
               Welcome {hrData.name || hrData.username}
             </h1>
-            {/* Removed the separate div for name */}
           </div>
 
-          {/* Department Overview - Keep as is */}
+          {/* Department Overview */}
           <div style={styles.detailSection}>
             <h3 style={styles.sectionTitle}>Department Overview</h3>
             <div style={styles.departmentGrid}>
@@ -462,7 +480,7 @@ function HRDashboard() {
             </div>
           </div>
 
-          {/* Quick Actions - Keep as is */}
+          {/* Quick Actions */}
           <div style={styles.detailSection}>
             <h3 style={styles.sectionTitle}>Quick Actions</h3>
             <div style={styles.quickActions}>
@@ -472,11 +490,11 @@ function HRDashboard() {
               >
                 ➕ Add New Employee
               </button>
-                  <button 
+              <button 
                 style={styles.actionButton}
                 onClick={() => navigate('hour')}
               >
-           Create Hour Report ➕
+                Create Hour Report ➕
               </button>
               <button 
                 style={styles.actionButton}
@@ -496,11 +514,11 @@ function HRDashboard() {
               >
                 📝 Attendance
               </button>
-               <button 
+              <button 
                 style={styles.actionButton}
                 onClick={() => navigate('view-leaves')}
               >
-              View Leave Requests
+                View Leave Requests
               </button>
             </div>
           </div>
@@ -521,14 +539,26 @@ function HRDashboard() {
       {/* Navbar */}
       <AutoLogout />
       <div style={styles.navbar}>
+        {/* Logo */}
+        <img 
+          src={GMSLogo} 
+          alt="GMS Logo" 
+          style={styles.logoIcon}
+          onClick={handleLogoClick}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.transition = 'transform 0.2s';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+        />
+        {/* Burger Menu */}
         <span style={styles.burger} onClick={() => setSidebarOpen(!sidebarOpen)}>
           &#9776;
         </span>
         <span
-          style={{
-            ...styles.brand,
-            cursor: 'pointer',
-          }}
+          style={styles.brand}
           onClick={() => {
             navigate('/hr-dashboard');
             if (window.innerWidth <= 768) {
@@ -576,7 +606,7 @@ function HRDashboard() {
       </div>
 
       <div style={styles.container}>
-        {/* Sidebar - Updated with correct routes */}
+        {/* Sidebar */}
         <div style={styles.sidebar}>
           <NavLink
             to="/hr-dashboard"
@@ -632,9 +662,9 @@ function HRDashboard() {
             onMouseLeave={() => setHoveredItem('')}
             onClick={handleSidebarItemClick}
           >
-           View Leave Requests
+            View Leave Requests
           </NavLink>
-           <NavLink
+          <NavLink
             to="/hr-dashboard/hr-report"
             end
             style={linkStyle('hr-report')}
@@ -642,9 +672,9 @@ function HRDashboard() {
             onMouseLeave={() => setHoveredItem('')}
             onClick={handleSidebarItemClick}
           >
-         Create Report ➕
+            Create Report ➕
           </NavLink>
-           <NavLink
+          <NavLink
             to="/hr-dashboard/hour"
             end
             style={linkStyle('hour')}
@@ -652,9 +682,9 @@ function HRDashboard() {
             onMouseLeave={() => setHoveredItem('')}
             onClick={handleSidebarItemClick}
           >
-         Create Hour Report ➕
+            Create Hour Report ➕
           </NavLink>
-             <NavLink
+          <NavLink
             to="/hr-dashboard/daily-report"
             end
             style={linkStyle('daily-report')}
@@ -662,9 +692,9 @@ function HRDashboard() {
             onMouseLeave={() => setHoveredItem('')}
             onClick={handleSidebarItemClick}
           >
-        Executive Report 
+            Executive Report 
           </NavLink>
-            <NavLink
+          <NavLink
             to="/hr-dashboard/fieldvisitsadmin"
             end
             style={linkStyle('fieldvisitsadmin')}
@@ -672,9 +702,9 @@ function HRDashboard() {
             onMouseLeave={() => setHoveredItem('')}
             onClick={handleSidebarItemClick}
           >
-        Field Executive Report 
+            Field Executive Report 
           </NavLink>
-           <NavLink
+          <NavLink
             to="/hr-dashboard/hour-reeport"
             end
             style={linkStyle('hour-reeport')}
@@ -682,20 +712,20 @@ function HRDashboard() {
             onMouseLeave={() => setHoveredItem('')}
             onClick={handleSidebarItemClick}
           >
-       View Hour Report 
+            View Hour Report 
           </NavLink>
-           <NavLink
+          <NavLink
             to="/hr-dashboard/advance-approvals"
             style={linkStyle('advance-approvals')}
             onMouseEnter={() => setHoveredItem('advance-approvals')}
             onMouseLeave={() => setHoveredItem('')}
             onClick={handleSidebarItemClick}
           >
-          Advance-Approvals
+            Advance-Approvals
           </NavLink>
         </div>
 
-        {/* Main Content Area - Now using Outlet for nested routes */}
+        {/* Main Content Area */}
         <div style={styles.content}>
           {isLoading ? (
             <div style={styles.loadingText}>Loading HR dashboard...</div>

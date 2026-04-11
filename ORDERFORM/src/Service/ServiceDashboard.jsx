@@ -1,3 +1,5 @@
+// Import the logo
+import GMSLogo from '../assets/GMS_LOGO_.png';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Bar } from 'react-chartjs-2';
@@ -102,6 +104,51 @@ const ServiceDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Logo icon styles
+  const logoIconStyle = {
+    width: '75px',
+    height: '75px',
+    cursor: 'pointer',
+    objectFit: 'contain',
+    marginRight: '15px',
+    borderRadius: '14px',
+  };
+
+  // Hamburger menu icon styles
+  const hamburgerStyle = {
+    display: window.innerWidth <= 768 ? 'flex' : 'none',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    width: '30px',
+    height: '21px',
+    cursor: 'pointer',
+    marginRight: '15px',
+  };
+
+  const hamburgerLineStyle = {
+    width: '100%',
+    height: '3px',
+    backgroundColor: 'white',
+    borderRadius: '2px',
+    transition: 'all 0.3s ease',
+  };
+
+  // Handle logo click - Navigate to dashboard and close sidebar on mobile
+  const handleLogoClick = () => {
+    // Check if already on dashboard
+    if (location.pathname === '/service-dashboard') {
+      // If already on dashboard, refresh the page data
+      window.location.reload();
+    } else {
+      // Navigate to dashboard
+      navigate('/service-dashboard');
+    }
+    // Close sidebar on mobile if open
+    if (window.innerWidth <= 768 && sidebarOpen) {
+      setSidebarOpen(false);
+    }
+  };
+
   // Auto-close sidebar on mobile when route changes
   useEffect(() => {
     if (window.innerWidth <= 768) {
@@ -121,6 +168,13 @@ const ServiceDashboard = () => {
 
   // Toggle sidebar visibility
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+
+  // Close sidebar when clicking overlay on mobile
+  const closeSidebarOnOverlay = () => {
+    if (window.innerWidth <= 768 && sidebarOpen) {
+      setSidebarOpen(false);
+    }
+  };
 
   // Check if current route is dashboard home
   const isDashboardHome = location.pathname === '/service-dashboard';
@@ -153,11 +207,6 @@ const ServiceDashboard = () => {
       end: getEndOfDay(end)
     };
   };
-
-  // Helper functions for date checking
-
-
-  
 
   // Filter services by date range for current executive only
   const filterServicesByDate = (services, daysFromToday) => {
@@ -567,185 +616,185 @@ const ServiceDashboard = () => {
     }
   };
 
- const handleStatusToggle = async (orderId, rowIndex, currentStatus) => {
-  const updatedStatus = !currentStatus;
-  const newStatus = updatedStatus ? 'Completed' : 'Pending';
+  const handleStatusToggle = async (orderId, rowIndex, currentStatus) => {
+    const updatedStatus = !currentStatus;
+    const newStatus = updatedStatus ? 'Completed' : 'Pending';
 
-  console.log('🔄 Frontend: Starting status toggle', {
-    orderId,
-    rowIndex,
-    currentStatus,
-    updatedStatus,
-    newStatus,
-    executive: currentExecutive
-  });
+    console.log('🔄 Frontend: Starting status toggle', {
+      orderId,
+      rowIndex,
+      currentStatus,
+      updatedStatus,
+      newStatus,
+      executive: currentExecutive
+    });
 
-  // Store original state for rollback
-  const originalState = {
-    orderId,
-    rowIndex,
-    status: currentStatus ? 'Completed' : 'Pending',
-    isCompleted: currentStatus
+    // Store original state for rollback
+    const originalState = {
+      orderId,
+      rowIndex,
+      status: currentStatus ? 'Completed' : 'Pending',
+      isCompleted: currentStatus
+    };
+
+    try {
+      // 1. Update UI optimistically
+      updateUIOptimistically(orderId, rowIndex, updatedStatus, newStatus);
+
+      // 2. Make API call
+      console.log('🌐 Making API call...');
+      const response = await axios.put(
+        `/api/orders/${orderId}/rows/${rowIndex}/status`,
+        {
+          isCompleted: updatedStatus,
+          status: newStatus,
+          updatedBy: currentExecutive
+        },
+        {
+          timeout: 10000,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        }
+      );
+
+      console.log('✅ API Response:', response.data);
+
+      if (response.data && response.data.success) {
+        console.log('🎉 Status updated successfully');
+        return;
+      } else {
+        throw new Error(response.data?.message || 'API returned unsuccessful response');
+      }
+
+    } catch (error) {
+      console.error('❌ Error in handleStatusToggle:', error);
+      
+      // Revert UI changes
+      revertUIChanges(originalState);
+      
+      // Show appropriate error message
+      showErrorMessage(error, originalState);
+    }
   };
 
-  try {
-    // 1. Update UI optimistically
-    updateUIOptimistically(orderId, rowIndex, updatedStatus, newStatus);
-
-    // 2. Make API call
-    console.log('🌐 Making API call...');
-    const response = await axios.put(
-      `/api/orders/${orderId}/rows/${rowIndex}/status`,
-      {
-        isCompleted: updatedStatus,
-        status: newStatus,
-        updatedBy: currentExecutive
-      },
-      {
-        timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+  // Helper function to update UI
+  const updateUIOptimistically = (orderId, rowIndex, updatedStatus, newStatus) => {
+    console.log('🎨 Updating UI optimistically');
+    
+    // Update main services state
+    setServices(prevServices =>
+      prevServices.map(service => {
+        if (service._id === orderId) {
+          const updatedRows = service.rows.map((row, idx) => 
+            idx === parseInt(rowIndex) 
+              ? {
+                  ...row,
+                  isCompleted: updatedStatus,
+                  status: newStatus,
+                  updatedBy: currentExecutive,
+                  updatedAt: new Date().toISOString()
+                }
+              : row
+          );
+          return { ...service, rows: updatedRows };
         }
-      }
+        return service;
+      })
     );
 
-    console.log('✅ API Response:', response.data);
+    // Update filtered lists
+    const updateServiceInList = (list) => 
+      list.map(service => 
+        service.id === orderId && service.rowIndex === parseInt(rowIndex)
+          ? { 
+              ...service, 
+              isCompleted: updatedStatus, 
+              status: newStatus,
+              updatedAt: new Date().toISOString()
+            }
+          : service
+      );
 
-    if (response.data && response.data.success) {
-      console.log('🎉 Status updated successfully');
-      return;
+    setTodaysServices(prev => updateServiceInList(prev));
+    setTomorrowsServices(prev => updateServiceInList(prev));
+    setNextWeekServices(prev => updateServiceInList(prev));
+    setPendingServices(prev => updateServiceInList(prev));
+    setCompletedServices(prev => updateServiceInList(prev));
+
+    // Update stats
+    setStats(prev => ({
+      ...prev,
+      totalPending: updatedStatus ? prev.totalPending - 1 : prev.totalPending + 1,
+      totalCompleted: updatedStatus ? prev.totalCompleted + 1 : prev.totalCompleted - 1
+    }));
+  };
+
+  // Helper function to revert UI changes
+  const revertUIChanges = (originalState) => {
+    console.log('↩️ Reverting UI changes');
+    
+    const { orderId, rowIndex, status, isCompleted } = originalState;
+
+    setServices(prevServices =>
+      prevServices.map(service => {
+        if (service._id === orderId) {
+          const updatedRows = service.rows.map((row, idx) => 
+            idx === parseInt(rowIndex) 
+              ? { ...row, isCompleted, status }
+              : row
+          );
+          return { ...service, rows: updatedRows };
+        }
+        return service;
+      })
+    );
+
+    const revertServiceInList = (list) => 
+      list.map(service => 
+        service.id === orderId && service.rowIndex === parseInt(rowIndex)
+          ? { ...service, isCompleted, status }
+          : service
+      );
+
+    setTodaysServices(prev => revertServiceInList(prev));
+    setTomorrowsServices(prev => revertServiceInList(prev));
+    setNextWeekServices(prev => revertServiceInList(prev));
+    setPendingServices(prev => revertServiceInList(prev));
+    setCompletedServices(prev => revertServiceInList(prev));
+
+    // Revert stats
+    setStats(prev => ({
+      ...prev,
+      totalPending: isCompleted ? prev.totalPending + 1 : prev.totalPending - 1,
+      totalCompleted: isCompleted ? prev.totalCompleted - 1 : prev.totalCompleted + 1
+    }));
+  };
+
+  // Helper function to show error messages
+  const showErrorMessage = (error) => {
+    let errorMessage = 'Failed to update status. ';
+    
+    if (error.response) {
+      // Server responded with error status
+      const serverMessage = error.response.data?.message;
+      if (serverMessage) {
+        errorMessage += serverMessage;
+      } else {
+        errorMessage += `Server error: ${error.response.status}`;
+      }
+    } else if (error.request) {
+      // Request was made but no response received
+      errorMessage += 'Network error. Please check your connection.';
     } else {
-      throw new Error(response.data?.message || 'API returned unsuccessful response');
+      // Something else happened
+      errorMessage += error.message;
     }
 
-  } catch (error) {
-    console.error('❌ Error in handleStatusToggle:', error);
-    
-    // Revert UI changes
-    revertUIChanges(originalState);
-    
-    // Show appropriate error message
-    showErrorMessage(error, originalState);
-  }
-};
-
-// Helper function to update UI
-const updateUIOptimistically = (orderId, rowIndex, updatedStatus, newStatus) => {
-  console.log('🎨 Updating UI optimistically');
-  
-  // Update main services state
-  setServices(prevServices =>
-    prevServices.map(service => {
-      if (service._id === orderId) {
-        const updatedRows = service.rows.map((row, idx) => 
-          idx === parseInt(rowIndex) 
-            ? {
-                ...row,
-                isCompleted: updatedStatus,
-                status: newStatus,
-                updatedBy: currentExecutive,
-                updatedAt: new Date().toISOString()
-              }
-            : row
-        );
-        return { ...service, rows: updatedRows };
-      }
-      return service;
-    })
-  );
-
-  // Update filtered lists
-  const updateServiceInList = (list) => 
-    list.map(service => 
-      service.id === orderId && service.rowIndex === parseInt(rowIndex)
-        ? { 
-            ...service, 
-            isCompleted: updatedStatus, 
-            status: newStatus,
-            updatedAt: new Date().toISOString()
-          }
-        : service
-    );
-
-  setTodaysServices(prev => updateServiceInList(prev));
-  setTomorrowsServices(prev => updateServiceInList(prev));
-  setNextWeekServices(prev => updateServiceInList(prev));
-  setPendingServices(prev => updateServiceInList(prev));
-  setCompletedServices(prev => updateServiceInList(prev));
-
-  // Update stats
-  setStats(prev => ({
-    ...prev,
-    totalPending: updatedStatus ? prev.totalPending - 1 : prev.totalPending + 1,
-    totalCompleted: updatedStatus ? prev.totalCompleted + 1 : prev.totalCompleted - 1
-  }));
-};
-
-// Helper function to revert UI changes
-const revertUIChanges = (originalState) => {
-  console.log('↩️ Reverting UI changes');
-  
-  const { orderId, rowIndex, status, isCompleted } = originalState;
-
-  setServices(prevServices =>
-    prevServices.map(service => {
-      if (service._id === orderId) {
-        const updatedRows = service.rows.map((row, idx) => 
-          idx === parseInt(rowIndex) 
-            ? { ...row, isCompleted, status }
-            : row
-        );
-        return { ...service, rows: updatedRows };
-      }
-      return service;
-    })
-  );
-
-  const revertServiceInList = (list) => 
-    list.map(service => 
-      service.id === orderId && service.rowIndex === parseInt(rowIndex)
-        ? { ...service, isCompleted, status }
-        : service
-    );
-
-  setTodaysServices(prev => revertServiceInList(prev));
-  setTomorrowsServices(prev => revertServiceInList(prev));
-  setNextWeekServices(prev => revertServiceInList(prev));
-  setPendingServices(prev => revertServiceInList(prev));
-  setCompletedServices(prev => revertServiceInList(prev));
-
-  // Revert stats
-  setStats(prev => ({
-    ...prev,
-    totalPending: isCompleted ? prev.totalPending + 1 : prev.totalPending - 1,
-    totalCompleted: isCompleted ? prev.totalCompleted - 1 : prev.totalCompleted + 1
-  }));
-};
-
-// Helper function to show error messages
-const showErrorMessage = (error) => {
-  let errorMessage = 'Failed to update status. ';
-  
-  if (error.response) {
-    // Server responded with error status
-    const serverMessage = error.response.data?.message;
-    if (serverMessage) {
-      errorMessage += serverMessage;
-    } else {
-      errorMessage += `Server error: ${error.response.status}`;
-    }
-  } else if (error.request) {
-    // Request was made but no response received
-    errorMessage += 'Network error. Please check your connection.';
-  } else {
-    // Something else happened
-    errorMessage += error.message;
-  }
-
-  console.error('💬 Error message:', errorMessage);
-  alert(`❌ ${errorMessage}`);
-};
+    console.error('💬 Error message:', errorMessage);
+    alert(`❌ ${errorMessage}`);
+  };
 
   // Handle logout
   const handleLogout = () => {
@@ -1016,6 +1065,24 @@ const showErrorMessage = (error) => {
       overflow: 'hidden',
     }}>
       <AutoLogout />
+      
+      {/* Overlay for mobile when sidebar is open */}
+      {sidebarOpen && window.innerWidth <= 768 && (
+        <div
+          onClick={closeSidebarOnOverlay}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 999,
+            transition: 'all 0.3s ease',
+          }}
+        />
+      )}
+      
       {/* Navbar */}
       <div style={{
         position: 'fixed',
@@ -1029,26 +1096,37 @@ const showErrorMessage = (error) => {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 20px',
-        zIndex: 2,
+        zIndex: 1000,
         boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
       }}>
-        <div style={{
-          fontSize: '24px',
-          cursor: 'pointer',
-          padding: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minWidth: '40px',
-        }} onClick={toggleSidebar}>
-          {sidebarOpen ? '☰' : '≡'}
+        {/* Hamburger Menu for Mobile */}
+        <div style={hamburgerStyle} onClick={toggleSidebar}>
+          <div style={hamburgerLineStyle}></div>
+          <div style={hamburgerLineStyle}></div>
+          <div style={hamburgerLineStyle}></div>
         </div>
+        
+        {/* Logo */}
+        <img 
+          src={GMSLogo} 
+          alt="GMS Logo" 
+          style={logoIconStyle}
+          onClick={handleLogoClick}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.transition = 'transform 0.2s';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+        />
+        
         <div style={{
           background: 'linear-gradient(to right, #ff7e5f, #feb47b)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           fontWeight: 'bold',
-          fontSize: '18px',
+          fontSize: window.innerWidth <= 768 ? '14px' : '18px',
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -1066,19 +1144,19 @@ const showErrorMessage = (error) => {
         }}>
           <div style={{
             backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            padding: '8px 12px',
+            padding: window.innerWidth <= 768 ? '4px 8px' : '8px 12px',
             borderRadius: '6px',
-            minWidth: '200px',
+            minWidth: window.innerWidth <= 768 ? '120px' : '200px',
           }}>
             <div style={{
-              fontSize: '12px',
-              marginBottom: '4px',
+              fontSize: window.innerWidth <= 768 ? '8px' : '12px',
+              marginBottom: '2px',
               opacity: 0.8,
             }}>🎯 Target:</div>
             <div style={{
-              fontSize: '14px',
+              fontSize: window.innerWidth <= 768 ? '10px' : '14px',
               fontWeight: 'bold',
-              marginBottom: '4px',
+              marginBottom: '2px',
             }}>
               {targetLoading 
                 ? "Loading..." 
@@ -1086,7 +1164,7 @@ const showErrorMessage = (error) => {
               }
             </div>
             <div style={{
-              height: '6px',
+              height: window.innerWidth <= 768 ? '3px' : '6px',
               backgroundColor: 'rgba(255, 255, 255, 0.2)',
               borderRadius: '3px',
               overflow: 'hidden',
@@ -1104,8 +1182,8 @@ const showErrorMessage = (error) => {
           
           <div style={{
             marginRight: '30px',
-            width: '36px',
-            height: '36px',
+            width: window.innerWidth <= 768 ? '32px' : '36px',
+            height: window.innerWidth <= 768 ? '32px' : '36px',
             borderRadius: '50%',
             backgroundColor: '#fff',
             color: '#003366',
@@ -1113,7 +1191,7 @@ const showErrorMessage = (error) => {
             justifyContent: 'center',
             alignItems: 'center',
             fontWeight: 'bold',
-            fontSize: '16px',
+            fontSize: window.innerWidth <= 768 ? '14px' : '16px',
             boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
           }}>
             {username.charAt(0).toUpperCase()}
@@ -1133,10 +1211,11 @@ const showErrorMessage = (error) => {
         top: '60px',
         bottom: 0,
         left: 0,
-        zIndex: 1,
+        zIndex: 1000,
         display: 'flex',
         flexDirection: 'column',
         overflowY: 'auto',
+        boxShadow: sidebarOpen && window.innerWidth <= 768 ? '2px 0 10px rgba(0,0,0,0.3)' : 'none',
       }}>
         {/* Dashboard Link */}
         <NavLink
@@ -1217,7 +1296,22 @@ const showErrorMessage = (error) => {
               >
                 Create Expense ➕
               </NavLink>
-             
+              <NavLink
+                to="/service-dashboard/field-executive"
+                style={({ isActive }) => ({
+                  padding: '12px 40px',
+                  cursor: 'pointer',
+                  color: 'white',
+                  textDecoration: 'none',
+                  display: 'block',
+                  fontSize: '14px',
+                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #fff' : '3px solid transparent',
+                })}
+                onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
+              >
+               Field Visits
+              </NavLink>
               
               
               <NavLink
@@ -1443,7 +1537,7 @@ const showErrorMessage = (error) => {
                 })}
                 onClick={() => window.innerWidth <= 768 && setSidebarOpen(false)}
               >
-                Create Hour Report ➕
+                Create Report ➕
               </NavLink>
               
               <NavLink

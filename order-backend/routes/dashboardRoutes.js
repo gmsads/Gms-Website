@@ -869,7 +869,7 @@ router.get('/comparison-data', async (req, res) => {
   }
 });
 
-// Top products analysis endpoint - shows which products are ordered most frequently
+// Top products analysis endpoint - shows which products are ordered most frequently with quantities
 router.get('/top-products', async (req, res) => {
   try {
     const { financialYear, month, startDate, endDate } = req.query;
@@ -973,109 +973,141 @@ router.get('/top-products', async (req, res) => {
 
     console.log(`Analyzing ${filteredOrders.length} orders for top products`);
 
-    // Initialize product counts and amounts
-    const productCounts = {};
-    const productAmount = {};
+    // Initialize product tracking with quantity
+    const productStats = {};
     
-    // Initialize all requirements with zero counts
+    // Initialize all requirements with zero stats
     allRequirements.forEach(req => {
       const productName = req.name || req.requirementName || req.title;
       if (productName) {
-        productCounts[productName] = 0;
-        productAmount[productName] = 0;
+        productStats[productName] = {
+          orderCount: 0,
+          totalQuantity: 0,
+          totalAmount: 0
+        };
       }
     });
 
+    // Also track products that might not be in requirements but appear in orders
+    const extraProducts = {};
+
     // Process each order
     filteredOrders.forEach(order => {
-      // Calculate the TOTAL ORDER AMOUNT (after discount)
+      // Calculate total order amount (after discount)
       let totalOrderAmount = 0;
-      
-      // Calculate total from rows
       if (order.rows && Array.isArray(order.rows)) {
         totalOrderAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
       }
       
-      // Apply discount if any
       const discount = parseFloat(order.discount) || 0;
       const finalOrderAmount = totalOrderAmount - discount;
       
-      // Track which products we've already counted for this order (to avoid double counting)
-      const productsFoundInThisOrder = new Set();
+      // Track which products we've already counted for order count (once per order per product)
+      const productsCountedForOrder = new Set();
       
       if (order.rows && Array.isArray(order.rows)) {
         order.rows.forEach(row => {
-          // Check what requirement/service is in this row
-          let foundProduct = null;
+          // Get quantity
+          const quantity = parseFloat(row.quantity) || 0;
+          const rowAmount = parseFloat(row.total) || 0;
           
-          // Check multiple possible fields for requirement
-          const possibleFields = ['requirement', 'product', 'service', 'itemName', 'description', 'name', 'type'];
+          // Get product name from various possible fields
+          let productName = null;
           
-          for (const field of possibleFields) {
-            if (row[field] && typeof row[field] === 'string') {
-              const rowValue = row[field].trim();
-              
-              // Try to match with requirements in database
-              for (const req of allRequirements) {
-                const reqName = req.name || req.requirementName || req.title;
-                if (reqName && rowValue.toLowerCase().includes(reqName.toLowerCase())) {
-                  foundProduct = reqName;
-                  break;
-                }
-              }
-              
-              // Also check exact matches
-              if (!foundProduct) {
-                for (const req of allRequirements) {
-                  const reqName = req.name || req.requirementName || req.title;
-                  if (reqName && rowValue.toLowerCase() === reqName.toLowerCase()) {
-                    foundProduct = reqName;
-                    break;
-                  }
-                }
-              }
-              
-              if (foundProduct) break;
-            }
+          // Check requirement field first
+          if (row.requirement && typeof row.requirement === 'string' && row.requirement.trim()) {
+            productName = row.requirement.trim();
+          }
+          // Then check customRequirement
+          else if (row.customRequirement && typeof row.customRequirement === 'string' && row.customRequirement.trim()) {
+            productName = row.customRequirement.trim();
+          }
+          // Then check description
+          else if (row.description && typeof row.description === 'string' && row.description.trim()) {
+            productName = row.description.trim();
           }
           
-          // If product found, count it and add amount (only once per order)
-          if (foundProduct && productCounts.hasOwnProperty(foundProduct)) {
-            if (!productsFoundInThisOrder.has(foundProduct)) {
-              productsFoundInThisOrder.add(foundProduct);
-              productCounts[foundProduct]++;
-              // Add the FULL ORDER AMOUNT for this product (not just row amount)
-              productAmount[foundProduct] += finalOrderAmount;
+          if (productName) {
+            // Try to match with requirements in database for consistent naming
+            let matchedProduct = null;
+            for (const req of allRequirements) {
+              const reqName = req.name || req.requirementName || req.title;
+              if (reqName && productName.toLowerCase().includes(reqName.toLowerCase())) {
+                matchedProduct = reqName;
+                break;
+              }
+            }
+            
+            // If no match found, use the original name
+            const finalProductName = matchedProduct || productName;
+            
+            // Check if product exists in productStats
+            if (productStats[finalProductName]) {
+              // Add quantity (always add quantity from each row)
+              productStats[finalProductName].totalQuantity += quantity;
+              
+              // Add amount
+              productStats[finalProductName].totalAmount += rowAmount;
+              
+              // Only count order once per product
+              if (!productsCountedForOrder.has(finalProductName)) {
+                productsCountedForOrder.add(finalProductName);
+                productStats[finalProductName].orderCount++;
+              }
+            } else {
+              // Track extra products not in requirements
+              if (!extraProducts[finalProductName]) {
+                extraProducts[finalProductName] = {
+                  orderCount: 0,
+                  totalQuantity: 0,
+                  totalAmount: 0
+                };
+              }
+              extraProducts[finalProductName].totalQuantity += quantity;
+              extraProducts[finalProductName].totalAmount += rowAmount;
+              if (!productsCountedForOrder.has(finalProductName)) {
+                productsCountedForOrder.add(finalProductName);
+                extraProducts[finalProductName].orderCount++;
+              }
             }
           }
         });
       }
     });
 
-    // Convert to array, filter out zero counts, and sort
-    const sortedProducts = Object.entries(productCounts)
-      .filter(([, count]) => count > 0)
-      .map(([name, count]) => ({
+    // Merge extra products into productStats
+    Object.entries(extraProducts).forEach(([name, stats]) => {
+      productStats[name] = stats;
+    });
+
+    // Convert to array, filter out zero orderCount, and sort by orderCount
+    const allProductsArray = Object.entries(productStats)
+      .filter(([, stats]) => stats.orderCount > 0 || stats.totalQuantity > 0)
+      .map(([name, stats]) => ({
         name,
-        count,
-        amount: productAmount[name]
+        orderCount: stats.orderCount,
+        totalQuantity: stats.totalQuantity,
+        totalAmount: stats.totalAmount
       }))
-      .sort((a, b) => b.count - a.count);
+      .sort((a, b) => b.orderCount - a.orderCount);
 
     // Get top 3 products
-    const top3Products = sortedProducts.slice(0, 3);
+    const top3Products = allProductsArray.slice(0, 3);
     
-    console.log('=== TOP 3 PRODUCTS ===');
+    console.log('=== TOP PRODUCTS ANALYSIS ===');
+    console.log(`Total products with orders: ${allProductsArray.length}`);
+    console.log(`Top 3 Products:`);
     top3Products.forEach((p, i) => {
-      console.log(`${i+1}. ${p.name}: ${p.count} orders, Total Amount: ₹${p.amount.toFixed(2)}`);
+      console.log(`${i+1}. ${p.name}: ${p.orderCount} orders, ${p.totalQuantity} units, Amount: ₹${p.totalAmount.toFixed(2)}`);
     });
 
     res.json({
       topProducts: top3Products,
-      allProducts: sortedProducts.slice(0, 10),
-      totalProducts: sortedProducts.length,
+      allProducts: allProductsArray,
+      totalProducts: allProductsArray.length,
       totalRequirements: allRequirements.length,
       totalOrdersAnalyzed: filteredOrders.length,
+      totalQuantitySum: allProductsArray.reduce((sum, p) => sum + p.totalQuantity, 0),
       timePeriod: {
         financialYear: selectedFinancialYear || 'all',
         month: selectedMonth !== null ? selectedMonth + 1 : null,

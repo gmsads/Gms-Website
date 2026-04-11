@@ -1025,179 +1025,194 @@ const upiOptions = [
     }
   };
 
-  // ===== 13. FETCH ORDERS FUNCTION =====
-  const fetchOrders = async (role, name, month = null, financialYear = null, clientType = null, executive = null, executiveName = null, leadSource = null, useDateRangeFlag = false, startDateParam = null, endDateParam = null) => {
-    setLoading(true);
-    setError(null);
-    try {
-      let url = API_ENDPOINTS.ORDERS;
+// ===== 13. FETCH ORDERS FUNCTION (FIXED) =====
+const fetchOrders = async (role, name, month = null, financialYear = null, clientType = null, executive = null, executiveNameParam = null, leadSource = null, useDateRangeFlag = false, startDateParam = null, endDateParam = null) => {
+  setLoading(true);
+  setError(null);
+  try {
+    let url = API_ENDPOINTS.ORDERS;
 
-      const searchParams = new URLSearchParams(location.search);
-      const executiveFromUrl = searchParams.get('executive');
-      const executiveTypeFromUrl = searchParams.get('executiveType');
-      const executiveNameFromUrl = searchParams.get('executiveName');
-      const leadSourceFromUrl = searchParams.get('leadSource');
+    const searchParams = new URLSearchParams(location.search);
+    const executiveFromUrl = searchParams.get('executive');
+    const executiveTypeFromUrl = searchParams.get('executiveType');
+    const executiveNameFromUrl = searchParams.get('executiveName');
+    const leadSourceFromUrl = searchParams.get('leadSource');
+    const monthFromUrl = searchParams.get('month');
+    const financialYearFromUrl = searchParams.get('financialYear');
 
-      console.log('🔍 Fetching orders with params:', {
-        role,
-        name,
-        month,
-        financialYear,
-        clientType,
-        executive,
-        executiveName,
-        executiveFromUrl,
-        executiveTypeFromUrl,
-        executiveNameFromUrl,
-        leadSource: leadSourceFromUrl,
-        useDateRange: useDateRangeFlag,
-        startDate: startDateParam,
-        endDate: endDateParam
-      });
-
-      const queryParams = new URLSearchParams();
-
-      if (useDateRangeFlag && startDateParam && endDateParam) {
-        queryParams.append('startDate', startDateParam);
-        queryParams.append('endDate', endDateParam);
-        console.log('📅 Using date range filter:', { startDate: startDateParam, endDate: endDateParam });
-      } else if (executiveNameFromUrl) {
-        console.log('🎯 Filtering by specific executive from performance view:', executiveNameFromUrl);
-        queryParams.append('executive', executiveNameFromUrl);
-        queryParams.append('filterByExecutive', 'true');
-      } else {
-        const rolesThatCanSeeAll = ['Admin', 'Account', 'Service Executive'];
-        const shouldFilter = role && !rolesThatCanSeeAll.includes(role) && name;
-
-        if (shouldFilter) {
-          queryParams.append('executive', name);
-          console.log('👤 FILTERING: Showing only orders for current executive:', name);
-        } else {
-          console.log('👑 NO FILTER: Showing all orders for role:', role);
-        }
-      }
-
-      if (!useDateRangeFlag) {
-        if (month) queryParams.append('month', month);
-        if (financialYear) queryParams.append('financialYear', financialYear);
-      }
-      if (clientType) queryParams.append('clientType', clientType);
-      if (executive) queryParams.append('executive', executive);
-      if (executiveName) queryParams.append('executiveName', executiveName);
-      if (leadSource) queryParams.append('leadSource', leadSource);
-
-      console.log('📡 API Call:', `${url}?${queryParams.toString()}`);
-
-      const res = await axios.get(`${url}?${queryParams.toString()}`);
-      console.log('📦 Total orders received from API:', res.data.length);
-
-      let fetchedOrders = res.data;
-      
-      const sortedOrders = fetchedOrders.sort((a, b) => {
-        const dateA = new Date(a.orderDate || 0);
-        const dateB = new Date(b.orderDate || 0);
-        return dateB - dateA;
-      });
-
-      setOrders(sortedOrders);
-      
-    } catch (err) {
-      console.error('❌ Error fetching orders:', err);
-      setError('Failed to fetch orders. Please try again.');
-      toast.error('Failed to fetch orders. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ===== 14. NEW: Handle URL parameters from PerformanceView (FINANCIAL YEAR FIX) =====
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    
-    const financialYearFromUrl = params.get('financialYear');
-    const financialMonthFromUrl = params.get('financialMonth');
-    const calendarMonthFromUrl = params.get('month');
-    const calendarYearFromUrl = params.get('year');
-    const executiveFromUrl = params.get('executive');
-    const executiveNameFromUrl = params.get('executiveName');
-    const requirement = params.get('requirement');
-    
-    console.log('🔍 ViewOrders received URL params:', {
-      financialYearFromUrl,
-      financialMonthFromUrl,
-      calendarMonthFromUrl,
-      calendarYearFromUrl,
-      executiveFromUrl,
-      executiveNameFromUrl,
-      requirement
+    console.log('🔍 Fetching orders with params:', {
+      role,
+      name,
+      month: month || monthFromUrl,
+      financialYear: financialYear || financialYearFromUrl,
+      clientType,
+      executive,
+      executiveName: executiveNameParam || executiveNameFromUrl,
+      leadSource: leadSource || leadSourceFromUrl,
+      useDateRange: useDateRangeFlag,
+      startDate: startDateParam,
+      endDate: endDateParam
     });
-    
-    // Handle requirement filter
-    if (requirement) {
-      setRequirementFilter(requirement);
-      setSearchTerm(requirement);
-    }
-    
-    // CASE 1: Financial year and month provided directly (from PerformanceView)
-    if (financialYearFromUrl) {
-      console.log('📅 Setting financial year filter from URL:', financialYearFromUrl);
-      setFinancialYearFilter(financialYearFromUrl);
-      
-      if (financialMonthFromUrl) {
-        const financialMonthNum = parseInt(financialMonthFromUrl);
-        console.log('📅 Setting financial month filter from URL:', financialMonthNum);
-        setMonthFilter(financialMonthNum);
-        setCurrentViewMonth(financialMonthNum);
-      }
+
+    const queryParams = new URLSearchParams();
+
+    // IMPORTANT: Use the correct month and financial year values
+    const effectiveMonth = month !== null ? month : (monthFromUrl ? parseInt(monthFromUrl) : null);
+    const effectiveFinancialYear = financialYear || financialYearFromUrl;
+
+    // Date range filter takes precedence
+    if (useDateRangeFlag && startDateParam && endDateParam) {
+      queryParams.append('startDate', startDateParam);
+      queryParams.append('endDate', endDateParam);
+      console.log('📅 Using date range filter:', { startDate: startDateParam, endDate: endDateParam });
     } 
-    // CASE 2: Calendar month/year provided (convert to financial)
-    else if (calendarMonthFromUrl && calendarYearFromUrl) {
-      const calendarMonth = parseInt(calendarMonthFromUrl);
-      const calendarYear = parseInt(calendarYearFromUrl);
+    // Apply month and financial year filters
+    else if (effectiveMonth !== null) {
+      queryParams.append('month', effectiveMonth.toString());
+      console.log('📅 Filtering by month:', effectiveMonth);
       
-      let financialMonth;
-      let financialYear;
-      
-      if (calendarMonth >= 4) {
-        financialMonth = calendarMonth - 3;
-        financialYear = `${calendarYear}-${calendarYear + 1}`;
-      } else {
-        financialMonth = calendarMonth + 9;
-        financialYear = `${calendarYear - 1}-${calendarYear}`;
+      if (effectiveFinancialYear && effectiveFinancialYear !== 'all') {
+        queryParams.append('financialYear', effectiveFinancialYear);
+        console.log('📅 Filtering by financial year:', effectiveFinancialYear);
       }
-      
-      console.log('🔄 Converted calendar to financial:', {
-        calendarMonth,
-        calendarYear,
-        financialMonth,
-        financialYear
-      });
-      
-      setFinancialYearFilter(financialYear);
-      setMonthFilter(financialMonth);
-      setCurrentViewMonth(financialMonth);
+    }
+    else if (effectiveFinancialYear && effectiveFinancialYear !== 'all') {
+      queryParams.append('financialYear', effectiveFinancialYear);
+      console.log('📅 Filtering by financial year only:', effectiveFinancialYear);
     }
     
-    // Handle executive filter
-    if (executiveNameFromUrl) {
-      console.log('👤 Setting executive filter from URL:', executiveNameFromUrl);
-      setAppliedExecutiveFilters({
-        executive: executiveFromUrl || '',
-        executiveType: '',
-        executiveName: decodeURIComponent(executiveNameFromUrl)
-      });
+    // Executive filter for non-admin users
+    const rolesThatCanSeeAll = ['Admin', 'Account', 'Service Executive'];
+    const shouldFilter = role && !rolesThatCanSeeAll.includes(role) && name;
+
+    if (shouldFilter) {
+      queryParams.append('executive', name);
+      console.log('👤 FILTERING: Showing only orders for current executive:', name);
+    } else {
+      console.log('👑 NO FILTER: Showing all orders for role:', role);
     }
+
+    // Additional filters
+    if (clientType && clientType !== 'undefined' && clientType !== 'null') {
+      queryParams.append('clientType', clientType);
+    }
+    if (executive && executive !== 'undefined' && executive !== 'null') {
+      queryParams.append('executive', executive);
+    }
+    if (executiveNameParam && executiveNameParam !== 'undefined' && executiveNameParam !== 'null') {
+      queryParams.append('executiveName', executiveNameParam);
+    }
+    if (leadSource && leadSource !== 'undefined' && leadSource !== 'null') {
+      queryParams.append('leadSource', leadSource);
+    }
+
+    console.log('📡 API Call:', `${url}?${queryParams.toString()}`);
+
+    const res = await axios.get(`${url}?${queryParams.toString()}`);
+    console.log('📦 Total orders received from API:', res.data.length);
+    console.log('📦 Sample order dates:', res.data.slice(0, 3).map(o => o.orderDate));
+
+    let fetchedOrders = res.data;
     
-    // Fetch orders with the filters
-    const { role, name } = getUserInfo();
-    const month = monthFilter;
-    const financialYear = financialYearFilter;
-    const clientType = params.get('clientType');
-    const leadSource = params.get('leadSource');
+    const sortedOrders = fetchedOrders.sort((a, b) => {
+      const dateA = new Date(a.orderDate || 0);
+      const dateB = new Date(b.orderDate || 0);
+      return dateB - dateA;
+    });
+
+    setOrders(sortedOrders);
     
-    fetchOrders(role, name, month, financialYear, clientType, executiveFromUrl, executiveNameFromUrl, leadSource);
-    
-  }, [location.search]);
+  } catch (err) {
+    console.error('❌ Error fetching orders:', err);
+    setError('Failed to fetch orders. Please try again.');
+    toast.error('Failed to fetch orders. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
+// ===== 14. Handle URL parameters (FIXED) =====
+useEffect(() => {
+  const params = new URLSearchParams(location.search);
+  
+  const financialYearFromUrl = params.get('financialYear');
+  const monthFromUrl = params.get('month'); // This is financial month (1-12 where 1=April)
+  const clientTypeFromUrl = params.get('clientType');
+  const leadSourceFromUrl = params.get('leadSource');
+  const executiveFromUrl = params.get('executive');
+  const executiveNameFromUrl = params.get('executiveName');
+  const requirement = params.get('requirement');
+  
+  console.log('🔍 ViewOrders received URL params:', {
+    financialYearFromUrl,
+    monthFromUrl,
+    clientTypeFromUrl,
+    leadSourceFromUrl,
+    executiveFromUrl,
+    executiveNameFromUrl,
+    requirement
+  });
+  
+  // Handle requirement filter
+  if (requirement) {
+    setRequirementFilter(requirement);
+    setSearchTerm(requirement);
+  }
+  
+  // Set month filter from URL
+  if (monthFromUrl) {
+    const monthNum = parseInt(monthFromUrl);
+    console.log('📅 Setting month filter from URL:', monthNum);
+    setMonthFilter(monthNum);
+    setCurrentViewMonth(monthNum);
+  } else {
+    setMonthFilter(null);
+    setCurrentViewMonth(null);
+  }
+  
+  // Set financial year filter from URL
+  if (financialYearFromUrl && financialYearFromUrl !== 'all') {
+    console.log('📅 Setting financial year filter from URL:', financialYearFromUrl);
+    setFinancialYearFilter(financialYearFromUrl);
+  } else {
+    setFinancialYearFilter('all');
+  }
+  
+  // Set client type filter
+  if (clientTypeFromUrl && clientTypeFromUrl !== 'undefined' && clientTypeFromUrl !== 'null') {
+    setClientTypeFilter(clientTypeFromUrl);
+  }
+  
+  // Set lead source filter
+  if (leadSourceFromUrl && leadSourceFromUrl !== 'undefined' && leadSourceFromUrl !== 'null') {
+    setLeadSourceFilter(leadSourceFromUrl);
+  }
+  
+  // Set executive filter
+  if (executiveNameFromUrl) {
+    console.log('👤 Setting executive filter from URL:', decodeURIComponent(executiveNameFromUrl));
+    setAppliedExecutiveFilters({
+      executive: executiveFromUrl || '',
+      executiveType: '',
+      executiveName: decodeURIComponent(executiveNameFromUrl)
+    });
+  }
+  
+  // Fetch orders with the filters
+  const { role, name } = getUserInfo();
+  
+  // Use the values from URL
+  fetchOrders(
+    role, 
+    name, 
+    monthFromUrl ? parseInt(monthFromUrl) : null, 
+    financialYearFromUrl || 'all', 
+    clientTypeFromUrl, 
+    executiveFromUrl, 
+    executiveNameFromUrl, 
+    leadSourceFromUrl
+  );
+  
+}, [location.search]);
 
   // ===== 15. CAPTURE REQUIREMENT FILTER FROM URL =====
   useEffect(() => {
@@ -1367,62 +1382,91 @@ const upiOptions = [
     fetchOrders(role, name, month, financialYearParam, clientType, executive, executiveNameParam, source);
   };
 
-  // ===== 18. FINANCIAL YEAR CHANGE HANDLER =====
-  const handleFinancialYearChange = (e) => {
-    const newFinancialYear = e.target.value;
-    setFinancialYearFilter(newFinancialYear);
-    
-    setMonthFilter(null);
-    setCurrentViewMonth(null);
+  // ===== 18. FINANCIAL YEAR CHANGE HANDLER (FIXED) =====
+const handleFinancialYearChange = (e) => {
+  const newFinancialYear = e.target.value;
+  console.log('📅 Financial year changed to:', newFinancialYear);
+  
+  setFinancialYearFilter(newFinancialYear);
+  setUseDateRange(false);
+  setStartDate('');
+  setEndDate('');
 
-    const params = new URLSearchParams(location.search);
-    if (newFinancialYear !== 'all') {
-      params.set('financialYear', newFinancialYear);
-    } else {
-      params.delete('financialYear');
-    }
+  const params = new URLSearchParams(location.search);
+  
+  if (newFinancialYear !== 'all') {
+    params.set('financialYear', newFinancialYear);
+  } else {
+    params.delete('financialYear');
+  }
+  
+  // Preserve month if set
+  if (monthFilter) {
+    params.set('month', monthFilter.toString());
+  } else {
     params.delete('month');
-    params.delete('startDate');
-    params.delete('endDate');
-    params.delete('requirement');
-    
-    navigate(`/admin-dashboard/view-orders?${params.toString()}`);
+  }
+  
+  params.delete('startDate');
+  params.delete('endDate');
+  params.delete('requirement');
+  
+  console.log('🔄 Navigating to URL:', `/admin-dashboard/view-orders?${params.toString()}`);
+  navigate(`/admin-dashboard/view-orders?${params.toString()}`);
 
-    const { role, name } = getUserInfo();
-    const month = params.get('month');
-    const clientType = params.get('clientType');
-    const executive = params.get('executive');
-    const executiveNameParam = params.get('executiveName');
-    const leadSource = params.get('leadSource');
-    fetchOrders(role, name, month, newFinancialYear, clientType, executive, executiveNameParam, leadSource);
-  };
+  const { role, name } = getUserInfo();
+  const month = params.get('month');
+  const clientType = params.get('clientType');
+  const executive = params.get('executive');
+  const executiveNameParam = params.get('executiveName');
+  const leadSource = params.get('leadSource');
+  
+  fetchOrders(role, name, month ? parseInt(month) : null, newFinancialYear, clientType, executive, executiveNameParam, leadSource);
+};
+// ===== 19. MONTH CHANGE HANDLER (FIXED) =====
+const handleMonthChange = (e) => {
+  const newMonth = e.target.value ? parseInt(e.target.value) : null;
+  
+  console.log('📅 Month changed to:', newMonth);
+  
+  setMonthFilter(newMonth);
+  setCurrentViewMonth(newMonth);
+  setUseDateRange(false);
+  setStartDate('');
+  setEndDate('');
 
-  // ===== 19. MONTH CHANGE HANDLER =====
-  const handleMonthChange = (e) => {
-    const newMonth = e.target.value ? parseInt(e.target.value) : null;
-    setMonthFilter(newMonth);
-    setCurrentViewMonth(newMonth);
+  const params = new URLSearchParams(location.search);
+  
+  if (newMonth) {
+    params.set('month', newMonth.toString());
+  } else {
+    params.delete('month');
+  }
+  
+  // Preserve financial year if set
+  if (financialYearFilter !== 'all') {
+    params.set('financialYear', financialYearFilter);
+  } else {
+    params.delete('financialYear');
+  }
+  
+  // Clear other filters that might conflict
+  params.delete('startDate');
+  params.delete('endDate');
+  params.delete('requirement');
+  
+  console.log('🔄 Navigating to URL:', `/admin-dashboard/view-orders?${params.toString()}`);
+  navigate(`/admin-dashboard/view-orders?${params.toString()}`);
 
-    const params = new URLSearchParams(location.search);
-    if (newMonth) {
-      params.set('month', newMonth);
-    } else {
-      params.delete('month');
-    }
-    params.delete('startDate');
-    params.delete('endDate');
-    params.delete('requirement');
-    
-    navigate(`/admin-dashboard/view-orders?${params.toString()}`);
-
-    const { role, name } = getUserInfo();
-    const financialYear = params.get('financialYear');
-    const clientType = params.get('clientType');
-    const executive = params.get('executive');
-    const executiveNameParam = params.get('executiveName');
-    const leadSource = params.get('leadSource');
-    fetchOrders(role, name, newMonth, financialYear, clientType, executive, executiveNameParam, leadSource);
-  };
+  // Fetch orders with the new month
+  const { role, name } = getUserInfo();
+  const clientType = params.get('clientType');
+  const executive = params.get('executive');
+  const executiveNameParam = params.get('executiveName');
+  const leadSource = params.get('leadSource');
+  
+  fetchOrders(role, name, newMonth, financialYearFilter, clientType, executive, executiveNameParam, leadSource);
+};
 
   // ===== 20. CLEAR FILTERS FUNCTION =====
   const clearAllFilters = () => {

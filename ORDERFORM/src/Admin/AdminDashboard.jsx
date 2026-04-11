@@ -421,19 +421,17 @@ const NAV = [
     key: 'sales', label: 'Sales', icon: '💼',
     items: [
       { to: 'create-order',       label: 'Create Sale',       emoji: '➕', badge: 'NEW' },
-   { to: 'price-list', label: 'Pricelist', emoji: '🧾' },
+      { to: 'price-list', label: 'Pricelist', emoji: '🧾' },
       { to: 'view-orders',        label: 'View All Orders',    emoji: '📋' },
       { to: 'parties',            label: 'Party',            emoji: '👥' },
       { to: 'quotation',          label: 'Quotation',          emoji: '💬' },
       { to: 'performance',        label: 'Performance',        emoji: '📈' },
-   
-   
       { to: 'ledger',             label: 'Ledger',             emoji: '📒' },
       { to: 'purchase',           label: 'Purchase',           emoji: '🛒' },
-            { to: 'prospects',         label: 'Create Prospects',    emoji: '🎯' },
-   { to: 'view-prospective',   label: 'View Prospects',     emoji: '🎯' },
+      { to: 'prospects',         label: 'Create Prospects',    emoji: '🎯' },
+      { to: 'view-prospective',   label: 'View Prospects',     emoji: '🎯' },
       { to: 'appointments',      label: 'Create Appointments', emoji: '📅' },
-         { to: 'select-appointment', label: 'Appointments',       emoji: '📅' },
+      { to: 'select-appointment', label: 'Appointments',       emoji: '📅' },
     ],
   },
   {
@@ -441,7 +439,7 @@ const NAV = [
     items: [
       { to: 'add-executive',     label: 'Add Employee',        emoji: '➕' },
       { to: 'Employees',         label: 'Employees',           emoji: '👨‍💼' },
-         { to: 'advance-approvals',  label: 'Advance Approvals',  emoji: '✅' },
+      { to: 'advance-approvals',  label: 'Advance Approvals',  emoji: '✅' },
       { to: 'tele-breaks',       label: 'Tele Breaks',         emoji: '☕' },
       { to: 'unit-attendance',   label: 'Unit Attendance',     emoji: '🕐' },
       { to: 'view-leaves',       label: 'View Leave Requests', emoji: '🏖️' },
@@ -457,8 +455,7 @@ const NAV = [
       { to: 'daily-report',      label: 'Daily Report',        emoji: '📄' },
       { to: 'view-hrreport',     label: 'HR Report',           emoji: '👔' },
       { to: 'fieldvisitsadmin',  label: 'Field Visits',        emoji: '🗺️' },
-          { to: 'hour-reeport',  label: 'Hour Report',        emoji: '📊' },
-
+      { to: 'hour-reeport',  label: 'Hour Report',        emoji: '📊' },
     ],
   },
   {
@@ -468,7 +465,6 @@ const NAV = [
       { to: 'pending-service',   label: 'Pending Service',     emoji: '⏳' },
       { to: 'view-design',       label: 'View Design',         emoji: '🎨' },
       { to: 'design-report',     label: 'Design Reports',      emoji: '🗂️' },
-     
     ],
   },
   {
@@ -477,7 +473,7 @@ const NAV = [
       { to: 'pending-payment',   label: 'Pending Payment',     emoji: '💳' },
       { to: 'view-expenses',     label: 'View Expenses',       emoji: '💸' },
       { to: 'inventory',         label: 'Inventory',           emoji: '📦' },
-       { to: 'vendors',           label: 'Vendors',             emoji: '🏪' },
+      { to: 'vendors',           label: 'Vendors',             emoji: '🏪' },
     ],
   },
   {
@@ -658,7 +654,8 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
   const [topProducts, setTopProducts] = useState(null);
-const [productsLoading, setProductsLoading] = useState(false);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [showAllProductsModal, setShowAllProductsModal] = useState(false);
   const [financialYear, setFinancialYear] = useState(() => {
     const currentDate = new Date();
     const currentMonth = currentDate.getMonth();
@@ -845,35 +842,37 @@ const [productsLoading, setProductsLoading] = useState(false);
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
   }, []);
-// Fetch top products data
-useEffect(() => {
-  const fetchTopProducts = async () => {
-    setProductsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (useDateRange && startDate && endDate) {
-        params.append('startDate', startDate);
-        params.append('endDate', endDate);
-      } else {
-        if (financialYear !== 'all') {
-          params.append('financialYear', financialYear);
+
+  // Fetch top products data
+  useEffect(() => {
+    const fetchTopProducts = async () => {
+      setProductsLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (useDateRange && startDate && endDate) {
+          params.append('startDate', startDate);
+          params.append('endDate', endDate);
+        } else {
+          if (financialYear !== 'all') {
+            params.append('financialYear', financialYear);
+          }
+          if (selectedMonth !== null) {
+            params.append('month', selectedMonth + 1);
+          }
         }
-        if (selectedMonth !== null) {
-          params.append('month', selectedMonth + 1);
-        }
+        const response = await axios.get(`/api/dashboard/top-products?${params.toString()}`);
+        setTopProducts(response.data);
+      } catch (err) {
+        console.error('Error fetching top products:', err);
+        setTopProducts(null);
+      } finally {
+        setProductsLoading(false);
       }
-    const response = await axios.get(`/api/dashboard/top-products?${params.toString()}`);
-setTopProducts(response.data);
-    } catch (err) {
-      console.error('Error fetching top products:', err);
-      setTopProducts(null);
-    } finally {
-      setProductsLoading(false);
-    }
-  };
-  
-  fetchTopProducts();
-}, [financialYear, selectedMonth, startDate, endDate, useDateRange]);
+    };
+    
+    fetchTopProducts();
+  }, [financialYear, selectedMonth, startDate, endDate, useDateRange]);
+
   const handleSearch = async () => {
     if (orderNumber.length !== 10) {
       setSearchError('Please enter exactly 10 digits');
@@ -988,6 +987,17 @@ setTopProducts(response.data);
       return `${monthLabels[selectedMonth]} ${financialYear !== 'all' ? `(FY ${financialYear})` : '(All Years)'}`;
     }
     return financialYear === 'all' ? 'All Financial Years' : `Financial Year ${financialYear}`;
+  };
+
+  const formatAmount = (amount) => {
+    if (amount >= 10000000) {
+      return `₹${(amount / 10000000).toFixed(2)}Cr`;
+    } else if (amount >= 100000) {
+      return `₹${(amount / 100000).toFixed(2)}L`;
+    } else if (amount >= 1000) {
+      return `₹${(amount / 1000).toFixed(1)}K`;
+    }
+    return `₹${amount.toLocaleString('en-IN')}`;
   };
 
   const styles = {
@@ -1346,7 +1356,59 @@ setTopProducts(response.data);
       fontSize: '20px',
       transition: 'all 0.15s',
       boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
-    }
+    },
+    modalOverlay: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 2000,
+      animation: 'sb-fadeUp 0.2s ease',
+    },
+    modalContent: {
+      backgroundColor: 'white',
+      borderRadius: '16px',
+      width: '90%',
+      maxWidth: '1000px',
+      maxHeight: '85vh',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+    },
+    modalHeader: {
+      padding: '16px 24px',
+      borderBottom: '1px solid #e2e8f0',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: '#f8fafc',
+    },
+    modalTitle: {
+      fontSize: '18px',
+      fontWeight: 'bold',
+      color: '#1e293b',
+    },
+    modalClose: {
+      background: 'none',
+      border: 'none',
+      fontSize: '24px',
+      cursor: 'pointer',
+      color: '#94a3b8',
+      padding: '0 8px',
+      borderRadius: '8px',
+      transition: 'all 0.2s',
+    },
+    modalBody: {
+      padding: '24px',
+      overflowY: 'auto',
+      flex: 1,
+    },
   };
 
   const [hoveredCard, setHoveredCard] = useState(null);
@@ -1603,275 +1665,272 @@ setTopProducts(response.data);
                   </div>
                 ) : (
                   <div style={styles.dashboardCards}>
-                 {/* Comparison Card - Compact Version */}
-<div 
-  style={{
-    ...styles.card,
-    ...(hoveredCard === 'comparison' ? styles.cardHover : {}),
-    backgroundColor: '#ffffff',
-    padding: '12px',
-    minHeight: 'auto',
-    height: 'auto'
-  }}
-  onMouseEnter={() => setHoveredCard('comparison')}
-  onMouseLeave={() => setHoveredCard(null)}
->
-  <div style={{
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '10px'
-  }}>
-    <div style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-      <span>📊</span> Last 3 Months
-    </div>
-    {comparisonData?.months && (
-      <div style={{
-        fontSize: '10px',
-        color: '#64748b',
-        background: '#f1f5f9',
-        padding: '2px 8px',
-        borderRadius: '12px'
-      }}>
-        {comparisonData.months[0]} - {comparisonData.months[comparisonData.months.length - 1]}
-      </div>
-    )}
-  </div>
+                    {/* Comparison Card */}
+                    <div 
+                      style={{
+                        ...styles.card,
+                        ...(hoveredCard === 'comparison' ? styles.cardHover : {}),
+                        backgroundColor: '#ffffff',
+                        padding: '12px',
+                        minHeight: 'auto',
+                        height: 'auto'
+                      }}
+                      onMouseEnter={() => setHoveredCard('comparison')}
+                      onMouseLeave={() => setHoveredCard(null)}
+                    >
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '10px'
+                      }}>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>📊</span> Last 3 Months
+                        </div>
+                        {comparisonData?.months && (
+                          <div style={{
+                            fontSize: '10px',
+                            color: '#64748b',
+                            background: '#f1f5f9',
+                            padding: '2px 8px',
+                            borderRadius: '12px'
+                          }}>
+                            {comparisonData.months[0]} - {comparisonData.months[comparisonData.months.length - 1]}
+                          </div>
+                        )}
+                      </div>
 
-  {comparisonLoading ? (
-    <div style={{ textAlign: 'center', padding: '20px', color: '#64748b', fontSize: '12px' }}>
-      Loading...
-    </div>
-  ) : !comparisonData || !comparisonData.months || comparisonData.months.length === 0 ? (
-    <div style={{ textAlign: 'center', padding: '20px', color: '#64748b', fontSize: '12px' }}>
-      No data available
-    </div>
-  ) : (
-    <>
-      {/* Mini Stats Row */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        marginBottom: '12px',
-        background: '#f8fafc',
-        padding: '8px 12px',
-        borderRadius: '10px',
-        gap: '6px'
-      }}>
-        <div style={{ textAlign: 'center', flex: 1 }}>
-          <div style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
-            {comparisonData.ordersData.reduce((a, b) => a + b, 0)}
-          </div>
-          <div style={{ fontSize: '9px', color: '#64748b' }}>Orders</div>
-        </div>
-        <div style={{ width: '1px', background: '#e2e8f0' }} />
-        <div style={{ textAlign: 'center', flex: 1 }}>
-          <div style={{ fontSize: '14px', fontWeight: '700', color: '#059669' }}>
-            {(() => {
-              const total = comparisonData.amountData.reduce((a, b) => a + b, 0);
-              if (total >= 10000000) return `₹${(total / 10000000).toFixed(1)}Cr`;
-              if (total >= 100000) return `₹${(total / 100000).toFixed(1)}L`;
-              return `₹${(total / 1000).toFixed(0)}K`;
-            })()}
-          </div>
-          <div style={{ fontSize: '9px', color: '#64748b' }}>Revenue</div>
-        </div>
-        <div style={{ width: '1px', background: '#e2e8f0' }} />
-        <div style={{ textAlign: 'center', flex: 1 }}>
-          <div style={{ fontSize: '14px', fontWeight: '700', color: '#d97706' }}>
-            {(comparisonData.ordersData.reduce((a, b) => a + b, 0) / 3).toFixed(0)}
-          </div>
-          <div style={{ fontSize: '9px', color: '#64748b' }}>Monthly Avg</div>
-        </div>
-      </div>
+                      {comparisonLoading ? (
+                        <div style={{ textAlign: 'center', padding: '20px', color: '#64748b', fontSize: '12px' }}>
+                          Loading...
+                        </div>
+                      ) : !comparisonData || !comparisonData.months || comparisonData.months.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '20px', color: '#64748b', fontSize: '12px' }}>
+                          No data available
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            marginBottom: '12px',
+                            background: '#f8fafc',
+                            padding: '8px 12px',
+                            borderRadius: '10px',
+                            gap: '6px'
+                          }}>
+                            <div style={{ textAlign: 'center', flex: 1 }}>
+                              <div style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
+                                {comparisonData.ordersData.reduce((a, b) => a + b, 0)}
+                              </div>
+                              <div style={{ fontSize: '9px', color: '#64748b' }}>Orders</div>
+                            </div>
+                            <div style={{ width: '1px', background: '#e2e8f0' }} />
+                            <div style={{ textAlign: 'center', flex: 1 }}>
+                              <div style={{ fontSize: '14px', fontWeight: '700', color: '#059669' }}>
+                                {(() => {
+                                  const total = comparisonData.amountData.reduce((a, b) => a + b, 0);
+                                  if (total >= 10000000) return `₹${(total / 10000000).toFixed(1)}Cr`;
+                                  if (total >= 100000) return `₹${(total / 100000).toFixed(1)}L`;
+                                  return `₹${(total / 1000).toFixed(0)}K`;
+                                })()}
+                              </div>
+                              <div style={{ fontSize: '9px', color: '#64748b' }}>Revenue</div>
+                            </div>
+                            <div style={{ width: '1px', background: '#e2e8f0' }} />
+                            <div style={{ textAlign: 'center', flex: 1 }}>
+                              <div style={{ fontSize: '14px', fontWeight: '700', color: '#d97706' }}>
+                                {(comparisonData.ordersData.reduce((a, b) => a + b, 0) / 3).toFixed(0)}
+                              </div>
+                              <div style={{ fontSize: '9px', color: '#64748b' }}>Monthly Avg</div>
+                            </div>
+                          </div>
 
-      {/* Compact Chart */}
-      <div style={{ height: '100px', marginBottom: '10px' }}>
-        <Bar
-          data={{
-            labels: comparisonData.months,
-            datasets: [
-              {
-                label: 'Orders',
-                data: comparisonData.ordersData,
-                backgroundColor: '#3b82f6',
-                borderRadius: 3,
-                barPercentage: 0.7,
-                categoryPercentage: 0.8,
-                yAxisID: 'y-orders'
-              },
-              {
-                label: 'Revenue',
-                data: comparisonData.amountData,
-                backgroundColor: '#f59e0b',
-                borderRadius: 3,
-                barPercentage: 0.7,
-                categoryPercentage: 0.8,
-                yAxisID: 'y-revenue'
-              }
-            ]
-          }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: 'top',
-                labels: { boxWidth: 8, font: { size: 9 }, padding: 4 }
-              },
-              tooltip: {
-                bodyFont: { size: 11 },
-                callbacks: {
-                  label: (context) => {
-                    const label = context.dataset.label;
-                    const value = context.raw;
-                    if (label === 'Revenue') {
-                      if (value >= 10000000) return `Revenue: ₹${(value / 10000000).toFixed(2)}Cr`;
-                      if (value >= 100000) return `Revenue: ₹${(value / 100000).toFixed(2)}L`;
-                      return `Revenue: ₹${(value / 1000).toFixed(1)}K`;
-                    }
-                    return `Orders: ${value}`;
-                  }
-                }
-              }
-            },
-            scales: {
-              'y-orders': {
-                type: 'linear',
-                position: 'left',
-                beginAtZero: true,
-                grid: { display: false },
-                ticks: { font: { size: 8 }, stepSize: 1 }
-              },
-              'y-revenue': {
-                type: 'linear',
-                position: 'right',
-                beginAtZero: true,
-                grid: { drawOnChartArea: false },
-                ticks: {
-                  font: { size: 8 },
-                  callback: (v) => {
-                    if (v >= 10000000) return `${(v/10000000).toFixed(0)}Cr`;
-                    if (v >= 100000) return `${(v/100000).toFixed(0)}L`;
-                    if (v >= 1000) return `${(v/1000).toFixed(0)}K`;
-                    return v;
-                  }
-                }
-              },
-              x: {
-                grid: { display: false },
-                ticks: { font: { size: 9, weight: '500' }, color: '#334155' }
-              }
-            },
-            onClick: (_, elements) => {
-              if (elements.length > 0) {
-                const index = elements[0].index;
-                const month = comparisonData.rawData[index];
-                const queryParams = new URLSearchParams();
-                queryParams.append('month', month.month + 1);
-                queryParams.append('year', month.year);
-                if (financialYear !== 'all') queryParams.append('financialYear', financialYear);
-                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-              }
-            }
-          }}
-        />
-      </div>
+                          <div style={{ height: '100px', marginBottom: '10px' }}>
+                            <Bar
+                              data={{
+                                labels: comparisonData.months,
+                                datasets: [
+                                  {
+                                    label: 'Orders',
+                                    data: comparisonData.ordersData,
+                                    backgroundColor: '#3b82f6',
+                                    borderRadius: 3,
+                                    barPercentage: 0.7,
+                                    categoryPercentage: 0.8,
+                                    yAxisID: 'y-orders'
+                                  },
+                                  {
+                                    label: 'Revenue',
+                                    data: comparisonData.amountData,
+                                    backgroundColor: '#f59e0b',
+                                    borderRadius: 3,
+                                    barPercentage: 0.7,
+                                    categoryPercentage: 0.8,
+                                    yAxisID: 'y-revenue'
+                                  }
+                                ]
+                              }}
+                              options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                  legend: {
+                                    position: 'top',
+                                    labels: { boxWidth: 8, font: { size: 9 }, padding: 4 }
+                                  },
+                                  tooltip: {
+                                    bodyFont: { size: 11 },
+                                    callbacks: {
+                                      label: (context) => {
+                                        const label = context.dataset.label;
+                                        const value = context.raw;
+                                        if (label === 'Revenue') {
+                                          if (value >= 10000000) return `Revenue: ₹${(value / 10000000).toFixed(2)}Cr`;
+                                          if (value >= 100000) return `Revenue: ₹${(value / 100000).toFixed(2)}L`;
+                                          return `Revenue: ₹${(value / 1000).toFixed(1)}K`;
+                                        }
+                                        return `Orders: ${value}`;
+                                      }
+                                    }
+                                  }
+                                },
+                                scales: {
+                                  'y-orders': {
+                                    type: 'linear',
+                                    position: 'left',
+                                    beginAtZero: true,
+                                    grid: { display: false },
+                                    ticks: { font: { size: 8 }, stepSize: 1 }
+                                  },
+                                  'y-revenue': {
+                                    type: 'linear',
+                                    position: 'right',
+                                    beginAtZero: true,
+                                    grid: { drawOnChartArea: false },
+                                    ticks: {
+                                      font: { size: 8 },
+                                      callback: (v) => {
+                                        if (v >= 10000000) return `${(v/10000000).toFixed(0)}Cr`;
+                                        if (v >= 100000) return `${(v/100000).toFixed(0)}L`;
+                                        if (v >= 1000) return `${(v/1000).toFixed(0)}K`;
+                                        return v;
+                                      }
+                                    }
+                                  },
+                                  x: {
+                                    grid: { display: false },
+                                    ticks: { font: { size: 9, weight: '500' }, color: '#334155' }
+                                  }
+                                },
+                                onClick: (_, elements) => {
+                                  if (elements.length > 0) {
+                                    const index = elements[0].index;
+                                    const month = comparisonData.rawData[index];
+                                    const queryParams = new URLSearchParams();
+                                    queryParams.append('month', month.month + 1);
+                                    queryParams.append('year', month.year);
+                                    if (financialYear !== 'all') queryParams.append('financialYear', financialYear);
+                                    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                                  }
+                                }
+                              }}
+                            />
+                          </div>
 
-      {/* Compact Month Cards */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${Math.min(comparisonData.months.length, 3)}, 1fr)`,
-        gap: '6px',
-        marginBottom: '8px'
-      }}>
-        {comparisonData.rawData.slice(0, 3).map((month, index) => {
-          const prevMonth = index > 0 ? comparisonData.rawData[index - 1] : null;
-          const orderDiff = prevMonth ? month.orders - prevMonth.orders : 0;
-          const colors = ['#3b82f6', '#f59e0b', '#10b981'];
+                          <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: `repeat(${Math.min(comparisonData.months.length, 3)}, 1fr)`,
+                            gap: '6px',
+                            marginBottom: '8px'
+                          }}>
+                            {comparisonData.rawData.slice(0, 3).map((month, index) => {
+                              const prevMonth = index > 0 ? comparisonData.rawData[index - 1] : null;
+                              const orderDiff = prevMonth ? month.orders - prevMonth.orders : 0;
+                              const colors = ['#3b82f6', '#f59e0b', '#10b981'];
 
-          return (
-            <div
-              key={index}
-              onClick={() => {
-                const queryParams = new URLSearchParams();
-                queryParams.append('month', month.month + 1);
-                queryParams.append('year', month.year);
-                if (financialYear !== 'all') queryParams.append('financialYear', financialYear);
-                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-              }}
-              style={{
-                background: index === 2 ? '#f0f9ff' : '#f8fafc',
-                padding: '6px 2px',
-                borderRadius: '6px',
-                textAlign: 'center',
-                cursor: 'pointer',
-                border: index === 2 ? `1px solid ${colors[index]}` : '1px solid #e2e8f0',
-                transition: 'all 0.2s'
-              }}
-            >
-              <div style={{ fontSize: '10px', fontWeight: '600', color: '#1e293b' }}>
-                {month.monthName}
-              </div>
-              <div style={{ fontSize: '14px', fontWeight: '700', color: colors[index] }}>
-                {month.orders}
-              </div>
-              <div style={{ fontSize: '9px', color: '#64748b' }}>
-                {(() => {
-                  if (month.amount >= 10000000) return `₹${(month.amount / 10000000).toFixed(1)}Cr`;
-                  if (month.amount >= 100000) return `₹${(month.amount / 100000).toFixed(1)}L`;
-                  return `₹${(month.amount / 1000).toFixed(0)}K`;
-                })()}
-              </div>
-              {index > 0 && (
-                <div style={{
-                  fontSize: '8px',
-                  marginTop: '3px',
-                  padding: '1px 4px',
-                  borderRadius: '10px',
-                  display: 'inline-block',
-                  background: orderDiff > 0 ? '#dcfce7' : orderDiff < 0 ? '#fee2e2' : '#f1f5f9',
-                  color: orderDiff > 0 ? '#166534' : orderDiff < 0 ? '#991b1b' : '#475569',
-                  fontWeight: '500'
-                }}>
-                  {orderDiff > 0 ? '↑' : orderDiff < 0 ? '↓' : '→'} {Math.abs(orderDiff)}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                              return (
+                                <div
+                                  key={index}
+                                  onClick={() => {
+                                    const queryParams = new URLSearchParams();
+                                    queryParams.append('month', month.month + 1);
+                                    queryParams.append('year', month.year);
+                                    if (financialYear !== 'all') queryParams.append('financialYear', financialYear);
+                                    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                                  }}
+                                  style={{
+                                    background: index === 2 ? '#f0f9ff' : '#f8fafc',
+                                    padding: '6px 2px',
+                                    borderRadius: '6px',
+                                    textAlign: 'center',
+                                    cursor: 'pointer',
+                                    border: index === 2 ? `1px solid ${colors[index]}` : '1px solid #e2e8f0',
+                                    transition: 'all 0.2s'
+                                  }}
+                                >
+                                  <div style={{ fontSize: '10px', fontWeight: '600', color: '#1e293b' }}>
+                                    {month.monthName}
+                                  </div>
+                                  <div style={{ fontSize: '14px', fontWeight: '700', color: colors[index] }}>
+                                    {month.orders}
+                                  </div>
+                                  <div style={{ fontSize: '9px', color: '#64748b' }}>
+                                    {(() => {
+                                      if (month.amount >= 10000000) return `₹${(month.amount / 10000000).toFixed(1)}Cr`;
+                                      if (month.amount >= 100000) return `₹${(month.amount / 100000).toFixed(1)}L`;
+                                      return `₹${(month.amount / 1000).toFixed(0)}K`;
+                                    })()}
+                                  </div>
+                                  {index > 0 && (
+                                    <div style={{
+                                      fontSize: '8px',
+                                      marginTop: '3px',
+                                      padding: '1px 4px',
+                                      borderRadius: '10px',
+                                      display: 'inline-block',
+                                      background: orderDiff > 0 ? '#dcfce7' : orderDiff < 0 ? '#fee2e2' : '#f1f5f9',
+                                      color: orderDiff > 0 ? '#166534' : orderDiff < 0 ? '#991b1b' : '#475569',
+                                      fontWeight: '500'
+                                    }}>
+                                      {orderDiff > 0 ? '↑' : orderDiff < 0 ? '↓' : '→'} {Math.abs(orderDiff)}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
 
-      {/* Growth Indicator - Compact */}
-      {comparisonData.rawData.length >= 3 && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          background: '#f1f5f9',
-          padding: '4px 8px',
-          borderRadius: '6px',
-          marginBottom: '4px'
-        }}>
-          <span style={{ fontSize: '9px', color: '#475569' }}>Growth:</span>
-          <span style={{
-            fontSize: '11px',
-            fontWeight: '600',
-            color: comparisonData.rawData[2].orders > comparisonData.rawData[0].orders ? '#059669' : '#dc2626'
-          }}>
-            {comparisonData.rawData[2].orders > comparisonData.rawData[0].orders ? '↑' : '↓'}
-            {Math.abs(((comparisonData.rawData[2].orders - comparisonData.rawData[0].orders) / comparisonData.rawData[0].orders * 100)).toFixed(0)}%
-          </span>
-        </div>
-      )}
+                          {comparisonData.rawData.length >= 3 && (
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              background: '#f1f5f9',
+                              padding: '4px 8px',
+                              borderRadius: '6px',
+                              marginBottom: '4px'
+                            }}>
+                              <span style={{ fontSize: '9px', color: '#475569' }}>Growth:</span>
+                              <span style={{
+                                fontSize: '11px',
+                                fontWeight: '600',
+                                color: comparisonData.rawData[2].orders > comparisonData.rawData[0].orders ? '#059669' : '#dc2626'
+                              }}>
+                                {comparisonData.rawData[2].orders > comparisonData.rawData[0].orders ? '↑' : '↓'}
+                                {Math.abs(((comparisonData.rawData[2].orders - comparisonData.rawData[0].orders) / comparisonData.rawData[0].orders * 100)).toFixed(0)}%
+                              </span>
+                            </div>
+                          )}
 
-      <div style={{ fontSize: '8px', color: '#94a3b8', textAlign: 'center' }}>
-        Click for details
-      </div>
-    </>
-  )}
-</div>
+                          <div style={{ fontSize: '8px', color: '#94a3b8', textAlign: 'center' }}>
+                            Click for details
+                          </div>
+                        </>
+                      )}
+                    </div>
 
+                    {/* Revenue & Orders Card */}
                     <div 
                       style={{
                         ...styles.card,
@@ -1905,8 +1964,8 @@ setTopProducts(response.data);
                                 data: selectedMonth !== null
                                   ? chartData?.weeklyOrders?.map(w => w.amount || 0) || []
                                   : safeArray(chartData?.amountByMonth),
-                                backgroundColor: 'rgba(49, 122, 176, 0.7)',
-                                borderColor: 'rgba(49, 122, 176, 1)',
+                                backgroundColor: '#f59e0b',
+                                borderColor: '#f59e0b',
                                 borderWidth: 1,
                                 borderRadius: 8,
                                 yAxisID: 'y-revenue',
@@ -1916,8 +1975,8 @@ setTopProducts(response.data);
                                 data: selectedMonth !== null
                                   ? chartData?.weeklyOrders?.map(w => w.count) || []
                                   : safeArray(chartData?.totalOrdersByMonth),
-                                backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                                borderColor: 'rgba(54, 162, 235, 1)',
+                                backgroundColor: '#3b82f6',
+                                borderColor: '#3b82f6',
                                 borderWidth: 1,
                                 borderRadius: 8,
                                 yAxisID: 'y-orders',
@@ -1993,7 +2052,7 @@ setTopProducts(response.data);
                                 title: {
                                   display: true,
                                   text: 'Revenue (₹)',
-                                  color: '#317ab0',
+                                  color: '#f59e0b',
                                 },
                                 ticks: {
                                   callback: function(value) {
@@ -2006,7 +2065,7 @@ setTopProducts(response.data);
                                     }
                                     return value;
                                   },
-                                  color: '#317ab0'
+                                  color: '#f59e0b'
                                 }
                               },
                               'y-orders': {
@@ -2017,11 +2076,11 @@ setTopProducts(response.data);
                                 title: {
                                   display: true,
                                   text: 'Orders',
-                                  color: '#36a2eb',
+                                  color: '#3b82f6',
                                 },
                                 ticks: {
                                   stepSize: 1,
-                                  color: '#36a2eb'
+                                  color: '#3b82f6'
                                 }
                               }
                             }
@@ -2086,176 +2145,189 @@ setTopProducts(response.data);
                         </button>
                       )}
                     </div>
-                    {/* Top Products Card - Most Ordered Items */}
-<div 
-  style={{
-    ...styles.card,
-    ...(hoveredCard === 'topProducts' ? styles.cardHover : {}),
-    minHeight: '300px',
-    padding: '15px'
-  }}
-  onMouseEnter={() => setHoveredCard('topProducts')}
-  onMouseLeave={() => setHoveredCard(null)}
->
-  <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
-    🏆 Most Ordered Products
-  </div>
-  
-  {productsLoading ? (
-    <div style={styles.noDataMessage}>Loading...</div>
-  ) : !topProducts || !topProducts.topProducts || topProducts.topProducts.length === 0 ? (
-    <div style={styles.noDataMessage}>No data available</div>
-  ) : (
-    <>
-      {/* Bar Chart */}
-      <div style={{ height: '160px', cursor: 'pointer' }}>
-        <Bar
-          data={{
-            labels: topProducts.topProducts.map(p => p.name),
-            datasets: [
-              {
-                label: 'Orders',
-                data: topProducts.topProducts.map(p => p.count),
-                backgroundColor: [
-                  'rgba(255, 99, 132, 0.8)',
-                  'rgba(54, 162, 235, 0.8)',
-                  'rgba(255, 206, 86, 0.8)'
-                ],
-                borderRadius: 6,
-              }
-            ]
-          }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  title: (tooltipItems) => topProducts.topProducts[tooltipItems[0].dataIndex].name,
-                  label: (context) => {
-                    const product = topProducts.topProducts[context.dataIndex];
-                    let amountDisplay = '';
-                    if (product.amount >= 10000000) {
-                      amountDisplay = `₹${(product.amount / 10000000).toFixed(2)} Cr`;
-                    } else if (product.amount >= 100000) {
-                      amountDisplay = `₹${(product.amount / 100000).toFixed(2)} L`;
-                    } else if (product.amount >= 1000) {
-                      amountDisplay = `₹${(product.amount / 1000).toFixed(1)} K`;
-                    } else {
-                      amountDisplay = `₹${product.amount}`;
-                    }
-                    return [
-                      `Orders: ${product.count}`,
-                      `Amount: ${amountDisplay}`
-                    ];
-                  }
-                }
-              }
-            },
-            onClick: (event, elements) => {
-              if (elements.length > 0) {
-                const product = topProducts.topProducts[elements[0].index];
-                const queryParams = new URLSearchParams();
-                queryParams.append('requirement', product.name);
-                if (selectedMonth !== null) {
-                  queryParams.append('month', selectedMonth + 1);
-                }
-                if (financialYear !== 'all') {
-                  queryParams.append('financialYear', financialYear);
-                }
-                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-              }
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: { stepSize: 1, font: { size: 9 } },
-                grid: { display: false },
-                title: { display: false }
-              },
-              x: {
-                ticks: { font: { size: 10, weight: 'bold' } },
-                grid: { display: false }
-              }
-            }
-          }}
-        />
-      </div>
-      
-      {/* Small text for ranking, orders and amount */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-around', 
-        marginTop: '10px',
-        gap: '8px'
-      }}>
-        {topProducts.topProducts.map((product, index) => {
-          const colors = ['#ff4444', '#2196F3', '#ff9800'];
-          const ranks = ['🥇', '🥈', '🥉'];
-          
-          // Format amount display
-          let amountDisplay = '';
-          if (product.amount >= 10000000) {
-            amountDisplay = `₹${(product.amount / 10000000).toFixed(2)}Cr`;
-          } else if (product.amount >= 100000) {
-            amountDisplay = `₹${(product.amount / 100000).toFixed(2)}L`;
-          } else if (product.amount >= 1000) {
-            amountDisplay = `₹${(product.amount / 1000).toFixed(1)}K`;
-          } else {
-            amountDisplay = `₹${product.amount}`;
-          }
-          
-          return (
-            <div 
-              key={index}
-              onClick={() => {
-                const queryParams = new URLSearchParams();
-                queryParams.append('requirement', product.name);
-                if (selectedMonth !== null) {
-                  queryParams.append('month', selectedMonth + 1);
-                }
-                if (financialYear !== 'all') {
-                  queryParams.append('financialYear', financialYear);
-                }
-                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-              }}
-              style={{
-                flex: 1,
-                textAlign: 'center',
-                padding: '6px',
-                backgroundColor: '#f8f9fa',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#e9ecef';
-                e.currentTarget.style.transform = 'translateY(-2px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#f8f9fa';
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
-            >
-              <div style={{ fontSize: '14px' }}>{ranks[index]}</div>
-              <div style={{ fontSize: '10px', fontWeight: 'bold', color: colors[index], marginTop: '2px' }}>
-                {product.name.length > 12 ? product.name.substring(0, 10) + '..' : product.name}
-              </div>
-              <div style={{ fontSize: '12px', fontWeight: 'bold', color: colors[index], marginTop: '2px' }}>
-                {product.count} orders
-              </div>
-              <div style={{ fontSize: '9px', color: '#666' }}>
-                {amountDisplay}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </>
-  )}
-</div>
-{/*pending payment */}
+
+                    {/* Top Products Card */}
+                    <div 
+                      style={{
+                        ...styles.card,
+                        ...(hoveredCard === 'topProducts' ? styles.cardHover : {}),
+                        minHeight: '350px',
+                        padding: '15px'
+                      }}
+                      onMouseEnter={() => setHoveredCard('topProducts')}
+                      onMouseLeave={() => setHoveredCard(null)}
+                    >
+                      <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>🏆 Most Ordered Products</span>
+                        {topProducts?.allProducts && topProducts.allProducts.length > 3 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowAllProductsModal(true);
+                            }}
+                            style={{
+                              fontSize: '11px',
+                              color: '#3b82f6',
+                              background: '#eff6ff',
+                              border: 'none',
+                              padding: '4px 10px',
+                              borderRadius: '12px',
+                              cursor: 'pointer',
+                              fontWeight: '500'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = '#dbeafe'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = '#eff6ff'}
+                          >
+                            View All ({topProducts.allProducts.length})
+                          </button>
+                        )}
+                      </div>
+                      
+                      {productsLoading ? (
+                        <div style={styles.noDataMessage}>Loading...</div>
+                      ) : !topProducts || !topProducts.topProducts || topProducts.topProducts.length === 0 ? (
+                        <div style={styles.noDataMessage}>No data available</div>
+                      ) : (
+                        <>
+                          {/* Bar Chart for Top 3 Products - Single Bar showing Quantity */}
+                          <div style={{ height: '180px', cursor: 'pointer' }}>
+                            <Bar
+                              data={{
+                                labels: topProducts.topProducts.map(p => p.name.length > 12 ? p.name.substring(0, 10) + '..' : p.name),
+                                datasets: [
+                                  {
+                                    label: 'Quantity Sold (Units)',
+                                    data: topProducts.topProducts.map(p => p.totalQuantity),
+                                    backgroundColor: ['#3b82f6', '#f59e0b', '#10b981'],
+                                    borderRadius: 8,
+                                  }
+                                ]
+                              }}
+                              options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                  legend: { 
+                                    position: 'top',
+                                    labels: { font: { size: 10 } }
+                                  },
+                                  tooltip: {
+                                    callbacks: {
+                                      title: (tooltipItems) => topProducts.topProducts[tooltipItems[0].dataIndex].name,
+                                      label: (context) => {
+                                        const product = topProducts.topProducts[context.dataIndex];
+                                        return [
+                                          `📦 Quantity: ${product.totalQuantity} units`,
+                                          `📋 Orders: ${product.orderCount}`,
+                                          `💰 Amount: ${formatAmount(product.totalAmount)}`
+                                        ];
+                                      }
+                                    }
+                                  }
+                                },
+                                onClick: (event, elements) => {
+                                  if (elements.length > 0) {
+                                    const product = topProducts.topProducts[elements[0].index];
+                                    const queryParams = new URLSearchParams();
+                                    queryParams.append('requirement', product.name);
+                                    if (selectedMonth !== null) {
+                                      queryParams.append('month', selectedMonth + 1);
+                                    }
+                                    if (financialYear !== 'all') {
+                                      queryParams.append('financialYear', financialYear);
+                                    }
+                                    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                                  }
+                                },
+                                scales: {
+                                  y: {
+                                    beginAtZero: true,
+                                    title: {
+                                      display: true,
+                                      text: 'Quantity (Units)',
+                                      font: { size: 10 }
+                                    },
+                                    ticks: { stepSize: 1, font: { size: 9 } }
+                                  },
+                                  x: {
+                                    ticks: { font: { size: 10, weight: 'bold' } }
+                                  }
+                                }
+                              }}
+                            />
+                          </div>
+                          
+                          {/* Top 3 Products Details */}
+                          <div style={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-around', 
+                            marginTop: '15px',
+                            gap: '8px',
+                            width: '100%'
+                          }}>
+                            {topProducts.topProducts.map((product, index) => {
+                              const colors = ['#3b82f6', '#f59e0b', '#10b981'];
+                              const ranks = ['🥇', '🥈', '🥉'];
+                              
+                              return (
+                                <div 
+                                  key={index}
+                                  onClick={() => {
+                                    const queryParams = new URLSearchParams();
+                                    queryParams.append('requirement', product.name);
+                                    if (selectedMonth !== null) {
+                                      queryParams.append('month', selectedMonth + 1);
+                                    }
+                                    if (financialYear !== 'all') {
+                                      queryParams.append('financialYear', financialYear);
+                                    }
+                                    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                                  }}
+                                  style={{
+                                    flex: 1,
+                                    textAlign: 'center',
+                                    padding: '8px',
+                                    backgroundColor: '#f8f9fa',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    border: `2px solid ${colors[index]}20`
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#e9ecef';
+                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#f8f9fa';
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                  }}
+                                >
+                                  <div style={{ fontSize: '20px' }}>{ranks[index]}</div>
+                                  <div style={{ fontSize: '11px', fontWeight: 'bold', color: colors[index], marginTop: '4px' }}>
+                                    {product.name.length > 15 ? product.name.substring(0, 12) + '..' : product.name}
+                                  </div>
+                                  <div style={{ fontSize: '13px', fontWeight: 'bold', color: colors[index], marginTop: '4px' }}>
+                                    📦 {product.totalQuantity} units
+                                  </div>
+                                  <div style={{ fontSize: '11px', color: '#666' }}>
+                                    {product.orderCount} orders
+                                  </div>
+                                  <div style={{ fontSize: '10px', color: '#888', marginTop: '2px' }}>
+                                    {formatAmount(product.totalAmount)}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          
+                          <div style={{ fontSize: '10px', color: '#94a3b8', textAlign: 'center', marginTop: '12px' }}>
+                            Based on {topProducts.totalOrdersAnalyzed || 0} orders | Click any product to view details
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Pending Payment Card */}
                     <div 
                       style={{
                         ...styles.card,
@@ -2316,6 +2388,7 @@ setTopProducts(response.data);
                       </div>
                     </div>
 
+                    {/* Service Status Card */}
                     <div 
                       style={{
                         ...styles.card,
@@ -2472,6 +2545,7 @@ setTopProducts(response.data);
                       </div>
                     </div>
 
+                    {/* Appointments Card */}
                     <div 
                       style={{
                         ...styles.card,
@@ -2524,6 +2598,7 @@ setTopProducts(response.data);
                       <div style={styles.number}>{appointments[1] || 0}</div>
                     </div>
 
+                    {/* Client Overview Card */}
                     <div 
                       style={{
                         ...styles.card,
@@ -2617,7 +2692,8 @@ setTopProducts(response.data);
                         )}
                       </div>
                     </div>
-{/*agent card */}
+
+                    {/* Agent Orders Card */}
                     <div 
                       style={{
                         ...styles.card,
@@ -2769,7 +2845,7 @@ setTopProducts(response.data);
                       )}
                     </div>
 
-                  {/* Propective client */}
+                    {/* Prospective Clients Card */}
                     <div 
                       style={{
                         ...styles.card,
@@ -2822,7 +2898,6 @@ setTopProducts(response.data);
                           : 0}
                       </div>
                     </div>
-
                   </div>
                 )}
               </>
@@ -2830,6 +2905,138 @@ setTopProducts(response.data);
           </>
         )}
       </div>
+
+      {/* All Products Modal - Table Only */}
+      {showAllProductsModal && topProducts?.allProducts && (
+        <div style={styles.modalOverlay} onClick={() => setShowAllProductsModal(false)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div style={styles.modalTitle}>
+                📋 All Products - Quantity Details
+                <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#64748b', marginLeft: '10px' }}>
+                  ({topProducts.totalOrdersAnalyzed} orders analyzed)
+                </span>
+              </div>
+              <button
+                style={styles.modalClose}
+                onClick={() => setShowAllProductsModal(false)}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#1e293b'; e.currentTarget.style.background = '#f1f5f9'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = 'none'; }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={styles.modalBody}>
+              {/* Search Input */}
+              <div style={{ marginBottom: '16px' }}>
+                <input
+                  type="text"
+                  id="productSearchInput"
+                  placeholder="🔍 Search products..."
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    outline: 'none'
+                  }}
+                  onKeyUp={(e) => {
+                    const searchTerm = e.target.value.toLowerCase();
+                    const tableRows = document.querySelectorAll('#productsTableBody tr');
+                    tableRows.forEach(row => {
+                      const productName = row.querySelector('.product-name')?.innerText.toLowerCase() || '';
+                      if (productName.includes(searchTerm)) {
+                        row.style.display = '';
+                      } else {
+                        row.style.display = 'none';
+                      }
+                    });
+                  }}
+                />
+              </div>
+
+              {/* Table View */}
+              <div style={{ 
+                overflowX: 'auto', 
+                maxHeight: '500px', 
+                overflowY: 'auto', 
+                border: '1px solid #e2e8f0', 
+                borderRadius: '8px',
+                position: 'relative'
+              }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f1f5f9', zIndex: 10 }}>
+                    <tr>
+                      <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #e2e8f0', width: '50px' }}>#</th>
+                      <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Product Name</th>
+                      <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #e2e8f0', width: '100px' }}>📦 Quantity</th>
+                      <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #e2e8f0', width: '80px' }}>📋 Orders</th>
+                      <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #e2e8f0', width: '120px' }}>💰 Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody id="productsTableBody">
+                    {topProducts.allProducts.map((product, idx) => (
+                      <tr 
+                        key={idx}
+                        onClick={() => {
+                          const queryParams = new URLSearchParams();
+                          queryParams.append('requirement', product.name);
+                          if (selectedMonth !== null) {
+                            queryParams.append('month', selectedMonth + 1);
+                          }
+                          if (financialYear !== 'all') {
+                            queryParams.append('financialYear', financialYear);
+                          }
+                          navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                          setShowAllProductsModal(false);
+                        }}
+                        style={{ 
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #e2e8f0',
+                          backgroundColor: idx % 2 === 0 ? '#fff' : '#f8fafc',
+                          transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e0f2fe'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = idx % 2 === 0 ? '#fff' : '#f8fafc'}
+                      >
+                        <td style={{ padding: '10px', fontWeight: '500' }}>{idx + 1}.</td>
+                        <td style={{ padding: '10px', fontWeight: '500', color: '#1e293b' }} className="product-name">{product.name}</td>
+                        <td style={{ padding: '10px', textAlign: 'center', fontWeight: 'bold', color: '#f59e0b' }}>{product.totalQuantity}</td>
+                        <td style={{ padding: '10px', textAlign: 'center', fontWeight: 'bold', color: '#3b82f6' }}>{product.orderCount}</td>
+                        <td style={{ padding: '10px', textAlign: 'right', fontWeight: '500' }}>{formatAmount(product.totalAmount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Summary Footer */}
+              <div style={{ 
+                marginTop: '16px', 
+                padding: '12px', 
+                backgroundColor: '#f1f5f9', 
+                borderRadius: '8px', 
+                fontSize: '12px', 
+                color: '#475569',
+                display: 'flex',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '10px'
+              }}>
+                <div><strong>📊 Total Products:</strong> {topProducts.allProducts.length}</div>
+                <div><strong>📋 Total Orders Analyzed:</strong> {topProducts.totalOrdersAnalyzed}</div>
+                <div><strong>📦 Total Quantity:</strong> {topProducts.allProducts.reduce((sum, p) => sum + p.totalQuantity, 0)} units</div>
+                <div><strong>💰 Total Amount:</strong> {formatAmount(topProducts.allProducts.reduce((sum, p) => sum + p.totalAmount, 0))}</div>
+              </div>
+              
+              <div style={{ marginTop: '12px', fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>
+                💡 Click on any row to view all orders containing that product
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <button
         style={styles.whatsappButton}
