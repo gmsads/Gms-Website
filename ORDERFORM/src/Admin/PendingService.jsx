@@ -44,24 +44,24 @@ function PendingService() {
     });
   };
   
-  // Initialize filters from URL parameters
-  const [selectedYear, setSelectedYear] = useState(() => {
-    const urlYear = searchParams.get('year');
-    if (urlYear && urlYear !== 'undefined' && urlYear !== 'null' && urlYear !== 'all') {
-      return urlYear;
-    }
-    // Default to current calendar year
-    return currentDate.getFullYear().toString();
-  });
-  
-  const [selectedCalendarMonth, setSelectedCalendarMonth] = useState(() => {
-    const urlMonth = searchParams.get('month');
-    if (urlMonth && urlMonth !== 'undefined' && urlMonth !== 'null' && urlMonth !== 'all') {
-      return urlMonth;
-    }
-    // Default to 'all' for showing all months
-    return 'all';
-  });
+ // Initialize filters from URL parameters
+const [selectedYear, setSelectedYear] = useState(() => {
+  const urlYear = searchParams.get('year');
+  if (urlYear && urlYear !== 'undefined' && urlYear !== 'null' && urlYear !== 'all') {
+    return urlYear;
+  }
+  // Default to current calendar year
+  return currentDate.getFullYear().toString();
+});
+
+const [selectedCalendarMonth, setSelectedCalendarMonth] = useState(() => {
+  const urlMonth = searchParams.get('month');
+  if (urlMonth && urlMonth !== 'undefined' && urlMonth !== 'null' && urlMonth !== 'all') {
+    return urlMonth;
+  }
+  // Default to 'all' for showing all months
+  return 'all';
+});
   
   const [statusFilter, setStatusFilter] = useState(() => {
     const urlStatus = searchParams.get('status');
@@ -116,9 +116,10 @@ function PendingService() {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+// Fetch orders when filters change
+useEffect(() => {
+  fetchOrders();
+}, [selectedYear, selectedCalendarMonth, statusFilter]); // Add dependencies
 
   useEffect(() => {
     applyFilters();
@@ -149,174 +150,218 @@ function PendingService() {
     }
   }, [selectedYear, selectedCalendarMonth, statusFilter, setSearchParams]);
 
-  const fetchOrders = async () => {
-    setLoading(true);
+ const fetchOrders = async () => {
+  setLoading(true);
+  try {
+    // Build query params for backend filtering
+    const params = new URLSearchParams();
+    
+    // Pass year and month to backend for server-side filtering
+    if (selectedYear && selectedYear !== 'all') {
+      params.append('year', selectedYear);
+    }
+    if (selectedCalendarMonth && selectedCalendarMonth !== 'all') {
+      params.append('month', selectedCalendarMonth);
+    }
+    if (statusFilter && statusFilter !== 'all') {
+      params.append('status', statusFilter);
+    }
+    
+    // Add timestamp to prevent caching
+    params.append('_', new Date().getTime());
+    
+    const res = await axios.get(`/api/orders?${params.toString()}`);
+    
+    const allOrders = res.data.filter(order => 
+      order.rows && order.rows.length > 0
+    );
+    
+    const sortedOrders = allOrders.sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.date || new Date());
+      const dateB = new Date(b.createdAt || b.date || new Date());
+      return dateB - dateA;
+    });
+    
+    setOrders(sortedOrders);
+  } catch (err) {
+    console.error('Error fetching orders:', err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+ const applyFilters = () => {
+  if (!orders.length) {
+    setFilteredOrders([]);
+    return;
+  }
+
+  let result = [...orders];
+
+  // Helper function to safely parse delivery date
+  const parseDeliveryDate = (dateValue) => {
+    if (!dateValue) return null;
     try {
-      const res = await axios.get('/api/orders', {
-        params: {
-          _: new Date().getTime()
+      if (typeof dateValue === 'string') {
+        // Handle DD-MM-YYYY format
+        if (dateValue.includes('-')) {
+          const parts = dateValue.split('-');
+          if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+            // DD-MM-YYYY to Date
+            return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+          } else {
+            return new Date(dateValue);
+          }
+        } else {
+          return new Date(dateValue);
         }
-      });
-      
-      const allOrders = res.data.filter(order => 
-        order.rows && order.rows.length > 0
-      );
-      
-      const sortedOrders = allOrders.sort((a, b) => {
-        const dateA = new Date(a.createdAt || a.date || new Date());
-        const dateB = new Date(b.createdAt || b.date || new Date());
-        return dateB - dateA;
-      });
-      
-      setOrders(sortedOrders);
-    } catch (err) {
-      console.error('Error fetching orders:', err);
-    } finally {
-      setLoading(false);
+      }
+      return dateValue instanceof Date ? dateValue : new Date(dateValue);
+    } catch (e) {
+      console.error('Error parsing delivery date:', dateValue, e);
+      return null;
     }
   };
 
-  const applyFilters = () => {
-    if (!orders.length) {
-      setFilteredOrders([]);
-      return;
-    }
-
-    let result = [...orders];
-
-    // Apply calendar year and month filters based on delivery date
-    if (selectedYear !== 'all') {
+  // Apply calendar year and month filters based on delivery date
+  if (selectedYear !== 'all') {
+    const targetYear = parseInt(selectedYear);
+    
+    result = result.map(order => {
+      const filteredRows = order.rows.filter(row => {
+        try {
+          if (!row.deliveryDate) return false;
+          
+          const deliveryDate = parseDeliveryDate(row.deliveryDate);
+          if (!deliveryDate || isNaN(deliveryDate.getTime())) {
+            console.log('Invalid delivery date:', row.deliveryDate);
+            return false;
+          }
+          
+          // Get the calendar year of this delivery date
+          const orderYear = deliveryDate.getFullYear();
+          
+          // Apply year filter
+          if (orderYear !== targetYear) {
+            return false;
+          }
+          
+          // Apply calendar month filter ONLY if a specific month is selected (not 'all')
+          if (selectedCalendarMonth !== 'all') {
+            const orderMonth = deliveryDate.getMonth() + 1; // 1-12
+            const filterMonth = parseInt(selectedCalendarMonth);
+            if (orderMonth !== filterMonth) {
+              return false;
+            }
+          }
+          
+          return true;
+        } catch (e) {
+          console.error('Error processing date:', row.deliveryDate, e);
+          return false;
+        }
+      });
+      
+      return { ...order, rows: filteredRows };
+    }).filter(order => order.rows.length > 0);
+  } else {
+    // If year is 'all', but specific month is selected
+    if (selectedCalendarMonth !== 'all') {
+      const filterMonth = parseInt(selectedCalendarMonth);
+      
       result = result.map(order => {
         const filteredRows = order.rows.filter(row => {
           try {
             if (!row.deliveryDate) return false;
             
-            const deliveryDate = new Date(row.deliveryDate);
-            if (isNaN(deliveryDate.getTime())) return false;
+            const deliveryDate = parseDeliveryDate(row.deliveryDate);
+            if (!deliveryDate || isNaN(deliveryDate.getTime())) return false;
             
-            // Get the calendar year of this delivery date
-            const orderYear = getCalendarYearFromDate(deliveryDate);
-            
-            // Apply year filter
-            if (orderYear !== parseInt(selectedYear)) {
-              return false;
-            }
-            
-            // Apply calendar month filter ONLY if a specific month is selected (not 'all')
-            if (selectedCalendarMonth !== 'all') {
-              const orderMonth = getCalendarMonthFromDate(deliveryDate);
-              const filterMonth = parseInt(selectedCalendarMonth);
-              if (orderMonth !== filterMonth) {
-                return false;
-              }
-            }
-            
-            return true;
+            const orderMonth = deliveryDate.getMonth() + 1;
+            return orderMonth === filterMonth;
           } catch (e) {
-            console.error('Error processing date:', row.deliveryDate, e);
             return false;
           }
         });
+        return { ...order, rows: filteredRows };
+      }).filter(order => order.rows.length > 0);
+    }
+  }
+
+  // Apply status filter (same as before)
+  if (statusFilter !== 'all') {
+    result = result.map(order => {
+      const filteredRows = order.rows.filter(row => {
+        const currentRemark = row.remark ? row.remark.toLowerCase() : 'pending';
         
-        return { ...order, rows: filteredRows };
-      }).filter(order => order.rows.length > 0);
-    } else {
-      // If year is 'all', but specific month is selected
-      if (selectedCalendarMonth !== 'all') {
-        result = result.map(order => {
-          const filteredRows = order.rows.filter(row => {
-            try {
-              if (!row.deliveryDate) return false;
-              
-              const deliveryDate = new Date(row.deliveryDate);
-              if (isNaN(deliveryDate.getTime())) return false;
-              
-              const orderMonth = getCalendarMonthFromDate(deliveryDate);
-              const filterMonth = parseInt(selectedCalendarMonth);
-              return orderMonth === filterMonth;
-            } catch (e) {
-              return false;
-            }
-          });
-          return { ...order, rows: filteredRows };
-        }).filter(order => order.rows.length > 0);
-      }
-    }
-
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      result = result.map(order => {
-        const filteredRows = order.rows.filter(row => {
-          const currentRemark = row.remark ? row.remark.toLowerCase() : 'pending';
-          
-          if (statusFilter === 'pending') {
-            return currentRemark === 'pending' || currentRemark === '' || !currentRemark;
-          }
-          
-          if (statusFilter === 'assigned to') {
-            return currentRemark.includes('assigned to');
-          }
-          
-          if (statusFilter === 'updated') {
-            return currentRemark.includes('updated:');
-          }
-          
-          if (statusFilter === 'completed') {
-            return currentRemark === 'completed';
-          }
-          
-          if (statusFilter === 'design pending') {
-            return currentRemark === 'design pending';
-          }
-          
-          if (statusFilter === 'printing') {
-            return currentRemark === 'printing';
-          }
-          
-          if (statusFilter === 'installation pending') {
-            return currentRemark === 'installation pending';
-          }
-          
-          if (statusFilter === 'onboarding') {
-            return currentRemark === 'onboarding';
-          }
-          
-          return currentRemark === statusFilter.toLowerCase();
-        });
+        if (statusFilter === 'pending') {
+          return currentRemark === 'pending' || currentRemark === '' || !currentRemark;
+        }
         
-        return { ...order, rows: filteredRows };
-      }).filter(order => order.rows.length > 0);
-    }
+        if (statusFilter === 'assigned to') {
+          return currentRemark.includes('assigned to');
+        }
+        
+        if (statusFilter === 'updated') {
+          return currentRemark.includes('updated:');
+        }
+        
+        if (statusFilter === 'completed') {
+          return currentRemark === 'completed';
+        }
+        
+        if (statusFilter === 'design pending') {
+          return currentRemark === 'design pending';
+        }
+        
+        if (statusFilter === 'printing') {
+          return currentRemark === 'printing';
+        }
+        
+        if (statusFilter === 'installation pending') {
+          return currentRemark === 'installation pending';
+        }
+        
+        if (statusFilter === 'onboarding') {
+          return currentRemark === 'onboarding';
+        }
+        
+        return currentRemark === statusFilter.toLowerCase();
+      });
+      
+      return { ...order, rows: filteredRows };
+    }).filter(order => order.rows.length > 0);
+  }
 
-    // Apply search filter
-    if (searchTerm) {
-      result = result.map(order => {
-        const filteredRows = order.rows.filter(row => {
-          const valuesToSearch = [
-            order.executive,
-            order.business,
-            order.contactPerson,
-            `${order.contactCode} ${order.phone}`,
-            row.requirement,
-            row.quantity,
-            row.rate,
-            row.total,
-            row.deliveryDate,
-            row.remark || 'Pending',
-            order.balance,
-          ];
+  // Apply search filter (same as before)
+  if (searchTerm) {
+    result = result.map(order => {
+      const filteredRows = order.rows.filter(row => {
+        const valuesToSearch = [
+          order.executive,
+          order.business,
+          order.contactPerson,
+          `${order.contactCode} ${order.phone}`,
+          row.requirement,
+          row.quantity,
+          row.rate,
+          row.total,
+          row.deliveryDate,
+          row.remark || 'Pending',
+          order.balance,
+        ];
 
-          return valuesToSearch.some(val =>
-            String(val).toLowerCase().includes(searchTerm.toLowerCase())
-          );
-        });
+        return valuesToSearch.some(val =>
+          String(val).toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      });
 
-        return { ...order, rows: filteredRows };
-      }).filter(order => order.rows.length > 0);
-    }
+      return { ...order, rows: filteredRows };
+    }).filter(order => order.rows.length > 0);
+  }
 
-    setFilteredOrders(result);
-  };
+  setFilteredOrders(result);
+};
 
   const handleRemarkChange = async (orderId, rowIndex, newRemark) => {
     try {
@@ -549,19 +594,21 @@ function PendingService() {
     return text;
   };
 
-  const resetToCurrentPeriod = () => {
-    const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-    
-    setSelectedYear(currentYear.toString());
-    setSelectedCalendarMonth('all'); // Set to 'all' to show all months of current year
-    
-    const params = new URLSearchParams(searchParams);
-    params.set('year', currentYear.toString());
-    params.set('month', 'all');
-    setSearchParams(params);
-  };
-
+const resetToCurrentPeriod = () => {
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  
+  setSelectedYear(currentYear.toString());
+  setSelectedCalendarMonth('all'); // Set to 'all' to show all months of current year
+  
+  const params = new URLSearchParams(searchParams);
+  params.set('year', currentYear.toString());
+  params.set('month', 'all');
+  setSearchParams(params);
+  
+  // Fetch orders with new filters
+  fetchOrders();
+};
   const clearAllFilters = () => {
     setSelectedYear('all');
     setSelectedCalendarMonth('all');

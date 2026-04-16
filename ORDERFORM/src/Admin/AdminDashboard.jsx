@@ -420,67 +420,67 @@ const NAV = [
   {
     key: 'sales', label: 'Sales', icon: '💼',
     items: [
-      { to: 'create-order',       label: 'Booking Form',       emoji: '➕', badge: 'NEW' },
+      { to: 'create-order', label: 'Booking Form', emoji: '➕', badge: 'NEW' },
       { to: 'price-list', label: 'Pricelist', emoji: '🧾' },
-      { to: 'view-orders',        label: 'View All Orders',    emoji: '📋' },
-      { to: 'parties',            label: 'Party',            emoji: '👥' },
-      { to: 'quotation',          label: 'Quotation',          emoji: '💬' },
-      { to: 'performance',        label: 'Performance',        emoji: '📈' },
-      { to: 'ledger',             label: 'Ledger',             emoji: '📒' },
-      { to: 'purchase',           label: 'Purchase',           emoji: '🛒' },
-      { to: 'prospects',         label: 'Create Prospects',    emoji: '🎯' },
-      { to: 'view-prospective',   label: 'View Prospects',     emoji: '🎯' },
-      { to: 'appointments',      label: 'Create Appointments', emoji: '📅' },
-      { to: 'select-appointment', label: 'Appointments',       emoji: '📅' },
+      { to: 'view-orders', label: 'View All Orders', emoji: '📋' },
+      { to: 'parties', label: 'Party', emoji: '👥' },
+      { to: 'quotation', label: 'Quotation', emoji: '💬' },
+      { to: 'performance', label: 'Performance', emoji: '📈' },
+      { to: 'ledger', label: 'Ledger', emoji: '📒' },
+      { to: 'purchase', label: 'Purchase', emoji: '🛒' },
+      { to: 'prospects', label: 'Create Prospects', emoji: '🎯' },
+      { to: 'view-prospective', label: 'View Prospects', emoji: '🎯' },
+      { to: 'appointments', label: 'Create Appointments', emoji: '📅' },
+      { to: 'select-appointment', label: 'Appointments', emoji: '📅' },
     ],
   },
   {
     key: 'users', label: 'Manage Users', icon: '👤',
     items: [
-      { to: 'add-executive',     label: 'Add Employee',        emoji: '➕' },
-      { to: 'Employees',         label: 'Employees',           emoji: '👨‍💼' },
-      { to: 'advance-approvals',  label: 'Advance Approvals',  emoji: '✅' },
-      { to: 'tele-breaks',       label: 'Tele Breaks',         emoji: '☕' },
-      { to: 'unit-attendance',   label: 'Unit Attendance',     emoji: '🕐' },
-      { to: 'view-leaves',       label: 'View Leave Requests', emoji: '🏖️' },
-      { to: 'activity',          label: 'Target',              emoji: '🎯' },
-      { to: 'executives-logins', label: 'Executive Login Time',emoji: '🔐' },
-      { to: 'daily-report',      label: 'Daily Report',        emoji: '📄' },
-      { to: 'fieldvisitsadmin',  label: 'Field Visits',        emoji: '📍' },
+      { to: 'add-executive', label: 'Add Employee', emoji: '➕' },
+      { to: 'Employees', label: 'Employees', emoji: '👨‍💼' },
+      { to: 'advance-approvals', label: 'Advance Approvals', emoji: '✅' },
+      { to: 'tele-breaks', label: 'Tele Breaks', emoji: '☕' },
+      { to: 'unit-attendance', label: 'Unit Attendance', emoji: '🕐' },
+      { to: 'view-leaves', label: 'View Leave Requests', emoji: '🏖️' },
+      { to: 'activity', label: 'Target', emoji: '🎯' },
+      { to: 'executives-logins', label: 'Executive Login Time', emoji: '🔐' },
+      { to: 'daily-report', label: 'Daily Report', emoji: '📄' },
+      { to: 'fieldvisitsadmin', label: 'Field Visits', emoji: '📍' },
     ],
   },
   {
     key: 'reports', label: 'Reports', icon: '📊',
     items: [
-      { to: 'daily-report',      label: 'Daily Report',        emoji: '📄' },
-      { to: 'view-hrreport',     label: 'HR Report',           emoji: '👔' },
-      { to: 'fieldvisitsadmin',  label: 'Field Visits',        emoji: '🗺️' },
-      { to: 'hour-reeport',  label: 'Hour Report',        emoji: '📊' },
+      { to: 'daily-report', label: 'Daily Report', emoji: '📄' },
+      { to: 'view-hrreport', label: 'HR Report', emoji: '👔' },
+      { to: 'fieldvisitsadmin', label: 'Field Visits', emoji: '🗺️' },
+      { to: 'hour-reeport', label: 'Hour Report', emoji: '📊' },
     ],
   },
   {
     key: 'operations', label: 'Operations', icon: '🔧',
     items: [
-      { to: 'assign-service',    label: 'Assign Service',      emoji: '🔄' },
-      { to: 'pending-service',   label: 'Pending Service',     emoji: '⏳' },
-      { to: 'view-design',       label: 'View Design',         emoji: '🎨' },
-      { to: 'design-report',     label: 'Design Reports',      emoji: '🗂️' },
+      { to: 'assign-service', label: 'Assign Service', emoji: '🔄' },
+      { to: 'pending-service', label: 'Pending Service', emoji: '⏳' },
+      { to: 'view-design', label: 'View Design', emoji: '🎨' },
+      { to: 'design-report', label: 'Design Reports', emoji: '🗂️' },
     ],
   },
   {
     key: 'accounts', label: 'Accounts', icon: '💰',
     items: [
-      { to: 'pending-payment',   label: 'Pending Payment',     emoji: '💳' },
-      { to: 'view-expenses',     label: 'View Expenses',       emoji: '💸' },
-      { to: 'inventory',         label: 'Inventory',           emoji: '📦' },
-      { to: 'vendors',           label: 'Vendors',             emoji: '🏪' },
+      { to: 'pending-payment', label: 'Pending Payment', emoji: '💳' },
+      { to: 'view-expenses', label: 'View Expenses', emoji: '💸' },
+      { to: 'inventory', label: 'Inventory', emoji: '📦' },
+      { to: 'vendors', label: 'Vendors', emoji: '🏪' },
     ],
   },
   {
     key: 'events', label: 'Events', icon: '🎉',
     items: [
-      { to: 'create-anniversary',label: 'Create Anniversary',  emoji: '🎂' },
-      { to: 'anniversary-list',  label: 'Anniversary List',    emoji: '📋' },
+      { to: 'create-anniversary', label: 'Create Anniversary', emoji: '🎂' },
+      { to: 'anniversary-list', label: 'Anniversary List', emoji: '📋' },
     ],
   },
 ];
@@ -503,9 +503,9 @@ function Sidebar({ open, onClose }) {
   const query = search.trim().toLowerCase();
   const filtered = query
     ? NAV.map(sec => ({
-        ...sec,
-        items: sec.items.filter(it => it.label.toLowerCase().includes(query)),
-      })).filter(sec => sec.items.length > 0)
+      ...sec,
+      items: sec.items.filter(it => it.label.toLowerCase().includes(query)),
+    })).filter(sec => sec.items.length > 0)
     : NAV;
 
   const handleNavigation = (to, e) => {
@@ -656,13 +656,13 @@ function AdminDashboard() {
   const [topProducts, setTopProducts] = useState(null);
   const [productsLoading, setProductsLoading] = useState(false);
   const [showAllProductsModal, setShowAllProductsModal] = useState(false);
-  
+
   // Calendar year state (Jan-Dec)
   const [selectedYear, setSelectedYear] = useState(() => {
     const currentDate = new Date();
     return currentDate.getFullYear();
   });
-  
+
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [comparisonData, setComparisonData] = useState(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
@@ -719,11 +719,6 @@ function AdminDashboard() {
 
   const clientTypes = getClientTypeData();
 
-  const handleMenuItemClick = () => {
-    if (window.innerWidth <= 768) {
-      setSidebarOpen(false);
-    }
-  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -785,46 +780,46 @@ function AdminDashboard() {
     fetchDashboardData();
   }, [selectedYear, selectedMonth, startDate, endDate, useDateRange]);
 
-useEffect(() => {
-  const fetchComparisonData = async () => {
-    setComparisonLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (useDateRange && startDate && endDate) {
-        params.append('startDate', startDate);
-        params.append('endDate', endDate);
-      } else {
-        // Use 'year' parameter for consistency
-        if (selectedYear !== 'all') {
-          params.append('year', selectedYear);
+  useEffect(() => {
+    const fetchComparisonData = async () => {
+      setComparisonLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (useDateRange && startDate && endDate) {
+          params.append('startDate', startDate);
+          params.append('endDate', endDate);
+        } else {
+          // Use 'year' parameter for consistency
+          if (selectedYear !== 'all') {
+            params.append('year', selectedYear);
+          }
+          if (selectedMonth !== null) {
+            params.append('month', selectedMonth + 1);
+          }
         }
-        if (selectedMonth !== null) {
-          params.append('month', selectedMonth + 1);
+
+        console.log('Fetching comparison data with params:', params.toString());
+
+        const response = await axios.get(`/api/dashboard/comparison-data?${params.toString()}`);
+
+        console.log('Comparison data response:', response.data);
+
+        if (response.data && response.data.months && response.data.months.length > 0) {
+          setComparisonData(response.data);
+        } else {
+          console.warn('No comparison data received');
+          setComparisonData(null);
         }
-      }
-      
-      console.log('Fetching comparison data with params:', params.toString());
-      
-      const response = await axios.get(`/api/dashboard/comparison-data?${params.toString()}`);
-      
-      console.log('Comparison data response:', response.data);
-      
-      if (response.data && response.data.months && response.data.months.length > 0) {
-        setComparisonData(response.data);
-      } else {
-        console.warn('No comparison data received');
+      } catch (err) {
+        console.error('Error fetching comparison data:', err);
         setComparisonData(null);
+      } finally {
+        setComparisonLoading(false);
       }
-    } catch (err) {
-      console.error('Error fetching comparison data:', err);
-      setComparisonData(null);
-    } finally {
-      setComparisonLoading(false);
-    }
-  };
-  
-  fetchComparisonData();
-}, [selectedYear, selectedMonth, startDate, endDate, useDateRange]);
+    };
+
+    fetchComparisonData();
+  }, [selectedYear, selectedMonth, startDate, endDate, useDateRange]);
   useEffect(() => {
     const fetchUnreadCount = async () => {
       try {
@@ -865,7 +860,7 @@ useEffect(() => {
         setProductsLoading(false);
       }
     };
-    
+
     fetchTopProducts();
   }, [selectedYear, selectedMonth, startDate, endDate, useDateRange]);
 
@@ -913,60 +908,6 @@ useEffect(() => {
     }
     return safeArray(chartData?.totalOrdersByMonth).reduce((a, b) => a + b, 0);
   };
-
-  const handleChartClick = (chartType) => {
-    if (chartType === 'pending-payment') {
-      const queryParams = new URLSearchParams();
-      if (selectedYear !== 'all') {
-        queryParams.append('calendarYear', selectedYear);
-      } else {
-        queryParams.append('calendarYear', 'all');
-      }
-      if (selectedMonth !== null) {
-        queryParams.append('month', selectedMonth + 1);
-      }
-      queryParams.append('filterType', 'pending');
-      navigate(`/admin-dashboard/pending-payment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
-    } else if (chartType === 'completed-payment') {
-      const queryParams = new URLSearchParams();
-      if (selectedYear !== 'all') {
-        queryParams.append('calendarYear', selectedYear);
-      } else {
-        queryParams.append('calendarYear', 'all');
-      }
-      if (selectedMonth !== null) {
-        queryParams.append('month', selectedMonth + 1);
-      }
-      queryParams.append('filterType', 'completed');
-      navigate(`/admin-dashboard/pending-payment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
-    } else if (chartType === 'pending-service') {
-      const queryParams = new URLSearchParams();
-      if (selectedYear !== 'all') {
-        queryParams.append('calendarYear', selectedYear);
-      } else {
-        queryParams.append('calendarYear', 'all');
-      }
-      if (selectedMonth !== null) {
-        queryParams.append('month', selectedMonth + 1);
-      } else {
-        queryParams.append('month', 'all');
-      }
-      navigate(`/admin-dashboard/pending-service${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
-    } else if (chartType === 'revenue') {
-      navigate('/admin-dashboard/view-orders');
-    } else if (chartType === 'daily-report') {
-      navigate('/admin-dashboard/daily-report');
-    }
-  };
-
-  const handleCreateOrderClick = (e) => {
-    if (e) e.preventDefault();
-    setShowOrderForm(false);
-    setOrderNumber('');
-    navigate('create-order');
-    handleMenuItemClick();
-  };
-
   const handleClearFilters = () => {
     setSelectedYear('all');
     setSelectedMonth(null);
@@ -1436,9 +1377,9 @@ useEffect(() => {
         </button>
       )}
 
-      <Sidebar 
-        open={sidebarOpen} 
-        onClose={() => setSidebarOpen(false)} 
+      <Sidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
 
       <div style={styles.content}>
@@ -1613,7 +1554,7 @@ useEffect(() => {
                       }}
                       style={styles.dateInput}
                     />
-                    
+
                     <label style={styles.yearSelectorLabel}>To:</label>
                     <input
                       type="date"
@@ -1662,7 +1603,7 @@ useEffect(() => {
                 ) : (
                   <div style={styles.dashboardCards}>
                     {/* Comparison Card */}
-                    <div 
+                    <div
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'comparison' ? styles.cardHover : {}),
@@ -1807,9 +1748,9 @@ useEffect(() => {
                                     ticks: {
                                       font: { size: 8 },
                                       callback: (v) => {
-                                        if (v >= 10000000) return `${(v/10000000).toFixed(0)}Cr`;
-                                        if (v >= 100000) return `${(v/100000).toFixed(0)}L`;
-                                        if (v >= 1000) return `${(v/1000).toFixed(0)}K`;
+                                        if (v >= 10000000) return `${(v / 10000000).toFixed(0)}Cr`;
+                                        if (v >= 100000) return `${(v / 100000).toFixed(0)}L`;
+                                        if (v >= 1000) return `${(v / 1000).toFixed(0)}K`;
                                         return v;
                                       }
                                     }
@@ -1825,7 +1766,8 @@ useEffect(() => {
                                     const month = comparisonData.rawData[index];
                                     const queryParams = new URLSearchParams();
                                     queryParams.append('month', month.month + 1);
-                                    queryParams.append('calendarYear', month.year);
+                                    queryParams.append('year', month.year.toString());
+                                    console.log('🔗 Comparison chart clicked - navigating with:', queryParams.toString());
                                     navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                                   }
                                 }
@@ -1925,34 +1867,34 @@ useEffect(() => {
                     </div>
 
                     {/* Revenue & Orders Card */}
-                    <div 
+                    <div
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'revenueOrders' ? styles.cardHover : {})
                       }}
                       onMouseEnter={() => setHoveredCard('revenueOrders')}
                       onMouseLeave={() => setHoveredCard(null)}
-                    onClick={(e) => {
-  if (e.target.tagName !== 'BUTTON') {
-    const queryParams = new URLSearchParams();
-    
-    // Pass month (1-12)
-    if (selectedMonth !== null && selectedMonth !== undefined) {
-      queryParams.append('month', (selectedMonth + 1).toString());
-    }
-    
-    // Pass year - use 'year' not 'calendarYear' to match ViewOrders expectations
-    if (selectedYear && selectedYear !== 'all') {
-      queryParams.append('year', selectedYear.toString());
-    }
-    
-    // Also pass the filter type to indicate this is a filtered navigation
-    queryParams.append('fromDashboard', 'true');
-    
-    console.log('Navigating to view-orders with params:', queryParams.toString());
-    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-  }
-}}
+                      onClick={(e) => {
+                        if (e.target.tagName !== 'BUTTON') {
+                          const queryParams = new URLSearchParams();
+
+                          // Pass month (1-12)
+                          if (selectedMonth !== null && selectedMonth !== undefined) {
+                            queryParams.append('month', (selectedMonth + 1).toString());
+                          }
+
+                          // Pass year - use 'year' not 'calendarYear' to match ViewOrders expectations
+                          if (selectedYear && selectedYear !== 'all') {
+                            queryParams.append('year', selectedYear.toString());
+                          }
+
+                          // Also pass the filter type to indicate this is a filtered navigation
+                          queryParams.append('fromDashboard', 'true');
+
+                          console.log('Navigating to view-orders with params:', queryParams.toString());
+                          navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                        }
+                      }}
                     >
                       <div>Revenue & Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : selectedYear === 'all' ? '(All Years)' : `(Year ${selectedYear})`}</div>
                       <div style={styles.chartContainer}>
@@ -2024,29 +1966,29 @@ useEffect(() => {
                                 }
                               }
                             },
-                         onClick: (_, elements) => {
-  if (elements.length > 0) {
-    const queryParams = new URLSearchParams();
-    
-    if (selectedMonth === null) {
-      // Clicked on a specific month bar in yearly view
-      const clickedMonth = elements[0].index + 1;
-      queryParams.append('month', clickedMonth);
-      if (selectedYear && selectedYear !== 'all') {
-        queryParams.append('year', selectedYear);
-      }
-    } else {
-      // Already in month view, maintain the same month/year
-      queryParams.append('month', selectedMonth + 1);
-      if (selectedYear && selectedYear !== 'all') {
-        queryParams.append('year', selectedYear);
-      }
-    }
-    
-    console.log('Bar chart clicked - navigating with:', queryParams.toString());
-    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-  }
-},
+                            onClick: (_, elements) => {
+                              if (elements.length > 0) {
+                                const queryParams = new URLSearchParams();
+
+                                if (selectedMonth === null) {
+                                  // Clicked on a specific month bar in yearly view
+                                  const clickedMonth = elements[0].index + 1;
+                                  queryParams.append('month', clickedMonth);
+                                  if (selectedYear && selectedYear !== 'all') {
+                                    queryParams.append('year', selectedYear);
+                                  }
+                                } else {
+                                  // Already in month view, maintain the same month/year
+                                  queryParams.append('month', selectedMonth + 1);
+                                  if (selectedYear && selectedYear !== 'all') {
+                                    queryParams.append('year', selectedYear);
+                                  }
+                                }
+
+                                console.log('Bar chart clicked - navigating with:', queryParams.toString());
+                                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+                              }
+                            },
                             scales: {
                               x: {
                                 grid: { display: true, color: 'rgba(49, 122, 176, 0.1)' },
@@ -2063,7 +2005,7 @@ useEffect(() => {
                                   color: '#f59e0b',
                                 },
                                 ticks: {
-                                  callback: function(value) {
+                                  callback: function (value) {
                                     if (value >= 10000000) {
                                       return (value / 10000000).toFixed(1) + 'Cr';
                                     } else if (value >= 100000) {
@@ -2095,31 +2037,31 @@ useEffect(() => {
                           }}
                         />
                       </div>
-                      
+
                       <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', marginTop: '15px', gap: '20px' }}>
                         <div style={{ textAlign: 'center', flex: 1 }}>
                           <div style={styles.number}>
-                            {selectedMonth !== null 
+                            {selectedMonth !== null
                               ? (() => {
-                                  const amount = chartData?.amountByMonth?.[selectedMonth] || 0;
-                                  if (amount >= 10000000) {
-                                    return (amount / 10000000).toFixed(2) + 'Cr';
-                                  } else if (amount >= 100000) {
-                                    return (amount / 100000).toFixed(2) + 'L';
-                                  } else {
-                                    return amount.toLocaleString('en-IN');
-                                  }
-                                })()
+                                const amount = chartData?.amountByMonth?.[selectedMonth] || 0;
+                                if (amount >= 10000000) {
+                                  return (amount / 10000000).toFixed(2) + 'Cr';
+                                } else if (amount >= 100000) {
+                                  return (amount / 100000).toFixed(2) + 'L';
+                                } else {
+                                  return amount.toLocaleString('en-IN');
+                                }
+                              })()
                               : (() => {
-                                  const total = safeArray(chartData?.amountByMonth).reduce((sum, amount) => sum + amount, 0);
-                                  if (total >= 10000000) {
-                                    return (total / 10000000).toFixed(2) + 'Cr';
-                                  } else if (total >= 100000) {
-                                    return (total / 100000).toFixed(2) + 'L';
-                                  } else {
-                                    return total.toLocaleString('en-IN');
-                                  }
-                                })()
+                                const total = safeArray(chartData?.amountByMonth).reduce((sum, amount) => sum + amount, 0);
+                                if (total >= 10000000) {
+                                  return (total / 10000000).toFixed(2) + 'Cr';
+                                } else if (total >= 100000) {
+                                  return (total / 100000).toFixed(2) + 'L';
+                                } else {
+                                  return total.toLocaleString('en-IN');
+                                }
+                              })()
                             }
                           </div>
                           <div style={styles.revenueSubtext}>Total Revenue</div>
@@ -2130,7 +2072,7 @@ useEffect(() => {
                           <div style={styles.revenueSubtext}>Total Orders</div>
                         </div>
                       </div>
-                      
+
                       {selectedMonth !== null && (
                         <button
                           onClick={(e) => {
@@ -2155,7 +2097,7 @@ useEffect(() => {
                     </div>
 
                     {/* Top Products Card */}
-                    <div 
+                    <div
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'topProducts' ? styles.cardHover : {}),
@@ -2190,7 +2132,7 @@ useEffect(() => {
                           </button>
                         )}
                       </div>
-                      
+
                       {productsLoading ? (
                         <div style={styles.noDataMessage}>Loading...</div>
                       ) : !topProducts || !topProducts.topProducts || topProducts.topProducts.length === 0 ? (
@@ -2215,7 +2157,7 @@ useEffect(() => {
                                 responsive: true,
                                 maintainAspectRatio: false,
                                 plugins: {
-                                  legend: { 
+                                  legend: {
                                     position: 'top',
                                     labels: { font: { size: 10 } }
                                   },
@@ -2242,8 +2184,9 @@ useEffect(() => {
                                       queryParams.append('month', selectedMonth + 1);
                                     }
                                     if (selectedYear !== 'all') {
-                                      queryParams.append('calendarYear', selectedYear);
+                                      queryParams.append('year', selectedYear.toString());
                                     }
+                                    console.log('🔗 Top Products chart clicked - navigating with:', queryParams.toString());
                                     navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                                   }
                                 },
@@ -2264,11 +2207,11 @@ useEffect(() => {
                               }}
                             />
                           </div>
-                          
+
                           {/* Top 3 Products Details */}
-                          <div style={{ 
-                            display: 'flex', 
-                            justifyContent: 'space-around', 
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-around',
                             marginTop: '15px',
                             gap: '8px',
                             width: '100%'
@@ -2276,9 +2219,9 @@ useEffect(() => {
                             {topProducts.topProducts.map((product, index) => {
                               const colors = ['#3b82f6', '#f59e0b', '#10b981'];
                               const ranks = ['🥇', '🥈', '🥉'];
-                              
+
                               return (
-                                <div 
+                                <div
                                   key={index}
                                   onClick={() => {
                                     const queryParams = new URLSearchParams();
@@ -2327,7 +2270,7 @@ useEffect(() => {
                               );
                             })}
                           </div>
-                          
+
                           <div style={{ fontSize: '10px', color: '#94a3b8', textAlign: 'center', marginTop: '12px' }}>
                             Based on {topProducts.totalOrdersAnalyzed || 0} orders | Click any product to view details
                           </div>
@@ -2336,13 +2279,40 @@ useEffect(() => {
                     </div>
 
                     {/* Pending Payment Card */}
-                    <div 
+                    <div
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'payment' ? styles.cardHover : {})
                       }}
                       onMouseEnter={() => setHoveredCard('payment')}
                       onMouseLeave={() => setHoveredCard(null)}
+                      onClick={() => {
+                        const queryParams = new URLSearchParams();
+
+                        // Add year filter
+                        if (selectedYear && selectedYear !== 'all') {
+                          queryParams.append('year', selectedYear.toString());
+                        } else {
+                          queryParams.append('year', 'all');
+                        }
+
+                        // Add month filter
+                        if (selectedMonth !== null && selectedMonth !== undefined && !useDateRange) {
+                          queryParams.append('month', (selectedMonth + 1).toString());
+                        }
+
+                        // Add date range if using date range filter
+                        if (useDateRange && startDate && endDate) {
+                          queryParams.append('startDate', startDate);
+                          queryParams.append('endDate', endDate);
+                        }
+
+                        // Add filter type for pending
+                        queryParams.append('filterType', 'pending');
+
+                        console.log('🔗 Navigating to pending-payment with params:', queryParams.toString());
+                        navigate(`/admin-dashboard/pending-payment?${queryParams.toString()}`);
+                      }}
                     >
                       <div>Payment Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : selectedYear === 'all' ? '(All Years)' : ''}</div>
                       <div style={styles.pieChart}>
@@ -2358,11 +2328,34 @@ useEffect(() => {
                           }}
                           options={{
                             onClick: (e, elements) => {
+                              e.stopPropagation();
                               if (elements.length > 0) {
+                                const queryParams = new URLSearchParams();
+
+                                // Add year filter
+                                if (selectedYear && selectedYear !== 'all') {
+                                  queryParams.append('year', selectedYear.toString());
+                                } else {
+                                  queryParams.append('year', 'all');
+                                }
+
+                                // Add month filter
+                                if (selectedMonth !== null && selectedMonth !== undefined && !useDateRange) {
+                                  queryParams.append('month', (selectedMonth + 1).toString());
+                                }
+
+                                // Add date range if using date range filter
+                                if (useDateRange && startDate && endDate) {
+                                  queryParams.append('startDate', startDate);
+                                  queryParams.append('endDate', endDate);
+                                }
+
                                 if (elements[0].index === 1) {
-                                  handleChartClick('pending-payment');
+                                  queryParams.append('filterType', 'pending');
+                                  navigate(`/admin-dashboard/pending-payment?${queryParams.toString()}`);
                                 } else if (elements[0].index === 0) {
-                                  handleChartClick('completed-payment');
+                                  queryParams.append('filterType', 'completed');
+                                  navigate(`/admin-dashboard/pending-payment?${queryParams.toString()}`);
                                 }
                               }
                             },
@@ -2370,21 +2363,49 @@ useEffect(() => {
                         />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-around', width: '100%', marginTop: '10px' }}>
-                        <div 
-                          style={{ textAlign: 'center', cursor: 'pointer' }} 
+                        <div
+                          style={{ textAlign: 'center', cursor: 'pointer' }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleChartClick('completed-payment');
+                            const queryParams = new URLSearchParams();
+                            if (selectedYear && selectedYear !== 'all') {
+                              queryParams.append('year', selectedYear.toString());
+                            } else {
+                              queryParams.append('year', 'all');
+                            }
+                            if (selectedMonth !== null && selectedMonth !== undefined && !useDateRange) {
+                              queryParams.append('month', (selectedMonth + 1).toString());
+                            }
+                            if (useDateRange && startDate && endDate) {
+                              queryParams.append('startDate', startDate);
+                              queryParams.append('endDate', endDate);
+                            }
+                            queryParams.append('filterType', 'completed');
+                            navigate(`/admin-dashboard/pending-payment?${queryParams.toString()}`);
                           }}
                         >
                           <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#27ae60' }}>{pendingPayments[0] || 0}</div>
                           <div style={{ fontSize: '12px', color: '#666' }}>Paid</div>
                         </div>
-                        <div 
-                          style={{ textAlign: 'center', cursor: 'pointer' }} 
+                        <div
+                          style={{ textAlign: 'center', cursor: 'pointer' }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleChartClick('pending-payment');
+                            const queryParams = new URLSearchParams();
+                            if (selectedYear && selectedYear !== 'all') {
+                              queryParams.append('year', selectedYear.toString());
+                            } else {
+                              queryParams.append('year', 'all');
+                            }
+                            if (selectedMonth !== null && selectedMonth !== undefined && !useDateRange) {
+                              queryParams.append('month', (selectedMonth + 1).toString());
+                            }
+                            if (useDateRange && startDate && endDate) {
+                              queryParams.append('startDate', startDate);
+                              queryParams.append('endDate', endDate);
+                            }
+                            queryParams.append('filterType', 'pending');
+                            navigate(`/admin-dashboard/pending-payment?${queryParams.toString()}`);
                           }}
                         >
                           <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#e74c3c' }}>{pendingPayments[1] || 0}</div>
@@ -2397,7 +2418,7 @@ useEffect(() => {
                     </div>
 
                     {/* Service Status Card */}
-                    <div 
+                    <div
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'service' ? styles.cardHover : {})
@@ -2406,20 +2427,29 @@ useEffect(() => {
                       onMouseLeave={() => setHoveredCard(null)}
                       onClick={() => {
                         const queryParams = new URLSearchParams();
-                        
-                        if (selectedYear !== 'all') {
-                          queryParams.append('calendarYear', selectedYear);
+
+                        // Add calendar year filter (use 'year' parameter)
+                        if (selectedYear && selectedYear !== 'all') {
+                          queryParams.append('year', selectedYear.toString());
                         } else {
-                          queryParams.append('calendarYear', 'all');
+                          queryParams.append('year', 'all');
                         }
-                        
-                        if (selectedMonth !== null) {
-                          queryParams.append('month', selectedMonth + 1);
+
+                        // Add calendar month filter
+                        if (selectedMonth !== null && selectedMonth !== undefined && !useDateRange) {
+                          queryParams.append('month', (selectedMonth + 1).toString());
                         } else {
                           queryParams.append('month', 'all');
                         }
-                        
-                        navigate(`/admin-dashboard/pending-service${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
+
+                        // Add date range if using date range filter
+                        if (useDateRange && startDate && endDate) {
+                          queryParams.append('startDate', startDate);
+                          queryParams.append('endDate', endDate);
+                        }
+
+                        console.log('🔗 Navigating to pending-service with params:', queryParams.toString());
+                        navigate(`/admin-dashboard/pending-service?${queryParams.toString()}`);
                       }}
                     >
                       <div>
@@ -2522,19 +2552,32 @@ useEffect(() => {
                                   if (elements && elements.length > 0) {
                                     const clickedIndex = elements[0].index;
                                     const clickedStatus = statusMap[clickedIndex];
-                                    
+
                                     const queryParams = new URLSearchParams();
-                                    
+
                                     queryParams.append('status', clickedStatus.value);
-                                    
-                                    if (selectedYear !== 'all') {
-                                      queryParams.append('calendarYear', selectedYear);
+
+                                    // Add calendar year filter (use 'year' parameter)
+                                    if (selectedYear && selectedYear !== 'all') {
+                                      queryParams.append('year', selectedYear.toString());
+                                    } else {
+                                      queryParams.append('year', 'all');
                                     }
-                                    
-                                    if (selectedMonth !== null) {
+
+                                    // Add calendar month filter
+                                    if (selectedMonth !== null && selectedMonth !== undefined && !useDateRange) {
                                       queryParams.append('month', (selectedMonth + 1).toString());
+                                    } else {
+                                      queryParams.append('month', 'all');
                                     }
-                                    
+
+                                    // Add date range if using date range filter
+                                    if (useDateRange && startDate && endDate) {
+                                      queryParams.append('startDate', startDate);
+                                      queryParams.append('endDate', endDate);
+                                    }
+
+                                    console.log('🔗 Doughnut clicked - navigating to pending-service with params:', queryParams.toString());
                                     navigate(`/admin-dashboard/pending-service?${queryParams.toString()}`);
                                   }
                                 }
@@ -2552,9 +2595,8 @@ useEffect(() => {
                         Total Services
                       </div>
                     </div>
-
                     {/* Appointments Card */}
-                    <div 
+                    <div
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'appointments' ? styles.cardHover : {})
@@ -2607,7 +2649,7 @@ useEffect(() => {
                     </div>
 
                     {/* Client Overview Card */}
-                    <div 
+                    <div
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'clientTypes' ? styles.cardHover : {})
@@ -2652,16 +2694,16 @@ useEffect(() => {
                               legend: { display: false },
                               tooltip: {
                                 callbacks: {
-                                  label: function(context) {
+                                  label: function (context) {
                                     const label = context.label || '';
                                     const count = context.raw || 0;
                                     let amount = 0;
-                                    
+
                                     if (label === 'Retail') amount = clientTypes.Retail?.amount || 0;
                                     else if (label === 'Renewal') amount = clientTypes.Renewal?.amount || 0;
                                     else if (label === 'Agent') amount = clientTypes.Agent?.amount || 0;
                                     else if (label === 'Renewal-Agent') amount = clientTypes['Renewal-Agent']?.amount || 0;
-                                    
+
                                     return [
                                       `Orders: ${count}`,
                                       `Amount: ₹${amount.toLocaleString('en-IN')}`
@@ -2682,9 +2724,9 @@ useEffect(() => {
                                   queryParams.append('month', selectedMonth + 1);
                                 }
                                 if (selectedYear !== 'all') {
-                                  queryParams.append('calendarYear', selectedYear);
+                                  queryParams.append('year', selectedYear.toString());
                                 }
-
+                                console.log('🔗 Client Overview clicked - navigating with:', queryParams.toString());
                                 navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                               }
                             }
@@ -2702,7 +2744,7 @@ useEffect(() => {
                     </div>
 
                     {/* Agent Orders Card */}
-                    <div 
+                    <div
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'agentOrders' ? styles.cardHover : {})
@@ -2717,8 +2759,9 @@ useEffect(() => {
                             queryParams.append('month', selectedMonth + 1);
                           }
                           if (selectedYear !== 'all') {
-                            queryParams.append('calendarYear', selectedYear);
+                            queryParams.append('year', selectedYear.toString());
                           }
+                          console.log('🔗 Agent Orders card clicked - navigating with:', queryParams.toString());
                           navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                         }
                       }}
@@ -2740,18 +2783,18 @@ useEffect(() => {
                                     data: selectedMonth !== null
                                       ? [clientTypes.Agent?.count || 0]
                                       : (() => {
-                                          if (chartData?.agentOrdersByMonth && Array.isArray(chartData.agentOrdersByMonth)) {
-                                            return chartData.agentOrdersByMonth;
-                                          } else {
-                                            const totalAgentOrders = clientTypes.Agent?.count || 0;
-                                            return monthLabels.map((_, monthIndex) => {
-                                              if (selectedMonth === null) {
-                                                return 0;
-                                              }
-                                              return monthIndex === selectedMonth ? totalAgentOrders : 0;
-                                            });
-                                          }
-                                        })(),
+                                        if (chartData?.agentOrdersByMonth && Array.isArray(chartData.agentOrdersByMonth)) {
+                                          return chartData.agentOrdersByMonth;
+                                        } else {
+                                          const totalAgentOrders = clientTypes.Agent?.count || 0;
+                                          return monthLabels.map((_, monthIndex) => {
+                                            if (selectedMonth === null) {
+                                              return 0;
+                                            }
+                                            return monthIndex === selectedMonth ? totalAgentOrders : 0;
+                                          });
+                                        }
+                                      })(),
                                     backgroundColor: 'rgba(255, 206, 86, 0.7)',
                                     borderRadius: 8,
                                   }
@@ -2764,7 +2807,7 @@ useEffect(() => {
                                   legend: { display: false },
                                   tooltip: {
                                     callbacks: {
-                                      label: function(context) {
+                                      label: function (context) {
                                         const count = context.raw || 0;
                                         let amount = 0;
                                         if (chartData?.agentAmountByMonth && Array.isArray(chartData.agentAmountByMonth)) {
@@ -2782,7 +2825,7 @@ useEffect(() => {
                                   if (elements && elements.length > 0) {
                                     const queryParams = new URLSearchParams();
                                     queryParams.append('clientType', 'Agent');
-                                    
+
                                     if (selectedMonth === null) {
                                       const clickedMonth = elements[0].index + 1;
                                       queryParams.append('month', clickedMonth);
@@ -2790,9 +2833,9 @@ useEffect(() => {
                                       queryParams.append('month', selectedMonth + 1);
                                     }
                                     if (selectedYear !== 'all') {
-                                      queryParams.append('calendarYear', selectedYear);
+                                      queryParams.append('year', selectedYear.toString());
                                     }
-                                    
+                                    console.log('🔗 Agent Orders chart clicked - navigating with:', queryParams.toString());
                                     navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                                   }
                                 },
@@ -2852,15 +2895,29 @@ useEffect(() => {
                         </>
                       )}
                     </div>
-
                     {/* Prospective Clients Card */}
-                    <div 
+                    <div
                       style={{
                         ...styles.card,
                         ...(hoveredCard === 'prospective' ? styles.cardHover : {})
                       }}
                       onMouseEnter={() => setHoveredCard('prospective')}
                       onMouseLeave={() => setHoveredCard(null)}
+                      onClick={() => {
+                        const queryParams = new URLSearchParams();
+
+                        // Add year filter
+                        if (selectedYear !== 'all') {
+                          queryParams.append('year', selectedYear.toString());
+                        }
+                        // Add month filter
+                        if (selectedMonth !== null) {
+                          queryParams.append('month', (selectedMonth + 1).toString());
+                        }
+
+                        console.log('🔗 Prospective card clicked - navigating with:', queryParams.toString());
+                        navigate(`/admin-dashboard/view-prospective?${queryParams.toString()}`);
+                      }}
                     >
                       <div>Prospective Clients {getTimePeriodText()}</div>
                       <div style={styles.pieChart}>
@@ -2878,7 +2935,9 @@ useEffect(() => {
                             options={{
                               responsive: true,
                               maintainAspectRatio: false,
-                              plugins: { legend: { position: 'right' } },
+                              plugins: {
+                                legend: { position: 'right' }
+                              },
                               onClick: (event, elements) => {
                                 if (elements.length > 0) {
                                   const index = elements[0].index;
@@ -2886,9 +2945,16 @@ useEffect(() => {
                                   const queryParams = new URLSearchParams();
                                   queryParams.append('status', status);
 
-                                  if (selectedYear !== 'all') queryParams.append('calendarYear', selectedYear);
-                                  if (selectedMonth !== null) queryParams.append('month', selectedMonth + 1);
+                                  // Add year filter
+                                  if (selectedYear !== 'all') {
+                                    queryParams.append('year', selectedYear.toString());
+                                  }
+                                  // Add month filter
+                                  if (selectedMonth !== null) {
+                                    queryParams.append('month', (selectedMonth + 1).toString());
+                                  }
 
+                                  console.log('🔗 Prospective chart segment clicked - navigating with:', queryParams.toString());
                                   navigate(`/admin-dashboard/view-prospective?${queryParams.toString()}`);
                                 }
                               },
@@ -2965,11 +3031,11 @@ useEffect(() => {
               </div>
 
               {/* Table View */}
-              <div style={{ 
-                overflowX: 'auto', 
-                maxHeight: '500px', 
-                overflowY: 'auto', 
-                border: '1px solid #e2e8f0', 
+              <div style={{
+                overflowX: 'auto',
+                maxHeight: '500px',
+                overflowY: 'auto',
+                border: '1px solid #e2e8f0',
                 borderRadius: '8px',
                 position: 'relative'
               }}>
@@ -2985,7 +3051,7 @@ useEffect(() => {
                   </thead>
                   <tbody id="productsTableBody">
                     {topProducts.allProducts.map((product, idx) => (
-                      <tr 
+                      <tr
                         key={idx}
                         onClick={() => {
                           const queryParams = new URLSearchParams();
@@ -2999,7 +3065,7 @@ useEffect(() => {
                           navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                           setShowAllProductsModal(false);
                         }}
-                        style={{ 
+                        style={{
                           cursor: 'pointer',
                           borderBottom: '1px solid #e2e8f0',
                           backgroundColor: idx % 2 === 0 ? '#fff' : '#f8fafc',
@@ -3018,14 +3084,14 @@ useEffect(() => {
                   </tbody>
                 </table>
               </div>
-              
+
               {/* Summary Footer */}
-              <div style={{ 
-                marginTop: '16px', 
-                padding: '12px', 
-                backgroundColor: '#f1f5f9', 
-                borderRadius: '8px', 
-                fontSize: '12px', 
+              <div style={{
+                marginTop: '16px',
+                padding: '12px',
+                backgroundColor: '#f1f5f9',
+                borderRadius: '8px',
+                fontSize: '12px',
                 color: '#475569',
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -3037,7 +3103,7 @@ useEffect(() => {
                 <div><strong>📦 Total Quantity:</strong> {topProducts.allProducts.reduce((sum, p) => sum + p.totalQuantity, 0)} units</div>
                 <div><strong>💰 Total Amount:</strong> {formatAmount(topProducts.allProducts.reduce((sum, p) => sum + p.totalAmount, 0))}</div>
               </div>
-              
+
               <div style={{ marginTop: '12px', fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>
                 💡 Click on any row to view all orders containing that product
               </div>
