@@ -47,20 +47,19 @@ const PerformanceView = () => {
   const [showSalaryModal, setShowSalaryModal] = useState(false);
   const [allEmployeesForSalary, setAllEmployeesForSalary] = useState([]);
 
-  const financialMonthLabels = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+  // Calendar month labels (Jan-Dec)
+  const calendarMonthLabels = useMemo(() => [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ], []);
 
-  const [financialYearFilter, setFinancialYearFilter] = useState(() => {
+  // Calendar Year State (Jan-Dec) like admin dashboard
+  const [selectedYear, setSelectedYear] = useState(() => {
     const currentDate = new Date();
-    const currentMonth = currentDate.getMonth();
-    const currentYear = currentDate.getFullYear();
-    if (currentMonth >= 3) {
-      return `${currentYear}-${currentYear + 1}`;
-    } else {
-      return `${currentYear - 1}-${currentYear}`;
-    }
+    return currentDate.getFullYear();
   });
 
-  const [selectedFinancialMonth, setSelectedFinancialMonth] = useState(null);
+  const [selectedMonth, setSelectedMonth] = useState(null);
 
   const [manuallyEligibleMonths, setManuallyEligibleMonths] = useState(() => {
     try {
@@ -72,36 +71,7 @@ const PerformanceView = () => {
     }
   });
 
-  // Helper function to get financial year from date
-  const getFinancialYear = (date) => {
-    const month = date.getMonth();
-    const year = date.getFullYear();
-    if (month >= 3) {
-      return `${year}-${year + 1}`;
-    } else {
-      return `${year - 1}-${year}`;
-    }
-  };
-
-  // Helper function to get financial month (1-12 where 1=April)
-  const getFinancialMonth = (date) => {
-    const month = date.getMonth();
-    if (month === 0) return 10;
-    if (month === 1) return 11;
-    if (month === 2) return 12;
-    return month - 2;
-  };
-
-  // Helper function to get date range from financial year
-  const getDateRangeFromFinancialYear = (financialYear) => {
-    if (!financialYear || financialYear === 'all') return null;
-    const [startYear, endYear] = financialYear.split('-').map(Number);
-    const startDate = new Date(startYear, 3, 1);
-    const endDate = new Date(endYear, 2, 31, 23, 59, 59, 999);
-    return { startDate, endDate };
-  };
-
-  // Format currency for display (like ExecutiveDashboard)
+  // Format currency for display
   const formatCurrency = (value) => {
     if (!value || value === 0) return '₹0';
     if (value >= 10000000) {
@@ -142,7 +112,7 @@ const PerformanceView = () => {
     return allExecutives.find(exec => exec.value === selectedExecutive);
   }, [allExecutives, selectedExecutive]);
 
-  // Calculate totals with proper breakdown
+  // Calculate totals with proper breakdown (New + Retail combined)
   const calculateTotals = useMemo(() => {
     if (!performanceData?.detailedData?.byMonth) {
       return {
@@ -153,10 +123,8 @@ const PerformanceView = () => {
         totalOrders: 0,
         totalProspects: 0,
         totalAmount: 0,
-        retailCount: 0,
-        retailAmount: 0,
-        newCount: 0,
-        newAmount: 0,
+        newRetailCount: 0,
+        newRetailAmount: 0,
         agentCount: 0,
         agentAmount: 0,
         renewalCount: 0,
@@ -170,16 +138,13 @@ const PerformanceView = () => {
     const filteredMonths = monthlyData.filter(monthData => {
       const [monthName, yearStr] = monthData.month.split(' ');
       const year = parseInt(yearStr);
-      const monthIndex = new Date(`${monthName} 1, ${yearStr}`).getMonth();
-      const date = new Date(year, monthIndex, 1);
-      const financialYear = getFinancialYear(date);
+      const monthIndex = calendarMonthLabels.indexOf(monthName);
       
-      if (financialYearFilter !== 'all' && financialYear !== financialYearFilter) {
+      if (selectedYear !== 'all' && year !== selectedYear) {
         return false;
       }
-      if (selectedFinancialMonth !== null) {
-        const financialMonth = getFinancialMonth(date);
-        if (financialMonth !== selectedFinancialMonth) return false;
+      if (selectedMonth !== null && monthIndex !== selectedMonth) {
+        return false;
       }
       return true;
     });
@@ -191,10 +156,9 @@ const PerformanceView = () => {
       totalOrders: acc.totalOrders + (month.orders || 0),
       totalProspects: acc.totalProspects + (month.prospects || 0),
       totalAmount: acc.totalAmount + (month.totalAmount || 0),
-      retailCount: acc.retailCount + (month.retailCount || 0),
-      retailAmount: acc.retailAmount + (month.retailAmount || 0),
-      newCount: acc.newCount + (month.newCount || 0),
-      newAmount: acc.newAmount + (month.newAmount || 0),
+      // Combined New + Retail
+      newRetailCount: acc.newRetailCount + (month.newRetailCount || 0),
+      newRetailAmount: acc.newRetailAmount + (month.newRetailAmount || 0),
       agentCount: acc.agentCount + (month.agentCount || 0),
       agentAmount: acc.agentAmount + (month.agentAmount || 0),
       renewalCount: acc.renewalCount + (month.renewalCount || 0),
@@ -208,10 +172,8 @@ const PerformanceView = () => {
       totalOrders: 0,
       totalProspects: 0,
       totalAmount: 0,
-      retailCount: 0,
-      retailAmount: 0,
-      newCount: 0,
-      newAmount: 0,
+      newRetailCount: 0,
+      newRetailAmount: 0,
       agentCount: 0,
       agentAmount: 0,
       renewalCount: 0,
@@ -225,7 +187,7 @@ const PerformanceView = () => {
       remaining: Math.max(0, totals.target - totals.achieved),
       achievedPercentage: totals.target > 0 ? (totals.achieved / totals.target) * 100 : (totals.achieved > 0 ? 100 : 0)
     };
-  }, [performanceData, financialYearFilter, selectedFinancialMonth]);
+  }, [performanceData, selectedYear, selectedMonth, calendarMonthLabels]);
 
   const overallBalance = calculateTotals.achieved - calculateTotals.advance;
 
@@ -260,9 +222,8 @@ const PerformanceView = () => {
 
   const calculateTotalSalaryReceived = () => {
     if (!salaryData || !salaryData.paymentHistory) return 0;
-    if (financialYearFilter === 'all') return 0;
+    if (selectedYear === 'all') return 0;
     
-    const [startYear, endYear] = financialYearFilter.split('-').map(Number);
     const total = salaryData.paymentHistory
       .filter(payment => {
         if (!payment.month) return false;
@@ -270,11 +231,8 @@ const PerformanceView = () => {
         const paymentYear = parseInt(year);
         const paymentMonth = parseInt(month);
         
-        if (paymentMonth >= 4) {
-          return paymentYear === startYear;
-        } else {
-          return paymentYear === endYear;
-        }
+        // Filter by selected year
+        return paymentYear === selectedYear;
       })
       .reduce((sum, payment) => sum + (payment.amount || 0), 0);
     return total;
@@ -285,27 +243,19 @@ const PerformanceView = () => {
       return { total: 0, monthsCount: 0, formattedString: 'Not Configured' };
     }
 
-    if (financialYearFilter === 'all') {
+    if (selectedYear === 'all') {
       return { total: 0, monthsCount: 0, formattedString: 'Not Configured' };
     }
 
-    const [startYear, endYear] = financialYearFilter.split('-').map(Number);
-    
-    const paymentsInFinancialYear = salaryData.paymentHistory.filter(payment => {
+    const paymentsInYear = salaryData.paymentHistory.filter(payment => {
       if (!payment.month) return false;
-      const [year, month] = payment.month.split('-');
+      const [year] = payment.month.split('-');
       const paymentYear = parseInt(year);
-      const paymentMonth = parseInt(month);
-      
-      if (paymentMonth >= 4) {
-        return paymentYear === startYear;
-      } else {
-        return paymentYear === endYear;
-      }
+      return paymentYear === selectedYear;
     });
 
-    const total = paymentsInFinancialYear.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-    const monthsCount = paymentsInFinancialYear.length;
+    const total = paymentsInYear.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+    const monthsCount = paymentsInYear.length;
 
     if (total === 0 || monthsCount === 0) {
       return { total: 0, monthsCount: 0, formattedString: 'Not Configured' };
@@ -345,12 +295,11 @@ const PerformanceView = () => {
         executiveType,
       };
       
-      if (financialYearFilter !== 'all') {
-        const dateRangeFromFY = getDateRangeFromFinancialYear(financialYearFilter);
-        if (dateRangeFromFY) {
-          params.startDate = dateRangeFromFY.startDate.toISOString().split('T')[0];
-          params.endDate = dateRangeFromFY.endDate.toISOString().split('T')[0];
-        }
+      if (selectedYear !== 'all') {
+        const startDate = new Date(selectedYear, 0, 1);
+        const endDate = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
+        params.startDate = startDate.toISOString().split('T')[0];
+        params.endDate = endDate.toISOString().split('T')[0];
       } else if (dateRange.startDate && dateRange.endDate) {
         params.startDate = dateRange.startDate;
         params.endDate = dateRange.endDate;
@@ -372,7 +321,7 @@ const PerformanceView = () => {
     if (selectedExecutive) {
       fetchPerformanceData(selectedExecutive);
     }
-  }, [financialYearFilter, selectedFinancialMonth]);
+  }, [selectedYear, selectedMonth]);
 
   useEffect(() => {
     if (employeeNameFromUrl && allExecutives.length > 0) {
@@ -413,29 +362,25 @@ const PerformanceView = () => {
     fetchAllExecutives();
   }, []);
 
-  const financialYearOptions = () => {
+  // Generate year options (from 2015 to current year + 5)
+  const yearOptions = () => {
     const currentYear = new Date().getFullYear();
-    const options = [];
-    for (let i = -3; i <= 3; i++) {
-      const startYear = currentYear + i;
-      const endYear = startYear + 1;
-      options.push({
-        value: `${startYear}-${endYear}`,
-        label: `FY ${startYear}-${endYear}`
-      });
+    const options = [{ value: 'all', label: 'All Years' }];
+    for (let i = 2015; i <= currentYear + 5; i++) {
+      options.push({ value: i, label: i.toString() });
     }
     return options;
   };
 
-  const handleYearlyFilterChange = (e) => {
-    const { value } = e.target;
-    setFinancialYearFilter(value);
-    setSelectedFinancialMonth(null);
+  const handleYearChange = (e) => {
+    const value = e.target.value;
+    setSelectedYear(value === 'all' ? 'all' : parseInt(value));
+    setSelectedMonth(null);
   };
 
-  const handleFinancialMonthChange = (e) => {
+  const handleMonthChange = (e) => {
     const value = e.target.value;
-    setSelectedFinancialMonth(value ? parseInt(value) : null);
+    setSelectedMonth(value ? parseInt(value) : null);
   };
 
   const formatPercentage = (percentage) => {
@@ -452,31 +397,12 @@ const PerformanceView = () => {
       return;
     }
     
-    let monthStr, financialYear;
-    if (monthData.displayMonth) {
-      const parts = monthData.displayMonth.split(' ');
-      monthStr = parts[0];
-      financialYear = parts[1];
-    } else {
-      const [m, y] = monthData.month.split(' ');
-      monthStr = m;
-      financialYear = getFinancialYear(new Date(parseInt(y), 0, 1));
-    }
-    
-    const financialMonthNumber = financialMonthLabels.indexOf(monthStr) + 1;
-    
-    let calendarMonth;
-    if (financialMonthNumber <= 9) {
-      calendarMonth = financialMonthNumber + 2;
-    } else {
-      calendarMonth = financialMonthNumber - 10;
-    }
-    
-    const startYear = parseInt(financialYear.split('-')[0]);
+    const [monthName, yearStr] = monthData.month.split(' ');
+    const monthIndex = calendarMonthLabels.indexOf(monthName);
     
     const [executiveType, executiveId] = selectedExecutive.split('_');
     
-    navigate(`/admin-dashboard/view-orders?month=${calendarMonth + 1}&year=${startYear}&financialYear=${financialYear}&financialMonth=${financialMonthNumber}&executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
+    navigate(`/admin-dashboard/view-orders?month=${monthIndex + 1}&year=${yearStr}&executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
   };
 
   const handleTotalOrdersClick = () => {
@@ -488,11 +414,11 @@ const PerformanceView = () => {
     
     let queryParams = `executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`;
     
-    if (financialYearFilter !== 'all') {
-      queryParams += `&financialYear=${financialYearFilter}`;
+    if (selectedYear !== 'all') {
+      queryParams += `&year=${selectedYear}`;
     }
-    if (selectedFinancialMonth !== null) {
-      queryParams += `&financialMonth=${selectedFinancialMonth}`;
+    if (selectedMonth !== null) {
+      queryParams += `&month=${selectedMonth + 1}`;
     }
     
     navigate(`/admin-dashboard/view-orders?${queryParams}`);
@@ -513,18 +439,8 @@ const PerformanceView = () => {
       return;
     }
     
-    let monthStr, yearStr;
-    if (monthData.displayMonth) {
-      const parts = monthData.displayMonth.split(' ');
-      monthStr = parts[0];
-      yearStr = parts[1].split('-')[0];
-    } else {
-      const [m, y] = monthData.month.split(' ');
-      monthStr = m;
-      yearStr = y;
-    }
-    
-    const monthIndex = new Date(`${monthStr} 1, ${yearStr}`).getMonth();
+    const [monthName, yearStr] = monthData.month.split(' ');
+    const monthIndex = calendarMonthLabels.indexOf(monthName);
     const year = parseInt(yearStr);
     const [executiveType, executiveId] = selectedExecutive.split('_');
     navigate(`/admin-dashboard/view-prospective?month=${monthIndex + 1}&year=${year}&executive=${executiveId}&executiveType=${executiveType}&executiveName=${encodeURIComponent(selectedExecutiveObj?.name || '')}`);
@@ -617,9 +533,9 @@ const PerformanceView = () => {
         }}>
           <p style={{ margin: '0 0 5px 0', fontWeight: '600', color: '#2c3e50' }}>{label}</p>
           <p style={{ margin: '2px 0', color: '#3498db' }}>Target: {formatCurrency(target)}</p>
-          <p style={{ margin: '2px 0', color: '#2ecc71' }}>Achieved (Retail+New): {formatCurrency(achieved)}</p>
+          <p style={{ margin: '2px 0', color: '#2ecc71' }}>Achieved (New/Retail): {formatCurrency(achieved)}</p>
           <p style={{ margin: '5px 0 0 0', fontSize: '10px', color: '#666', fontStyle: 'italic' }}>
-            ✓ Only Retail & New orders count toward target
+            ✓ Only New & Retail orders count toward target
           </p>
         </div>
       );
@@ -632,8 +548,8 @@ const PerformanceView = () => {
       return 'Select an executive to view monthly performance';
     }
     const executiveName = selectedExecutiveObj?.name || 'Selected Executive';
-    const yearText = financialYearFilter !== 'all' ? `FY ${financialYearFilter}` : 'All Financial Years';
-    const monthText = selectedFinancialMonth ? ` - ${financialMonthLabels[selectedFinancialMonth - 1]}` : '';
+    const yearText = selectedYear !== 'all' ? selectedYear : 'All Years';
+    const monthText = selectedMonth !== null ? ` - ${calendarMonthLabels[selectedMonth]}` : '';
     return `${executiveName} - Monthly Performance for ${yearText}${monthText}`;
   };
 
@@ -651,15 +567,12 @@ const PerformanceView = () => {
     const filteredMonthlyData = monthlyData.filter(monthData => {
       const [monthName, yearStr] = monthData.month.split(' ');
       const year = parseInt(yearStr);
-      const monthIndex = new Date(`${monthName} 1, ${yearStr}`).getMonth();
-      const date = new Date(year, monthIndex, 1);
-      const financialYear = getFinancialYear(date);
-      const financialMonth = getFinancialMonth(date);
+      const monthIndex = calendarMonthLabels.indexOf(monthName);
       
-      if (financialYearFilter !== 'all' && financialYear !== financialYearFilter) {
+      if (selectedYear !== 'all' && year !== selectedYear) {
         return false;
       }
-      if (selectedFinancialMonth !== null && financialMonth !== selectedFinancialMonth) {
+      if (selectedMonth !== null && monthIndex !== selectedMonth) {
         return false;
       }
       return true;
@@ -673,14 +586,11 @@ const PerformanceView = () => {
     
     const chartData = filteredMonthlyData.map(monthData => {
       const [monthName, yearStr] = monthData.month.split(' ');
-      const monthIndex = new Date(`${monthName} 1, ${yearStr}`).getMonth();
-      const date = new Date(parseInt(yearStr), monthIndex, 1);
-      const financialMonth = getFinancialMonth(date);
-      const financialYear = getFinancialYear(date);
+      const monthIndex = calendarMonthLabels.indexOf(monthName);
       
       return {
         ...monthData,
-        displayMonth: `${financialMonthLabels[financialMonth - 1]} ${financialYear}`,
+        displayMonth: `${calendarMonthLabels[monthIndex]} ${yearStr}`,
         targetAmount: monthData.target || 0,
         achievedAmount: monthData.achieved || 0
       };
@@ -689,43 +599,86 @@ const PerformanceView = () => {
     if (chartData.length === 0) {
       return (
         <div style={styles.noDataText}>
-          No performance data available for the selected financial {financialYearFilter !== 'all' ? `year ${financialYearFilter}` : 'period'}
+          No performance data available for the selected {selectedYear !== 'all' ? `year ${selectedYear}` : 'period'}
         </div>
       );
     }
     
     const yAxisProps = getYAxisProps(chartData);
     const yTickFormatter = getYTickFormatter(chartData);
+    const isSmallScreen = window.innerWidth < 768;
+    
+    const getBarSize = () => {
+      const dataLength = chartData.length;
+      if (dataLength <= 6) return 40;
+      if (dataLength <= 8) return 35;
+      if (dataLength <= 10) return 30;
+      if (dataLength <= 12) return 25;
+      return 20;
+    };
     
     return (
       <div>
         <div style={styles.chartSubtitle}>{getChartSubtitle()}</div>
-        <ResponsiveContainer width="100%" height={400}>
-          <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 30 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis 
-              dataKey="displayMonth" 
-              angle={-45} 
-              textAnchor="end" 
-              height={70} 
-              tick={{ fontSize: 11 }} 
-            />
-            <YAxis 
-              tickFormatter={yTickFormatter} 
-              tick={{ fontSize: 12 }} 
-              domain={yAxisProps.domain} 
-              tickCount={yAxisProps.tickCount} 
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend wrapperStyle={{ paddingTop: '10px' }} />
-            <Bar dataKey="targetAmount" name="Target Amount" fill="#3498db" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="achievedAmount" name="Achieved (Retail+New)" fill="#2ecc71" radius={[4, 4, 0, 0]}>
-              {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.hasData ? getPerformanceColor((entry.achievedAmount / entry.targetAmount) * 100) : '#ecf0f1'} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        <div style={styles.chartWrapper}>
+          <div style={{ 
+            width: '100%', 
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            WebkitOverflowScrolling: 'touch'
+          }}>
+            <div style={{ 
+              minWidth: isSmallScreen ? '600px' : '100%',
+              height: '400px'
+            }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart 
+                  data={chartData} 
+                  margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
+                  barCategoryGap={isSmallScreen ? "15%" : "20%"}
+                  barGap={4}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis 
+                    dataKey="displayMonth" 
+                    angle={isSmallScreen ? -45 : -45} 
+                    textAnchor="end" 
+                    height={70} 
+                    tick={{ fontSize: isSmallScreen ? 10 : 11 }} 
+                    interval={0}
+                  />
+                  <YAxis 
+                    tickFormatter={yTickFormatter} 
+                    tick={{ fontSize: isSmallScreen ? 10 : 12 }} 
+                    domain={yAxisProps.domain} 
+                    tickCount={yAxisProps.tickCount} 
+                    width={isSmallScreen ? 60 : 80}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                  <Bar 
+                    dataKey="targetAmount" 
+                    name="Target Amount" 
+                    fill="#3498db" 
+                    radius={[4, 4, 0, 0]} 
+                    barSize={getBarSize()}
+                  />
+                  <Bar 
+                    dataKey="achievedAmount" 
+                    name="Achieved (New/Retail)" 
+                    fill="#2ecc71" 
+                    radius={[4, 4, 0, 0]}
+                    barSize={getBarSize()}
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.hasData ? getPerformanceColor((entry.achievedAmount / entry.targetAmount) * 100) : '#ecf0f1'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
         <div style={{ 
           textAlign: 'center', 
           marginTop: '10px', 
@@ -739,7 +692,7 @@ const PerformanceView = () => {
           marginLeft: 'auto',
           marginRight: 'auto'
         }}>
-          📊 Note: Only <strong>Retail</strong> and <strong>New</strong> client orders count toward target achievement
+          📊 Note: Only <strong>New</strong> and <strong>Retail</strong> client orders count toward target achievement
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', marginTop: '15px', gap: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}><div style={{ width: '12px', height: '12px', backgroundColor: '#e74c3c', marginRight: '4px' }}></div><span style={{ fontSize: '11px' }}>0-35%</span></div>
@@ -753,7 +706,7 @@ const PerformanceView = () => {
     );
   };
 
-  // Compact Performance Box Component (no remaining display)
+  // Compact Performance Box Component
   const renderPerformanceBox = (percentage) => {
     if (!percentage || percentage <= 0) {
       return (
@@ -806,36 +759,35 @@ const PerformanceView = () => {
     );
   };
 
-  const renderFinancialYearFilter = () => {
+  const renderYearFilter = () => {
     return (
       <div style={styles.yearlyFilterContainer}>
         <div style={styles.yearlyFilterGroup}>
-          <label htmlFor="financialYear" style={styles.label}>Filter by Financial Year</label>
+          <label htmlFor="year" style={styles.label}>Filter by Year</label>
           <select 
-            name="financialYear" 
-            value={financialYearFilter} 
-            onChange={handleYearlyFilterChange} 
+            name="year" 
+            value={selectedYear} 
+            onChange={handleYearChange} 
             style={styles.select}
           >
-            <option value="all">All Financial Years</option>
-            {financialYearOptions().map(option => (
+            {yearOptions().map(option => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
         </div>
         
-        {financialYearFilter !== 'all' && (
+        {selectedYear !== 'all' && (
           <div style={styles.yearlyFilterGroup}>
-            <label htmlFor="financialMonth" style={styles.label}>Filter by Month (Optional)</label>
+            <label htmlFor="month" style={styles.label}>Filter by Month (Optional)</label>
             <select 
-              name="financialMonth" 
-              value={selectedFinancialMonth || ''} 
-              onChange={handleFinancialMonthChange} 
+              name="month" 
+              value={selectedMonth !== null ? selectedMonth : ''} 
+              onChange={handleMonthChange} 
               style={styles.select}
             >
               <option value="">All Months</option>
-              {financialMonthLabels.map((month, index) => (
-                <option key={index + 1} value={index + 1}>{month}</option>
+              {calendarMonthLabels.map((month, index) => (
+                <option key={index} value={index}>{month}</option>
               ))}
             </select>
           </div>
@@ -845,8 +797,8 @@ const PerformanceView = () => {
   };
 
   const getYearFilterDisplayText = () => {
-    if (financialYearFilter === 'all') return 'All Financial Years';
-    return `FY ${financialYearFilter}`;
+    if (selectedYear === 'all') return 'All Years';
+    return selectedYear;
   };
 
   const styles = {
@@ -1243,6 +1195,10 @@ const PerformanceView = () => {
       marginBottom: '20px',
       fontSize: '14px'
     },
+    chartWrapper: {
+      width: '100%',
+      position: 'relative'
+    },
     noDataText: {
       textAlign: 'center',
       padding: '30px',
@@ -1307,7 +1263,7 @@ const PerformanceView = () => {
         <div>
           <strong style={{ color: '#2e7d32' }}>Target Calculation:</strong>
           <span style={{ marginLeft: '8px', color: '#555', fontSize: '13px' }}>
-            Only <strong style={{ color: '#4CAF50' }}>Retail</strong> and <strong style={{ color: '#8BC34A' }}>New</strong> client orders count toward target achievement.
+            Only <strong style={{ color: '#4CAF50' }}>New</strong> and <strong style={{ color: '#8BC34A' }}>Retail</strong> client orders count toward target achievement.
           </span>
         </div>
       </div>
@@ -1384,13 +1340,13 @@ const PerformanceView = () => {
               )}
             </h2>
             <div style={styles.yearFilterDisplay}>
-              <span style={styles.yearFilterLabel}>Financial Year:</span>
+              <span style={styles.yearFilterLabel}>Year:</span>
               <span>{getYearFilterDisplayText()}</span>
-              {selectedFinancialMonth && <span style={styles.yearBadge}>{financialMonthLabels[selectedFinancialMonth - 1]}</span>}
+              {selectedMonth !== null && <span style={styles.yearBadge}>{calendarMonthLabels[selectedMonth]}</span>}
             </div>
           </div>
 
-          {renderFinancialYearFilter()}
+          {renderYearFilter()}
 
           {/* Performance Summary Cards - Compact */}
           <div style={styles.cardGrid}>
@@ -1436,7 +1392,7 @@ const PerformanceView = () => {
 
             {/* Target Card - Compact */}
             <div style={{ ...styles.card, borderTop: '4px solid #2ecc71' }}>
-              <h3 style={styles.cardTitle}>🎯 Target - {selectedFinancialMonth ? financialMonthLabels[selectedFinancialMonth - 1] : 'Yearly'}</h3>
+              <h3 style={styles.cardTitle}>🎯 Target - {selectedMonth !== null ? calendarMonthLabels[selectedMonth] : 'Yearly'}</h3>
               
               <div style={styles.targetBox}>
                 <div style={styles.cardItem}>
@@ -1444,7 +1400,7 @@ const PerformanceView = () => {
                   <span style={styles.targetValue}>{formatCurrency(calculateTotals.target)}</span>
                 </div>
                 <div style={styles.cardItem}>
-                  <span style={styles.cardLabel}>Achieved:</span>
+                  <span style={styles.cardLabel}>Achieved (New/Retail):</span>
                   <span style={styles.achievedValue}>{formatCurrency(calculateTotals.achieved)}</span>
                 </div>
               </div>
@@ -1475,15 +1431,9 @@ const PerformanceView = () => {
                 </div>
                 
                 <div style={styles.clientBreakdownItem}>
-                  <span>Retail:</span>
-                  <span>{calculateTotals.retailCount} orders</span>
-                  <span>{formatCurrency(calculateTotals.retailAmount)}</span>
-                </div>
-                
-                <div style={styles.clientBreakdownItem}>
-                  <span>New:</span>
-                  <span>{calculateTotals.newCount} orders</span>
-                  <span>{formatCurrency(calculateTotals.newAmount)}</span>
+                  <span>New/Retail:</span>
+                  <span>{calculateTotals.newRetailCount} orders</span>
+                  <span>{formatCurrency(calculateTotals.newRetailAmount)}</span>
                 </div>
                 
                 <div style={styles.clientBreakdownItem}>
@@ -1514,22 +1464,16 @@ const PerformanceView = () => {
                 ?.filter(monthData => {
                   const [monthName, yearStr] = monthData.month.split(' ');
                   const year = parseInt(yearStr);
-                  const monthIndex = new Date(`${monthName} 1, ${yearStr}`).getMonth();
-                  const date = new Date(year, monthIndex, 1);
-                  const financialYear = getFinancialYear(date);
-                  const financialMonth = getFinancialMonth(date);
+                  const monthIndex = calendarMonthLabels.indexOf(monthName);
                   
-                  if (financialYearFilter !== 'all' && financialYear !== financialYearFilter) return false;
-                  if (selectedFinancialMonth !== null && financialMonth !== selectedFinancialMonth) return false;
+                  if (selectedYear !== 'all' && year !== selectedYear) return false;
+                  if (selectedMonth !== null && monthIndex !== selectedMonth) return false;
                   return true;
                 })
                 .map((monthData, index) => {
                   const [monthName, yearStr] = monthData.month.split(' ');
-                  const monthIndex = new Date(`${monthName} 1, ${yearStr}`).getMonth();
-                  const date = new Date(parseInt(yearStr), monthIndex, 1);
-                  const financialMonth = getFinancialMonth(date);
-                  const financialYear = getFinancialYear(date);
-                  const displayMonth = `${financialMonthLabels[financialMonth - 1]} ${financialYear}`;
+                  const monthIndex = calendarMonthLabels.indexOf(monthName);
+                  const displayMonth = `${calendarMonthLabels[monthIndex]} ${yearStr}`;
                   
                   const target = monthData.target || 0;
                   const achieved = monthData.achieved || 0;
@@ -1545,7 +1489,7 @@ const PerformanceView = () => {
                           <span style={styles.targetValue}>{formatCurrency(target)}</span>
                         </div>
                         <div style={styles.cardItem}>
-                          <span>Achieved:</span>
+                          <span>Achieved (New/Retail):</span>
                           <span style={styles.achievedValue}>{formatCurrency(achieved)}</span>
                         </div>
                       </div>
@@ -1556,11 +1500,11 @@ const PerformanceView = () => {
                         <span>Advance:</span>
                         <span>{formatCurrency(monthData.advance || 0)}</span>
                       </div>
-                      <div style={{ ...styles.clickableCardItem, cursor: canNavigateToOrders ? 'pointer' : 'not-allowed', opacity: canNavigateToOrders ? 1 : 0.7 }} onClick={() => canNavigateToOrders ? handleMonthClick({ ...monthData, displayMonth }) : null}>
+                      <div style={{ ...styles.clickableCardItem, cursor: canNavigateToOrders ? 'pointer' : 'not-allowed', opacity: canNavigateToOrders ? 1 : 0.7 }} onClick={() => canNavigateToOrders ? handleMonthClick({ ...monthData, month: displayMonth }) : null}>
                         <span>Orders:</span>
                         <span>{monthData.orders || 0}</span>
                       </div>
-                      <div style={{ ...styles.clickableCardItem, cursor: canNavigateToProspects ? 'pointer' : 'not-allowed', opacity: canNavigateToProspects ? 1 : 0.7 }} onClick={() => canNavigateToProspects ? handleMonthlyProspectsClick({ ...monthData, displayMonth }) : null}>
+                      <div style={{ ...styles.clickableCardItem, cursor: canNavigateToProspects ? 'pointer' : 'not-allowed', opacity: canNavigateToProspects ? 1 : 0.7 }} onClick={() => canNavigateToProspects ? handleMonthlyProspectsClick({ ...monthData, month: displayMonth }) : null}>
                         <span>Prospects:</span>
                         <span>{monthData.prospects || 0}</span>
                       </div>
@@ -1584,8 +1528,8 @@ const PerformanceView = () => {
       <style>{`
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         @media (max-width: 768px) {
-          .recharts-wrapper { overflow-x: auto; }
-          .recharts-surface { min-width: 500px; }
+          .recharts-wrapper { overflow-x: auto !important; }
+          .recharts-surface { min-width: 600px !important; }
           div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
         }
       `}</style>

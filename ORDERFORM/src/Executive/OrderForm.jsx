@@ -27,13 +27,13 @@ function OrderForm({
   );
   const [business, setBusiness] = useState(routerLocation.state?.businessName || "");
   const [contactPerson, setContactPerson] = useState(routerLocation.state?.customerName || "");
-  const [clientLocation, setClientLocation] = useState(existingData?.location || "");
+  const [clientLocation, setClientLocation] = useState("");
   const [isNewFromExisting, setIsNewFromExisting] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
 
   // Customer special dates (optional)
-  const [birthDate, setBirthDate] = useState(existingData?.birthDate || "");
-  const [anniversaryDate, setAnniversaryDate] = useState(existingData?.anniversaryDate || "");
+  const [birthDate, setBirthDate] = useState("");
+  const [anniversaryDate, setAnniversaryDate] = useState("");
 
   // Lead Source states
   const [leadSources] = useState([
@@ -47,13 +47,11 @@ function OrderForm({
     'Newspaper',
     'Other Specify'
   ]);
-  const [leadSource, setLeadSource] = useState(existingData?.leadSource || '');
-  const [otherLeadSource, setOtherLeadSource] = useState(existingData?.otherLeadSource || '');
+  const [leadSource, setLeadSource] = useState('');
+  const [otherLeadSource, setOtherLeadSource] = useState('');
 
   const [contactNumber, setContactNumber] = useState(
-    existingData
-      ? `${existingData.contactCode || "+91"} ${existingData.phone || ""}`
-      : `+91 ${routerLocation.state?.phoneNumber || orderNumber || ""}`
+    routerLocation.state?.phoneNumber ? `+91 ${routerLocation.state.phoneNumber}` : `+91 ${orderNumber || ""}`
   );
   const [orderDate, setOrderDate] = useState(new Date().toISOString().split("T")[0]);
   const [advanceDate, setAdvanceDate] = useState(new Date().toISOString().split("T")[0]);
@@ -89,6 +87,7 @@ function OrderForm({
   const [hasAdvanceApproval, setHasAdvanceApproval] = useState(false);
   const [approvalRequested, setApprovalRequested] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   const printRef = useRef();
   const invoiceRef = useRef();
@@ -405,11 +404,11 @@ Global Marketing Solutions Team`;
       alert("At least one requirement item is required");
       return;
     }
-    
+
     const updatedRows = [...rows];
     updatedRows.splice(index, 1);
     setRows(updatedRows);
-    
+
     // Recalculate total
     const orderTotal = updatedRows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
     setTotal(orderTotal.toFixed(2));
@@ -425,7 +424,7 @@ Global Marketing Solutions Team`;
     }));
   };
 
-  // Modify the createNewOrderFromExisting function
+  // CRITICAL FUNCTION: Create a fresh new order from existing client data
   const createNewOrderFromExisting = () => {
     // Determine the new order type based on existing order type
     let newClientType = "";
@@ -450,14 +449,24 @@ Global Marketing Solutions Team`;
 
     // Set mode to "new from existing"
     setIsNewFromExisting(true);
+    
+    // CRITICAL: Set isCreatingNew to true to prevent loading existing data
+    setIsCreatingNew(true);
+    
+    // Reset dataLoaded flag
+    setDataLoaded(false);
 
-    // Keep these fields from existing order (these will be read-only)
+    // Keep ONLY customer info fields from existing order (these will be read-only)
     setBusiness((existingData?.business || "").toUpperCase());
     setContactPerson(existingData?.contactPerson || "");
     setContactNumber(`${existingData?.contactCode || "+91"} ${existingData?.phone || ""}`);
     setClientType(newClientType);
+    
+    // Keep special dates if they exist
+    setBirthDate(existingData?.birthDate || "");
+    setAnniversaryDate(existingData?.anniversaryDate || "");
 
-    // Reset ALL other fields for new order
+    // Reset ALL order-specific fields for new order
     setSelectedExecutive(isAdmin ? "" : localStorage.getItem("userName") || "");
     setClientLocation("");
     setLeadSource("");
@@ -466,15 +475,10 @@ Global Marketing Solutions Team`;
     setAdvanceDate(new Date().toISOString().split("T")[0]);
     setTarget("");
     setDiscount(0);
-    setRows([{
-      ...getEmptyRow(),
-      gstIncluded: true
-    }]);
-    setTotal(0);
-    setDiscountedTotal(0);
+    setPaymentDate("");
+    setPaymentMethods([]);
     setAdvance("");
     setBalance(0);
-    setPaymentMethods([]);
     setSelectedUpi("");
     setChequeNumber("");
     setChequeImage(null);
@@ -489,16 +493,34 @@ Global Marketing Solutions Team`;
     setHasAdvanceApproval(false);
     setApprovalRequested(false);
     setApprovalReason("");
-    setBirthDate("");
-    setAnniversaryDate("");
+    
+    // Reset PO document if any
+    setPoDocument(null);
+
+    // CRITICAL: Reset rows to a single empty row (fresh requirements)
+    setRows([{
+      requirement: "",
+      customRequirement: "",
+      description: "",
+      quantity: "",
+      rate: "",
+      days: "",
+      startDate: new Date().toISOString().split("T")[0],
+      endDate: calculateDeliveryDate(new Date().toISOString().split("T")[0], 3),
+      total: "0.00",
+      deliveryDate: calculateDeliveryDate(new Date().toISOString().split("T")[0], 3),
+      gstIncluded: true,
+    }]);
+
+    setTotal(0);
+    setDiscountedTotal(0);
 
     if (approvalPollingRef.current) {
       clearInterval(approvalPollingRef.current);
       approvalPollingRef.current = null;
     }
 
-    setIsCreatingNew(true);
-
+    // Call onNewOrder callback if provided
     if (onNewOrder) onNewOrder();
   };
 
@@ -555,7 +577,7 @@ Global Marketing Solutions Team`;
       setIsSubmittingApproval(false);
     }
   };
-  
+
   useEffect(() => {
     const fetchAllExecutives = async () => {
       try {
@@ -602,7 +624,7 @@ Global Marketing Solutions Team`;
         console.log("All executives combined:", allExecutives);
         setSortedExecutives(allExecutives);
 
-        // If there's an existing executive, select it
+        // If there's an existing executive and NOT creating new, select it
         if (existingData?.executive && !isCreatingNew) {
           setSelectedExecutive(existingData.executive);
         }
@@ -623,75 +645,94 @@ Global Marketing Solutions Team`;
 
     fetchAllExecutives();
   }, [existingData, isAdmin, isCreatingNew]);
-  
+
+  // Separate useEffect for loading requirements only
   useEffect(() => {
-    const fetchInitialData = async () => {
+    const fetchRequirements = async () => {
       try {
         const requirementsRes = await axios.get("/api/requirements");
         setRequirements([...requirementsRes.data].sort((a, b) => a.name.localeCompare(b.name)));
-
-        await fetchTargetForDate(orderDate);
-
-        if (routerLocation.state?.phoneNumber) {
-          checkIfExistingClient(routerLocation.state.phoneNumber);
-        }
       } catch (error) {
-        console.error("Initialization error:", error);
+        console.error("Error fetching requirements:", error);
+      }
+    };
+    fetchRequirements();
+  }, []);
+
+  // Main data loading effect - ONLY runs when NOT creating a new order
+  useEffect(() => {
+    // CRITICAL: Skip loading existing data if we're creating a new order
+    if (isCreatingNew) {
+      console.log("Skipping existing data load - creating new order");
+      return;
+    }
+
+    const loadExistingData = async () => {
+      if (existingData) {
+        console.log("Loading existing order data for editing");
+        setDataLoaded(true);
+        
+        setSelectedExecutive(existingData.executive || (isAdmin ? "" : localStorage.getItem("userName") || ""));
+        setBusiness((existingData.business || "").toUpperCase());
+        setContactPerson(existingData.contactPerson || "");
+        setClientLocation(existingData.location || "");
+        setLeadSource(existingData.leadSource || '');
+        setOtherLeadSource(existingData.otherLeadSource || '');
+        setContactNumber(`${existingData.contactCode || "+91"} ${existingData.phone || ""}`);
+        setOrderDate(existingData.orderDate || new Date().toISOString().split("T")[0]);
+        setClientType(existingData.clientType || "");
+        setTarget(existingData.target || "");
+        setDiscount(existingData.discount || 0);
+        setCreatedBy(existingData.createdBy || "Admin");
+        setBirthDate(existingData.birthDate || "");
+        setAnniversaryDate(existingData.anniversaryDate || "");
+
+        if (existingData.rows && existingData.rows.length > 0) {
+          setRows(existingData.rows.map((row) => ({
+            requirement: row.customRequirement ? "other" : row.requirement,
+            customRequirement: row.customRequirement || "",
+            description: row.description,
+            quantity: row.quantity?.toString() || "",
+            rate: row.rate?.toString() || "",
+            days: row.days?.toString() || "",
+            startDate: row.startDate || row.deliveryDate,
+            endDate: row.endDate || calculateDeliveryDate(row.deliveryDate),
+            total: row.total?.toString() || "0",
+            deliveryDate: row.deliveryDate,
+            gstIncluded: row.gstIncluded !== undefined ? row.gstIncluded : true,
+          })));
+          
+          const totalAmount = existingData.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+          setTotal(totalAmount.toFixed(2));
+          setDiscountedTotal((totalAmount - (existingData.discount || 0)).toFixed(2));
+        }
+
+        setAdvanceDate(existingData.advanceDate || new Date().toISOString().split("T")[0]);
+        setPaymentDate(existingData.paymentDate || "");
+        setAdvance(existingData.advance?.toString() || "");
+        setBalance(existingData.balance?.toString() || "");
+
+        if (existingData.paymentMethods) {
+          const methods = typeof existingData.paymentMethods === 'string'
+            ? existingData.paymentMethods.split(' + ')
+            : existingData.paymentMethods;
+          setPaymentMethods(methods);
+        }
+
+        setDesign(existingData.designStatus === "provided" ? "yes" : "no");
+      }
+      
+      // Fetch target for the date
+      await fetchTargetForDate(orderDate);
+
+      // Check if existing client from location state
+      if (routerLocation.state?.phoneNumber) {
+        checkIfExistingClient(routerLocation.state.phoneNumber);
       }
     };
 
-    if (existingData && !isCreatingNew) {
-      // Load existing data into the form (editable mode)
-      setSelectedExecutive(existingData.executive || (isAdmin ? "" : localStorage.getItem("userName") || ""));
-      setBusiness((existingData.business || "").toUpperCase());
-      setContactPerson(existingData.contactPerson || "");
-      setClientLocation(existingData.location || "");
-      setLeadSource(existingData.leadSource || '');
-      setOtherLeadSource(existingData.otherLeadSource || '');
-      setContactNumber(`${existingData.contactCode || "+91"} ${existingData.phone || ""}`);
-      setOrderDate(existingData.orderDate || new Date().toISOString().split("T")[0]);
-      setClientType(existingData.clientType || "");
-      setTarget(existingData.target || "");
-      setDiscount(existingData.discount || 0);
-      setCreatedBy(existingData.createdBy || "Admin");
-      setBirthDate(existingData.birthDate || "");
-      setAnniversaryDate(existingData.anniversaryDate || "");
-
-      if (existingData.rows && existingData.rows.length > 0) {
-        setRows(existingData.rows.map((row) => ({
-          requirement: row.customRequirement ? "other" : row.requirement,
-          customRequirement: row.customRequirement || "",
-          description: row.description,
-          quantity: row.quantity.toString(),
-          rate: row.rate.toString(),
-          days: row.days?.toString() || "",
-          startDate: row.startDate || row.deliveryDate,
-          endDate: row.endDate || calculateDeliveryDate(row.deliveryDate),
-          total: row.total.toString(),
-          deliveryDate: row.deliveryDate,
-          gstIncluded: row.gstIncluded !== undefined ? row.gstIncluded : true,
-        })));
-        setTotal(existingData.total || 0);
-        setDiscountedTotal(existingData.total - (existingData.discount || 0));
-      }
-
-      setAdvanceDate(existingData.advanceDate || new Date().toISOString().split("T")[0]);
-      setPaymentDate(existingData.paymentDate || "");
-      setAdvance(existingData.advance?.toString() || "");
-      setBalance(existingData.balance?.toString() || "");
-
-      if (existingData.paymentMethods) {
-        const methods = typeof existingData.paymentMethods === 'string'
-          ? existingData.paymentMethods.split(' + ')
-          : existingData.paymentMethods;
-        setPaymentMethods(methods);
-      }
-
-      setDesign(existingData.designStatus === "provided" ? "yes" : "no");
-    }
-
-    fetchInitialData();
-  }, [existingData, orderNumber, isAdmin, executives, routerLocation.state, isCreatingNew]);
+    loadExistingData();
+  }, [existingData, orderNumber, isAdmin, routerLocation.state, isCreatingNew]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -703,22 +744,22 @@ Global Marketing Solutions Team`;
       alert("Please select an executive");
       return;
     }
-
+  
     // Validate lead source if selected
     if (leadSource === 'Other Specify' && !otherLeadSource.trim()) {
       alert("Please specify the lead source");
       return;
     }
-
+  
     const advanceNum = parseFloat(advance) || 0;
     const totalNum = parseFloat(total) || 0;
     const advancePercentage = (advanceNum / totalNum) * 100;
-
+  
     if (totalNum > 0 && !isAdmin && advancePercentage < 50 && !hasAdvanceApproval) {
       setShowAdvanceApprovalModal(true);
       return;
     }
-
+  
     await submitOrder();
   };
 
@@ -727,15 +768,15 @@ Global Marketing Solutions Team`;
     try {
       const phone = contactNumber.replace(/\D/g, "").slice(-10);
       if (phone.length !== 10) throw new Error("Please enter a valid 10-digit phone number");
-
+  
       const totalNum = parseFloat(total) || 0;
       const advanceNum = parseFloat(advance) || 0;
-
+  
       // Determine final lead source value
       const finalLeadSource = leadSource === 'Other Specify'
         ? otherLeadSource
         : leadSource;
-
+  
       const designRequestData = {
         executive: selectedExecutive,
         businessName: business,
@@ -748,13 +789,13 @@ Global Marketing Solutions Team`;
         status: "pending",
         requestDate: new Date().toISOString(),
       };
-
+  
       let paymentMethodStr = paymentMethods.includes("UPI") && selectedUpi
         ? paymentMethods.map((m) => m === "UPI" ? `UPI - ${selectedUpi}` : m).join(" + ")
         : paymentMethods.join(" + ");
-
+  
       const finalCreatedBy = isAdmin ? createdBy : (existingData?.createdBy || selectedExecutive);
-
+  
       // Create requirement details array for each row
       const requirementDetails = rows
         .filter((row) => row.requirement)
@@ -763,7 +804,7 @@ Global Marketing Solutions Team`;
           const quantity = row.quantity ? parseFloat(row.quantity) : 0;
           const rate = row.rate ? parseFloat(row.rate) : 0;
           const rowTotal = row.total ? parseFloat(row.total) : 0;
-
+  
           return {
             name: requirementName,
             quantity: quantity,
@@ -778,17 +819,12 @@ Global Marketing Solutions Team`;
             remark: row.remark || ""
           };
         });
-
+  
       // Create a summary string for backward compatibility
       const allRequirements = requirementDetails
         .map(req => `${req.quantity} x ${req.name}`)
         .join(", ");
-
-      const allDescriptions = requirementDetails
-        .map(req => `${req.description}${req.days ? ` (${req.days} days)` : ''}`)
-        .filter(desc => desc.trim())
-        .join(" | ");
-
+  
       const mainOrderData = {
         executive: selectedExecutive,
         business,
@@ -801,11 +837,11 @@ Global Marketing Solutions Team`;
         orderDate,
         target,
         clientType: clientType || "New",
-
+  
         // Add the new date fields
         birthDate: birthDate || null,
         anniversaryDate: anniversaryDate || null,
-
+  
         rows: rows
           .filter((row) => row.requirement) // Only include rows with requirements
           .map((row) => ({
@@ -825,9 +861,9 @@ Global Marketing Solutions Team`;
             isCompleted: row.isCompleted || false,
             status: row.status || "Pending"
           })),
-
+  
         requirementDetails: requirementDetails,
-
+  
         advanceDate,
         paymentDate,
         paymentMethods: paymentMethodStr,
@@ -840,31 +876,22 @@ Global Marketing Solutions Team`;
         chequeImage,
         designStatus: design === "no" ? "pending" : "provided",
         createdBy: finalCreatedBy,
-
-        originalRows: rows.map(row => ({
-          requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
-          description: row.description,
-          quantity: row.quantity,
-          rate: row.rate,
-          days: row.days,
-          total: row.total,
-          deliveryDate: row.deliveryDate,
-          gstIncluded: row.gstIncluded
-        }))
       };
-
+  
       console.log('Final order data being submitted:', mainOrderData);
-      console.log('Rows count:', mainOrderData.rows.length);
-      console.log('First row quantity:', mainOrderData.rows[0]?.quantity);
-
+      console.log('isCreatingNew flag:', isCreatingNew);
+      console.log('existingData exists:', !!existingData);
+  
       setIsSubmittingDesign(true);
       await axios.post("/api/design-requests", designRequestData);
       setIsSubmittingDesign(false);
-
+  
+      // CRITICAL: Always create a NEW order when isCreatingNew is true
+      // Only update existing order when editing (existingData exists AND isCreatingNew is false)
       const orderResponse = (existingData && !isCreatingNew)
         ? await axios.put(`/api/orders/${existingData._id}`, mainOrderData)
         : await axios.post("/api/submit", mainOrderData);
-
+  
       const orderDataForWhatsApp = {
         business: business,
         contactPerson: contactPerson,
@@ -887,14 +914,16 @@ Global Marketing Solutions Team`;
         birthDate: birthDate,
         anniversaryDate: anniversaryDate
       };
-
+  
       sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
-
+  
       setShowSuccessModal(true);
       setTimeout(() => {
         setShowSuccessModal(false);
         setIsSubmitting(false);
         setIsCreatingNew(false);
+        setIsNewFromExisting(false); // Reset this flag as well
+        setDataLoaded(false);
         if (onSuccess) onSuccess(orderResponse.data);
       }, 2000);
     } catch (err) {
@@ -903,7 +932,7 @@ Global Marketing Solutions Team`;
       setIsSubmitting(false);
     }
   };
-  
+
   const fetchTargetForDate = async (dateString) => {
     if (!dateString || !selectedExecutive) return;
     setLoadingTarget(true);
@@ -1208,43 +1237,41 @@ Global Marketing Solutions Team`;
           {isExpanded && (
             <div className="card-details" style={{ marginTop: '15px', borderTop: '1px solid #eee', paddingTop: '12px' }}>
               {/* Requirement Select (if not selected or needs change) */}
-              {!row.requirement && (
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Requirement *</label>
-                  <Select
-                    options={[
-                      { value: '', label: 'Select Requirement' },
-                      ...requirements.map(req => ({ value: req.name, label: req.name })),
-                      { value: 'other', label: 'Other (Specify)' }
-                    ]}
-                    value={row.requirement ? { value: row.requirement, label: row.requirement } : null}
-                    onChange={(selectedOption) => {
-                      const value = selectedOption ? selectedOption.value : '';
-                      handleRowChange(index, "requirement", value);
-                      if (value !== "other") handleRowChange(index, "customRequirement", "");
-                    }}
-                    isSearchable={true}
-                    placeholder="Search requirement..."
-                    className="requirement-select"
-                    classNamePrefix="react-select"
-                    styles={{
-                      control: (base) => ({ ...base, minHeight: '38px', fontSize: '14px' }),
-                      menu: (base) => ({ ...base, fontSize: '14px', zIndex: 999 }),
-                      menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-                    }}
-                    menuPortalTarget={document.body}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Requirement *</label>
+                <Select
+                  options={[
+                    { value: '', label: 'Select Requirement' },
+                    ...requirements.map(req => ({ value: req.name, label: req.name })),
+                    { value: 'other', label: 'Other (Specify)' }
+                  ]}
+                  value={row.requirement ? { value: row.requirement, label: row.requirement } : null}
+                  onChange={(selectedOption) => {
+                    const value = selectedOption ? selectedOption.value : '';
+                    handleRowChange(index, "requirement", value);
+                    if (value !== "other") handleRowChange(index, "customRequirement", "");
+                  }}
+                  isSearchable={true}
+                  placeholder="Search requirement..."
+                  className="requirement-select"
+                  classNamePrefix="react-select"
+                  styles={{
+                    control: (base) => ({ ...base, minHeight: '38px', fontSize: '14px' }),
+                    menu: (base) => ({ ...base, fontSize: '14px', zIndex: 999 }),
+                    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                  }}
+                  menuPortalTarget={document.body}
+                />
+                {row.requirement === "other" && (
+                  <input
+                    type="text"
+                    value={row.customRequirement || ""}
+                    onChange={(e) => handleRowChange(index, "customRequirement", e.target.value)}
+                    placeholder="Enter custom requirement"
+                    style={{ marginTop: '8px', width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
                   />
-                  {row.requirement === "other" && (
-                    <input
-                      type="text"
-                      value={row.customRequirement || ""}
-                      onChange={(e) => handleRowChange(index, "customRequirement", e.target.value)}
-                      placeholder="Enter custom requirement"
-                      style={{ marginTop: '8px', width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                    />
-                  )}
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Description */}
               <div style={{ marginBottom: '12px' }}>
@@ -1616,14 +1643,19 @@ Global Marketing Solutions Team`;
         </div>
       )}
 
-      {/* Header with Order Already Exists message for editing existing orders - NO Create New Order button */}
-      {isEditingExisting && (
+      {/* Header with Order Already Exists message and Create New Order button */}
+      {existingData && !isCreatingNew && !isNewFromExisting && (
         <div style={{
           backgroundColor: '#fff3cd',
           padding: '15px 20px',
           borderRadius: '8px',
           marginBottom: '20px',
-          borderLeft: '4px solid #ffc107'
+          borderLeft: '4px solid #ffc107',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '15px'
         }}>
           <div>
             <strong style={{ fontSize: '16px', color: '#856404' }}>📋 ORDER ALREADY EXISTS</strong>
@@ -1635,10 +1667,44 @@ Global Marketing Solutions Team`;
               })}
             </div>
           </div>
+          <button
+            onClick={createNewOrderFromExisting}
+            style={{
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '10px 20px',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            ➕ Create New Order
+          </button>
         </div>
       )}
 
-      {/* Hide these fields when editing existing order */}
+      {/* Show "New Order from Existing" header when in new-from-existing mode */}
+      {isNewFromExisting && (
+        <div style={{
+          backgroundColor: '#d4edda',
+          padding: '10px 15px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          borderLeft: '4px solid #28a745'
+        }}>
+          <strong style={{ color: '#155724' }}>🔄 Creating New Order for {business}</strong>
+          <div style={{ fontSize: '12px', color: '#155724', marginTop: '4px' }}>
+            Customer details are pre-filled. Please add new requirements and payment details below.
+          </div>
+        </div>
+      )}
+
+      {/* Show full form when NOT editing existing (includes new orders and new from existing) */}
       {!isEditingExisting && (
         <>
           <div className="form-header">
@@ -1889,54 +1955,10 @@ Global Marketing Solutions Team`;
         </>
       )}
 
-      {/* Design Status for Existing Orders - Show if editing existing */}
-      {isEditingExisting && (
-        <div className="design-status-container" style={{ marginBottom: "20px", padding: "15px", backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
-          <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
-            <legend style={{ display: "block", fontSize: "16px", fontWeight: "500", color: "#333", marginBottom: "8px" }}>
-              Design Status:
-            </legend>
-            <div style={{ display: "flex", gap: "24px", fontSize: "15px", alignItems: "center", flexWrap: "wrap" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="designStatus"
-                  value="yes"
-                  checked={design === "yes"}
-                  onChange={(e) => setDesign(e.target.value)}
-                  style={{ width: "16px", height: "16px", accentColor: "#4CAF50", cursor: 'pointer' }}
-                />
-                <span style={{ color: design === "yes" ? "#4CAF50" : "#555", fontWeight: design === "yes" ? "600" : "400" }}>
-                  Design Provided
-                </span>
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="designStatus"
-                  value="no"
-                  checked={design === "no"}
-                  onChange={(e) => setDesign(e.target.value)}
-                  style={{ width: "16px", height: "16px", accentColor: "#FF5722", cursor: 'pointer' }}
-                />
-                <span style={{ color: design === "no" ? "#FF5722" : "#555", fontWeight: design === "no" ? "600" : "400" }}>
-                  Need Design
-                </span>
-              </label>
-            </div>
-          </fieldset>
-          {design === "no" && (
-            <div style={{ marginTop: "12px", padding: "12px", backgroundColor: "#FFF8E1", borderRadius: "6px", borderLeft: "4px solid #FFC107", fontSize: "14px" }}>
-              <p style={{ margin: 0, color: "#E65100" }}>This request will be sent to the design team for processing.</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Requirements Section - Always visible, starts directly from here for existing orders */}
+      {/* Requirements Section - Always visible and fresh for new-from-existing */}
       <div className="rows-section">
         <h3 style={{ marginBottom: '15px', color: '#333' }}>
-          {isEditingExisting ? 'Edit Requirements' : 'Order Requirements'}
+          {isNewFromExisting ? 'New Order Requirements' : (isEditingExisting ? 'Edit Requirements' : 'Order Requirements')}
         </h3>
         
         {isMobile ? (
@@ -2207,7 +2229,7 @@ Global Marketing Solutions Team`;
           disabled={isSubmitting || (!isAdmin && advanceError && !hasAdvanceApproval)}
           className="btn btn-primary"
         >
-          {isSubmitting ? "Submitting..." : (isEditingExisting ? "Update Order" : "Submit Order")}
+          {isSubmitting ? "Submitting..." : "Submit Order"}
         </button>
       </div>
 

@@ -3,73 +3,28 @@ const router = express.Router();
 const ProspectiveClient = require('../models/ProspectiveClients');
 const PRIVILEGED_EXECUTIVES = ['admin1','Soujanya', 'Aleem', 'Sirisha', 'Rajesh'];
 
-// Helper function to get financial year start and end dates
-const getFinancialYearDates = (financialYear) => {
-  if (financialYear === 'all' || !financialYear) {
+// Helper function to get calendar year start and end dates (Jan-Dec)
+const getCalendarYearDates = (year) => {
+  if (year === 'all' || !year) {
     return { startDate: null, endDate: null };
   }
   
-  const [startYear, endYear] = financialYear.split('-').map(Number);
-  const startDate = new Date(startYear, 3, 1); // April 1st (month 3 = April)
-  const endDate = new Date(endYear, 2, 31, 23, 59, 59, 999); // March 31st (month 2 = March)
+  const startDate = new Date(year, 0, 1); // January 1st
+  const endDate = new Date(year, 11, 31, 23, 59, 59, 999); // December 31st
   
   return { startDate, endDate };
 };
 
-// Helper function to get month start and end dates for financial month
-const getFinancialMonthDates = (financialYear, financialMonth) => {
-  const monthIndex = financialMonth - 1; // 0-11 where 0=April
-  const [startYear, endYear] = financialYear.split('-').map(Number);
-  
-  let calendarMonth, year;
-  
-  if (monthIndex <= 8) { // April to December (0-8)
-    calendarMonth = monthIndex + 3; // Apr=3, May=4, etc.
-    year = startYear;
-  } else { // January to March (9-11)
-    calendarMonth = monthIndex - 9; // Jan=0, Feb=1, Mar=2
-    year = endYear;
-  }
-  
-  const startDate = new Date(year, calendarMonth, 1);
+// Helper function to get month start and end dates for calendar month
+const getCalendarMonthDates = (year, month) => {
+  const monthIndex = month - 1; // 0-11 where 0=Jan
+  const startDate = new Date(year, monthIndex, 1);
   startDate.setHours(0, 0, 0, 0);
   
-  const endDate = new Date(year, calendarMonth + 1, 1);
+  const endDate = new Date(year, monthIndex + 1, 1);
   endDate.setHours(0, 0, 0, 0);
   
   return { startDate, endDate };
-};
-
-// Helper function to get financial year from date
-const getFinancialYearFromDate = (date) => {
-  const month = date.getMonth(); // 0-11
-  const year = date.getFullYear();
-  if (month >= 3) { // April to December
-    return `${year}-${year + 1}`;
-  } else { // January to March
-    return `${year - 1}-${year}`;
-  }
-};
-
-// Helper function to get financial month from date (1-12 where 1=April)
-const getFinancialMonthFromDate = (date) => {
-  const month = date.getMonth(); // 0-11
-  if (month >= 3) { // April to December
-    return month - 2; // Apr=1, May=2, ..., Dec=10
-  } else { // January to March
-    return month + 10; // Jan=11, Feb=12, Mar=13? Wait, Mar should be 12
-    // Let's fix: Jan=11, Feb=12, Mar=13? Actually Mar should be 12
-    // So: Jan=10, Feb=11, Mar=12
-  }
-};
-
-// Corrected: Get financial month (1-12 where 1=April)
-const getFinancialMonthCorrect = (date) => {
-  const month = date.getMonth(); // 0=Jan, 1=Feb, 2=Mar, 3=Apr...
-  if (month === 0) return 10; // Jan -> 10th month
-  if (month === 1) return 11; // Feb -> 11th month
-  if (month === 2) return 12; // Mar -> 12th month
-  return month - 2; // Apr=1, May=2, Jun=3, Jul=4, Aug=5, Sep=6, Oct=7, Nov=8, Dec=9
 };
 
 // Create a new prospective client
@@ -144,18 +99,18 @@ router.post('/', async (req, res) => {
     }
 });
 
-// GET all prospective clients with filtering (UPDATED for financial year)
+// GET all prospective clients with filtering (UPDATED for calendar year)
 router.get('/', async (req, res) => {
     try {
-        const { userName, role, search, status, executiveName, filterByExecutive, month, financialYear, startDate, endDate } = req.query;
+        const { userName, role, search, status, executiveName, filterByExecutive, month, year, startDate, endDate } = req.query;
 
         console.log('📥 Backend received query:', {
-            userName, role, executiveName, filterByExecutive, search, status, month, financialYear, startDate, endDate
+            userName, role, executiveName, filterByExecutive, search, status, month, year, startDate, endDate
         });
 
         let query = {};
         
-        // Build date filter based on financial year or date range
+        // Build date filter based on calendar year or date range
         if (startDate && endDate) {
             // Date range filter
             const startDateTime = new Date(startDate);
@@ -170,29 +125,31 @@ router.get('/', async (req, res) => {
             };
             
             console.log('📅 Date range filter:', { startDate: startDateTime, endDate: endDateTime });
-        } else if (financialYear && financialYear !== 'all' && financialYear !== 'undefined' && financialYear !== 'null') {
-            if (month) {
-                // Specific month in financial year
-                const financialMonth = parseInt(month);
-                const { startDate: monthStart, endDate: monthEnd } = getFinancialMonthDates(financialYear, financialMonth);
+        } else if (year && year !== 'all' && year !== 'undefined' && year !== 'null') {
+            const selectedYear = parseInt(year);
+            
+            if (month && month !== 'undefined' && month !== 'null') {
+                // Specific month in calendar year
+                const selectedMonth = parseInt(month);
+                const { startDate: monthStart, endDate: monthEnd } = getCalendarMonthDates(selectedYear, selectedMonth);
                 
                 query.createdAt = {
                     $gte: monthStart,
                     $lt: monthEnd
                 };
                 
-                console.log('📅 Financial month filter:', { financialYear, month, monthStart, monthEnd });
+                console.log('📅 Calendar month filter:', { year: selectedYear, month: selectedMonth, monthStart, monthEnd });
             } else {
-                // Full financial year
-                const { startDate: fyStart, endDate: fyEnd } = getFinancialYearDates(financialYear);
+                // Full calendar year
+                const { startDate: yearStart, endDate: yearEnd } = getCalendarYearDates(selectedYear);
                 
-                if (fyStart && fyEnd) {
+                if (yearStart && yearEnd) {
                     query.createdAt = {
-                        $gte: fyStart,
-                        $lte: fyEnd
+                        $gte: yearStart,
+                        $lte: yearEnd
                     };
                     
-                    console.log('📅 Financial year filter:', { financialYear, fyStart, fyEnd });
+                    console.log('📅 Calendar year filter:', { year: selectedYear, yearStart, yearEnd });
                 }
             }
         }
@@ -265,14 +222,14 @@ router.get('/by-phone', async (req, res) => {
     }
 });
 
-// Get prospective stats (UPDATED for financial year)
+// Get prospective stats (UPDATED for calendar year)
 router.get('/stats', async (req, res) => {
   try {
-    const { financialYear, month, startDate, endDate } = req.query;
+    const { year, month, startDate, endDate } = req.query;
     
-    console.log('📊 Prospective stats request:', { financialYear, month, startDate, endDate });
+    console.log('📊 Prospective stats request:', { year, month, startDate, endDate });
     
-    // Build date filter based on financial year or date range
+    // Build date filter based on calendar year or date range
     let dateFilter = {};
     
     if (startDate && endDate) {
@@ -289,29 +246,31 @@ router.get('/stats', async (req, res) => {
       };
       
       console.log('📅 Date range filter for stats:', { startDateTime, endDateTime });
-    } else if (financialYear && financialYear !== 'all' && financialYear !== 'undefined' && financialYear !== 'null') {
-      if (month) {
-        // Specific month in financial year
-        const financialMonth = parseInt(month);
-        const { startDate: monthStart, endDate: monthEnd } = getFinancialMonthDates(financialYear, financialMonth);
+    } else if (year && year !== 'all' && year !== 'undefined' && year !== 'null') {
+      const selectedYear = parseInt(year);
+      
+      if (month && month !== 'undefined' && month !== 'null') {
+        // Specific month in calendar year
+        const selectedMonth = parseInt(month);
+        const { startDate: monthStart, endDate: monthEnd } = getCalendarMonthDates(selectedYear, selectedMonth);
         
         dateFilter.createdAt = {
           $gte: monthStart,
           $lt: monthEnd
         };
         
-        console.log('📅 Financial month filter for stats:', { financialYear, month, monthStart, monthEnd });
+        console.log('📅 Calendar month filter for stats:', { year: selectedYear, month: selectedMonth, monthStart, monthEnd });
       } else {
-        // Full financial year
-        const { startDate: fyStart, endDate: fyEnd } = getFinancialYearDates(financialYear);
+        // Full calendar year
+        const { startDate: yearStart, endDate: yearEnd } = getCalendarYearDates(selectedYear);
         
-        if (fyStart && fyEnd) {
+        if (yearStart && yearEnd) {
           dateFilter.createdAt = {
-            $gte: fyStart,
-            $lte: fyEnd
+            $gte: yearStart,
+            $lte: yearEnd
           };
           
-          console.log('📅 Financial year filter for stats:', { financialYear, fyStart, fyEnd });
+          console.log('📅 Calendar year filter for stats:', { year: selectedYear, yearStart, yearEnd });
         }
       }
     }
@@ -343,7 +302,7 @@ router.get('/stats', async (req, res) => {
 
     // Add time period info to response
     result.timePeriod = {
-      financialYear: financialYear || 'all',
+      year: year || 'all',
       month: month ? parseInt(month) : null,
       startDate: startDate || null,
       endDate: endDate || null
@@ -458,10 +417,10 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
-// Get all prospective clients for privileged executives (separate route) - UPDATED for financial year
+// Get all prospective clients for privileged executives (separate route) - UPDATED for calendar year
 router.get('/privileged/all', async (req, res) => {
     try {
-        const { userName, search, status, financialYear, month, startDate, endDate } = req.query;
+        const { userName, search, status, year, month, startDate, endDate } = req.query;
 
         // Verify the user is a privileged executive
         if (!PRIVILEGED_EXECUTIVES.includes(userName)) {
@@ -472,7 +431,7 @@ router.get('/privileged/all', async (req, res) => {
 
         let query = {};
         
-        // Build date filter based on financial year or date range
+        // Build date filter based on calendar year or date range
         if (startDate && endDate) {
             const startDateTime = new Date(startDate);
             startDateTime.setHours(0, 0, 0, 0);
@@ -484,22 +443,24 @@ router.get('/privileged/all', async (req, res) => {
                 $gte: startDateTime,
                 $lte: endDateTime
             };
-        } else if (financialYear && financialYear !== 'all' && financialYear !== 'undefined' && financialYear !== 'null') {
-            if (month) {
-                const financialMonth = parseInt(month);
-                const { startDate: monthStart, endDate: monthEnd } = getFinancialMonthDates(financialYear, financialMonth);
+        } else if (year && year !== 'all' && year !== 'undefined' && year !== 'null') {
+            const selectedYear = parseInt(year);
+            
+            if (month && month !== 'undefined' && month !== 'null') {
+                const selectedMonth = parseInt(month);
+                const { startDate: monthStart, endDate: monthEnd } = getCalendarMonthDates(selectedYear, selectedMonth);
                 
                 query.createdAt = {
                     $gte: monthStart,
                     $lt: monthEnd
                 };
             } else {
-                const { startDate: fyStart, endDate: fyEnd } = getFinancialYearDates(financialYear);
+                const { startDate: yearStart, endDate: yearEnd } = getCalendarYearDates(selectedYear);
                 
-                if (fyStart && fyEnd) {
+                if (yearStart && yearEnd) {
                     query.createdAt = {
-                        $gte: fyStart,
-                        $lte: fyEnd
+                        $gte: yearStart,
+                        $lte: yearEnd
                     };
                 }
             }

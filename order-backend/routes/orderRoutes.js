@@ -98,6 +98,7 @@ router.get("/orders/all", async (req, res) => {
 
 // ============================
 // GET all orders with advanced filtering for payments dashboard
+// Supports: Financial Year, Month, Date, Year, Month/Year, Search
 // ============================
 router.get("/orders/payments-dashboard", async (req, res) => {
   try {
@@ -105,8 +106,9 @@ router.get("/orders/payments-dashboard", async (req, res) => {
     
     const { 
       executive, 
-      year, 
-      month, 
+      financialYear,
+      month,      // Financial month (1-12, where 1=April)
+      year,       // Calendar year (fallback)
       date,
       filterType,
       searchTerm 
@@ -127,81 +129,150 @@ router.get("/orders/payments-dashboard", async (req, res) => {
       );
     }
 
-    // Apply date filters
-    if (date) {
+    // ============================================
+    // FINANCIAL YEAR + MONTH FILTERING (Primary)
+    // ============================================
+    if (financialYear && financialYear !== 'all' && financialYear !== 'undefined' && financialYear !== 'null') {
+      console.log(`Applying financial year filter: ${financialYear}`);
+      const [startYear, endYear] = financialYear.split('-').map(Number);
+      
+      // Financial year starts April 1st of startYear, ends March 31st of endYear
+      const fyStartDate = new Date(startYear, 3, 1); // April 1st
+      fyStartDate.setHours(0, 0, 0, 0);
+      const fyEndDate = new Date(endYear, 2, 31, 23, 59, 59, 999); // March 31st
+      
+      console.log(`Financial year range: ${fyStartDate} to ${fyEndDate}`);
+      
+      // First filter by financial year range
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.orderDate) return false;
+        let orderDate = parseOrderDate(order.orderDate);
+        if (!orderDate || isNaN(orderDate.getTime())) return false;
+        return orderDate >= fyStartDate && orderDate <= fyEndDate;
+      });
+      
+      // Then apply month filter if specified (within financial year)
+      if (month && month !== 'undefined' && month !== 'null') {
+        const financialMonthIndex = parseInt(month) - 1; // 0-11 where 0=April
+        
+        // Convert financial month to calendar month and year
+        let calendarMonth, calendarYear;
+        
+        if (financialMonthIndex <= 8) { // April (0) to December (8)
+          calendarMonth = financialMonthIndex + 3; // Apr=3, May=4, ..., Dec=11
+          calendarYear = startYear;
+        } else { // January (9) to March (11)
+          calendarMonth = financialMonthIndex - 9; // Jan=0, Feb=1, Mar=2
+          calendarYear = endYear;
+        }
+        
+        const monthStartDate = new Date(calendarYear, calendarMonth, 1);
+        monthStartDate.setHours(0, 0, 0, 0);
+        const monthEndDate = new Date(calendarYear, calendarMonth + 1, 0, 23, 59, 59, 999);
+        
+        console.log(`Filtering for financial month ${financialMonthIndex + 1} (${financialMonthLabels[financialMonthIndex]}) -> Calendar: ${calendarMonthLabels[calendarMonth]} ${calendarYear}`);
+        console.log(`Month range: ${monthStartDate} to ${monthEndDate}`);
+        
+        filteredOrders = filteredOrders.filter(order => {
+          let orderDate = parseOrderDate(order.orderDate);
+          if (!orderDate) return false;
+          return orderDate >= monthStartDate && orderDate <= monthEndDate;
+        });
+      }
+    } 
+    // ============================================
+    // DATE FILTER (Specific date)
+    // ============================================
+    else if (date && date !== 'undefined' && date !== 'null') {
+      console.log(`Applying date filter: ${date}`);
       const filterDate = new Date(date);
       filterDate.setHours(0, 0, 0, 0);
       const nextDay = new Date(filterDate);
       nextDay.setDate(nextDay.getDate() + 1);
       
       filteredOrders = filteredOrders.filter(order => {
-        if (!order.orderDate) return false;
-        const orderDate = new Date(order.orderDate);
+        let orderDate = parseOrderDate(order.orderDate);
+        if (!orderDate) return false;
         return orderDate >= filterDate && orderDate < nextDay;
       });
-    } else if (year && month) {
-      const filterYear = parseInt(year);
-      const filterMonth = parseInt(month) - 1;
-      
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.orderDate) return false;
-        const orderDate = new Date(order.orderDate);
-        return orderDate.getFullYear() === filterYear && 
-               orderDate.getMonth() === filterMonth;
-      });
-    } else if (year) {
+    } 
+    // ============================================
+    // CALENDAR MONTH/YEAR FILTER (Fallback)
+    // ============================================
+    else if (year && year !== 'undefined' && year !== 'null') {
       const filterYear = parseInt(year);
       
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.orderDate) return false;
-        const orderDate = new Date(order.orderDate);
-        return orderDate.getFullYear() === filterYear;
-      });
+      if (month && month !== 'undefined' && month !== 'null') {
+        // Specific calendar month
+        const filterMonth = parseInt(month) - 1;
+        console.log(`Applying calendar month/year filter: ${filterMonth + 1}/${filterYear}`);
+        
+        const monthStartDate = new Date(filterYear, filterMonth, 1);
+        monthStartDate.setHours(0, 0, 0, 0);
+        const monthEndDate = new Date(filterYear, filterMonth + 1, 0, 23, 59, 59, 999);
+        
+        filteredOrders = filteredOrders.filter(order => {
+          let orderDate = parseOrderDate(order.orderDate);
+          if (!orderDate) return false;
+          return orderDate >= monthStartDate && orderDate <= monthEndDate;
+        });
+      } else {
+        // Full calendar year
+        console.log(`Applying calendar year filter: ${filterYear}`);
+        
+        const yearStartDate = new Date(filterYear, 0, 1);
+        yearStartDate.setHours(0, 0, 0, 0);
+        const yearEndDate = new Date(filterYear, 11, 31, 23, 59, 59, 999);
+        
+        filteredOrders = filteredOrders.filter(order => {
+          let orderDate = parseOrderDate(order.orderDate);
+          if (!orderDate) return false;
+          return orderDate >= yearStartDate && orderDate <= yearEndDate;
+        });
+      }
     }
 
-    // Apply filter type
-    if (filterType === 'today') {
-      // TODAY'S COLLECTIONS - Orders with delivery date today
+    // ============================================
+    // FILTER TYPE (pending/completed/today/other)
+    // ============================================
+    if (filterType === 'pending') {
+      filteredOrders = filteredOrders.filter(order => order.balance > 0);
+    } else if (filterType === 'completed') {
+      filteredOrders = filteredOrders.filter(order => order.balance <= 0);
+    } else if (filterType === 'today') {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const todayStr = today.toISOString().split('T')[0];
       
       filteredOrders = filteredOrders.filter(order => {
         if (!order.rows || !order.rows.length) return false;
-        
-        // Check if any row has delivery date today
         return order.rows.some(row => {
           if (!row.deliveryDate) return false;
-          const deliveryDate = new Date(row.deliveryDate);
-          return deliveryDate.toISOString().split('T')[0] === todayStr;
+          let deliveryDate = parseOrderDate(row.deliveryDate);
+          return deliveryDate && deliveryDate.toISOString().split('T')[0] === todayStr;
         });
       });
     } else if (filterType === 'other') {
-      // OTHER PENDING - balance > 0 AND no delivery today
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const todayStr = today.toISOString().split('T')[0];
       
       filteredOrders = filteredOrders.filter(order => {
-        // Must have balance > 0
         if (order.balance <= 0) return false;
         
-        // Check if has delivery today
         const hasDeliveryToday = order.rows?.some(row => {
           if (!row.deliveryDate) return false;
-          const deliveryDate = new Date(row.deliveryDate);
-          return deliveryDate.toISOString().split('T')[0] === todayStr;
+          let deliveryDate = parseOrderDate(row.deliveryDate);
+          return deliveryDate && deliveryDate.toISOString().split('T')[0] === todayStr;
         });
         
-        // Include if NO delivery today
         return !hasDeliveryToday;
       });
-    } else if (filterType === 'completed') {
-      // COMPLETED PAYMENTS
-      filteredOrders = filteredOrders.filter(order => order.balance <= 0);
     }
 
-    // Apply search term filter
+    // ============================================
+    // SEARCH TERM FILTER
+    // ============================================
     if (searchTerm && searchTerm.trim() !== '') {
       const term = searchTerm.toLowerCase();
       filteredOrders = filteredOrders.filter(order => {
@@ -209,8 +280,10 @@ router.get("/orders/payments-dashboard", async (req, res) => {
           (order.executive && order.executive.toLowerCase().includes(term)) ||
           (order.business && order.business.toLowerCase().includes(term)) ||
           (order.contactPerson && order.contactPerson.toLowerCase().includes(term)) ||
-          (order.phone && order.phone.includes(term)) ||
+          (order.phone && order.phone.toString().includes(term)) ||
           (order.orderNo && order.orderNo.toLowerCase().includes(term)) ||
+          (order.gstNo && order.gstNo.toLowerCase().includes(term)) ||
+          (order.contactCode && order.contactCode.toLowerCase().includes(term)) ||
           (order.followUps && order.followUps.some(f => 
             f.description && f.description.toLowerCase().includes(term)
           ))
@@ -218,14 +291,93 @@ router.get("/orders/payments-dashboard", async (req, res) => {
       });
     }
 
-    console.log(`After filters: ${filteredOrders.length} orders`);
-    res.json(filteredOrders);
+    // ============================================
+    // CALCULATE ADVANCE AND BALANCE FOR EACH ORDER
+    // ============================================
+    const ordersWithCalculations = filteredOrders.map(order => {
+      // Calculate total from rows
+      let totalOrderAmount = 0;
+      if (order.rows && Array.isArray(order.rows)) {
+        totalOrderAmount = order.rows.reduce((sum, row) => {
+          return sum + (parseFloat(row.total) || 0);
+        }, 0);
+      }
+      
+      // Use discounted total if available
+      const finalAmount = parseFloat(order.discountedTotal) || totalOrderAmount;
+      
+      // Calculate total payments from paymentHistory
+      let totalPayments = 0;
+      if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
+        totalPayments = order.paymentHistory.reduce((sum, payment) => {
+          return sum + (parseFloat(payment.amount) || 0);
+        }, 0);
+      }
+      
+      // Calculate total settlements
+      let totalSettlements = 0;
+      if (order.settlements && Array.isArray(order.settlements)) {
+        totalSettlements = order.settlements.reduce((sum, settlement) => {
+          return sum + (parseFloat(settlement.amount) || 0);
+        }, 0);
+      }
+      
+      // Calculate advance (total payments + settlements)
+      const advance = totalPayments + totalSettlements;
+      
+      // Calculate balance
+      const balance = Math.max(0, finalAmount - advance);
+      
+      return {
+        ...order.toObject(),
+        calculatedTotal: totalOrderAmount,
+        finalAmount: finalAmount,
+        advance: advance,
+        balance: balance,
+        paymentHistory: order.paymentHistory || [],
+        settlements: order.settlements || [],
+        followUps: order.followUps || []
+      };
+    });
+
+    console.log(`After filters: ${ordersWithCalculations.length} orders`);
+    res.json(ordersWithCalculations);
     
   } catch (err) {
     console.error("Error fetching payments dashboard data:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
+// Helper function to parse order dates (handles DD-MM-YYYY format)
+function parseOrderDate(dateValue) {
+  if (!dateValue) return null;
+  
+  try {
+    if (typeof dateValue === 'string') {
+      // Check for DD-MM-YYYY format
+      if (dateValue.includes('-')) {
+        const parts = dateValue.split('-');
+        if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+          // DD-MM-YYYY to Date
+          return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        } else {
+          return new Date(dateValue);
+        }
+      } else {
+        return new Date(dateValue);
+      }
+    }
+    return dateValue instanceof Date ? dateValue : new Date(dateValue);
+  } catch (e) {
+    console.error('Error parsing date:', dateValue, e);
+    return null;
+  }
+}
+
+// Month label arrays for logging
+const financialMonthLabels = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+const calendarMonthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 // ============================
 router.post("/submit", async (req, res) => {
   try {
@@ -391,75 +543,101 @@ router.put("/orders/:id", async (req, res) => {
 });
 
 // ============================
-// GET all orders (with filtering)
+// GET all orders (with calendar year filtering - FIXED)
 // ============================
 router.get("/orders", async (req, res) => {
   try {
     let query = {};
 
-    console.log('Query parameters:', req.query); // Debug log
+    console.log('Query parameters:', req.query);
 
-    // NEW: Handle date range filter
-    if (req.query.startDate && req.query.endDate) {
-      const startDate = new Date(req.query.startDate);
+    // Exclude trashed orders by default
+    query.isTrashed = { $ne: true };
+
+    // ============================================
+    // CALENDAR YEAR FILTERING (Jan-Dec)
+    // ============================================
+    const year = req.query.year;
+    const month = req.query.month;
+    const startDateParam = req.query.startDate;
+    const endDateParam = req.query.endDate;
+
+    // PRIORITY 1: Date range filter
+    if (startDateParam && endDateParam && startDateParam !== 'undefined' && endDateParam !== 'undefined') {
+      const startDate = new Date(startDateParam);
       startDate.setHours(0, 0, 0, 0);
-      
-      const endDate = new Date(req.query.endDate);
+      const endDate = new Date(endDateParam);
       endDate.setHours(23, 59, 59, 999);
       
       query.orderDate = {
         $gte: startDate,
         $lte: endDate
       };
-      console.log('📅 Date range filter applied:', { startDate, endDate });
+      console.log('📅 Date range filter:', { startDate, endDate });
     }
-    // Filter by executive name if specified (for performance view)
-    else if (req.query.executive) {
-      query.executive = req.query.executive;
-    }
-
-    // Filter by service executive if specified
-    if (req.query.serviceExecutive) {
-      query['rows.assignedExecutive'] = req.query.serviceExecutive;
-    }
-
-    // Filter by logged-in executive if role is Executive
-    if (req.query.role === "Executive") {
-      query.executive = req.query.name;
-    }
-
-    // Filter by client type if specified
-    if (req.query.clientType) {
-      query.clientType = req.query.clientType;
-    }
-
-    // Filter by lead source if specified
-    if (req.query.leadSource) {
-      query.leadSource = req.query.leadSource;
-    }
-
-    // Filter by month/year if specified (only if date range not applied)
-    if (!req.query.startDate && !req.query.endDate && req.query.month && req.query.year) {
-      const month = parseInt(req.query.month);
-      const year = parseInt(req.query.year);
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 1);
-
+    // PRIORITY 2: Specific month and year
+    else if (month && month !== 'undefined' && month !== 'null' && 
+             year && year !== 'undefined' && year !== 'null' && year !== 'all') {
+      const yearNum = parseInt(year);
+      const monthNum = parseInt(month) - 1; // Convert to 0-index (Jan=0)
+      
+      const startDate = new Date(yearNum, monthNum, 1);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(yearNum, monthNum + 1, 1);
+      endDate.setHours(0, 0, 0, 0);
+      
       query.orderDate = {
         $gte: startDate,
-        $lt: endDate,
+        $lt: endDate
       };
+      console.log(`📅 Calendar month filter: ${month}/${year}`, { startDate, endDate });
+    }
+    // PRIORITY 3: Full year only
+    else if (year && year !== 'undefined' && year !== 'null' && year !== 'all') {
+      const yearNum = parseInt(year);
+      const startDate = new Date(yearNum, 0, 1);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(yearNum, 11, 31, 23, 59, 59, 999);
+      
+      query.orderDate = {
+        $gte: startDate,
+        $lte: endDate
+      };
+      console.log(`📅 Calendar year filter: ${year}`, { startDate, endDate });
     }
 
-    console.log('Final query:', query); // Debug log
+    // Filter by executive
+    if (req.query.executive && req.query.executive !== 'undefined' && req.query.executive !== 'null') {
+      query.executive = req.query.executive;
+      console.log('👤 Executive filter:', req.query.executive);
+    }
 
-    const orders = await Order.find(query);
-    console.log('Found orders:', orders.length); // Debug log
+    // Filter by client type
+    if (req.query.clientType && req.query.clientType !== 'undefined' && req.query.clientType !== 'null') {
+      query.clientType = req.query.clientType;
+      console.log('🏷️ Client type filter:', req.query.clientType);
+    }
+
+    // Filter by lead source
+    if (req.query.leadSource && req.query.leadSource !== 'undefined' && req.query.leadSource !== 'null') {
+      query.leadSource = req.query.leadSource;
+      console.log('📋 Lead source filter:', req.query.leadSource);
+    }
+
+    console.log('Final MongoDB query:', JSON.stringify(query, null, 2));
+
+    const orders = await Order.find(query).sort({ orderDate: -1, createdAt: -1 });
+    console.log('✅ Found orders:', orders.length);
+    
+    // Log sample dates for debugging
+    if (orders.length > 0) {
+      console.log('Sample order dates:', orders.slice(0, 3).map(o => o.orderDate));
+    }
     
     res.json(orders);
   } catch (err) {
     console.error("Error fetching orders:", err);
-    res.status(500).json({ error: "Failed to fetch orders" });
+    res.status(500).json({ error: "Failed to fetch orders: " + err.message });
   }
 });
 // ============================
@@ -2775,61 +2953,237 @@ router.get("/orders/pending-payments", async (req, res) => {
   }
 });
 
-// Get payments dashboard with follow-ups and settlements
-router.get('/payments-dashboard', async (req, res) => {
+// ============================
+// GET all orders with advanced filtering for payments dashboard
+// Supports: Calendar Year, Month, Date, Year, Month/Year, Search
+// ============================
+router.get("/orders/payments-dashboard", async (req, res) => {
   try {
-    const { executive, filterType, year, month, date } = req.query;
+    console.log("Payments dashboard request received with query:", req.query);
     
-    let query = {};
+    const { 
+      executive, 
+      year,           // Calendar year (e.g., 2024)
+      month,          // Calendar month (1-12, where 1=Jan)
+      date,
+      filterType,
+      searchTerm 
+    } = req.query;
+
+    // Get all orders
+    let orders = await Order.find({}).sort({ orderDate: -1, createdAt: -1 });
     
-    if (executive) {
-      query.executive = executive;
-    }
-    
-    // Date filtering
-    if (date) {
-      const startDate = new Date(date);
-      startDate.setHours(0, 0, 0, 0);
-      const endDate = new Date(date);
-      endDate.setHours(23, 59, 59, 999);
-      query.orderDate = { $gte: startDate, $lte: endDate };
-    } else if (year) {
-      const startYear = new Date(parseInt(year), 0, 1);
-      const endYear = new Date(parseInt(year), 11, 31, 23, 59, 59, 999);
-      query.orderDate = { $gte: startYear, $lte: endYear };
+    console.log(`Total orders in database: ${orders.length}`);
+
+    // Helper function to parse order dates (handles DD-MM-YYYY format)
+    const parseOrderDate = (dateValue) => {
+      if (!dateValue) return null;
       
-      if (month) {
-        const startMonth = new Date(parseInt(year), parseInt(month) - 1, 1);
-        const endMonth = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
-        query.orderDate = { $gte: startMonth, $lte: endMonth };
+      try {
+        if (typeof dateValue === 'string') {
+          // Check for DD-MM-YYYY format
+          if (dateValue.includes('-')) {
+            const parts = dateValue.split('-');
+            if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+              // DD-MM-YYYY to Date
+              return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+            } else {
+              return new Date(dateValue);
+            }
+          } else {
+            return new Date(dateValue);
+          }
+        }
+        return dateValue instanceof Date ? dateValue : new Date(dateValue);
+      } catch (e) {
+        console.error('Error parsing date:', dateValue, e);
+        return null;
       }
+    };
+
+    // Apply filters manually
+    let filteredOrders = [...orders];
+
+    // Filter by executive
+    if (executive && executive !== 'undefined' && executive !== 'null') {
+      filteredOrders = filteredOrders.filter(order => 
+        order.executive && order.executive.toLowerCase() === executive.toLowerCase()
+      );
     }
-    
-    // Fetch orders with all nested data
-    const orders = await Order.find(query).sort({ orderDate: -1 });
-    
-    // Calculate balances if needed
-    const ordersWithData = orders.map(order => {
-      const orderTotal = order.rows.reduce((sum, row) => sum + (row.total || 0), 0);
-      const totalPayments = (order.paymentHistory || []).reduce((sum, payment) => sum + payment.amount, 0);
-      const totalSettlements = (order.settlements || []).reduce((sum, settlement) => sum + settlement.amount, 0);
+
+    // ============================================
+    // CALENDAR YEAR + MONTH FILTERING (Jan-Dec)
+    // ============================================
+    if (year && year !== 'undefined' && year !== 'null' && year !== 'all') {
+      const filterYear = parseInt(year);
+      console.log(`Applying calendar year filter: ${filterYear}`);
+      
+      if (month && month !== 'undefined' && month !== 'null' && month !== 'all') {
+        // Specific calendar month
+        const filterMonth = parseInt(month) - 1; // Convert to 0-index (Jan=0)
+        console.log(`Applying calendar month/year filter: ${filterMonth + 1}/${filterYear}`);
+        
+        const monthStartDate = new Date(filterYear, filterMonth, 1);
+        monthStartDate.setHours(0, 0, 0, 0);
+        const monthEndDate = new Date(filterYear, filterMonth + 1, 0, 23, 59, 59, 999);
+        
+        filteredOrders = filteredOrders.filter(order => {
+          let orderDate = parseOrderDate(order.orderDate);
+          if (!orderDate) return false;
+          return orderDate >= monthStartDate && orderDate <= monthEndDate;
+        });
+        console.log(`After month/year filter: ${filteredOrders.length} orders`);
+      } else {
+        // Full calendar year
+        const yearStartDate = new Date(filterYear, 0, 1);
+        yearStartDate.setHours(0, 0, 0, 0);
+        const yearEndDate = new Date(filterYear, 11, 31, 23, 59, 59, 999);
+        
+        filteredOrders = filteredOrders.filter(order => {
+          let orderDate = parseOrderDate(order.orderDate);
+          if (!orderDate) return false;
+          return orderDate >= yearStartDate && orderDate <= yearEndDate;
+        });
+        console.log(`After year filter: ${filteredOrders.length} orders`);
+      }
+    } 
+    // ============================================
+    // DATE FILTER (Specific date)
+    // ============================================
+    else if (date && date !== 'undefined' && date !== 'null') {
+      console.log(`Applying date filter: ${date}`);
+      const filterDate = new Date(date);
+      filterDate.setHours(0, 0, 0, 0);
+      const nextDay = new Date(filterDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      
+      filteredOrders = filteredOrders.filter(order => {
+        let orderDate = parseOrderDate(order.orderDate);
+        if (!orderDate) return false;
+        return orderDate >= filterDate && orderDate < nextDay;
+      });
+      console.log(`After date filter: ${filteredOrders.length} orders`);
+    }
+
+    // ============================================
+    // FILTER TYPE (pending/completed/today/other)
+    // ============================================
+    if (filterType === 'pending') {
+      filteredOrders = filteredOrders.filter(order => order.balance > 0);
+      console.log(`After pending filter: ${filteredOrders.length} orders`);
+    } else if (filterType === 'completed') {
+      filteredOrders = filteredOrders.filter(order => order.balance <= 0);
+      console.log(`After completed filter: ${filteredOrders.length} orders`);
+    } else if (filterType === 'today') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0];
+      
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.rows || !order.rows.length) return false;
+        return order.rows.some(row => {
+          if (!row.deliveryDate) return false;
+          let deliveryDate = parseOrderDate(row.deliveryDate);
+          return deliveryDate && deliveryDate.toISOString().split('T')[0] === todayStr;
+        });
+      });
+      console.log(`After today filter: ${filteredOrders.length} orders`);
+    } else if (filterType === 'other') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0];
+      
+      filteredOrders = filteredOrders.filter(order => {
+        if (order.balance <= 0) return false;
+        
+        const hasDeliveryToday = order.rows?.some(row => {
+          if (!row.deliveryDate) return false;
+          let deliveryDate = parseOrderDate(row.deliveryDate);
+          return deliveryDate && deliveryDate.toISOString().split('T')[0] === todayStr;
+        });
+        
+        return !hasDeliveryToday;
+      });
+      console.log(`After other filter: ${filteredOrders.length} orders`);
+    }
+
+    // ============================================
+    // SEARCH TERM FILTER
+    // ============================================
+    if (searchTerm && searchTerm.trim() !== '') {
+      const term = searchTerm.toLowerCase();
+      filteredOrders = filteredOrders.filter(order => {
+        return (
+          (order.executive && order.executive.toLowerCase().includes(term)) ||
+          (order.business && order.business.toLowerCase().includes(term)) ||
+          (order.contactPerson && order.contactPerson.toLowerCase().includes(term)) ||
+          (order.phone && order.phone.toString().includes(term)) ||
+          (order.orderNo && order.orderNo.toLowerCase().includes(term)) ||
+          (order.gstNo && order.gstNo.toLowerCase().includes(term)) ||
+          (order.contactCode && order.contactCode.toLowerCase().includes(term)) ||
+          (order.followUps && order.followUps.some(f => 
+            f.description && f.description.toLowerCase().includes(term)
+          ))
+        );
+      });
+      console.log(`After search filter: ${filteredOrders.length} orders`);
+    }
+
+    // ============================================
+    // CALCULATE ADVANCE AND BALANCE FOR EACH ORDER
+    // ============================================
+    const ordersWithCalculations = filteredOrders.map(order => {
+      // Calculate total from rows
+      let totalOrderAmount = 0;
+      if (order.rows && Array.isArray(order.rows)) {
+        totalOrderAmount = order.rows.reduce((sum, row) => {
+          return sum + (parseFloat(row.total) || 0);
+        }, 0);
+      }
+      
+      // Use discounted total if available
+      const finalAmount = parseFloat(order.discountedTotal) || totalOrderAmount;
+      
+      // Calculate total payments from paymentHistory
+      let totalPayments = 0;
+      if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
+        totalPayments = order.paymentHistory.reduce((sum, payment) => {
+          return sum + (parseFloat(payment.amount) || 0);
+        }, 0);
+      }
+      
+      // Calculate total settlements
+      let totalSettlements = 0;
+      if (order.settlements && Array.isArray(order.settlements)) {
+        totalSettlements = order.settlements.reduce((sum, settlement) => {
+          return sum + (parseFloat(settlement.amount) || 0);
+        }, 0);
+      }
+      
+      // Calculate advance (total payments + settlements)
       const advance = totalPayments + totalSettlements;
-      const balance = orderTotal - advance;
+      
+      // Calculate balance
+      const balance = Math.max(0, finalAmount - advance);
       
       return {
         ...order.toObject(),
+        calculatedTotal: totalOrderAmount,
+        finalAmount: finalAmount,
         advance: advance,
-        balance: balance > 0 ? balance : 0,
-        payments: order.paymentHistory || [],
-        followUps: order.followUps || [],
-        settlements: order.settlements || []
+        balance: balance,
+        paymentHistory: order.paymentHistory || [],
+        settlements: order.settlements || [],
+        followUps: order.followUps || []
       };
     });
+
+    console.log(`Final filtered orders: ${ordersWithCalculations.length}`);
+    res.json(ordersWithCalculations);
     
-    res.json(ordersWithData);
-  } catch (error) {
-    console.error('Error fetching payments dashboard:', error);
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    console.error("Error fetching payments dashboard data:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 

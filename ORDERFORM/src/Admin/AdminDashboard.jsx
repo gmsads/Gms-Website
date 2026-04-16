@@ -420,7 +420,7 @@ const NAV = [
   {
     key: 'sales', label: 'Sales', icon: '💼',
     items: [
-      { to: 'create-order',       label: 'Create Sale',       emoji: '➕', badge: 'NEW' },
+      { to: 'create-order',       label: 'Booking Form',       emoji: '➕', badge: 'NEW' },
       { to: 'price-list', label: 'Pricelist', emoji: '🧾' },
       { to: 'view-orders',        label: 'View All Orders',    emoji: '📋' },
       { to: 'parties',            label: 'Party',            emoji: '👥' },
@@ -656,14 +656,11 @@ function AdminDashboard() {
   const [topProducts, setTopProducts] = useState(null);
   const [productsLoading, setProductsLoading] = useState(false);
   const [showAllProductsModal, setShowAllProductsModal] = useState(false);
-  const [financialYear, setFinancialYear] = useState(() => {
+  
+  // Calendar year state (Jan-Dec)
+  const [selectedYear, setSelectedYear] = useState(() => {
     const currentDate = new Date();
-    const currentMonth = currentDate.getMonth();
-    const currentYear = currentDate.getFullYear();
-    if (currentMonth >= 0 && currentMonth <= 2) {
-      return `${currentYear - 1}-${currentYear}`;
-    }
-    return `${currentYear}-${currentYear + 1}`;
+    return currentDate.getFullYear();
   });
   
   const [selectedMonth, setSelectedMonth] = useState(null);
@@ -685,30 +682,21 @@ function AdminDashboard() {
   const [selectedFormType, setSelectedFormType] = useState('order');
 
   const monthLabels = [
-    'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
-    'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar',
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
 
-  const getFinancialYears = () => {
-    const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-    const years = [];
-    years.push('all');
-    for (let i = -10; i <= 5; i++) {
-      const startYear = currentYear + i;
-      const endYear = startYear + 1;
-      years.push(`${startYear}-${endYear}`);
+  // Get available years (from 2015 to current year + 5)
+  const getAvailableYears = () => {
+    const currentYear = new Date().getFullYear();
+    const years = ['all'];
+    for (let i = 2015; i <= currentYear + 5; i++) {
+      years.push(i.toString());
     }
-    return [...new Set(years)].sort((a, b) => {
-      if (a === 'all') return -1;
-      if (b === 'all') return 1;
-      const aStart = parseInt(a.split('-')[0]);
-      const bStart = parseInt(b.split('-')[0]);
-      return bStart - aStart;
-    });
+    return years;
   };
 
-  const financialYears = getFinancialYears();
+  const availableYears = getAvailableYears();
 
   const getClientTypeData = () => {
     const defaultTypes = {
@@ -756,10 +744,10 @@ function AdminDashboard() {
           params.append('startDate', startDate);
           params.append('endDate', endDate);
         } else {
-          if (financialYear !== 'all') {
-            params.append('financialYear', financialYear);
+          if (selectedYear !== 'all') {
+            params.append('year', selectedYear);
           } else {
-            params.append('financialYear', 'all');
+            params.append('year', 'all');
           }
           if (selectedMonth !== null) {
             params.append('month', selectedMonth + 1);
@@ -795,40 +783,48 @@ function AdminDashboard() {
       }
     };
     fetchDashboardData();
-  }, [financialYear, selectedMonth, startDate, endDate, useDateRange]);
+  }, [selectedYear, selectedMonth, startDate, endDate, useDateRange]);
 
-  useEffect(() => {
-    const fetchComparisonData = async () => {
-      setComparisonLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (useDateRange && startDate && endDate) {
-          params.append('startDate', startDate);
-          params.append('endDate', endDate);
-        } else {
-          if (financialYear !== 'all') {
-            params.append('financialYear', financialYear);
-          }
-          if (selectedMonth !== null) {
-            params.append('month', selectedMonth + 1);
-          }
+useEffect(() => {
+  const fetchComparisonData = async () => {
+    setComparisonLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (useDateRange && startDate && endDate) {
+        params.append('startDate', startDate);
+        params.append('endDate', endDate);
+      } else {
+        // Use 'year' parameter for consistency
+        if (selectedYear !== 'all') {
+          params.append('year', selectedYear);
         }
-        const response = await axios.get(`/api/dashboard/comparison-data?${params.toString()}`);
-        if (response.data) {
-          setComparisonData(response.data);
-        } else {
-          setComparisonData(null);
+        if (selectedMonth !== null) {
+          params.append('month', selectedMonth + 1);
         }
-      } catch (err) {
-        console.error('Error fetching comparison data:', err);
-        setComparisonData(null);
-      } finally {
-        setComparisonLoading(false);
       }
-    };
-    fetchComparisonData();
-  }, [financialYear, selectedMonth, startDate, endDate, useDateRange]);
-
+      
+      console.log('Fetching comparison data with params:', params.toString());
+      
+      const response = await axios.get(`/api/dashboard/comparison-data?${params.toString()}`);
+      
+      console.log('Comparison data response:', response.data);
+      
+      if (response.data && response.data.months && response.data.months.length > 0) {
+        setComparisonData(response.data);
+      } else {
+        console.warn('No comparison data received');
+        setComparisonData(null);
+      }
+    } catch (err) {
+      console.error('Error fetching comparison data:', err);
+      setComparisonData(null);
+    } finally {
+      setComparisonLoading(false);
+    }
+  };
+  
+  fetchComparisonData();
+}, [selectedYear, selectedMonth, startDate, endDate, useDateRange]);
   useEffect(() => {
     const fetchUnreadCount = async () => {
       try {
@@ -853,8 +849,8 @@ function AdminDashboard() {
           params.append('startDate', startDate);
           params.append('endDate', endDate);
         } else {
-          if (financialYear !== 'all') {
-            params.append('financialYear', financialYear);
+          if (selectedYear !== 'all') {
+            params.append('year', selectedYear);
           }
           if (selectedMonth !== null) {
             params.append('month', selectedMonth + 1);
@@ -871,7 +867,7 @@ function AdminDashboard() {
     };
     
     fetchTopProducts();
-  }, [financialYear, selectedMonth, startDate, endDate, useDateRange]);
+  }, [selectedYear, selectedMonth, startDate, endDate, useDateRange]);
 
   const handleSearch = async () => {
     if (orderNumber.length !== 10) {
@@ -921,10 +917,10 @@ function AdminDashboard() {
   const handleChartClick = (chartType) => {
     if (chartType === 'pending-payment') {
       const queryParams = new URLSearchParams();
-      if (financialYear !== 'all') {
-        queryParams.append('financialYear', financialYear);
+      if (selectedYear !== 'all') {
+        queryParams.append('calendarYear', selectedYear);
       } else {
-        queryParams.append('financialYear', 'all');
+        queryParams.append('calendarYear', 'all');
       }
       if (selectedMonth !== null) {
         queryParams.append('month', selectedMonth + 1);
@@ -933,10 +929,10 @@ function AdminDashboard() {
       navigate(`/admin-dashboard/pending-payment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
     } else if (chartType === 'completed-payment') {
       const queryParams = new URLSearchParams();
-      if (financialYear !== 'all') {
-        queryParams.append('financialYear', financialYear);
+      if (selectedYear !== 'all') {
+        queryParams.append('calendarYear', selectedYear);
       } else {
-        queryParams.append('financialYear', 'all');
+        queryParams.append('calendarYear', 'all');
       }
       if (selectedMonth !== null) {
         queryParams.append('month', selectedMonth + 1);
@@ -945,10 +941,10 @@ function AdminDashboard() {
       navigate(`/admin-dashboard/pending-payment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
     } else if (chartType === 'pending-service') {
       const queryParams = new URLSearchParams();
-      if (financialYear !== 'all') {
-        queryParams.append('financialYear', financialYear);
+      if (selectedYear !== 'all') {
+        queryParams.append('calendarYear', selectedYear);
       } else {
-        queryParams.append('financialYear', 'all');
+        queryParams.append('calendarYear', 'all');
       }
       if (selectedMonth !== null) {
         queryParams.append('month', selectedMonth + 1);
@@ -972,7 +968,7 @@ function AdminDashboard() {
   };
 
   const handleClearFilters = () => {
-    setFinancialYear('all');
+    setSelectedYear('all');
     setSelectedMonth(null);
     setStartDate('');
     setEndDate('');
@@ -984,9 +980,9 @@ function AdminDashboard() {
       return `${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}`;
     }
     if (selectedMonth !== null) {
-      return `${monthLabels[selectedMonth]} ${financialYear !== 'all' ? `(FY ${financialYear})` : '(All Years)'}`;
+      return `${monthLabels[selectedMonth]} ${selectedYear !== 'all' ? selectedYear : '(All Years)'}`;
     }
-    return financialYear === 'all' ? 'All Financial Years' : `Financial Year ${financialYear}`;
+    return selectedYear === 'all' ? 'All Years' : `Year ${selectedYear}`;
   };
 
   const formatAmount = (amount) => {
@@ -1559,24 +1555,24 @@ function AdminDashboard() {
               <>
                 <div style={styles.yearSelectorWrapper}>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <label htmlFor="financial-year-select" style={styles.yearSelectorLabel}>
-                      Financial Year:
+                    <label htmlFor="year-select" style={styles.yearSelectorLabel}>
+                      Year:
                     </label>
                     <select
-                      id="financial-year-select"
-                      value={financialYear}
+                      id="year-select"
+                      value={selectedYear}
                       onChange={(e) => {
                         const selectedValue = e.target.value;
-                        setFinancialYear(selectedValue);
+                        setSelectedYear(selectedValue === 'all' ? 'all' : parseInt(selectedValue));
                         setSelectedMonth(null);
                         setUseDateRange(false);
                       }}
                       style={styles.yearSelector}
                       disabled={useDateRange}
                     >
-                      {financialYears.map((fy) => (
-                        <option key={fy} value={fy}>
-                          {fy === 'all' ? 'ALL FINANCIAL YEARS' : fy}
+                      {availableYears.map((year) => (
+                        <option key={year} value={year}>
+                          {year === 'all' ? 'ALL YEARS' : year}
                         </option>
                       ))}
                     </select>
@@ -1611,7 +1607,7 @@ function AdminDashboard() {
                         setStartDate(e.target.value);
                         if (e.target.value && endDate) {
                           setUseDateRange(true);
-                          setFinancialYear('all');
+                          setSelectedYear('all');
                           setSelectedMonth(null);
                         }
                       }}
@@ -1626,7 +1622,7 @@ function AdminDashboard() {
                         setEndDate(e.target.value);
                         if (startDate && e.target.value) {
                           setUseDateRange(true);
-                          setFinancialYear('all');
+                          setSelectedYear('all');
                           setSelectedMonth(null);
                         }
                       }}
@@ -1829,8 +1825,7 @@ function AdminDashboard() {
                                     const month = comparisonData.rawData[index];
                                     const queryParams = new URLSearchParams();
                                     queryParams.append('month', month.month + 1);
-                                    queryParams.append('year', month.year);
-                                    if (financialYear !== 'all') queryParams.append('financialYear', financialYear);
+                                    queryParams.append('calendarYear', month.year);
                                     navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                                   }
                                 }
@@ -1855,8 +1850,7 @@ function AdminDashboard() {
                                   onClick={() => {
                                     const queryParams = new URLSearchParams();
                                     queryParams.append('month', month.month + 1);
-                                    queryParams.append('year', month.year);
-                                    if (financialYear !== 'all') queryParams.append('financialYear', financialYear);
+                                    queryParams.append('calendarYear', month.year);
                                     navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                                   }}
                                   style={{
@@ -1938,20 +1932,29 @@ function AdminDashboard() {
                       }}
                       onMouseEnter={() => setHoveredCard('revenueOrders')}
                       onMouseLeave={() => setHoveredCard(null)}
-                      onClick={(e) => {
-                        if (e.target.tagName !== 'BUTTON') {
-                          const queryParams = new URLSearchParams();
-                          if (selectedMonth !== null) {
-                            queryParams.append('month', selectedMonth + 1);
-                          }
-                          if (financialYear !== 'all') {
-                            queryParams.append('financialYear', financialYear);
-                          }
-                          navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-                        }
-                      }}
+                    onClick={(e) => {
+  if (e.target.tagName !== 'BUTTON') {
+    const queryParams = new URLSearchParams();
+    
+    // Pass month (1-12)
+    if (selectedMonth !== null && selectedMonth !== undefined) {
+      queryParams.append('month', (selectedMonth + 1).toString());
+    }
+    
+    // Pass year - use 'year' not 'calendarYear' to match ViewOrders expectations
+    if (selectedYear && selectedYear !== 'all') {
+      queryParams.append('year', selectedYear.toString());
+    }
+    
+    // Also pass the filter type to indicate this is a filtered navigation
+    queryParams.append('fromDashboard', 'true');
+    
+    console.log('Navigating to view-orders with params:', queryParams.toString());
+    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+  }
+}}
                     >
-                      <div>Revenue & Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : financialYear === 'all' ? '(All Financial Years)' : '(Monthly)'}</div>
+                      <div>Revenue & Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : selectedYear === 'all' ? '(All Years)' : `(Year ${selectedYear})`}</div>
                       <div style={styles.chartContainer}>
                         <Bar
                           data={{
@@ -2021,24 +2024,29 @@ function AdminDashboard() {
                                 }
                               }
                             },
-                            onClick: (_, elements) => {
-                              if (elements.length > 0) {
-                                const queryParams = new URLSearchParams();
-                                if (selectedMonth === null) {
-                                  const clickedMonth = elements[0].index + 1;
-                                  queryParams.append('month', clickedMonth);
-                                  if (financialYear !== 'all') {
-                                    queryParams.append('financialYear', financialYear);
-                                  }
-                                } else {
-                                  queryParams.append('month', selectedMonth + 1);
-                                  if (financialYear !== 'all') {
-                                    queryParams.append('financialYear', financialYear);
-                                  }
-                                }
-                                navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
-                              }
-                            },
+                         onClick: (_, elements) => {
+  if (elements.length > 0) {
+    const queryParams = new URLSearchParams();
+    
+    if (selectedMonth === null) {
+      // Clicked on a specific month bar in yearly view
+      const clickedMonth = elements[0].index + 1;
+      queryParams.append('month', clickedMonth);
+      if (selectedYear && selectedYear !== 'all') {
+        queryParams.append('year', selectedYear);
+      }
+    } else {
+      // Already in month view, maintain the same month/year
+      queryParams.append('month', selectedMonth + 1);
+      if (selectedYear && selectedYear !== 'all') {
+        queryParams.append('year', selectedYear);
+      }
+    }
+    
+    console.log('Bar chart clicked - navigating with:', queryParams.toString());
+    navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
+  }
+},
                             scales: {
                               x: {
                                 grid: { display: true, color: 'rgba(49, 122, 176, 0.1)' },
@@ -2233,8 +2241,8 @@ function AdminDashboard() {
                                     if (selectedMonth !== null) {
                                       queryParams.append('month', selectedMonth + 1);
                                     }
-                                    if (financialYear !== 'all') {
-                                      queryParams.append('financialYear', financialYear);
+                                    if (selectedYear !== 'all') {
+                                      queryParams.append('calendarYear', selectedYear);
                                     }
                                     navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                                   }
@@ -2278,8 +2286,8 @@ function AdminDashboard() {
                                     if (selectedMonth !== null) {
                                       queryParams.append('month', selectedMonth + 1);
                                     }
-                                    if (financialYear !== 'all') {
-                                      queryParams.append('financialYear', financialYear);
+                                    if (selectedYear !== 'all') {
+                                      queryParams.append('calendarYear', selectedYear);
                                     }
                                     navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                                   }}
@@ -2336,7 +2344,7 @@ function AdminDashboard() {
                       onMouseEnter={() => setHoveredCard('payment')}
                       onMouseLeave={() => setHoveredCard(null)}
                     >
-                      <div>Payment Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : financialYear === 'all' ? '(All Financial Years)' : ''}</div>
+                      <div>Payment Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : selectedYear === 'all' ? '(All Years)' : ''}</div>
                       <div style={styles.pieChart}>
                         <Doughnut
                           data={{
@@ -2399,10 +2407,10 @@ function AdminDashboard() {
                       onClick={() => {
                         const queryParams = new URLSearchParams();
                         
-                        if (financialYear !== 'all') {
-                          queryParams.append('financialYear', financialYear);
+                        if (selectedYear !== 'all') {
+                          queryParams.append('calendarYear', selectedYear);
                         } else {
-                          queryParams.append('financialYear', 'all');
+                          queryParams.append('calendarYear', 'all');
                         }
                         
                         if (selectedMonth !== null) {
@@ -2415,7 +2423,7 @@ function AdminDashboard() {
                       }}
                     >
                       <div>
-                        Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : financialYear === 'all' ? '(All Financial Years)' : ''}
+                        Service Status {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : selectedYear === 'all' ? '(All Years)' : ''}
                       </div>
                       <div style={styles.pieChart}>
                         {(() => {
@@ -2519,8 +2527,8 @@ function AdminDashboard() {
                                     
                                     queryParams.append('status', clickedStatus.value);
                                     
-                                    if (financialYear !== 'all') {
-                                      queryParams.append('financialYear', financialYear);
+                                    if (selectedYear !== 'all') {
+                                      queryParams.append('calendarYear', selectedYear);
                                     }
                                     
                                     if (selectedMonth !== null) {
@@ -2558,13 +2566,13 @@ function AdminDashboard() {
                         if (selectedMonth !== null) {
                           queryParams.append('month', selectedMonth + 1);
                         }
-                        if (financialYear !== 'all') {
-                          queryParams.append('financialYear', financialYear);
+                        if (selectedYear !== 'all') {
+                          queryParams.append('calendarYear', selectedYear);
                         }
                         navigate(`/admin-dashboard/select-appointment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
                       }}
                     >
-                      <div>Appointments {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : financialYear === 'all' ? '(All Financial Years)' : ''}</div>
+                      <div>Appointments {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : selectedYear === 'all' ? '(All Years)' : ''}</div>
                       <div style={styles.pieChart}>
                         <PolarArea
                           data={{
@@ -2586,8 +2594,8 @@ function AdminDashboard() {
                                 if (selectedMonth !== null) {
                                   queryParams.append('month', selectedMonth + 1);
                                 }
-                                if (financialYear !== 'all') {
-                                  queryParams.append('financialYear', financialYear);
+                                if (selectedYear !== 'all') {
+                                  queryParams.append('calendarYear', selectedYear);
                                 }
                                 navigate(`/admin-dashboard/select-appointment${queryParams.toString() ? '?' + queryParams.toString() : ''}`);
                               }
@@ -2612,14 +2620,14 @@ function AdminDashboard() {
                           if (selectedMonth !== null) {
                             queryParams.append('month', selectedMonth + 1);
                           }
-                          if (financialYear !== 'all') {
-                            queryParams.append('financialYear', financialYear);
+                          if (selectedYear !== 'all') {
+                            queryParams.append('calendarYear', selectedYear);
                           }
                           navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                         }
                       }}
                     >
-                      <div>Client Overview {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : financialYear === 'all' ? '(All Financial Years)' : ''}</div>
+                      <div>Client Overview {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : selectedYear === 'all' ? '(All Years)' : ''}</div>
                       <div style={styles.chartContainer}>
                         <Bar
                           data={{
@@ -2673,8 +2681,8 @@ function AdminDashboard() {
                                 if (selectedMonth !== null) {
                                   queryParams.append('month', selectedMonth + 1);
                                 }
-                                if (financialYear !== 'all') {
-                                  queryParams.append('financialYear', financialYear);
+                                if (selectedYear !== 'all') {
+                                  queryParams.append('calendarYear', selectedYear);
                                 }
 
                                 navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
@@ -2708,14 +2716,14 @@ function AdminDashboard() {
                           if (selectedMonth !== null) {
                             queryParams.append('month', selectedMonth + 1);
                           }
-                          if (financialYear !== 'all') {
-                            queryParams.append('financialYear', financialYear);
+                          if (selectedYear !== 'all') {
+                            queryParams.append('calendarYear', selectedYear);
                           }
                           navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                         }
                       }}
                     >
-                      <div>Agent Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : financialYear === 'all' ? '(All Financial Years)' : '(Monthly)'}</div>
+                      <div>Agent Orders {selectedMonth !== null ? `(${monthLabels[selectedMonth]})` : selectedYear === 'all' ? '(All Years)' : '(Monthly)'}</div>
                       {loading ? (
                         <div style={styles.noDataMessage}>Loading agent data...</div>
                       ) : (
@@ -2781,8 +2789,8 @@ function AdminDashboard() {
                                     } else {
                                       queryParams.append('month', selectedMonth + 1);
                                     }
-                                    if (financialYear !== 'all') {
-                                      queryParams.append('financialYear', financialYear);
+                                    if (selectedYear !== 'all') {
+                                      queryParams.append('calendarYear', selectedYear);
                                     }
                                     
                                     navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
@@ -2878,7 +2886,7 @@ function AdminDashboard() {
                                   const queryParams = new URLSearchParams();
                                   queryParams.append('status', status);
 
-                                  if (financialYear !== 'all') queryParams.append('financialYear', financialYear);
+                                  if (selectedYear !== 'all') queryParams.append('calendarYear', selectedYear);
                                   if (selectedMonth !== null) queryParams.append('month', selectedMonth + 1);
 
                                   navigate(`/admin-dashboard/view-prospective?${queryParams.toString()}`);
@@ -2985,8 +2993,8 @@ function AdminDashboard() {
                           if (selectedMonth !== null) {
                             queryParams.append('month', selectedMonth + 1);
                           }
-                          if (financialYear !== 'all') {
-                            queryParams.append('financialYear', financialYear);
+                          if (selectedYear !== 'all') {
+                            queryParams.append('calendarYear', selectedYear);
                           }
                           navigate(`/admin-dashboard/view-orders?${queryParams.toString()}`);
                           setShowAllProductsModal(false);

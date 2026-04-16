@@ -17,13 +17,10 @@ function PendingPayment({ executiveFilter = null }) {
   const tableContainerRef = useRef(null);
   const today = new Date();
   const searchTimeoutRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Get filter type from URL - determines if we show pending or completed
   const filterType = searchParams.get('filterType') || 'pending';
-  
-  // Simple filter for follow-up and settlement
-  const [showOnlyFollowUp, setShowOnlyFollowUp] = useState(false);
-  const [showOnlySettlement, setShowOnlySettlement] = useState(false);
 
   // Payment modal states
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -138,12 +135,24 @@ function PendingPayment({ executiveFilter = null }) {
   // Generate year options
   const years = useMemo(() => {
     const currentYear = today.getFullYear();
-    const yearsArray = [];
+    const yearsArray = ['all'];
     for (let y = currentYear - 5; y <= currentYear + 5; y++) {
       yearsArray.push(y);
     }
     return yearsArray;
   }, [today]);
+
+  // Check if screen is mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Memoized function to check if order has delivery today
   const hasDeliveryToday = useCallback((order) => {
@@ -221,36 +230,12 @@ function PendingPayment({ executiveFilter = null }) {
     return colors[type] || '#7f8c8d';
   }, []);
 
-  // Apply all filters to orders
-  const applyAllFilters = useCallback((ordersToFilter) => {
-    let filtered = [...ordersToFilter];
-    
-    // Apply payment status filter (pending/completed)
-    if (filterType === 'pending') {
-      filtered = filtered.filter(order => order.balance > 0);
-    } else if (filterType === 'completed') {
-      filtered = filtered.filter(order => order.balance <= 0);
-    }
-    
-    // Apply follow-up filter - show only orders that have at least one follow-up
-    if (showOnlyFollowUp) {
-      filtered = filtered.filter(order => order.followUps && order.followUps.length > 0);
-    }
-    
-    // Apply settlement filter - show only orders that have at least one settlement
-    if (showOnlySettlement) {
-      filtered = filtered.filter(order => order.settlements && order.settlements.length > 0);
-    }
-    
-    return filtered;
-  }, [filterType, showOnlyFollowUp, showOnlySettlement]);
-
   // Fetch orders
   useEffect(() => {
     fetchOrders();
-  }, [year, selectedMonth, selectedDate, useDateFilter, executiveFilter, filterType]);
+  }, [year, selectedMonth, selectedDate, useDateFilter, activeFilter, executiveFilter, filterType]);
 
-  // Client-side search and filter
+  // Client-side search filter
   useEffect(() => {
     if (orders.length > 0) {
       if (searchTimeoutRef.current) {
@@ -258,12 +243,11 @@ function PendingPayment({ executiveFilter = null }) {
       }
 
       searchTimeoutRef.current = setTimeout(() => {
-        let filtered = [...orders];
+        let filtered = orders;
         
-        // Apply search term
         if (searchTerm.trim()) {
           const term = searchTerm.toLowerCase().trim();
-          filtered = filtered.filter(order => {
+          filtered = orders.filter(order => {
             return (
               (order?.executive?.toLowerCase() || '').includes(term) ||
               (order?.business?.toLowerCase() || '').includes(term) ||
@@ -276,9 +260,6 @@ function PendingPayment({ executiveFilter = null }) {
           });
         }
         
-        // Apply follow-up and settlement filters
-        filtered = applyAllFilters(filtered);
-        
         setFilteredOrders(filtered);
         calculatePaymentSummaries(filtered);
       }, 300);
@@ -289,25 +270,21 @@ function PendingPayment({ executiveFilter = null }) {
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [searchTerm, orders, applyAllFilters]);
+  }, [searchTerm, orders]);
 
   // Update URL when filters change
   useEffect(() => {
     const params = new URLSearchParams(searchParams);
     
     if (filterType) params.set('filterType', filterType);
-    if (showOnlyFollowUp) params.set('followUp', 'true');
-    else params.delete('followUp');
-    if (showOnlySettlement) params.set('settlement', 'true');
-    else params.delete('settlement');
-    if (year) params.set('year', year.toString());
-    if (selectedMonth !== null && !useDateFilter) {
+    if (year && year !== 'all') params.set('year', year.toString());
+    if (selectedMonth !== null && selectedMonth !== 'all' && !useDateFilter) {
       params.set('month', (selectedMonth + 1).toString());
     }
     if (selectedDate && useDateFilter) params.set('date', selectedDate);
     
     setSearchParams(params);
-  }, [filterType, showOnlyFollowUp, showOnlySettlement, year, selectedMonth, selectedDate, useDateFilter, setSearchParams]);
+  }, [filterType, year, selectedMonth, selectedDate, useDateFilter, setSearchParams]);
 
   // Handle scroll for fixed columns
   useEffect(() => {
@@ -329,20 +306,25 @@ function PendingPayment({ executiveFilter = null }) {
       const params = new URLSearchParams();
       
       if (executiveFilter) params.append('executive', executiveFilter);
+      if (activeFilter) params.append('filterType', activeFilter);
       
       if (useDateFilter && selectedDate) {
         params.append('date', selectedDate);
       } else if (useMonthYearFilter) {
-        if (year) params.append('year', year.toString());
-        if (selectedMonth !== null) params.append('month', (selectedMonth + 1).toString());
+        if (year && year !== 'all') params.append('year', year.toString());
+        if (selectedMonth !== null && selectedMonth !== 'all') params.append('month', (selectedMonth + 1).toString());
       }
 
       const res = await axios.get('/api/orders/payments-dashboard?' + params.toString());
       
       let fetchedOrders = res.data;
       
-      // Apply filters
-      fetchedOrders = applyAllFilters(fetchedOrders);
+      // Apply filter based on filterType from URL
+      if (filterType === 'pending') {
+        fetchedOrders = fetchedOrders.filter(order => order.balance > 0);
+      } else if (filterType === 'completed') {
+        fetchedOrders = fetchedOrders.filter(order => order.balance <= 0);
+      }
       
       setOrders(fetchedOrders);
       
@@ -429,18 +411,6 @@ function PendingPayment({ executiveFilter = null }) {
       alert('Failed to load settlements');
     } finally {
       setLoadingSettlements(false);
-    }
-  };
-
-  const refreshFollowUps = async () => {
-    if (selectedOrderForView) {
-      await fetchOrderFollowUps(selectedOrderForView._id);
-    }
-  };
-
-  const refreshSettlements = async () => {
-    if (selectedOrderForSettlementView) {
-      await fetchOrderSettlements(selectedOrderForSettlementView._id);
     }
   };
 
@@ -584,14 +554,7 @@ function PendingPayment({ executiveFilter = null }) {
       });
       setShowSettlementSuccess(true);
       setShowSettlementModal(false);
-      
-      // Refresh orders
       await fetchOrders();
-      
-      // If view settlements modal is open for this order, refresh it
-      if (showViewSettlementsModal && selectedOrderForSettlementView?._id === currentOrder._id) {
-        await fetchOrderSettlements(currentOrder._id);
-      }
 
     } catch (err) {
       console.error('Error recording settlement:', err);
@@ -620,14 +583,7 @@ function PendingPayment({ executiveFilter = null }) {
       });
       setShowFollowUpSuccess(true);
       setShowFollowUpModal(false);
-      
-      // Refresh orders
       await fetchOrders();
-      
-      // If view follow-ups modal is open for this order, refresh it
-      if (showViewFollowUpsModal && selectedOrderForView?._id === currentOrder._id) {
-        await fetchOrderFollowUps(currentOrder._id);
-      }
 
     } catch (err) {
       console.error('Error adding follow-up:', err);
@@ -667,15 +623,26 @@ function PendingPayment({ executiveFilter = null }) {
     setSearchTerm('');
   };
 
-  const clearAllFilters = () => {
-    setShowOnlyFollowUp(false);
-    setShowOnlySettlement(false);
-    setSearchTerm('');
-  };
-
   const handleFilterModeChange = (useDate) => {
     setUseDateFilter(useDate);
     setUseMonthYearFilter(!useDate);
+  };
+
+  const resetToCurrentMonth = () => {
+    const currentDate = new Date();
+    setYear(currentDate.getFullYear());
+    setSelectedMonth(currentDate.getMonth());
+    setUseDateFilter(false);
+    setUseMonthYearFilter(true);
+  };
+
+  const clearAllFilters = () => {
+    setYear('all');
+    setSelectedMonth('all');
+    setUseDateFilter(false);
+    setUseMonthYearFilter(true);
+    setSearchTerm('');
+    setActiveFilter('pending');
   };
 
   const getFilterDescription = useCallback(() => {
@@ -686,19 +653,19 @@ function PendingPayment({ executiveFilter = null }) {
     if (useDateFilter && selectedDate) {
       description += ` - Date: ${new Date(selectedDate).toLocaleDateString()}`;
     } else if (useMonthYearFilter) {
-      if (selectedMonth !== null) {
-        description += ` - ${monthLabels[selectedMonth]} ${year}`;
-      } else {
+      if (selectedMonth !== null && selectedMonth !== 'all') {
+        description += ` - ${monthLabels[selectedMonth]} ${year === 'all' ? 'All Years' : year}`;
+      } else if (year !== 'all') {
         description += ` - Year ${year}`;
+      } else {
+        description += ` - All Time`;
       }
     }
 
-    if (showOnlyFollowUp) description += ` - Has Follow-up`;
-    if (showOnlySettlement) description += ` - Has Settlement`;
     if (searchTerm) description += ` - Search: "${searchTerm}"`;
 
     return description;
-  }, [executiveFilter, filterType, useDateFilter, selectedDate, useMonthYearFilter, selectedMonth, year, searchTerm, monthLabels, showOnlyFollowUp, showOnlySettlement]);
+  }, [executiveFilter, filterType, useDateFilter, selectedDate, useMonthYearFilter, selectedMonth, year, searchTerm, monthLabels]);
 
   const handleExportToExcel = useCallback(() => {
     const exportData = filteredOrders.map((order, orderIndex) => {
@@ -718,8 +685,6 @@ function PendingPayment({ executiveFilter = null }) {
         'Latest Follow-up': latestFollowUp ? `${new Date(latestFollowUp.date).toLocaleDateString()}: ${latestFollowUp.description}` : 'No follow-up',
         'Follow-up Status': latestFollowUp?.status || 'N/A',
         'Next Follow-up': latestFollowUp?.nextFollowUpDate ? new Date(latestFollowUp.nextFollowUpDate).toLocaleDateString() : 'Not set',
-        'Latest Settlement': latestSettlement ? `${new Date(latestSettlement.date).toLocaleDateString()}: ${latestSettlement.type} - ₹${latestSettlement.amount}` : 'No settlement',
-        'Settlement Type': latestSettlement?.type || 'N/A',
       };
     });
 
@@ -731,127 +696,204 @@ function PendingPayment({ executiveFilter = null }) {
     XLSX.writeFile(workbook, fileName);
   }, [filteredOrders, getLatestFollowUp, getLatestSettlement, getDeliveryDate, getFilterDescription, filterType]);
 
+  const handleExportToWord = async () => {
+    setExportLoading(true);
+    try {
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({
+              text: getFilterDescription(),
+              heading: "Heading1",
+              alignment: AlignmentType.CENTER,
+            }),
+            new Paragraph({ text: `Generated on: ${new Date().toLocaleString()}` }),
+            new Paragraph({ text: "" }),
+            new Table({
+              rows: [
+                new TableRow({
+                  children: [
+                    "S.No", "Executive", "Business", "Customer", "Contact",
+                    "Total", "Advance", "Balance", "Delivery Date", "Latest Follow-up"
+                  ].map(header => new TableCell({ children: [new Paragraph(header)] }))
+                }),
+                ...filteredOrders.slice(0, 50).map((order, idx) => new TableRow({
+                  children: [
+                    (idx + 1).toString(), 
+                    order.executive || '', 
+                    order.business || '', 
+                    order.contactPerson || '',
+                    `${order.contactCode || ''} ${order.phone || ''}`.trim(),
+                    `₹${order.rows?.reduce((s, r) => s + (r?.total || 0), 0)}`,
+                    `₹${order.advance || 0}`, 
+                    `₹${order.balance || 0}`,
+                    getDeliveryDate(order), 
+                    formatFollowUp(order)
+                  ].map(cell => new TableCell({ children: [new Paragraph(String(cell || ''))] }))
+                }))
+              ],
+            })
+          ]
+        }]
+      });
+      
+      const blob = await Packer.toBlob(doc);
+      saveAs(blob, `payments_report_${Date.now()}.docx`);
+    } catch (error) {
+      console.error('Error exporting to Word:', error);
+      alert('Failed to export to Word');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleExportToPDF = () => {
+    setExportLoading(true);
+    try {
+      const doc = new jsPDF('landscape');
+      let yPos = 20;
+      
+      doc.setFontSize(16);
+      doc.text(getFilterDescription(), 14, yPos);
+      yPos += 10;
+      
+      doc.setFontSize(10);
+      const headers = ['S.No', 'Executive', 'Business', 'Customer', 'Total', 'Advance', 'Balance', 'Delivery Date'];
+      const data = filteredOrders.slice(0, 20).map((order, idx) => [
+        (idx + 1).toString(), 
+        order.executive || '', 
+        order.business || '', 
+        order.contactPerson || '',
+        `₹${order.rows?.reduce((s, r) => s + (r?.total || 0), 0)}`,
+        `₹${order.advance || 0}`, 
+        `₹${order.balance || 0}`, 
+        getDeliveryDate(order)
+      ]);
+      
+      doc.autoTable({ head: [headers], body: data, startY: yPos });
+      
+      if (filteredOrders.length > 20) {
+        doc.text(`* Showing first 20 of ${filteredOrders.length} records`, 14, doc.lastAutoTable.finalY + 10);
+      }
+      
+      doc.save(`payments_report_${Date.now()}.pdf`);
+    } catch (error) {
+      console.error('Error exporting to PDF:', error);
+      alert('Failed to export to PDF');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Responsive column widths
+  const getColumnWidths = () => {
+    if (isMobile) {
+      return {
+        sno: '50px',
+        executive: '100px',
+        business: '120px',
+        customer: '100px',
+        contact: '110px',
+        total: '80px',
+        advance: '80px',
+        balance: '80px',
+        deliveryDate: '100px',
+        followUp: '140px',
+        actions: '120px'
+      };
+    } else {
+      return {
+        sno: '60px',
+        executive: '120px',
+        business: '180px',
+        customer: '150px',
+        contact: '140px',
+        total: '100px',
+        advance: '100px',
+        balance: '100px',
+        deliveryDate: '120px',
+        followUp: '200px',
+        actions: '220px'
+      };
+    }
+  };
+
+  const columnWidths = getColumnWidths();
+
+  // Calculate left positions for sticky columns
+  const getLeftPosition = (columnIndex) => {
+    const widths = {
+      0: parseInt(columnWidths.sno),
+      1: parseInt(columnWidths.executive),
+      2: parseInt(columnWidths.business),
+      3: parseInt(columnWidths.customer)
+    };
+    
+    let left = 0;
+    for (let i = 0; i < columnIndex; i++) {
+      left += widths[i];
+    }
+    return left;
+  };
+
   // Filter button styles
   const filterButtonStyle = (filterTypeValue) => ({
-    padding: '8px 16px',
+    padding: isMobile ? '6px 12px' : '8px 16px',
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
-    fontSize: '14px',
+    fontSize: isMobile ? '12px' : '14px',
     fontWeight: '600',
     transition: 'all 0.2s',
-    backgroundColor: filterType === filterTypeValue ? '#3498db' : '#ecf0f1',
-    color: filterType === filterTypeValue ? 'white' : '#2c3e50',
+    backgroundColor: activeFilter === filterTypeValue ? '#3498db' : '#ecf0f1',
+    color: activeFilter === filterTypeValue ? 'white' : '#2c3e50',
+    flex: isMobile ? 1 : 'auto',
   });
-
-  const simpleFilterButtonStyle = (isActive, color) => ({
-    padding: '6px 12px',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '600',
-    transition: 'all 0.2s',
-    backgroundColor: isActive ? color : '#ecf0f1',
-    color: isActive ? 'white' : '#2c3e50',
-  });
-
-  // Fixed column styles
-  const getFixedColumnStyle = useCallback((columnIndex) => {
-    const leftPositions = [0, 60, 220, 380];
-    
-    const baseStyle = {
-      position: 'sticky',
-      backgroundColor: '#ffffff',
-      zIndex: 5,
-    };
-
-    if (columnIndex <= 3) {
-      baseStyle.left = leftPositions[columnIndex];
-      baseStyle.borderRight = '2px solid #e0e0e0';
-      if (scrollPosition > 5 && columnIndex === 3) {
-        baseStyle.boxShadow = '5px 0 10px -5px rgba(0,0,0,0.1)';
-      }
-    }
-
-    return baseStyle;
-  }, [scrollPosition]);
-
-  const getFixedHeaderStyle = useCallback((columnIndex) => {
-    const leftPositions = [0, 60, 220, 380];
-    
-    const baseStyle = {
-      position: 'sticky',
-      backgroundColor: '#3498db',
-      color: '#ffffff',
-      zIndex: 10,
-    };
-
-    if (columnIndex <= 3) {
-      baseStyle.left = leftPositions[columnIndex];
-      baseStyle.borderRight = '2px solid #2980b9';
-    }
-
-    return baseStyle;
-  }, []);
-
-  // Business name style
-  const businessNameStyle = {
-    color: executiveFilter ? '#666666' : '#003366',
-    cursor: executiveFilter ? 'default' : 'pointer',
-    fontWeight: '500',
-    textDecoration: executiveFilter ? 'none' : 'underline',
-    transition: executiveFilter ? 'none' : 'all 0.2s ease',
-    padding: '4px 8px',
-    borderRadius: '4px',
-    display: 'inline-block',
-  };
 
   // Styles object
   const styles = {
     container: {
-      padding: '20px',
+      padding: isMobile ? '10px' : '20px',
       backgroundColor: '#f8f9fa',
       minHeight: '100vh',
       fontFamily: 'Arial, sans-serif',
-      maxWidth: '100%',
-      overflowX: 'auto',
     },
     title: {
       textAlign: 'center',
       margin: '0 0 20px 0',
       color: '#2c3e50',
-      fontSize: '24px',
+      fontSize: isMobile ? '20px' : '24px',
       fontWeight: '600',
     },
     summaryContainer: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(4, 1fr)',
-      gap: '15px',
+      gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+      gap: isMobile ? '10px' : '15px',
       marginBottom: '20px',
     },
     summaryBox: {
       backgroundColor: '#ffffff',
       borderRadius: '8px',
-      padding: '15px',
+      padding: isMobile ? '10px' : '15px',
       boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
       textAlign: 'center',
     },
     summaryLabel: {
-      fontSize: '14px',
+      fontSize: isMobile ? '11px' : '14px',
       color: '#7f8c8d',
       fontWeight: '600',
       marginBottom: '5px',
     },
     summaryAmount: {
-      fontSize: '20px',
+      fontSize: isMobile ? '16px' : '20px',
       fontWeight: 'bold',
     },
     summaryCount: {
-      fontSize: '12px',
+      fontSize: isMobile ? '10px' : '12px',
       color: '#3498db',
       backgroundColor: '#ebf5fb',
-      padding: '4px 8px',
+      padding: '2px 6px',
       borderRadius: '12px',
       display: 'inline-block',
       marginTop: '5px',
@@ -859,33 +901,39 @@ function PendingPayment({ executiveFilter = null }) {
     filterContainer: {
       display: 'flex',
       flexDirection: 'column',
-      gap: '15px',
+      gap: isMobile ? '10px' : '15px',
       marginBottom: '20px',
       backgroundColor: '#fff',
-      padding: '15px',
+      padding: isMobile ? '12px' : '15px',
       borderRadius: '8px',
       boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    },
+    filterRow: {
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      justifyContent: 'space-between',
+      alignItems: isMobile ? 'flex-start' : 'center',
+      gap: isMobile ? '10px' : '15px',
     },
     searchContainer: {
       display: 'flex',
       justifyContent: 'center',
-      alignItems: 'center',
-      gap: '10px',
       position: 'relative',
+      width: '100%',
     },
     searchInput: {
-      padding: '10px 15px',
+      padding: isMobile ? '8px 12px' : '10px 15px',
       paddingRight: '40px',
       width: '100%',
-      maxWidth: '500px',
+      maxWidth: isMobile ? '100%' : '500px',
       borderRadius: '4px',
       border: '1px solid #ddd',
-      fontSize: '14px',
+      fontSize: isMobile ? '14px' : '14px',
       boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
     },
     searchClearButton: {
       position: 'absolute',
-      right: 'calc(50% - 250px)',
+      right: isMobile ? '10px' : 'calc(50% - 250px)',
       background: 'none',
       border: 'none',
       fontSize: '18px',
@@ -896,23 +944,25 @@ function PendingPayment({ executiveFilter = null }) {
     filterModeContainer: {
       display: 'flex',
       justifyContent: 'center',
-      gap: '20px',
+      gap: isMobile ? '10px' : '20px',
       marginBottom: '10px',
     },
     filterModeButton: {
-      padding: '8px 16px',
+      padding: isMobile ? '6px 12px' : '8px 16px',
       border: 'none',
       borderRadius: '4px',
       cursor: 'pointer',
-      fontSize: '14px',
+      fontSize: isMobile ? '12px' : '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
+      flex: isMobile ? 1 : 'auto',
     },
     dateFilterContainer: {
       display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
       justifyContent: 'center',
       alignItems: 'center',
-      gap: '15px',
+      gap: isMobile ? '10px' : '15px',
       flexWrap: 'wrap',
       padding: '10px',
       backgroundColor: '#f0f7ff',
@@ -922,14 +972,15 @@ function PendingPayment({ executiveFilter = null }) {
       position: 'relative',
       display: 'inline-flex',
       alignItems: 'center',
+      width: isMobile ? '100%' : 'auto',
     },
     dateInput: {
       padding: '8px 12px',
       paddingLeft: '35px',
       borderRadius: '4px',
       border: '1px solid #ddd',
-      fontSize: '14px',
-      width: '200px',
+      fontSize: isMobile ? '14px' : '14px',
+      width: isMobile ? '100%' : '200px',
     },
     calendarIcon: {
       position: 'absolute',
@@ -938,119 +989,196 @@ function PendingPayment({ executiveFilter = null }) {
       color: '#3498db',
       pointerEvents: 'none',
     },
+    yearMonthContainer: {
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      alignItems: isMobile ? 'flex-start' : 'center',
+      gap: isMobile ? '10px' : '15px',
+      width: isMobile ? '100%' : 'auto',
+    },
+    selectWrapper: {
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      alignItems: isMobile ? 'flex-start' : 'center',
+      gap: isMobile ? '4px' : '8px',
+      width: isMobile ? '100%' : 'auto',
+    },
     filterLabel: {
       fontWeight: '600',
       color: '#2c3e50',
-      fontSize: '14px',
+      fontSize: isMobile ? '12px' : '14px',
+      minWidth: isMobile ? '100%' : 'auto',
+    },
+    filterSelect: {
+      padding: isMobile ? '6px 10px' : '8px 12px',
+      borderRadius: '4px',
+      border: '1px solid #ddd',
+      backgroundColor: '#fff',
+      fontSize: isMobile ? '14px' : '14px',
+      cursor: 'pointer',
+      width: isMobile ? '100%' : 'auto',
     },
     clearFilterButton: {
-      padding: '8px 12px',
+      padding: isMobile ? '6px 10px' : '8px 12px',
       backgroundColor: '#e74c3c',
       color: 'white',
       border: 'none',
       borderRadius: '4px',
       cursor: 'pointer',
-      fontSize: '14px',
+      fontSize: isMobile ? '12px' : '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
+      width: isMobile ? '100%' : 'auto',
     },
-    yearMonthContainer: {
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      gap: '15px',
-      flexWrap: 'wrap',
-      padding: '10px',
-      backgroundColor: '#f0f7ff',
+    currentMonthButton: {
+      padding: isMobile ? '6px 10px' : '8px 12px',
+      backgroundColor: '#3498db',
+      color: 'white',
+      border: 'none',
       borderRadius: '4px',
-    },
-    selectWrapper: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-    },
-    filterSelect: {
-      padding: '8px 12px',
-      borderRadius: '4px',
-      border: '1px solid #ddd',
-      backgroundColor: '#fff',
-      fontSize: '14px',
       cursor: 'pointer',
+      fontSize: isMobile ? '12px' : '14px',
+      fontWeight: '600',
+      transition: 'all 0.2s',
+      width: isMobile ? '100%' : 'auto',
+    },
+    clearAllButton: {
+      padding: isMobile ? '6px 10px' : '8px 12px',
+      backgroundColor: '#6c757d',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: isMobile ? '12px' : '14px',
+      fontWeight: '600',
+      transition: 'all 0.2s',
+      width: isMobile ? '100%' : 'auto',
+    },
+    currentFilterInfo: {
+      textAlign: 'center',
+      padding: '8px',
+      backgroundColor: '#e8f4fd',
+      borderRadius: '4px',
+      color: '#2c3e50',
+      fontSize: isMobile ? '11px' : '14px',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: '10px',
+    },
+    filterBadge: {
+      backgroundColor: '#3498db',
+      color: 'white',
+      padding: '2px 8px',
+      borderRadius: '12px',
+      fontSize: '11px',
     },
     filterButtonsContainer: {
       display: 'flex',
       justifyContent: 'center',
-      gap: '10px',
+      gap: isMobile ? '8px' : '10px',
       marginBottom: '15px',
       flexWrap: 'wrap',
-    },
-    simpleFiltersContainer: {
-      display: 'flex',
-      justifyContent: 'center',
-      gap: '15px',
-      marginBottom: '15px',
-      flexWrap: 'wrap',
-      padding: '10px',
-      backgroundColor: '#fff',
-      borderRadius: '8px',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    },
-    filterSectionTitle: {
-      fontWeight: '600',
-      fontSize: '14px',
-      marginRight: '10px',
-      color: '#2c3e50',
-      display: 'flex',
-      alignItems: 'center',
     },
     loading: {
       textAlign: 'center',
       padding: '20px',
       color: '#7f8c8d',
-      fontSize: '16px',
+      fontSize: isMobile ? '14px' : '16px',
     },
     noData: {
       textAlign: 'center',
       padding: '20px',
       color: '#7f8c8d',
-      fontSize: '16px',
+      fontSize: isMobile ? '14px' : '16px',
+    },
+    tableWrapper: {
+      position: 'relative',
+      width: '100%',
+      overflow: 'hidden',
+      borderRadius: '8px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+      marginBottom: '20px',
+      backgroundColor: '#fff',
     },
     tableContainer: {
       width: '100%',
       overflowX: 'auto',
-      borderRadius: '8px',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-      marginBottom: '20px',
+      overflowY: 'auto',
+      maxHeight: isMobile ? 'calc(100vh - 400px)' : '70vh',
+      backgroundColor: '#fff',
       position: 'relative',
-      maxHeight: '70vh',
+      border: '1px solid #ddd',
+      WebkitOverflowScrolling: 'touch',
     },
     table: {
       width: '100%',
       borderCollapse: 'collapse',
-      backgroundColor: '#ffffff',
-      fontSize: '14px',
-      borderSpacing: 0,
+      fontSize: isMobile ? '12px' : '14px',
+      minWidth: isMobile ? '100%' : '1400px',
     },
     tableHeader: {
       backgroundColor: '#3498db',
       color: '#ffffff',
+      position: 'sticky',
+      top: 0,
+      zIndex: 100,
     },
-    th: {
-      padding: '12px 8px',
+    stickyHeader: (index, width, left) => ({
+      padding: isMobile ? '8px 4px' : '12px 8px',
       textAlign: 'left',
       fontWeight: '600',
       whiteSpace: 'nowrap',
-    },
-    td: {
-      padding: '10px 8px',
-      borderBottom: '1px solid #ecf0f1',
+      borderRight: '1px solid rgba(255,255,255,0.2)',
+      position: isMobile ? 'relative' : 'sticky',
+      left: isMobile ? '0' : `${left}px`,
+      backgroundColor: '#3498db',
+      zIndex: isMobile ? 10 : 100 + (index + 1) * 10,
+      minWidth: width,
+      width: width,
+      boxShadow: isMobile ? 'none' : '2px 0 3px rgba(0,0,0,0.1)',
+    }),
+    regularHeader: (width) => ({
+      padding: isMobile ? '8px 4px' : '12px 8px',
+      textAlign: 'left',
+      fontWeight: '600',
       whiteSpace: 'nowrap',
-    },
-    evenRow: {
-      backgroundColor: '#ffffff',
-    },
-    oddRow: {
-      backgroundColor: '#f8f9fa',
+      borderRight: '1px solid rgba(255,255,255,0.2)',
+      minWidth: width,
+      width: width,
+    }),
+    stickyCell: (index, width, left, backgroundColor) => ({
+      padding: isMobile ? '8px 4px' : '12px 8px',
+      borderBottom: '1px solid #eee',
+      borderRight: '1px solid #eee',
+      textAlign: 'left',
+      position: isMobile ? 'relative' : 'sticky',
+      left: isMobile ? '0' : `${left}px`,
+      backgroundColor: backgroundColor,
+      zIndex: isMobile ? 1 : 10 + (index + 1) * 10,
+      minWidth: width,
+      width: width,
+      boxShadow: isMobile ? 'none' : '2px 0 3px rgba(0,0,0,0.1)',
+      verticalAlign: 'top',
+    }),
+    regularTd: (width) => ({
+      padding: isMobile ? '8px 4px' : '12px 8px',
+      borderBottom: '1px solid #eee',
+      borderRight: '1px solid #eee',
+      textAlign: 'left',
+      verticalAlign: 'top',
+      whiteSpace: 'normal',
+      wordWrap: 'break-word',
+      minWidth: width,
+      width: width,
+    }),
+    textCell: {
+      whiteSpace: 'normal',
+      wordWrap: 'break-word',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      maxWidth: '100%',
     },
     balanceCell: {
       color: '#e74c3c',
@@ -1075,17 +1203,17 @@ function PendingPayment({ executiveFilter = null }) {
     },
     actionButtons: {
       display: 'flex',
-      gap: '5px',
+      gap: isMobile ? '4px' : '5px',
       flexWrap: 'wrap',
     },
     payButton: {
       backgroundColor: '#9b59b6',
       color: 'white',
       border: 'none',
-      padding: '6px 12px',
+      padding: isMobile ? '4px 8px' : '6px 12px',
       borderRadius: '4px',
       cursor: 'pointer',
-      fontSize: '12px',
+      fontSize: isMobile ? '10px' : '12px',
       fontWeight: '600',
       transition: 'all 0.2s',
     },
@@ -1093,10 +1221,10 @@ function PendingPayment({ executiveFilter = null }) {
       backgroundColor: '#16a085',
       color: 'white',
       border: 'none',
-      padding: '6px 12px',
+      padding: isMobile ? '4px 8px' : '6px 12px',
       borderRadius: '4px',
       cursor: 'pointer',
-      fontSize: '12px',
+      fontSize: isMobile ? '10px' : '12px',
       fontWeight: '600',
       transition: 'all 0.2s',
     },
@@ -1104,10 +1232,10 @@ function PendingPayment({ executiveFilter = null }) {
       backgroundColor: '#f39c12',
       color: 'white',
       border: 'none',
-      padding: '6px 12px',
+      padding: isMobile ? '4px 8px' : '6px 12px',
       borderRadius: '4px',
       cursor: 'pointer',
-      fontSize: '12px',
+      fontSize: isMobile ? '10px' : '12px',
       fontWeight: '600',
       transition: 'all 0.2s',
     },
@@ -1115,10 +1243,10 @@ function PendingPayment({ executiveFilter = null }) {
       backgroundColor: '#3498db',
       color: 'white',
       border: 'none',
-      padding: '6px 12px',
+      padding: isMobile ? '4px 8px' : '6px 12px',
       borderRadius: '4px',
       cursor: 'pointer',
-      fontSize: '12px',
+      fontSize: isMobile ? '10px' : '12px',
       fontWeight: '600',
       transition: 'all 0.2s',
     },
@@ -1126,26 +1254,27 @@ function PendingPayment({ executiveFilter = null }) {
       backgroundColor: '#8e44ad',
       color: 'white',
       border: 'none',
-      padding: '6px 12px',
+      padding: isMobile ? '4px 8px' : '6px 12px',
       borderRadius: '4px',
       cursor: 'pointer',
-      fontSize: '12px',
+      fontSize: isMobile ? '10px' : '12px',
       fontWeight: '600',
       transition: 'all 0.2s',
     },
     completedBadge: {
       backgroundColor: '#2ecc71',
       color: 'white',
-      padding: '6px 12px',
+      padding: isMobile ? '4px 8px' : '6px 12px',
       borderRadius: '4px',
-      fontSize: '12px',
+      fontSize: isMobile ? '10px' : '12px',
       fontWeight: '600',
       display: 'inline-block',
     },
     footerButtons: {
       display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
       justifyContent: 'center',
-      gap: '15px',
+      gap: isMobile ? '10px' : '15px',
       marginTop: '20px',
       flexWrap: 'wrap',
     },
@@ -1153,45 +1282,61 @@ function PendingPayment({ executiveFilter = null }) {
       backgroundColor: '#16a085',
       color: 'white',
       border: 'none',
-      padding: '10px 20px',
+      padding: isMobile ? '10px 15px' : '10px 20px',
       borderRadius: '4px',
       cursor: 'pointer',
-      fontSize: '14px',
+      fontSize: isMobile ? '14px' : '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
+      width: isMobile ? '100%' : 'auto',
     },
     wordButton: {
       backgroundColor: '#2c5fa3',
       color: 'white',
       border: 'none',
-      padding: '10px 20px',
+      padding: isMobile ? '10px 15px' : '10px 20px',
       borderRadius: '4px',
       cursor: 'pointer',
-      fontSize: '14px',
+      fontSize: isMobile ? '14px' : '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
+      width: isMobile ? '100%' : 'auto',
     },
     pdfButton: {
       backgroundColor: '#e74c3c',
       color: 'white',
       border: 'none',
-      padding: '10px 20px',
+      padding: isMobile ? '10px 15px' : '10px 20px',
       borderRadius: '4px',
       cursor: 'pointer',
-      fontSize: '14px',
+      fontSize: isMobile ? '14px' : '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
+      width: isMobile ? '100%' : 'auto',
     },
     backButton: {
       backgroundColor: '#7f8c8d',
       color: 'white',
       border: 'none',
-      padding: '10px 20px',
+      padding: isMobile ? '10px 15px' : '10px 20px',
       borderRadius: '4px',
       cursor: 'pointer',
-      fontSize: '14px',
+      fontSize: isMobile ? '14px' : '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
+      width: isMobile ? '100%' : 'auto',
+    },
+    refreshButton: {
+      backgroundColor: '#3498db',
+      color: 'white',
+      border: 'none',
+      padding: isMobile ? '10px 15px' : '10px 20px',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: isMobile ? '14px' : '14px',
+      fontWeight: '600',
+      transition: 'all 0.2s',
+      width: isMobile ? '100%' : 'auto',
     },
     paymentModal: {
       position: 'fixed',
@@ -1207,9 +1352,9 @@ function PendingPayment({ executiveFilter = null }) {
     },
     paymentModalContent: {
       backgroundColor: 'white',
-      padding: '25px',
+      padding: isMobile ? '20px' : '25px',
       borderRadius: '8px',
-      width: '500px',
+      width: isMobile ? '95%' : '500px',
       maxWidth: '95%',
       maxHeight: '90vh',
       overflowY: 'auto',
@@ -1218,6 +1363,7 @@ function PendingPayment({ executiveFilter = null }) {
       marginTop: 0,
       textAlign: 'center',
       color: '#2c3e50',
+      fontSize: isMobile ? '18px' : '20px',
     },
     paymentFormGroup: {
       marginBottom: '15px',
@@ -1226,19 +1372,22 @@ function PendingPayment({ executiveFilter = null }) {
       display: 'block',
       marginBottom: '5px',
       fontWeight: '500',
+      fontSize: isMobile ? '13px' : '14px',
     },
     paymentFormInput: {
       width: '100%',
-      padding: '8px',
+      padding: isMobile ? '8px' : '8px',
       border: '1px solid #ddd',
       borderRadius: '4px',
+      fontSize: isMobile ? '14px' : '14px',
     },
     paymentFormTextarea: {
       width: '100%',
-      padding: '8px',
+      padding: isMobile ? '8px' : '8px',
       border: '1px solid #ddd',
       borderRadius: '4px',
       minHeight: '60px',
+      fontSize: isMobile ? '14px' : '14px',
     },
     paymentFormButtons: {
       display: 'flex',
@@ -1247,27 +1396,29 @@ function PendingPayment({ executiveFilter = null }) {
       marginTop: '20px',
     },
     paymentCancelButton: {
-      padding: '8px 16px',
+      padding: isMobile ? '8px 16px' : '8px 16px',
       backgroundColor: '#6c757d',
       color: 'white',
       border: 'none',
       borderRadius: '4px',
       cursor: 'pointer',
+      fontSize: isMobile ? '14px' : '14px',
     },
     paymentSubmitButton: {
-      padding: '8px 16px',
+      padding: isMobile ? '8px 16px' : '8px 16px',
       backgroundColor: '#28a745',
       color: 'white',
       border: 'none',
       borderRadius: '4px',
       cursor: 'pointer',
       fontWeight: 'bold',
+      fontSize: isMobile ? '14px' : '14px',
     },
     settlementModalContent: {
       backgroundColor: 'white',
-      padding: '25px',
+      padding: isMobile ? '20px' : '25px',
       borderRadius: '8px',
-      width: '500px',
+      width: isMobile ? '95%' : '500px',
       maxWidth: '95%',
       maxHeight: '90vh',
       overflowY: 'auto',
@@ -1287,9 +1438,9 @@ function PendingPayment({ executiveFilter = null }) {
     },
     followUpModalContent: {
       backgroundColor: 'white',
-      padding: '25px',
+      padding: isMobile ? '20px' : '25px',
       borderRadius: '8px',
-      width: '600px',
+      width: isMobile ? '95%' : '600px',
       maxWidth: '95%',
       maxHeight: '90vh',
       overflowY: 'auto',
@@ -1309,15 +1460,15 @@ function PendingPayment({ executiveFilter = null }) {
     },
     viewFollowUpsContent: {
       backgroundColor: 'white',
-      padding: '25px',
+      padding: isMobile ? '20px' : '25px',
       borderRadius: '8px',
-      width: '700px',
+      width: isMobile ? '95%' : '700px',
       maxWidth: '95%',
       maxHeight: '90vh',
       overflowY: 'auto',
     },
     followUpItem: {
-      padding: '15px',
+      padding: isMobile ? '12px' : '15px',
       border: '1px solid #ecf0f1',
       borderRadius: '4px',
       marginBottom: '10px',
@@ -1328,15 +1479,18 @@ function PendingPayment({ executiveFilter = null }) {
       justifyContent: 'space-between',
       alignItems: 'center',
       marginBottom: '8px',
+      flexWrap: 'wrap',
+      gap: '8px',
     },
     followUpDate: {
       fontWeight: 'bold',
       color: '#2c3e50',
+      fontSize: isMobile ? '12px' : '13px',
     },
     followUpStatus: {
       padding: '4px 8px',
       borderRadius: '12px',
-      fontSize: '12px',
+      fontSize: '11px',
       fontWeight: 'bold',
       color: 'white',
     },
@@ -1346,14 +1500,15 @@ function PendingPayment({ executiveFilter = null }) {
       backgroundColor: 'white',
       borderRadius: '4px',
       fontStyle: 'italic',
+      fontSize: isMobile ? '13px' : '14px',
     },
     followUpNextDate: {
-      fontSize: '12px',
+      fontSize: '11px',
       color: '#7f8c8d',
       marginTop: '5px',
     },
     settlementItem: {
-      padding: '15px',
+      padding: isMobile ? '12px' : '15px',
       border: '1px solid #ecf0f1',
       borderRadius: '4px',
       marginBottom: '10px',
@@ -1364,16 +1519,18 @@ function PendingPayment({ executiveFilter = null }) {
       justifyContent: 'space-between',
       alignItems: 'center',
       marginBottom: '8px',
+      flexWrap: 'wrap',
+      gap: '8px',
     },
     settlementType: {
       padding: '4px 8px',
       borderRadius: '12px',
-      fontSize: '12px',
+      fontSize: '11px',
       fontWeight: 'bold',
       color: 'white',
     },
     settlementAmount: {
-      fontSize: '16px',
+      fontSize: isMobile ? '14px' : '16px',
       fontWeight: 'bold',
       color: '#16a085',
       margin: '5px 0',
@@ -1383,6 +1540,17 @@ function PendingPayment({ executiveFilter = null }) {
       padding: '5px',
       backgroundColor: 'white',
       borderRadius: '4px',
+      fontSize: isMobile ? '12px' : '13px',
+    },
+    businessNameStyle: {
+      color: executiveFilter ? '#666666' : '#003366',
+      cursor: executiveFilter ? 'default' : 'pointer',
+      fontWeight: '500',
+      textDecoration: executiveFilter ? 'none' : 'underline',
+      transition: executiveFilter ? 'none' : 'all 0.2s ease',
+      padding: '4px 8px',
+      borderRadius: '4px',
+      display: 'inline-block',
     },
   };
 
@@ -1402,71 +1570,71 @@ function PendingPayment({ executiveFilter = null }) {
     },
     content: {
       backgroundColor: 'white',
-      padding: '30px',
+      padding: isMobile ? '20px' : '30px',
       borderRadius: '12px',
-      width: '400px',
+      width: isMobile ? '90%' : '400px',
       maxWidth: '90%',
       textAlign: 'center',
       boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
     },
     icon: {
-      fontSize: '60px',
+      fontSize: isMobile ? '50px' : '60px',
       color: '#27ae60',
       marginBottom: '15px',
     },
     settlementIcon: {
-      fontSize: '60px',
+      fontSize: isMobile ? '50px' : '60px',
       color: '#16a085',
       marginBottom: '15px',
     },
     followUpIcon: {
-      fontSize: '60px',
+      fontSize: isMobile ? '50px' : '60px',
       color: '#f39c12',
       marginBottom: '15px',
     },
     title: {
-      fontSize: '24px',
+      fontSize: isMobile ? '20px' : '24px',
       fontWeight: 'bold',
       color: '#27ae60',
       marginBottom: '20px',
     },
     settlementTitle: {
-      fontSize: '24px',
+      fontSize: isMobile ? '20px' : '24px',
       fontWeight: 'bold',
       color: '#16a085',
       marginBottom: '20px',
     },
     followUpTitle: {
-      fontSize: '24px',
+      fontSize: isMobile ? '20px' : '24px',
       fontWeight: 'bold',
       color: '#f39c12',
       marginBottom: '20px',
     },
     message: {
-      fontSize: '16px',
+      fontSize: isMobile ? '14px' : '16px',
       color: '#2c3e50',
       marginBottom: '10px',
     },
     amount: {
-      fontSize: '20px',
+      fontSize: isMobile ? '18px' : '20px',
       fontWeight: 'bold',
       color: '#e74c3c',
       margin: '10px 0',
     },
     balance: {
-      fontSize: '18px',
+      fontSize: isMobile ? '16px' : '18px',
       fontWeight: 'bold',
       color: '#3498db',
       margin: '10px 0',
     },
     orderNo: {
-      fontSize: '14px',
+      fontSize: isMobile ? '12px' : '14px',
       color: '#7f8c8d',
       marginBottom: '20px',
       fontStyle: 'italic',
     },
     description: {
-      fontSize: '16px',
+      fontSize: isMobile ? '14px' : '16px',
       color: '#2c3e50',
       margin: '15px 0',
       padding: '10px',
@@ -1478,9 +1646,9 @@ function PendingPayment({ executiveFilter = null }) {
       backgroundColor: '#27ae60',
       color: 'white',
       border: 'none',
-      padding: '12px 30px',
+      padding: isMobile ? '10px 20px' : '12px 30px',
       borderRadius: '6px',
-      fontSize: '16px',
+      fontSize: isMobile ? '14px' : '16px',
       fontWeight: 'bold',
       cursor: 'pointer',
       marginTop: '10px',
@@ -1490,9 +1658,9 @@ function PendingPayment({ executiveFilter = null }) {
       backgroundColor: '#16a085',
       color: 'white',
       border: 'none',
-      padding: '12px 30px',
+      padding: isMobile ? '10px 20px' : '12px 30px',
       borderRadius: '6px',
-      fontSize: '16px',
+      fontSize: isMobile ? '14px' : '16px',
       fontWeight: 'bold',
       cursor: 'pointer',
       marginTop: '10px',
@@ -1502,9 +1670,9 @@ function PendingPayment({ executiveFilter = null }) {
       backgroundColor: '#f39c12',
       color: 'white',
       border: 'none',
-      padding: '12px 30px',
+      padding: isMobile ? '10px 20px' : '12px 30px',
       borderRadius: '6px',
-      fontSize: '16px',
+      fontSize: isMobile ? '14px' : '16px',
       fontWeight: 'bold',
       cursor: 'pointer',
       marginTop: '10px',
@@ -1512,68 +1680,35 @@ function PendingPayment({ executiveFilter = null }) {
     },
   };
 
+  const getFilterDisplayText = () => {
+    let text = '';
+    
+    if (useDateFilter && selectedDate) {
+      text = new Date(selectedDate).toLocaleDateString();
+    } else if (useMonthYearFilter) {
+      if (year === 'all' && (selectedMonth === 'all' || selectedMonth === null)) {
+        text = 'All Time';
+      } else if (year === 'all') {
+        text = `All Years, ${monthLabels[selectedMonth]}`;
+      } else if (selectedMonth === 'all' || selectedMonth === null) {
+        text = `${year} - All Months`;
+      } else {
+        text = `${monthLabels[selectedMonth]} ${year}`;
+      }
+    }
+    
+    return text;
+  };
+
   return (
     <div style={styles.container}>
       <h2 style={styles.title}>
         {executiveFilter ? `${executiveFilter}'s ` : ''}
         {filterType === 'pending' ? 'Pending Payments' : 'Completed Payments'}
-        {useDateFilter && selectedDate && ` - ${new Date(selectedDate).toLocaleDateString()}`}
-        {!useDateFilter && selectedMonth !== null && ` - ${monthLabels[selectedMonth]} ${year}`}
-        {!useDateFilter && selectedMonth === null && ` - Year ${year}`}
+        {getFilterDisplayText() ? ` - ${getFilterDisplayText()}` : ''}
       </h2>
 
-      {/* Main Filter Buttons */}
-      <div style={styles.filterButtonsContainer}>
-        <button 
-          style={filterButtonStyle('pending')} 
-          onClick={() => {
-            const params = new URLSearchParams(searchParams);
-            params.set('filterType', 'pending');
-            setSearchParams(params);
-            setActiveFilter('pending');
-          }}
-        >
-          Pending Payments
-        </button>
-        <button 
-          style={filterButtonStyle('completed')} 
-          onClick={() => {
-            const params = new URLSearchParams(searchParams);
-            params.set('filterType', 'completed');
-            setSearchParams(params);
-            setActiveFilter('completed');
-          }}
-        >
-          Completed Payments
-        </button>
-      </div>
-
-      {/* Simple Follow-up & Settlement Filters */}
-      <div style={styles.simpleFiltersContainer}>
-        <div style={styles.filterSectionTitle}>📋 Filter Orders:</div>
-        <button 
-          style={simpleFilterButtonStyle(showOnlyFollowUp, '#f39c12')}
-          onClick={() => setShowOnlyFollowUp(!showOnlyFollowUp)}
-        >
-          {showOnlyFollowUp ? '✓ Has Follow-up' : 'Has Follow-up'}
-        </button>
-        <button 
-          style={simpleFilterButtonStyle(showOnlySettlement, '#16a085')}
-          onClick={() => setShowOnlySettlement(!showOnlySettlement)}
-        >
-          {showOnlySettlement ? '✓ Has Settlement' : 'Has Settlement'}
-        </button>
-        {(showOnlyFollowUp || showOnlySettlement) && (
-          <button 
-            onClick={clearAllFilters}
-            style={{...styles.clearFilterButton, padding: '6px 12px', fontSize: '12px'}}
-          >
-            Clear Filters
-          </button>
-        )}
-      </div>
-
-      {/* Summary Boxes - 4 Cards Only */}
+      {/* Summary Boxes */}
       <div style={styles.summaryContainer}>
         <div style={styles.summaryBox}>
           <div style={styles.summaryLabel}>Total Payments</div>
@@ -1595,6 +1730,32 @@ function PendingPayment({ executiveFilter = null }) {
           <div style={{...styles.summaryAmount, color: '#f39c12'}}>₹{todayCollections.toLocaleString()}</div>
           <div style={styles.summaryCount}>{todayCollectionCount} orders</div>
         </div>
+      </div>
+
+      {/* Filter Buttons */}
+      <div style={styles.filterButtonsContainer}>
+        <button 
+          style={filterButtonStyle('pending')} 
+          onClick={() => {
+            const params = new URLSearchParams(searchParams);
+            params.set('filterType', 'pending');
+            setSearchParams(params);
+            setActiveFilter('pending');
+          }}
+        >
+          Pending
+        </button>
+        <button 
+          style={filterButtonStyle('completed')} 
+          onClick={() => {
+            const params = new URLSearchParams(searchParams);
+            params.set('filterType', 'completed');
+            setSearchParams(params);
+            setActiveFilter('completed');
+          }}
+        >
+          Completed
+        </button>
       </div>
 
       {/* Filter Container */}
@@ -1627,7 +1788,7 @@ function PendingPayment({ executiveFilter = null }) {
               color: !useDateFilter ? 'white' : '#2c3e50',
             }}
           >
-            Month/Year Filter
+            Month/Year
           </button>
           <button
             onClick={() => handleFilterModeChange(true)}
@@ -1637,7 +1798,7 @@ function PendingPayment({ executiveFilter = null }) {
               color: useDateFilter ? 'white' : '#2c3e50',
             }}
           >
-            Date Filter
+            Date
           </button>
         </div>
 
@@ -1662,12 +1823,12 @@ function PendingPayment({ executiveFilter = null }) {
               <label htmlFor="year-select" style={styles.filterLabel}>Year:</label>
               <select
                 id="year-select"
-                value={year}
-                onChange={(e) => setYear(parseInt(e.target.value))}
+                value={year === 'all' ? 'all' : year}
+                onChange={(e) => setYear(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
                 style={styles.filterSelect}
               >
                 {years.map(y => (
-                  <option key={y} value={y}>{y}</option>
+                  <option key={y} value={y}>{y === 'all' ? 'ALL YEARS' : y}</option>
                 ))}
               </select>
             </div>
@@ -1676,181 +1837,209 @@ function PendingPayment({ executiveFilter = null }) {
               <label htmlFor="month-select" style={styles.filterLabel}>Month:</label>
               <select
                 id="month-select"
-                value={selectedMonth !== null ? selectedMonth + 1 : ''}
-                onChange={(e) => setSelectedMonth(e.target.value ? parseInt(e.target.value) - 1 : null)}
+                value={selectedMonth === 'all' ? 'all' : (selectedMonth !== null ? selectedMonth + 1 : '')}
+                onChange={(e) => setSelectedMonth(e.target.value === 'all' ? 'all' : parseInt(e.target.value) - 1)}
                 style={styles.filterSelect}
               >
-                <option value="">All Months</option>
+                <option value="all">ALL MONTHS</option>
                 {monthLabels.map((month, index) => (
                   <option key={month} value={index + 1}>{month}</option>
                 ))}
               </select>
             </div>
             
-            <button onClick={clearMonthYearFilter} style={styles.clearFilterButton}>
-              Clear Month/Year
+            <button onClick={resetToCurrentMonth} style={styles.currentMonthButton}>
+              Current Month
             </button>
+            {(year !== 'all' || (selectedMonth !== 'all' && selectedMonth !== null) || useDateFilter) && (
+              <button onClick={clearMonthYearFilter} style={styles.clearFilterButton}>
+                Clear
+              </button>
+            )}
           </div>
         )}
+        
+        <div style={styles.currentFilterInfo}>
+          <span>
+            Currently showing: <strong>{getFilterDisplayText() || 'All Time'}</strong>
+            {searchTerm && <span> | Search: <strong>"{searchTerm}"</strong></span>}
+          </span>
+          <span style={styles.filterBadge}>
+            {filteredOrders.length} orders
+          </span>
+        </div>
       </div>
 
       {/* Table */}
-      <div 
-        ref={tableContainerRef}
-        className="table-scroll-container" 
-        style={styles.tableContainer}
-      >
-        <table style={styles.table}>
-          <thead style={styles.tableHeader}>
-            <tr>
-              <th style={{...styles.th, ...getFixedHeaderStyle(0), width: '50px'}}>S.No</th>
-              <th style={{...styles.th, ...getFixedHeaderStyle(1), width: '100px'}}>Executive</th>
-              <th style={{...styles.th, ...getFixedHeaderStyle(2), width: '150px'}}>Business</th>
-              <th style={{...styles.th, ...getFixedHeaderStyle(3), width: '150px'}}>Customer</th>
-              <th style={{...styles.th, width: '120px'}}>Contact</th>
-              <th style={{...styles.th, width: '100px'}}>Total</th>
-              <th style={{...styles.th, width: '100px'}}>Advance</th>
-              <th style={{...styles.th, width: '100px'}}>Balance</th>
-              <th style={{...styles.th, width: '120px'}}>Delivery Date</th>
-              <th style={{...styles.th, width: '200px'}}>Follow-up</th>
-              <th style={{...styles.th, width: '200px'}}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
+      <div style={styles.tableWrapper}>
+        <div 
+          ref={tableContainerRef}
+          style={styles.tableContainer}
+        >
+          <table style={styles.table}>
+            <thead style={styles.tableHeader}>
               <tr>
-                <td colSpan="11" style={styles.loading}>
-                  Loading orders...
-                </td>
+                <th style={styles.stickyHeader(0, columnWidths.sno, getLeftPosition(0))}>S.No</th>
+                <th style={styles.stickyHeader(1, columnWidths.executive, getLeftPosition(1))}>Executive</th>
+                <th style={styles.stickyHeader(2, columnWidths.business, getLeftPosition(2))}>Business</th>
+                <th style={styles.stickyHeader(3, columnWidths.customer, getLeftPosition(3))}>Customer</th>
+                <th style={styles.regularHeader(columnWidths.contact)}>Contact</th>
+                <th style={styles.regularHeader(columnWidths.total)}>Total</th>
+                <th style={styles.regularHeader(columnWidths.advance)}>Advance</th>
+                <th style={styles.regularHeader(columnWidths.balance)}>Balance</th>
+                <th style={styles.regularHeader(columnWidths.deliveryDate)}>Delivery Date</th>
+                <th style={styles.regularHeader(columnWidths.followUp)}>Follow-up</th>
+                <th style={styles.regularHeader(columnWidths.actions)}>Actions</th>
               </tr>
-            ) : filteredOrders.length === 0 ? (
-              <tr>
-                <td colSpan="11" style={styles.noData}>
-                  No {filterType === 'pending' ? 'pending' : 'completed'} orders found
-                  {searchTerm && ` matching "${searchTerm}"`}
-                  {(showOnlyFollowUp || showOnlySettlement) && ' with selected filters'}
-                </td>
-              </tr>
-            ) : (
-              filteredOrders.map((order, index) => {
-                const latestFollowUp = getLatestFollowUp(order);
-                const followUpCount = order.followUps?.length || 0;
-                const settlementCount = order.settlements?.length || 0;
-                const isCompleted = order.balance <= 0;
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan="11" style={styles.loading}>
+                    Loading orders...
+                  </td>
+                </tr>
+              ) : filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan="11" style={styles.noData}>
+                    No {filterType === 'pending' ? 'pending' : 'completed'} orders found
+                    {searchTerm && ` matching "${searchTerm}"`}
+                  </td>
+                </tr>
+              ) : (
+                filteredOrders.map((order, index) => {
+                  const latestFollowUp = getLatestFollowUp(order);
+                  const followUpCount = order.followUps?.length || 0;
+                  const settlementCount = order.settlements?.length || 0;
+                  const isCompleted = order.balance <= 0;
+                  const rowBgColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
 
-                return (
-                  <tr key={order?._id || index} style={index % 2 === 0 ? styles.evenRow : styles.oddRow}>
-                    <td style={{...styles.td, ...getFixedColumnStyle(0)}}>{index + 1}</td>
-                    <td style={{...styles.td, ...getFixedColumnStyle(1)}}>{order?.executive || ''}</td>
-                    <td style={{...styles.td, ...getFixedColumnStyle(2)}}>
-                      <span
-                        style={businessNameStyle}
-                        onClick={() => handleBusinessClick(order?.business)}
-                      >
-                        {order?.business || ''}
-                      </span>
-                    </td>
-                    <td style={{...styles.td, ...getFixedColumnStyle(3)}}>{order?.contactPerson || ''}</td>
-                    <td style={styles.td}>{order?.contactCode || ''} {order?.phone || ''}</td>
-                    <td style={styles.td}>₹{(order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0)?.toLocaleString() || '0')}</td>
-                    <td style={styles.td}>₹{(order?.advance || 0).toLocaleString()}</td>
-                    <td style={{...styles.td, ...(order.balance > 0 ? styles.balanceCell : styles.completedCell)}}>
-                      ₹{(order?.balance || 0).toLocaleString()}
-                    </td>
-                    <td style={{...styles.td, ...styles.deliveryDateCell}}>
-                      {getDeliveryDate(order)}
-                    </td>
-                    <td
-                      style={{...styles.td, ...styles.followUpCell}}
-                      onClick={() => followUpCount > 0 && handleViewFollowUps(order)}
-                      title={latestFollowUp ? `Latest: ${latestFollowUp.description}\nStatus: ${latestFollowUp.status}\nClick to view all ${followUpCount} follow-ups` : 'No follow-ups'}
-                    >
-                      {latestFollowUp ? (
-                        <span style={{ color: getFollowUpStatusColor(latestFollowUp.status) }}>
-                          {formatFollowUp(order)}
-                          {followUpCount > 1 && ` (+${followUpCount - 1})`}
+                  return (
+                    <tr key={order?._id || index} style={{ backgroundColor: rowBgColor }}>
+                      <td style={styles.stickyCell(0, columnWidths.sno, getLeftPosition(0), rowBgColor)}>
+                        {index + 1}
+                      </td>
+                      <td style={styles.stickyCell(1, columnWidths.executive, getLeftPosition(1), rowBgColor)}>
+                        <div style={styles.textCell}>{order?.executive || ''}</div>
+                      </td>
+                      <td style={styles.stickyCell(2, columnWidths.business, getLeftPosition(2), rowBgColor)}>
+                        <span
+                          style={styles.businessNameStyle}
+                          onClick={() => handleBusinessClick(order?.business)}
+                        >
+                          {order?.business || ''}
                         </span>
-                      ) : 'No follow-up'}
-                    </td>
-                    <td style={styles.td}>
-                      <div style={styles.actionButtons}>
-                        {isCompleted ? (
-                          <>
-                            <span style={styles.completedBadge}>Completed</span>
-                            {followUpCount > 0 && (
-                              <button
-                                onClick={() => handleViewFollowUps(order)}
-                                style={styles.viewButton}
-                                title="View Follow-ups"
-                              >
-                                View F
-                              </button>
-                            )}
-                            {settlementCount > 0 && (
-                              <button
-                                onClick={() => handleViewSettlements(order)}
-                                style={styles.viewSettlementButton}
-                                title="View Settlements"
-                              >
-                                View S
-                              </button>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            {filterType === 'pending' && order.balance > 0 && (
-                              <>
+                      </td>
+                      <td style={styles.stickyCell(3, columnWidths.customer, getLeftPosition(3), rowBgColor)}>
+                        <div style={styles.textCell}>{order?.contactPerson || ''}</div>
+                      </td>
+                      <td style={styles.regularTd(columnWidths.contact)}>
+                        <div style={styles.textCell}>{order?.contactCode || ''} {order?.phone || ''}</div>
+                      </td>
+                      <td style={styles.regularTd(columnWidths.total)}>
+                        ₹{(order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0)?.toLocaleString() || '0')}
+                      </td>
+                      <td style={styles.regularTd(columnWidths.advance)}>
+                        ₹{(order?.advance || 0).toLocaleString()}
+                      </td>
+                      <td style={{...styles.regularTd(columnWidths.balance), ...(order.balance > 0 ? styles.balanceCell : styles.completedCell)}}>
+                        ₹{(order?.balance || 0).toLocaleString()}
+                      </td>
+                      <td style={{...styles.regularTd(columnWidths.deliveryDate), ...styles.deliveryDateCell}}>
+                        {getDeliveryDate(order)}
+                      </td>
+                      <td
+                        style={{...styles.regularTd(columnWidths.followUp), ...styles.followUpCell}}
+                        onClick={() => followUpCount > 0 && handleViewFollowUps(order)}
+                        title={latestFollowUp ? `Latest: ${latestFollowUp.description}\nStatus: ${latestFollowUp.status}\nClick to view all ${followUpCount} follow-ups` : 'No follow-ups'}
+                      >
+                        {latestFollowUp ? (
+                          <span style={{ color: getFollowUpStatusColor(latestFollowUp.status) }}>
+                            {formatFollowUp(order)}
+                            {followUpCount > 1 && ` (+${followUpCount - 1})`}
+                          </span>
+                        ) : 'No follow-up'}
+                      </td>
+                      <td style={styles.regularTd(columnWidths.actions)}>
+                        <div style={styles.actionButtons}>
+                          {isCompleted ? (
+                            <>
+                              <span style={styles.completedBadge}>✓ Done</span>
+                              {followUpCount > 0 && (
                                 <button
-                                  onClick={() => handleRecordPayment(order)}
-                                  style={styles.payButton}
-                                  title="Record Payment"
+                                  onClick={() => handleViewFollowUps(order)}
+                                  style={styles.viewButton}
+                                  title="View Follow-ups"
                                 >
-                                  Pay
+                                  F
                                 </button>
+                              )}
+                              {settlementCount > 0 && (
                                 <button
-                                  onClick={() => handleSettlement(order)}
-                                  style={styles.settlementButton}
-                                  title="Record Settlement"
+                                  onClick={() => handleViewSettlements(order)}
+                                  style={styles.viewSettlementButton}
+                                  title="View Settlements"
                                 >
-                                  Settle
+                                  S
                                 </button>
-                              </>
-                            )}
-                            <button
-                              onClick={() => handleFollowUp(order)}
-                              style={styles.followUpButton}
-                              title="Add Follow-up"
-                            >
-                              Follow-up
-                            </button>
-                            {followUpCount > 0 && (
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              {filterType === 'pending' && order.balance > 0 && (
+                                <>
+                                  <button
+                                    onClick={() => handleRecordPayment(order)}
+                                    style={styles.payButton}
+                                    title="Record Payment"
+                                  >
+                                    Pay
+                                  </button>
+                                  <button
+                                    onClick={() => handleSettlement(order)}
+                                    style={styles.settlementButton}
+                                    title="Record Settlement"
+                                  >
+                                    Settle
+                                  </button>
+                                </>
+                              )}
                               <button
-                                onClick={() => handleViewFollowUps(order)}
-                                style={styles.viewButton}
-                                title="View Follow-ups"
+                                onClick={() => handleFollowUp(order)}
+                                style={styles.followUpButton}
+                                title="Add Follow-up"
                               >
-                                View F
+                                +F
                               </button>
-                            )}
-                            {settlementCount > 0 && (
-                              <button
-                                onClick={() => handleViewSettlements(order)}
-                                style={styles.viewSettlementButton}
-                                title="View Settlements"
-                              >
-                                View S
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                              {followUpCount > 0 && (
+                                <button
+                                  onClick={() => handleViewFollowUps(order)}
+                                  style={styles.viewButton}
+                                  title="View Follow-ups"
+                                >
+                                  F
+                                </button>
+                              )}
+                              {settlementCount > 0 && (
+                                <button
+                                  onClick={() => handleViewSettlements(order)}
+                                  style={styles.viewSettlementButton}
+                                  title="View Settlements"
+                                >
+                                  S
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                       </td>
+                     </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Footer Buttons */}
@@ -1860,25 +2049,33 @@ function PendingPayment({ executiveFilter = null }) {
           style={styles.excelButton}
           disabled={exportLoading || filteredOrders.length === 0}
         >
-          {exportLoading ? 'Exporting...' : 'Export to Excel'}
+          📊 Excel
         </button>
         <button
-          onClick={() => {}}
+          onClick={handleExportToWord}
           style={styles.wordButton}
           disabled={exportLoading || filteredOrders.length === 0}
         >
-          {exportLoading ? 'Exporting...' : 'Export to Word'}
+          📄 Word
         </button>
         <button
-          onClick={() => {}}
+          onClick={handleExportToPDF}
           style={styles.pdfButton}
           disabled={exportLoading || filteredOrders.length === 0}
         >
-          {exportLoading ? 'Exporting...' : 'Export to PDF'}
+          📑 PDF
         </button>
         <button onClick={() => navigate(-1)} style={styles.backButton}>
-          Back
+          ← Back
         </button>
+        <button onClick={fetchOrders} style={styles.refreshButton}>
+          🔄 Refresh
+        </button>
+        {(year !== 'all' || selectedMonth !== 'all' || useDateFilter || searchTerm || filterType !== 'pending') && (
+          <button onClick={clearAllFilters} style={styles.clearAllButton}>
+            Clear All
+          </button>
+        )}
       </div>
 
       {/* Payment Modal */}
@@ -2148,7 +2345,7 @@ function PendingPayment({ executiveFilter = null }) {
                   onChange={handleFollowUpChange}
                   style={styles.paymentFormInput}
                 />
-                <small style={{ color: '#7f8c8d' }}>Leave blank if no next follow-up scheduled</small>
+                <small style={{ color: '#7f8c8d', fontSize: isMobile ? '11px' : '12px' }}>Leave blank if no next follow-up scheduled</small>
               </div>
 
               <div style={styles.paymentFormGroup}>
@@ -2189,19 +2386,10 @@ function PendingPayment({ executiveFilter = null }) {
       {showViewFollowUpsModal && selectedOrderForView && (
         <div style={styles.viewFollowUpsModal}>
           <div style={styles.viewFollowUpsContent}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <h3 style={styles.paymentModalTitle}>
-                Follow-ups for {selectedOrderForView.business}
-                {selectedOrderForView.orderNo && ` (${selectedOrderForView.orderNo})`}
-              </h3>
-              <button
-                onClick={refreshFollowUps}
-                style={{...styles.viewButton, padding: '5px 10px', fontSize: '12px'}}
-                title="Refresh"
-              >
-                🔄 Refresh
-              </button>
-            </div>
+            <h3 style={styles.paymentModalTitle}>
+              Follow-ups for {selectedOrderForView.business}
+              {selectedOrderForView.orderNo && ` (${selectedOrderForView.orderNo})`}
+            </h3>
 
             {loadingFollowUps ? (
               <div style={{ textAlign: 'center', padding: '20px', color: '#7f8c8d' }}>
@@ -2241,7 +2429,7 @@ function PendingPayment({ executiveFilter = null }) {
                     )}
 
                     {followUp.createdBy && (
-                      <div style={{ fontSize: '11px', color: '#95a5a6', marginTop: '5px' }}>
+                      <div style={{ fontSize: isMobile ? '10px' : '11px', color: '#95a5a6', marginTop: '5px' }}>
                         Added by: {followUp.createdBy}
                       </div>
                     )}
@@ -2266,19 +2454,10 @@ function PendingPayment({ executiveFilter = null }) {
       {showViewSettlementsModal && selectedOrderForSettlementView && (
         <div style={styles.viewFollowUpsModal}>
           <div style={styles.viewFollowUpsContent}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <h3 style={{...styles.paymentModalTitle, color: '#16a085'}}>
-                Settlements for {selectedOrderForSettlementView.business}
-                {selectedOrderForSettlementView.orderNo && ` (${selectedOrderForSettlementView.orderNo})`}
-              </h3>
-              <button
-                onClick={refreshSettlements}
-                style={{...styles.viewButton, padding: '5px 10px', fontSize: '12px', backgroundColor: '#16a085'}}
-                title="Refresh"
-              >
-                🔄 Refresh
-              </button>
-            </div>
+            <h3 style={{...styles.paymentModalTitle, color: '#16a085'}}>
+              Settlements for {selectedOrderForSettlementView.business}
+              {selectedOrderForSettlementView.orderNo && ` (${selectedOrderForSettlementView.orderNo})`}
+            </h3>
 
             {loadingSettlements ? (
               <div style={{ textAlign: 'center', padding: '20px', color: '#7f8c8d' }}>
@@ -2316,19 +2495,19 @@ function PendingPayment({ executiveFilter = null }) {
                     )}
 
                     {settlement.approvedBy && (
-                      <div style={{ fontSize: '12px', color: '#7f8c8d', marginTop: '5px' }}>
+                      <div style={{ fontSize: isMobile ? '11px' : '12px', color: '#7f8c8d', marginTop: '5px' }}>
                         Approved by: {settlement.approvedBy}
                       </div>
                     )}
 
                     {settlement.notes && (
-                      <div style={{ fontSize: '12px', color: '#95a5a6', marginTop: '5px', fontStyle: 'italic' }}>
+                      <div style={{ fontSize: isMobile ? '11px' : '12px', color: '#95a5a6', marginTop: '5px', fontStyle: 'italic' }}>
                         Notes: {settlement.notes}
                       </div>
                     )}
 
                     {settlement.createdBy && (
-                      <div style={{ fontSize: '11px', color: '#95a5a6', marginTop: '5px' }}>
+                      <div style={{ fontSize: isMobile ? '10px' : '11px', color: '#95a5a6', marginTop: '5px' }}>
                         Recorded by: {settlement.createdBy}
                       </div>
                     )}
@@ -2377,8 +2556,6 @@ function PendingPayment({ executiveFilter = null }) {
             <button
               onClick={closeSuccessPopup}
               style={successPopupStyles.button}
-              onMouseOver={(e) => e.target.style.backgroundColor = '#219a52'}
-              onMouseOut={(e) => e.target.style.backgroundColor = '#27ae60'}
             >
               OK
             </button>
@@ -2414,8 +2591,6 @@ function PendingPayment({ executiveFilter = null }) {
             <button
               onClick={closeSettlementSuccess}
               style={successPopupStyles.settlementButton}
-              onMouseOver={(e) => e.target.style.backgroundColor = '#138d75'}
-              onMouseOut={(e) => e.target.style.backgroundColor = '#16a085'}
             >
               OK
             </button>
@@ -2447,8 +2622,6 @@ function PendingPayment({ executiveFilter = null }) {
             <button
               onClick={closeFollowUpSuccess}
               style={successPopupStyles.followUpButton}
-              onMouseOver={(e) => e.target.style.backgroundColor = '#e67e22'}
-              onMouseOut={(e) => e.target.style.backgroundColor = '#f39c12'}
             >
               OK
             </button>

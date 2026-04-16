@@ -17,34 +17,62 @@ function PendingService() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentDate = new Date();
   
-  // Initialize filters from URL parameters (from AdminDashboard)
-  const [year, setYear] = useState(() => {
+  // Calendar month labels (Jan-Dec)
+  const calendarMonthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+  // Helper function to get calendar year from date
+  const getCalendarYearFromDate = (date) => {
+    return date.getFullYear();
+  };
+  
+  // Helper function to get calendar month from date (1-12 where 1=Jan)
+  const getCalendarMonthFromDate = (date) => {
+    return date.getMonth() + 1;
+  };
+  
+  // Generate calendar years list (from 2020 to current year + 5)
+  const getCalendarYears = () => {
+    const currentYear = new Date().getFullYear();
+    const years = ['all'];
+    for (let i = 2020; i <= currentYear + 5; i++) {
+      years.push(i.toString());
+    }
+    return [...new Set(years)].sort((a, b) => {
+      if (a === 'all') return -1;
+      if (b === 'all') return 1;
+      return parseInt(b) - parseInt(a);
+    });
+  };
+  
+  // Initialize filters from URL parameters
+  const [selectedYear, setSelectedYear] = useState(() => {
     const urlYear = searchParams.get('year');
-    // If URL has a year parameter, use it (could be 'all' or specific year)
-    // Otherwise default to current year
-    return urlYear ? urlYear : currentDate.getFullYear().toString();
+    if (urlYear && urlYear !== 'undefined' && urlYear !== 'null' && urlYear !== 'all') {
+      return urlYear;
+    }
+    // Default to current calendar year
+    return currentDate.getFullYear().toString();
   });
   
-  const [selectedMonth, setSelectedMonth] = useState(() => {
+  const [selectedCalendarMonth, setSelectedCalendarMonth] = useState(() => {
     const urlMonth = searchParams.get('month');
-    // If URL has a month parameter, use it (could be specific month)
-    // Otherwise default to current month
-    return urlMonth ? urlMonth : (currentDate.getMonth() + 1).toString();
+    if (urlMonth && urlMonth !== 'undefined' && urlMonth !== 'null' && urlMonth !== 'all') {
+      return urlMonth;
+    }
+    // Default to 'all' for showing all months
+    return 'all';
   });
   
   const [statusFilter, setStatusFilter] = useState(() => {
     const urlStatus = searchParams.get('status');
-    return urlStatus || 'all';
+    return (urlStatus && urlStatus !== 'undefined' && urlStatus !== 'null') ? urlStatus : 'all';
   });
   
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const tableContainerRef = useRef(null);
   
-  const monthLabels = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  ];
+  const calendarYearsList = getCalendarYears();
 
   const statusOptions = [
     { value: 'all', label: 'All Status' },
@@ -57,11 +85,6 @@ function PendingService() {
     { value: 'updated', label: 'Updated' },
     { value: 'completed', label: 'Completed' }
   ];
-
-  const years = ['all', ...Array.from({ length: 11 }, (_, i) => {
-    const currentYear = new Date().getFullYear();
-    return currentYear - 5 + i;
-  })];
 
   // Check if screen is mobile
   useEffect(() => {
@@ -77,20 +100,19 @@ function PendingService() {
 
   useEffect(() => {
     const statusFromUrl = searchParams.get('status');
-    if (statusFromUrl) {
+    if (statusFromUrl && statusFromUrl !== 'undefined' && statusFromUrl !== 'null') {
       setStatusFilter(statusFromUrl);
     }
     
-    // Update year and month from URL when they change
     const yearFromUrl = searchParams.get('year');
     const monthFromUrl = searchParams.get('month');
     
-    if (yearFromUrl !== null) {
-      setYear(yearFromUrl);
+    if (yearFromUrl && yearFromUrl !== 'undefined' && yearFromUrl !== 'null') {
+      setSelectedYear(yearFromUrl);
     }
     
-    if (monthFromUrl !== null) {
-      setSelectedMonth(monthFromUrl);
+    if (monthFromUrl && monthFromUrl !== 'undefined' && monthFromUrl !== 'null') {
+      setSelectedCalendarMonth(monthFromUrl);
     }
   }, [searchParams]);
 
@@ -100,22 +122,20 @@ function PendingService() {
 
   useEffect(() => {
     applyFilters();
-  }, [orders, year, selectedMonth, searchTerm, statusFilter]);
+  }, [orders, selectedYear, selectedCalendarMonth, searchTerm, statusFilter]);
 
   useEffect(() => {
     const params = new URLSearchParams();
     
-    // Only add year to URL if it's not 'all' or if it's explicitly set
-    if (year && year !== 'all') {
-      params.set('year', year.toString());
-    } else if (year === 'all') {
-      // Keep 'all' in URL to maintain the filter state
+    if (selectedYear && selectedYear !== 'all') {
+      params.set('year', selectedYear);
+    } else if (selectedYear === 'all') {
       params.set('year', 'all');
     }
     
-    if (selectedMonth && selectedMonth !== 'all') {
-      params.set('month', selectedMonth.toString());
-    } else if (selectedMonth === 'all') {
+    if (selectedCalendarMonth && selectedCalendarMonth !== 'all') {
+      params.set('month', selectedCalendarMonth);
+    } else if (selectedCalendarMonth === 'all') {
       params.set('month', 'all');
     }
     
@@ -125,9 +145,9 @@ function PendingService() {
     
     const currentParams = new URLSearchParams(window.location.search);
     if (params.toString() !== currentParams.toString()) {
-      setSearchParams(params);
+      setSearchParams(params, { replace: true });
     }
-  }, [year, selectedMonth, statusFilter, setSearchParams]);
+  }, [selectedYear, selectedCalendarMonth, statusFilter, setSearchParams]);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -157,43 +177,71 @@ function PendingService() {
   };
 
   const applyFilters = () => {
-    if (!orders.length) return;
+    if (!orders.length) {
+      setFilteredOrders([]);
+      return;
+    }
 
     let result = [...orders];
 
-    // Apply year and month filters based on selection from AdminDashboard
-    result = result.map(order => {
-      const filteredRows = order.rows.filter(row => {
-        try {
-          const deliveryDate = new Date(row.deliveryDate);
-          
-          if (isNaN(deliveryDate.getTime())) return false;
-          
-          // Apply year filter - if year is 'all', include all years
-          if (year !== 'all') {
-            const yearNum = parseInt(year);
-            if (deliveryDate.getFullYear() !== yearNum) {
+    // Apply calendar year and month filters based on delivery date
+    if (selectedYear !== 'all') {
+      result = result.map(order => {
+        const filteredRows = order.rows.filter(row => {
+          try {
+            if (!row.deliveryDate) return false;
+            
+            const deliveryDate = new Date(row.deliveryDate);
+            if (isNaN(deliveryDate.getTime())) return false;
+            
+            // Get the calendar year of this delivery date
+            const orderYear = getCalendarYearFromDate(deliveryDate);
+            
+            // Apply year filter
+            if (orderYear !== parseInt(selectedYear)) {
               return false;
             }
+            
+            // Apply calendar month filter ONLY if a specific month is selected (not 'all')
+            if (selectedCalendarMonth !== 'all') {
+              const orderMonth = getCalendarMonthFromDate(deliveryDate);
+              const filterMonth = parseInt(selectedCalendarMonth);
+              if (orderMonth !== filterMonth) {
+                return false;
+              }
+            }
+            
+            return true;
+          } catch (e) {
+            console.error('Error processing date:', row.deliveryDate, e);
+            return false;
           }
-          
-          // Apply month filter - if month is 'all', include all months
-          if (selectedMonth !== 'all') {
-            const monthNum = parseInt(selectedMonth) - 1; // Convert to 0-based
-            if (deliveryDate.getMonth() !== monthNum) {
+        });
+        
+        return { ...order, rows: filteredRows };
+      }).filter(order => order.rows.length > 0);
+    } else {
+      // If year is 'all', but specific month is selected
+      if (selectedCalendarMonth !== 'all') {
+        result = result.map(order => {
+          const filteredRows = order.rows.filter(row => {
+            try {
+              if (!row.deliveryDate) return false;
+              
+              const deliveryDate = new Date(row.deliveryDate);
+              if (isNaN(deliveryDate.getTime())) return false;
+              
+              const orderMonth = getCalendarMonthFromDate(deliveryDate);
+              const filterMonth = parseInt(selectedCalendarMonth);
+              return orderMonth === filterMonth;
+            } catch (e) {
               return false;
             }
-          }
-          
-          return true;
-        } catch (e) {
-          console.error('Error processing date:', row.deliveryDate, e);
-          return false;
-        }
-      });
-
-      return { ...order, rows: filteredRows };
-    }).filter(order => order.rows.length > 0);
+          });
+          return { ...order, rows: filteredRows };
+        }).filter(order => order.rows.length > 0);
+      }
+    }
 
     // Apply status filter
     if (statusFilter !== 'all') {
@@ -215,6 +263,22 @@ function PendingService() {
           
           if (statusFilter === 'completed') {
             return currentRemark === 'completed';
+          }
+          
+          if (statusFilter === 'design pending') {
+            return currentRemark === 'design pending';
+          }
+          
+          if (statusFilter === 'printing') {
+            return currentRemark === 'printing';
+          }
+          
+          if (statusFilter === 'installation pending') {
+            return currentRemark === 'installation pending';
+          }
+          
+          if (statusFilter === 'onboarding') {
+            return currentRemark === 'onboarding';
           }
           
           return currentRemark === statusFilter.toLowerCase();
@@ -368,6 +432,23 @@ function PendingService() {
   
     filteredOrders.forEach((order, orderIndex) => {
       order.rows.forEach((row) => {
+        let yearInfo = '';
+        let monthInfo = '';
+        let deliveryDateObj = null;
+        
+        try {
+          if (row.deliveryDate) {
+            deliveryDateObj = new Date(row.deliveryDate);
+            if (!isNaN(deliveryDateObj.getTime())) {
+              yearInfo = getCalendarYearFromDate(deliveryDateObj).toString();
+              const calMonth = getCalendarMonthFromDate(deliveryDateObj);
+              monthInfo = calendarMonthLabels[calMonth - 1];
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing date for export:', e);
+        }
+        
         exportData.push({
           'S.No': orderIndex + 1,
           'Executive': order.executive,
@@ -379,6 +460,8 @@ function PendingService() {
           'Rate': row.rate,
           'Total': row.total,
           'Delivery Date': formatDate(row.deliveryDate),
+          'Year': yearInfo,
+          'Month': monthInfo,
           'Service Assigned To': row.assignedExecutive || 'Not Assigned',
           'Remarks': row.remark || 'Pending',
           'Status': row.remark || 'Pending',
@@ -391,16 +474,15 @@ function PendingService() {
   
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'PendingServices');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Services');
     
-    let filename = 'pending_services';
-    if (selectedMonth !== 'all') {
-      filename += `_${monthLabels[parseInt(selectedMonth) - 1]}`;
-    } else {
-      filename += `_AllMonths`;
+    let filename = 'services';
+    if (selectedCalendarMonth !== 'all') {
+      const monthIndex = parseInt(selectedCalendarMonth) - 1;
+      filename += `_${calendarMonthLabels[monthIndex]}`;
     }
-    if (year !== 'all') {
-      filename += `_${year}`;
+    if (selectedYear !== 'all') {
+      filename += `_${selectedYear}`;
     } else {
       filename += `_AllYears`;
     }
@@ -452,36 +534,40 @@ function PendingService() {
   const getFilterDisplayText = () => {
     let text = '';
     
-    if (year === 'all' && selectedMonth === 'all') {
+    if (selectedYear === 'all' && selectedCalendarMonth === 'all') {
       text = 'All Time';
-    } else if (year === 'all') {
-      text = `All Years, ${monthLabels[parseInt(selectedMonth) - 1]}`;
-    } else if (selectedMonth === 'all') {
-      text = `${year} - All Months`;
+    } else if (selectedYear === 'all') {
+      const monthIndex = parseInt(selectedCalendarMonth) - 1;
+      text = `All Years, ${calendarMonthLabels[monthIndex]}`;
+    } else if (selectedCalendarMonth === 'all') {
+      text = `Year ${selectedYear} - All Months`;
     } else {
-      text = `${monthLabels[parseInt(selectedMonth) - 1]} ${year}`;
+      const monthIndex = parseInt(selectedCalendarMonth) - 1;
+      text = `${calendarMonthLabels[monthIndex]} ${selectedYear}`;
     }
     
     return text;
   };
 
-  const resetToCurrentMonth = () => {
+  const resetToCurrentPeriod = () => {
     const currentDate = new Date();
-    setYear(currentDate.getFullYear().toString());
-    setSelectedMonth((currentDate.getMonth() + 1).toString());
-    // Keep the URL updated
+    const currentYear = currentDate.getFullYear();
+    
+    setSelectedYear(currentYear.toString());
+    setSelectedCalendarMonth('all'); // Set to 'all' to show all months of current year
+    
     const params = new URLSearchParams(searchParams);
-    params.set('year', currentDate.getFullYear().toString());
-    params.set('month', (currentDate.getMonth() + 1).toString());
+    params.set('year', currentYear.toString());
+    params.set('month', 'all');
     setSearchParams(params);
   };
 
   const clearAllFilters = () => {
-    setYear('all');
-    setSelectedMonth('all');
+    setSelectedYear('all');
+    setSelectedCalendarMonth('all');
     setStatusFilter('all');
     setSearchTerm('');
-    // Update URL
+    
     const params = new URLSearchParams();
     params.set('year', 'all');
     params.set('month', 'all');
@@ -498,10 +584,9 @@ function PendingService() {
       color: 'white',
       fontWeight: 'bold',
       fontSize: isMobile ? '12px' : '14px',
-      cursor: 'pointer', // Always pointer cursor
+      cursor: 'pointer',
     };
 
-    // Check for specific statuses - convert to lowercase for comparison
     const remarkLower = remark ? remark.toLowerCase() : '';
     
     if (remarkLower === 'completed') {
@@ -560,7 +645,6 @@ function PendingService() {
       };
     }
 
-    // Default style for unknown statuses
     return {
       ...baseStyle,
       backgroundColor: '#95a5a6',
@@ -581,6 +665,8 @@ function PendingService() {
         rate: '80px',
         total: '90px',
         deliveryDate: '100px',
+        year: '80px',
+        month: '70px',
         assignedTo: '120px',
         remarks: '160px',
         lastUpdateTime: '120px'
@@ -592,13 +678,15 @@ function PendingService() {
         business: '200px',
         customer: '150px',
         contact: '150px',
-        requirement: '180px',
+        requirement: '200px',
         qty: '80px',
         rate: '100px',
         total: '120px',
         deliveryDate: '130px',
+        year: '100px',
+        month: '90px',
         assignedTo: '150px',
-        remarks: '200px',
+        remarks: '220px',
         lastUpdateTime: '150px'
       };
     }
@@ -606,7 +694,6 @@ function PendingService() {
 
   const columnWidths = getColumnWidths();
 
-  // Calculate left positions for sticky columns
   const getLeftPosition = (columnIndex) => {
     const widths = {
       0: parseInt(columnWidths.sno),
@@ -622,10 +709,7 @@ function PendingService() {
     return left;
   };
 
-  // ... (keep all the styles object as it was)
-
   const styles = {
-    // ... (keep all the existing styles exactly as they were)
     container: {
       padding: isMobile ? '10px' : '20px',
       backgroundColor: '#f8f9fa',
@@ -655,6 +739,7 @@ function PendingService() {
       justifyContent: 'space-between',
       alignItems: isMobile ? 'flex-start' : 'center',
       gap: isMobile ? '10px' : '15px',
+      flexWrap: 'wrap',
     },
     searchContainer: {
       display: 'flex',
@@ -674,21 +759,20 @@ function PendingService() {
       flexDirection: isMobile ? 'column' : 'row',
       alignItems: isMobile ? 'flex-start' : 'center',
       gap: isMobile ? '10px' : '15px',
-      width: isMobile ? '100%' : 'auto',
+      flexWrap: 'wrap',
     },
     statusFilterContainer: {
       display: 'flex',
       flexDirection: isMobile ? 'column' : 'row',
       alignItems: isMobile ? 'flex-start' : 'center',
       gap: isMobile ? '10px' : '15px',
-      width: isMobile ? '100%' : 'auto',
+      flexWrap: 'wrap',
     },
     selectWrapper: {
       display: 'flex',
       flexDirection: isMobile ? 'column' : 'row',
       alignItems: isMobile ? 'flex-start' : 'center',
       gap: isMobile ? '4px' : '8px',
-      width: isMobile ? '100%' : 'auto',
     },
     filterLabel: {
       fontWeight: '600',
@@ -703,7 +787,7 @@ function PendingService() {
       backgroundColor: '#fff',
       fontSize: isMobile ? '14px' : '14px',
       cursor: 'pointer',
-      width: isMobile ? '100%' : 'auto',
+      minWidth: isMobile ? '100%' : '140px',
     },
     clearFilterButton: {
       padding: isMobile ? '6px 10px' : '8px 12px',
@@ -715,12 +799,8 @@ function PendingService() {
       fontSize: isMobile ? '14px' : '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
-      width: isMobile ? '100%' : 'auto',
-      ':hover': {
-        backgroundColor: '#c0392b',
-      }
     },
-    currentMonthButton: {
+    currentPeriodButton: {
       padding: isMobile ? '6px 10px' : '8px 12px',
       backgroundColor: '#3498db',
       color: 'white',
@@ -730,10 +810,6 @@ function PendingService() {
       fontSize: isMobile ? '14px' : '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
-      width: isMobile ? '100%' : 'auto',
-      ':hover': {
-        backgroundColor: '#2980b9',
-      }
     },
     clearAllButton: {
       padding: isMobile ? '6px 10px' : '8px 12px',
@@ -745,10 +821,6 @@ function PendingService() {
       fontSize: isMobile ? '14px' : '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
-      width: isMobile ? '100%' : 'auto',
-      ':hover': {
-        backgroundColor: '#5a6268',
-      }
     },
     currentFilterInfo: {
       textAlign: 'center',
@@ -794,7 +866,7 @@ function PendingService() {
     },
     tableContainer: {
       width: '100%',
-      overflowX: isMobile ? 'hidden' : 'auto',
+      overflowX: 'auto',
       overflowY: 'auto',
       maxHeight: isMobile ? 'calc(100vh - 400px)' : 'calc(100vh - 300px)',
       backgroundColor: '#fff',
@@ -806,7 +878,7 @@ function PendingService() {
       width: '100%',
       borderCollapse: 'collapse',
       fontSize: isMobile ? '13px' : '14px',
-      minWidth: isMobile ? '100%' : '1600px',
+      minWidth: '100%',
     },
     tableHeader: {
       backgroundColor: '#3498db',
@@ -828,7 +900,6 @@ function PendingService() {
       minWidth: width,
       width: width,
       boxShadow: isMobile ? 'none' : '2px 0 3px rgba(0,0,0,0.1)',
-      overflow: 'visible !important',
     }),
     regularHeader: (width) => ({
       padding: isMobile ? '8px 4px' : '12px 8px',
@@ -852,7 +923,6 @@ function PendingService() {
       width: width,
       boxShadow: isMobile ? 'none' : '2px 0 3px rgba(0,0,0,0.1)',
       verticalAlign: 'top',
-      overflow: 'visible !important',
       whiteSpace: 'normal',
       wordWrap: 'break-word',
       maxWidth: width,
@@ -900,10 +970,6 @@ function PendingService() {
       fontSize: isMobile ? '14px' : '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
-      width: isMobile ? '100%' : 'auto',
-      ':hover': {
-        backgroundColor: '#1abc9c',
-      }
     },
     backButton: {
       backgroundColor: '#7f8c8d',
@@ -915,10 +981,6 @@ function PendingService() {
       fontSize: isMobile ? '14px' : '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
-      width: isMobile ? '100%' : 'auto',
-      ':hover': {
-        backgroundColor: '#95a5a6',
-      }
     },
     refreshButton: {
       backgroundColor: '#3498db',
@@ -930,10 +992,6 @@ function PendingService() {
       fontSize: isMobile ? '14px' : '14px',
       fontWeight: '600',
       transition: 'all 0.2s',
-      width: isMobile ? '100%' : 'auto',
-      ':hover': {
-        backgroundColor: '#2980b9',
-      }
     },
     remarkEditor: {
       display: 'flex',
@@ -987,9 +1045,6 @@ function PendingService() {
       fontSize: isMobile ? '13px' : '13px',
       fontWeight: 'bold',
       transition: 'all 0.2s',
-      ':hover': {
-        backgroundColor: '#218838',
-      }
     },
     cancelButton: {
       flex: 1,
@@ -1002,9 +1057,6 @@ function PendingService() {
       fontSize: isMobile ? '13px' : '13px',
       fontWeight: 'bold',
       transition: 'all 0.2s',
-      ':hover': {
-        backgroundColor: '#c82333',
-      }
     },
   };
 
@@ -1012,7 +1064,7 @@ function PendingService() {
     <div style={styles.container}>
       <h2 style={styles.title}>
         Service Management
-        {year !== 'all' || selectedMonth !== 'all' ? ` - ${getFilterDisplayText()}` : ''}
+        {(selectedYear !== 'all' || selectedCalendarMonth !== 'all') && ` - ${getFilterDisplayText()}`}
       </h2>
 
       <div style={styles.filterContainer}>
@@ -1034,13 +1086,13 @@ function PendingService() {
               </label>
               <select
                 id="year-select"
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
                 style={styles.filterSelect}
               >
-                {years.map((y) => (
-                  <option key={y} value={y}>
-                    {y === 'all' ? 'ALL YEARS' : y}
+                {calendarYearsList.map((year) => (
+                  <option key={year} value={year}>
+                    {year === 'all' ? 'ALL YEARS' : year}
                   </option>
                 ))}
               </select>
@@ -1052,12 +1104,12 @@ function PendingService() {
               </label>
               <select
                 id="month-select"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
+                value={selectedCalendarMonth}
+                onChange={(e) => setSelectedCalendarMonth(e.target.value)}
                 style={styles.filterSelect}
               >
                 <option value="all">ALL MONTHS</option>
-                {monthLabels.map((month, index) => (
+                {calendarMonthLabels.map((month, index) => (
                   <option key={month} value={index + 1}>
                     {month}
                   </option>
@@ -1066,11 +1118,11 @@ function PendingService() {
             </div>
             
             <button 
-              onClick={resetToCurrentMonth}
-              style={styles.currentMonthButton}
-              title="Reset to current month"
+              onClick={resetToCurrentPeriod}
+              style={styles.currentPeriodButton}
+              title="Reset to current year (all months)"
             >
-              Current Month
+              Current Year
             </button>
           </div>
 
@@ -1102,7 +1154,7 @@ function PendingService() {
               </button>
             )}
             
-            {(year !== 'all' || selectedMonth !== 'all' || statusFilter !== 'all' || searchTerm) && (
+            {(selectedYear !== 'all' || selectedCalendarMonth !== 'all' || statusFilter !== 'all' || searchTerm) && (
               <button 
                 onClick={clearAllFilters}
                 style={styles.clearAllButton}
@@ -1137,7 +1189,7 @@ function PendingService() {
             <table style={styles.table}>
               <thead style={styles.tableHeader}>
                 <tr>
-                  {/* Sticky columns - only sticky on desktop */}
+                  {/* Sticky columns */}
                   <th style={styles.stickyHeader(0, columnWidths.sno, getLeftPosition(0))}>S.No</th>
                   <th style={styles.stickyHeader(1, columnWidths.executive, getLeftPosition(1))}>Executive</th>
                   <th style={styles.stickyHeader(2, columnWidths.business, getLeftPosition(2))}>Business</th>
@@ -1150,6 +1202,8 @@ function PendingService() {
                   <th style={styles.regularHeader(columnWidths.rate)}>Rate</th>
                   <th style={styles.regularHeader(columnWidths.total)}>Total</th>
                   <th style={styles.regularHeader(columnWidths.deliveryDate)}>Delivery Date</th>
+                  <th style={styles.regularHeader(columnWidths.year)}>Year</th>
+                  <th style={styles.regularHeader(columnWidths.month)}>Month</th>
                   <th style={styles.regularHeader(columnWidths.assignedTo)}>Service Assigned To</th>
                   <th style={styles.regularHeader(columnWidths.remarks)}>Remarks</th>
                   <th style={styles.regularHeader(columnWidths.lastUpdateTime)}>Last Update Time</th>
@@ -1158,10 +1212,10 @@ function PendingService() {
               <tbody>
                 {filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan="13" style={styles.noData}>
+                    <td colSpan="15" style={styles.noData}>
                       No services found for {getFilterDisplayText()}
                       {statusFilter !== 'all' ? ` with status "${statusOptions.find(opt => opt.value === statusFilter)?.label}"` : ''}
-                    </td>
+                     </td>
                   </tr>
                 ) : (
                   filteredOrders.map((order, orderIndex) =>
@@ -1171,68 +1225,113 @@ function PendingService() {
                       const completedBgColor = '#d4edda';
                       const backgroundColor = isCompleted ? completedBgColor : rowBgColor;
                       
+                      // Calculate calendar info for display
+                      let displayYear = '';
+                      let displayMonth = '';
+                      let deliveryDateObj = null;
+                      
+                      try {
+                        if (row.deliveryDate) {
+                          deliveryDateObj = new Date(row.deliveryDate);
+                          if (!isNaN(deliveryDateObj.getTime())) {
+                            displayYear = getCalendarYearFromDate(deliveryDateObj).toString();
+                            const calMonth = getCalendarMonthFromDate(deliveryDateObj);
+                            displayMonth = calendarMonthLabels[calMonth - 1];
+                          }
+                        }
+                      } catch (e) {
+                        console.error('Error parsing date:', e);
+                      }
+                      
                       return (
                         <tr
                           key={`${order._id}-${rowIndex}`}
                           style={{
                             backgroundColor: backgroundColor,
                             ...(isCompleted && styles.completedRow),
-                            ':hover': {
-                              backgroundColor: isCompleted ? '#c3e6cb' : '#f1f5f9',
-                            }
                           }}
                         >
-                          {/* Sticky columns - only sticky on desktop */}
+                          {/* Sticky columns */}
                           <td style={styles.stickyCell(0, columnWidths.sno, getLeftPosition(0), backgroundColor)}>
                             {orderIndex + 1}
-                          </td>
+                           </td>
                           
                           <td style={styles.stickyCell(1, columnWidths.executive, getLeftPosition(1), backgroundColor)}>
                             <div style={styles.textCell}>
                               {order.executive}
                             </div>
-                          </td>
+                           </td>
                           
                           <td style={styles.stickyCell(2, columnWidths.business, getLeftPosition(2), backgroundColor)}>
                             <div style={styles.textCell}>
                               {order.business}
                             </div>
-                          </td>
+                           </td>
                           
                           <td style={styles.stickyCell(3, columnWidths.customer, getLeftPosition(3), backgroundColor)}>
                             <div style={styles.textCell}>
                               {order.contactPerson}
                             </div>
-                          </td>
+                           </td>
                           
                           {/* Regular columns */}
                           <td style={styles.regularTd(columnWidths.contact)}>
                             <div style={styles.textCell}>
                               {order.contactCode} {order.phone}
                             </div>
-                          </td>
+                           </td>
                           
                           <td style={styles.regularTd(columnWidths.requirement)}>
                             <div style={styles.textCell}>
                               {row.requirement}
                             </div>
-                          </td>
+                           </td>
                           
                           <td style={styles.regularTd(columnWidths.qty)}>
                             {row.quantity}
-                          </td>
+                           </td>
                           
                           <td style={styles.regularTd(columnWidths.rate)}>
                             {row.rate}
-                          </td>
+                           </td>
                           
                           <td style={styles.regularTd(columnWidths.total)}>
                             {row.total}
-                          </td>
+                           </td>
                           
                           <td style={styles.regularTd(columnWidths.deliveryDate)}>
                             {formatDate(row.deliveryDate)}
-                          </td>
+                           </td>
+                          
+                          <td style={styles.regularTd(columnWidths.year)}>
+                            <span style={{
+                              backgroundColor: '#e8f5e9',
+                              color: '#2e7d32',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: isMobile ? '11px' : '12px',
+                              fontWeight: 'bold',
+                              display: 'inline-block',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {displayYear || '-'}
+                            </span>
+                           </td>
+                          
+                          <td style={styles.regularTd(columnWidths.month)}>
+                            <span style={{
+                              backgroundColor: '#e3f2fd',
+                              color: '#1565c0',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: isMobile ? '11px' : '12px',
+                              fontWeight: 'bold',
+                              display: 'inline-block',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {displayMonth || '-'}
+                            </span>
+                           </td>
                           
                           <td style={styles.regularTd(columnWidths.assignedTo)}>
                             {row.assignedExecutive ? (
@@ -1258,7 +1357,7 @@ function PendingService() {
                                 Not Assigned
                               </span>
                             )}
-                          </td>
+                           </td>
                           
                           <td style={styles.regularTd(columnWidths.remarks)}>
                             {editingRemark?.orderId === order._id && editingRemark?.rowIndex === rowIndex ? (
@@ -1333,12 +1432,12 @@ function PendingService() {
                                 {row.remark === 'completed' && ' ✓'}
                               </div>
                             )}
-                          </td>
+                           </td>
                           
                           <td style={styles.regularTd(columnWidths.lastUpdateTime)}>
                             {row.lastUpdateTime ? formatDateTime(row.lastUpdateTime) : '-'}
-                          </td>
-                        </tr>
+                           </td>
+                         </tr>
                       );
                     })
                   )
@@ -1359,10 +1458,10 @@ function PendingService() {
         <button onClick={fetchOrders} style={styles.refreshButton}>
           Refresh Data
         </button>
-        <button onClick={resetToCurrentMonth} style={styles.currentMonthButton}>
-          Current Month
+        <button onClick={resetToCurrentPeriod} style={styles.currentPeriodButton}>
+          Current Year (All Months)
         </button>
-        {(year !== 'all' || selectedMonth !== 'all' || statusFilter !== 'all' || searchTerm) && (
+        {(selectedYear !== 'all' || selectedCalendarMonth !== 'all' || statusFilter !== 'all' || searchTerm) && (
           <button onClick={clearAllFilters} style={styles.clearAllButton}>
             Clear All
           </button>
