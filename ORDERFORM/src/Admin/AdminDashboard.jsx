@@ -481,6 +481,7 @@ const NAV = [
     items: [
       { to: 'create-anniversary', label: 'Create Anniversary', emoji: '🎂' },
       { to: 'anniversary-list', label: 'Anniversary List', emoji: '📋' },
+{ to: 'create-banner', label: 'Create-Banner', emoji: '🔖' }  // Bookmark - for promotions
     ],
   },
 ];

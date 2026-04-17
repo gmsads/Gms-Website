@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ProspectiveClient = require('../models/ProspectiveClients');
-const PRIVILEGED_EXECUTIVES = ['admin1','Soujanya', 'Aleem', 'Sirisha', 'Rajesh'];
+const PRIVILEGED_EXECUTIVES = ['admin1','Aleem', 'Sirisha', 'Rajesh'];
 
 // Helper function to get calendar year start and end dates (Jan-Dec)
 const getCalendarYearDates = (year) => {

@@ -50,6 +50,7 @@ const salaryRoutes = require('./routes/salaryRoutes');
 const greetingsRoutes = require('./routes/greetings');
 const leaveRoutes = require('./routes/leaveRoutes');
 const hrReportsRouter = require('./routes/hrReports');
+const bannerRoutes = require('./routes/bannerRoutes'); // ADDED BANNER ROUTES
 
 const app = express();
 runReminderCron();
@@ -62,7 +63,9 @@ app.use('/api', leaveRoutes);
 app.use('/api/salaries', salaryRoutes);
 app.use('/api/purchases', purchase); // ADD THIS LINE
 app.use('/', hrReportsRouter);
-app.use("/api/followup",whatsapp)
+app.use("/api/followup",whatsapp);
+app.use('/api/banners', bannerRoutes); // ADDED BANNER ROUTES - Mount banner routes
+
 // Upload endpoint
 app.use("/api/upload", uploadRoute);
 app.use("/api/trash-orders",trashOrdersRoutes);
@@ -107,7 +110,6 @@ app.use('/api/employees', require('./routes/employees'));
 app.use('/api/attendance', unitAttendanceRoutes);
 // Be careful with this catch-all route - it might conflict
 // app.use("/api", router);
-
 // MongoDB Connection
 mongoose
   .connect(process.env.MONGODB_URI)

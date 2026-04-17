@@ -45,7 +45,6 @@ const Ledger = () => {
         const data = await response.json();
         console.log('Fetched orders:', data.length);
         
-        // Process orders to ensure they have all required fields
         const processedOrders = data.map(order => ({
           ...order,
           advance: order.advance || 0,
@@ -186,6 +185,7 @@ const Ledger = () => {
             method: payment.method,
             upiNumber: payment.upiNumber,
             chequeNumber: payment.chequeNumber,
+            utrNumber: payment.utrNumber,
             orderId: order._id
           });
         });
@@ -201,6 +201,21 @@ const Ledger = () => {
     });
 
     return timeline;
+  };
+
+  // Get payment method display text with numbers
+  const getPaymentMethodDisplay = (entry) => {
+    if (entry.type !== 'payment') return entry.method || '-';
+    
+    let display = entry.method || '-';
+    if (entry.chequeNumber) {
+      display = `Cheque (${entry.chequeNumber})`;
+    } else if (entry.upiNumber) {
+      display = `UPI (${entry.upiNumber})`;
+    } else if (entry.utrNumber) {
+      display = `Bank Transfer (UTR: ${entry.utrNumber})`;
+    }
+    return display;
   };
 
   // Perform search
@@ -269,8 +284,6 @@ const Ledger = () => {
 
   // Toggle payment form
   const togglePaymentRow = (orderId) => {
-    console.log('Toggling payment row for order:', orderId);
-    
     if (activePaymentRow === orderId) {
       setActivePaymentRow(null);
       setNewPayments(prev => ({ ...prev, [orderId]: {} }));
@@ -281,40 +294,52 @@ const Ledger = () => {
       
       if (order) {
         const currentBalance = calculateCurrentBalance(order);
-        console.log('Setting payment data for order:', orderId, 'Balance:', currentBalance);
-        
         setNewPayments(prev => ({
           ...prev,
           [orderId]: {
             amount: currentBalance > 0 ? currentBalance.toString() : '',
             method: '',
-            date: new Date().toISOString().split('T')[0]
+            date: new Date().toISOString().split('T')[0],
+            utrNumber: '',
+            chequeNumber: '',
+            upiNumber: ''
           }
         }));
       }
     }
   };
 
-  // FIXED: Apply payment with better error handling
+  // Apply payment with bank transfer support
   const applyPayment = async (orderId) => {
-    console.log('Applying payment for order:', orderId);
-    
     const payment = newPayments[orderId];
-    console.log('Payment data:', payment);
     
     if (!payment?.amount || !payment?.method) {
       alert("Please enter amount and select payment method");
       return;
     }
 
-    // Validate amount
     const amount = parseFloat(payment.amount);
     if (isNaN(amount) || amount <= 0) {
       alert("Please enter a valid amount");
       return;
     }
 
-    // Find the current order to check balance
+    // Validate specific fields based on method
+    if (payment.method === 'Bank Transfer' && (!payment.utrNumber || payment.utrNumber.trim() === '')) {
+      alert("Please enter UTR number for Bank Transfer");
+      return;
+    }
+    
+    if (payment.method === 'Cheque' && (!payment.chequeNumber || payment.chequeNumber.trim() === '')) {
+      alert("Please enter Cheque number");
+      return;
+    }
+    
+    if (payment.method === 'UPI' && (!payment.upiNumber || payment.upiNumber.trim() === '')) {
+      alert("Please select UPI number");
+      return;
+    }
+
     const currentOrder = allOrders.find(o => o._id === orderId) || 
                          filteredOrders.find(o => o._id === orderId);
     
@@ -323,105 +348,96 @@ const Ledger = () => {
       return;
     }
 
-    // Calculate current balance for validation
     const currentBalance = calculateCurrentBalance(currentOrder);
 
-    // Validate payment amount doesn't exceed balance
-    if (amount > currentBalance + 0.01) { // Allow small floating point difference
+    if (amount > currentBalance + 0.01) {
       alert(`Payment amount (₹${amount}) exceeds remaining balance (₹${currentBalance.toFixed(2)})`);
       return;
     }
 
     try {
-      console.log('Sending payment request to:', `/api/orders/${orderId}/record-payment`);
-      console.log('Request payload:', {
+      const payload = {
         amount: amount,
         method: payment.method,
         upiNumber: payment.upiNumber || '',
         chequeNumber: payment.chequeNumber || '',
+        utrNumber: payment.utrNumber || '',
         date: payment.date || new Date().toISOString().split('T')[0],
         note: `Payment recorded from Ledger on ${new Date().toLocaleString()}`
-      });
+      };
+      
+      console.log('Sending payment:', payload);
       
       const res = await fetch(`/api/orders/${orderId}/record-payment`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          amount: amount,
-          method: payment.method,
-          upiNumber: payment.upiNumber || '',
-          chequeNumber: payment.chequeNumber || '',
-          date: payment.date || new Date().toISOString().split('T')[0],
-          note: `Payment recorded from Ledger on ${new Date().toLocaleString()}`
-        })
+        body: JSON.stringify(payload)
       });
 
-      // Get the response text first
       const responseText = await res.text();
-      console.log('Raw response:', responseText);
-
       let responseData;
       try {
         responseData = JSON.parse(responseText);
       } catch (e) {
-        console.error('Failed to parse JSON response:', responseText);
-        throw new Error(`Server returned invalid response: ${responseText.substring(0, 100)}`);
+        console.error('Failed to parse JSON:', responseText);
+        throw new Error(`Server returned invalid response`);
       }
 
-      console.log('Server response status:', res.status);
-      console.log('Server response data:', responseData);
-
-      if (!res.ok) {
-        throw new Error(responseData.error || responseData.message || `Server returned ${res.status}`);
+      if (!res.ok || !responseData.success) {
+        throw new Error(responseData.error || responseData.message || 'Failed to record payment');
       }
 
-      if (!responseData.success) {
-        throw new Error(responseData.error || 'Failed to record payment');
-      }
-
-      // Get the updated order from response
       const updatedOrder = responseData.order;
-      console.log('Payment added successfully, updated order:', updatedOrder);
-
-      // Create the full updated order object
-      const fullUpdatedOrder = {
-        ...currentOrder,
-        advance: updatedOrder.advance,
-        balance: updatedOrder.balance,
-        paymentHistory: updatedOrder.paymentHistory,
-        paymentDate: updatedOrder.paymentDate
+      
+      // Update the order in allOrders state
+      const updateOrderInList = (orders) => {
+        return orders.map(order => 
+          order._id === orderId 
+            ? { ...order, advance: updatedOrder.advance, balance: updatedOrder.balance, paymentHistory: updatedOrder.paymentHistory }
+            : order
+        );
       };
-
-      // Show success message
+      
+      setAllOrders(prev => updateOrderInList(prev));
+      setFilteredOrders(prev => updateOrderInList(prev));
+      
+      // Refresh the timeline with updated data
+      const updatedFilteredOrders = updateOrderInList(filteredOrders);
+      setClientTimeline(organizeClientTimeline(updatedFilteredOrders));
+      
       setPaymentSuccess({
         orderId,
         message: `Payment of ₹${amount} added successfully!`,
         balance: updatedOrder.balance
       });
 
-      setTimeout(() => setPaymentSuccess(null), 5000);
-
-      // Update orders in state
-      const updateOrders = (orders) =>
-        orders.map(order => order._id === orderId ? fullUpdatedOrder : order);
-
-      const updatedAllOrders = updateOrders(allOrders);
-      const updatedFilteredOrders = updateOrders(filteredOrders);
-
-      setAllOrders(updatedAllOrders);
-      setFilteredOrders(updatedFilteredOrders);
+      setTimeout(() => setPaymentSuccess(null), 3000);
       
-      // Update client timeline with new data
-      setClientTimeline(organizeClientTimeline(updatedFilteredOrders));
-
-      // Clear payment form and close it
+      // Clear payment form
       setNewPayments(prev => ({ ...prev, [orderId]: {} }));
       setActivePaymentRow(null);
+      
+      // Force a refresh of the orders
+      const refreshResponse = await fetch('/api/orders');
+      if (refreshResponse.ok) {
+        const freshData = await refreshResponse.json();
+        const processedFreshData = freshData.map(order => ({
+          ...order,
+          advance: order.advance || 0,
+          balance: order.balance || 0,
+          paymentHistory: order.paymentHistory || [],
+          rows: order.rows || []
+        }));
+        setAllOrders(processedFreshData);
+        if (searchTerm) {
+          performSearch(processedFreshData, searchTerm);
+        }
+      }
 
     } catch (err) {
-      console.error('Payment update failed:', err);
+      console.error('Payment failed:', err);
       alert(`Failed to record payment: ${err.message}`);
     }
   };
@@ -452,11 +468,12 @@ const Ledger = () => {
       end: endDate.toLocaleDateString()
     };
   };
-const formatCurrency = (amount) => {
-  return 'Rs. ' + parseFloat(amount || 0)
-    .toFixed(2)
-    .replace(/\d(?=(\d{3})+(?!\d))/g, '$&,');
-};
+  
+  const formatCurrency = (amount) => {
+    return 'Rs. ' + parseFloat(amount || 0)
+      .toFixed(2)
+      .replace(/\d(?=(\d{3})+(?!\d))/g, '$&,');
+  };
 
   // PRINT FUNCTION
   const handlePrintClient = (business, clientData) => {
@@ -471,126 +488,20 @@ const formatCurrency = (amount) => {
       <head>
         <title>${business} - Ledger</title>
         <style>
-          body { 
-            font-family: Arial, sans-serif; 
-            margin: 40px; 
-            line-height: 1.5;
-          }
-          .header { 
-            text-align: center; 
-            margin-bottom: 30px; 
-            border-bottom: 2px solid #003366; 
-            padding-bottom: 20px; 
-          }
-          .header h1 { 
-            color: #003366; 
-            margin: 0; 
-            font-size: 28px;
-          }
-          .header p { 
-            color: #666; 
-            margin: 5px 0 0; 
-          }
-          .client-info { 
-            background: #f5f5f5; 
-            padding: 20px; 
-            border-radius: 5px; 
-            margin-bottom: 25px; 
-          }
-          .client-info h2 { 
-            color: #003366; 
-            margin: 0 0 15px 0; 
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 10px;
-          }
-          .info-grid { 
-            display: grid; 
-            grid-template-columns: repeat(3, 1fr); 
-            gap: 15px; 
-          }
-          .info-item { 
-            margin: 5px 0; 
-          }
-          .info-item strong { 
-            color: #003366; 
-            display: block;
-            margin-bottom: 3px;
-          }
-          .summary { 
-            background: #e3f2fd; 
-            padding: 20px; 
-            border-radius: 5px; 
-            margin-bottom: 25px; 
-            border: 1px solid #003366;
-          }
-          .summary h3 { 
-            color: #003366; 
-            margin: 0 0 15px 0; 
-          }
-          .summary-row { 
-            display: flex; 
-            justify-content: space-between; 
-            padding: 8px; 
-            border-bottom: 1px solid #ccc; 
-          }
-          .summary-row:last-child { 
-            border-bottom: none; 
-          }
-          .total { 
-            font-weight: bold; 
-            font-size: 18px; 
-          }
-          table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 20px; 
-            font-size: 14px;
-          }
-          th { 
-            background: #003366; 
-            color: white; 
-            padding: 12px; 
-            text-align: left; 
-          }
-          td { 
-            padding: 10px; 
-            border-bottom: 1px solid #ddd; 
-            vertical-align: top;
-          }
-          .order-row { 
-            background: #f8f9fa; 
-          }
-          .payment-row { 
-            background: #f0fff0; 
-          }
-          .amount-positive { 
-            color: #27ae60; 
-            font-weight: bold; 
-          }
-          .amount-negative { 
-            color: #e74c3c; 
-            font-weight: bold; 
-          }
-          .footer { 
-            text-align: center; 
-            margin-top: 40px; 
-            padding-top: 20px; 
-            border-top: 2px solid #ccc; 
-            color: #666; 
-            font-size: 12px; 
-          }
-          .requirements-list {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-          }
-          .requirements-list li {
-            padding: 3px 0;
-            border-bottom: 1px dashed #eee;
-          }
-          .text-right {
-            text-align: right;
-          }
+          body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.5; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #003366; padding-bottom: 20px; }
+          .header h1 { color: #003366; margin: 0; font-size: 28px; }
+          .client-info { background: #f5f5f5; padding: 20px; border-radius: 5px; margin-bottom: 25px; }
+          .client-info h2 { color: #003366; margin: 0 0 15px 0; }
+          .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+          .summary { background: #e3f2fd; padding: 20px; border-radius: 5px; margin-bottom: 25px; }
+          .summary-row { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #ccc; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th { background: #003366; color: white; padding: 12px; text-align: left; }
+          td { padding: 10px; border-bottom: 1px solid #ddd; }
+          .order-row { background: #f8f9fa; }
+          .payment-row { background: #f0fff0; }
+          .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 2px solid #ccc; }
         </style>
       </head>
       <body>
@@ -598,71 +509,22 @@ const formatCurrency = (amount) => {
           <h1>COMPLETE SALES LEDGER</h1>
           <p>Generated on: ${new Date().toLocaleString()}</p>
         </div>
-
         <div class="client-info">
           <h2>${business}</h2>
           <div class="info-grid">
-            <div class="info-item">
-              <strong>Contact Person:</strong>
-              ${clientData.clientInfo.contactPerson || 'N/A'}
-            </div>
-            <div class="info-item">
-              <strong>Phone:</strong>
-              ${clientData.clientInfo.contactCode || '+91'} ${clientData.clientInfo.phone || 'N/A'}
-            </div>
-            <div class="info-item">
-              <strong>Client Type:</strong>
-              ${clientData.clientInfo.clientType || 'N/A'}
-            </div>
-            <div class="info-item">
-              <strong>Address:</strong>
-              ${clientData.clientInfo.address || 'Hyd'}
-            </div>
-            <div class="info-item">
-              <strong>GSTIN:</strong>
-              ${clientData.clientInfo.gstin || 'N/A'}
-            </div>
-            <div class="info-item">
-              <strong>Total Orders:</strong>
-              ${clientData.orders.length}
-            </div>
+            <div><strong>Contact:</strong> ${clientData.clientInfo.contactPerson || 'N/A'}</div>
+            <div><strong>Phone:</strong> ${clientData.clientInfo.contactCode || '+91'} ${clientData.clientInfo.phone || 'N/A'}</div>
+            <div><strong>Type:</strong> ${clientData.clientInfo.clientType || 'N/A'}</div>
           </div>
         </div>
-
         <div class="summary">
-          <h3>FINANCIAL SUMMARY</h3>
-          <div class="summary-row">
-            <span>Total Order Amount:</span>
-            <span>${formatCurrency(summary.totalOrderAmount)}</span>
-          </div>
-          <div class="summary-row">
-            <span>Total Paid:</span>
-            <span style="color: #27ae60;">${formatCurrency(summary.totalPaid)}</span>
-          </div>
-          <div class="summary-row total">
-            <span>Outstanding Balance:</span>
-            <span style="color: ${summary.totalBalance > 0 ? '#e74c3c' : '#27ae60'};">
-              ${formatCurrency(summary.totalBalance)}
-            </span>
-          </div>
-          <div class="summary-row">
-            <span>Transaction Period:</span>
-            <span>${dateRange.start} - ${dateRange.end}</span>
-          </div>
+          <div class="summary-row"><span>Total Order Amount:</span><span>${formatCurrency(summary.totalOrderAmount)}</span></div>
+          <div class="summary-row"><span>Total Paid:</span><span>${formatCurrency(summary.totalPaid)}</span></div>
+          <div class="summary-row"><span>Outstanding Balance:</span><span>${formatCurrency(summary.totalBalance)}</span></div>
         </div>
-
-        <h3 style="color: #003366; margin-bottom: 15px;">TRANSACTION HISTORY</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Order No</th>
-              <th>Description</th>
-              <th class="text-right">Amount (₹)</th>
-              <th>Method</th>
-              <th class="text-right">Balance (₹)</th>
-            </tr>
-          </thead>
+        <h3>TRANSACTION HISTORY</h3>
+         <table>
+          <thead><tr><th>Date</th><th>Order No</th><th>Description</th><th>Amount</th><th>Method</th><th>Balance</th></tr></thead>
           <tbody>
     `;
 
@@ -670,49 +532,39 @@ const formatCurrency = (amount) => {
     let runningBalance = 0;
     
     clientData.timeline.forEach((entry) => {
-      const order = clientData.orders.find(o => o._id === entry.orderId);
-      
       let description = '';
+      let methodDisplay = '';
+      
       if (entry.type === 'order') {
-        description = '<ul class="requirements-list">';
-        entry.requirements.forEach(req => {
-          description += `<li>${req.requirement} - ${req.quantity} × ₹${req.rate} = ₹${req.total}</li>`;
-        });
-        description += '</ul>';
+        description = entry.requirements.map(req => `${req.requirement} - ${req.quantity}×₹${req.rate}`).join(', ');
         runningBalance = entry.balance;
+        methodDisplay = '-';
       } else {
         description = 'Payment Received';
-        if (entry.upiNumber) description += ` (UPI: ${entry.upiNumber})`;
-        if (entry.chequeNumber) description += ` (Cheque: ${entry.chequeNumber})`;
+        methodDisplay = entry.method || '-';
+        if (entry.chequeNumber) {
+          methodDisplay = `Cheque (${entry.chequeNumber})`;
+        } else if (entry.upiNumber) {
+          methodDisplay = `UPI (${entry.upiNumber})`;
+        } else if (entry.utrNumber) {
+          methodDisplay = `Bank Transfer (UTR: ${entry.utrNumber})`;
+        }
         runningBalance -= entry.amount;
       }
 
-      const rowClass = entry.type === 'order' ? 'order-row' : 'payment-row';
-
       tableRows += `
-        <tr class="${rowClass}">
+        <tr class="${entry.type === 'order' ? 'order-row' : 'payment-row'}">
           <td>${formatDateSafe(entry.date)}</td>
           <td><strong>${entry.orderNo}</strong></td>
           <td>${description}</td>
-          <td class="text-right">${formatCurrency(entry.totalAmount || entry.amount || 0)}</td>
-          <td>${entry.method || '-'}</td>
-          <td class="text-right ${runningBalance > 0 ? 'amount-negative' : 'amount-positive'}">${formatCurrency(runningBalance)}</td>
+          <td>${formatCurrency(entry.totalAmount || entry.amount || 0)}</td>
+          <td>${methodDisplay}</td>
+          <td>${formatCurrency(runningBalance)}</td>
         </tr>
       `;
     });
 
-    const printFooter = `
-          </tbody>
-        </table>
-        <div class="footer">
-          <p>This is a computer generated statement - Valid without signature</p>
-          <p>Generated from Admin Dashboard on ${new Date().toLocaleString()}</p>
-        </div>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.write(printContent + tableRows + printFooter);
+    printWindow.document.write(printContent + tableRows + '</tbody></table><div class="footer"><p>Generated from Admin Dashboard</p></div></body></html>');
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();
@@ -722,169 +574,83 @@ const formatCurrency = (amount) => {
   const handleDownloadClientPDF = (business, clientData) => {
     try {
       const summary = calculateClientSummary(clientData.orders);
-      const dateRange = getDateRange(clientData.timeline);
-
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
       
       doc.setFontSize(18);
       doc.setTextColor(0, 51, 102);
       doc.text('COMPLETE SALES LEDGER', 148, 15, { align: 'center' });
-      
       doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
       doc.text(`Generated on: ${new Date().toLocaleString()}`, 148, 22, { align: 'center' });
 
       doc.setFontSize(12);
-      doc.setTextColor(0, 51, 102);
-      doc.setFont(undefined, 'bold');
       doc.text(business, 14, 30);
       
-      doc.setFontSize(8);
-      doc.setTextColor(80, 80, 80);
-      doc.setFont(undefined, 'normal');
-      
-      let yPos = 35;
-      const clientDetails = [
-        `Contact: ${clientData.clientInfo.contactPerson || 'N/A'}`,
-        `Phone: ${clientData.clientInfo.contactCode || '+91'} ${clientData.clientInfo.phone || 'N/A'}`,
-        `Type: ${clientData.clientInfo.clientType || 'N/A'}`,
-        `Address: ${clientData.clientInfo.address || 'Hyd'}`,
-        `GSTIN: ${clientData.clientInfo.gstin || 'N/A'}`,
-        `Orders: ${clientData.orders.length}`
-      ];
-      
-      const leftCol = clientDetails.slice(0, 3);
-      const rightCol = clientDetails.slice(3);
-      
-      leftCol.forEach((detail, index) => {
-        doc.text(detail, 14, yPos + (index * 4));
-      });
-      
-      rightCol.forEach((detail, index) => {
-        doc.text(detail, 100, yPos + (index * 4));
-      });
+      let yPos = 40;
+      doc.setFontSize(9);
+      doc.text(`Contact: ${clientData.clientInfo.contactPerson || 'N/A'}`, 14, yPos);
+      doc.text(`Phone: ${clientData.clientInfo.contactCode || '+91'} ${clientData.clientInfo.phone || 'N/A'}`, 14, yPos + 5);
+      doc.text(`Type: ${clientData.clientInfo.clientType || 'N/A'}`, 14, yPos + 10);
 
-      yPos = 55;
+      yPos = 60;
       doc.setFillColor(240, 248, 255);
-      doc.rect(14, yPos - 4, 268, 35, 'F');
-      
+      doc.rect(14, yPos - 4, 268, 30, 'F');
       doc.setFontSize(10);
-      doc.setTextColor(0, 51, 102);
-      doc.setFont(undefined, 'bold');
       doc.text('FINANCIAL SUMMARY', 14, yPos);
       
       yPos += 6;
-      doc.setFontSize(8);
-      doc.setTextColor(0, 0, 0);
-      doc.setFont(undefined, 'normal');
-      
-      const summaryItems = [
-        { label: 'Total Order Amount:', value: formatCurrency(summary.totalOrderAmount) },
-        { label: 'Total Paid:', value: formatCurrency(summary.totalPaid) },
-        { label: 'Outstanding Balance:', value: formatCurrency(summary.totalBalance) },
-        { label: 'Period:', value: `${dateRange.start} - ${dateRange.end}` }
-      ];
-      
-      const leftSummary = summaryItems.slice(0, 2);
-      const rightSummary = summaryItems.slice(2);
-      
-      leftSummary.forEach((item, index) => {
-        doc.text(item.label, 20, yPos + (index * 5));
-        doc.text(item.value, 80, yPos + (index * 5), { align: 'right' });
-      });
-      
-      rightSummary.forEach((item, index) => {
-        doc.text(item.label, 160, yPos + (index * 5));
-        doc.text(item.value, 240, yPos + (index * 5), { align: 'right' });
-      });
+      doc.setFontSize(9);
+      doc.text(`Total Order Amount: ${formatCurrency(summary.totalOrderAmount)}`, 20, yPos);
+      doc.text(`Total Paid: ${formatCurrency(summary.totalPaid)}`, 20, yPos + 5);
+      doc.text(`Outstanding Balance: ${formatCurrency(summary.totalBalance)}`, 20, yPos + 10);
 
-      yPos = 98;
+      yPos = 105;
       doc.setFontSize(10);
-      doc.setTextColor(0, 51, 102);
-      doc.setFont(undefined, 'bold');
       doc.text('TRANSACTION HISTORY', 14, yPos);
       
-      yPos += 4;
-
       const tableData = clientData.timeline.map(entry => {
-        const order = clientData.orders.find(o => o._id === entry.orderId);
-        const currentBalance = order ? calculateCurrentBalance(order) : 0;
-        
         let description = '';
+        let methodDisplay = '';
+        
         if (entry.type === 'order') {
-          description = entry.requirements.map(req => 
-            `${req.quantity}×${req.requirement}`
-          ).join(', ');
-          if (description.length > 60) {
-            description = description.substring(0, 57) + '...';
-          }
+          description = entry.requirements.map(req => `${req.quantity}×${req.requirement}`).join(', ');
+          if (description.length > 50) description = description.substring(0, 47) + '...';
+          methodDisplay = '-';
         } else {
           description = 'PAYMENT RECEIVED';
-          if (entry.upiNumber) description += ` (UPI: ${entry.upiNumber})`;
-          if (entry.chequeNumber) description += ` (CHQ: ${entry.chequeNumber})`;
+          methodDisplay = entry.method || '-';
+          if (entry.chequeNumber) {
+            methodDisplay = `Cheque (${entry.chequeNumber})`;
+          } else if (entry.upiNumber) {
+            methodDisplay = `UPI (${entry.upiNumber})`;
+          } else if (entry.utrNumber) {
+            methodDisplay = `Bank Transfer (UTR: ${entry.utrNumber})`;
+          }
         }
-
+        
         return [
           formatDateSafe(entry.date),
           entry.orderNo,
           description,
           formatCurrency(entry.totalAmount || entry.amount || 0),
-          entry.method?.toUpperCase() || '-',
-          formatCurrency(currentBalance)
+          methodDisplay,
+          formatCurrency(entry.type === 'order' ? entry.balance : 0)
         ];
       });
 
       autoTable(doc, {
-        startY: yPos,
+        startY: yPos + 4,
         head: [['DATE', 'ORDER NO', 'DESCRIPTION', 'AMOUNT', 'METHOD', 'BALANCE']],
         body: tableData,
         theme: 'grid',
-        styles: { 
-          fontSize: 7,
-          cellPadding: 2,
-          font: 'helvetica',
-          lineColor: [200, 200, 200],
-          lineWidth: 0.1,
-        },
-        headStyles: { 
-          fillColor: [0, 51, 102],
-          textColor: 255,
-          fontSize: 8,
-          fontStyle: 'bold',
-          halign: 'center',
-        },
+        styles: { fontSize: 7, cellPadding: 2 },
+        headStyles: { fillColor: [0, 51, 102], textColor: 255, fontSize: 8, fontStyle: 'bold' },
         columnStyles: {
-          0: { cellWidth: 30, halign: 'center' },
-          1: { cellWidth: 28, halign: 'center' },
-          2: { cellWidth: 95, halign: 'left' },
+          0: { cellWidth: 30 },
+          1: { cellWidth: 28 },
+          2: { cellWidth: 95 },
           3: { cellWidth: 35, halign: 'right' },
-          4: { cellWidth: 30, halign: 'center' },
+          4: { cellWidth: 40 },
           5: { cellWidth: 35, halign: 'right' }
-        },
-        margin: { left: 14, right: 14 },
-        didDrawPage: (data) => {
-          const pageCount = doc.internal.getNumberOfPages();
-          for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFontSize(6);
-            doc.setTextColor(128, 128, 128);
-            doc.text(
-              'This is a computer generated statement - Valid without signature',
-              148,
-              200,
-              { align: 'center' }
-            );
-            doc.text(
-              `Generated on ${new Date().toLocaleString()} | Page ${i} of ${pageCount}`,
-              148,
-              205,
-              { align: 'center' }
-            );
-          }
         }
       });
 
@@ -892,100 +658,40 @@ const formatCurrency = (amount) => {
       doc.save(filename);
       
     } catch (error) {
-      console.error('PDF generation error:', error);
-      alert('Failed to generate PDF. Error: ' + error.message);
+      console.error('PDF error:', error);
+      alert('Failed to generate PDF: ' + error.message);
     }
   };
 
   if (loading) {
-    return (
-      <div style={styles.loadingContainer}>
-        <div style={styles.loadingText}>Loading ledger data...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div style={styles.errorContainer}>
-        <div style={styles.errorText}>Error: {error}</div>
-        <button onClick={() => window.location.reload()} style={styles.retryButton}>
-          Retry
-        </button>
-      </div>
-    );
+    return <div style={styles.loadingContainer}><div style={styles.loadingText}>Loading ledger data...</div></div>;
   }
 
   return (
     <div style={styles.container}>
-      {/* Header with Back Button */}
       <div style={styles.headerWithBack}>
-        <button
-          onClick={handleBackToViewOrders}
-          style={styles.backButton}
-        >
-          ← Back to Orders
-        </button>
+        <button onClick={handleBackToViewOrders} style={styles.backButton}>← Back to Orders</button>
         <h2 style={styles.title}>Client Transaction Timeline</h2>
       </div>
 
-      {/* Search Form */}
       <form onSubmit={handleSearch} style={styles.searchForm}>
         <div style={styles.searchContainer}>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={handleSearchChange}
-            placeholder="Search by Business, Order No, Client Type, Contact Person or Phone..."
-            style={styles.searchInput}
-          />
-          {searchTerm && (
-            <button
-              type="button"
-              onClick={clearSearch}
-              style={styles.clearButton}
-              title="Clear search"
-            >
-              ×
-            </button>
-          )}
+          <input type="text" value={searchTerm} onChange={handleSearchChange} placeholder="Search by Business, Order No, Client Type, Contact Person or Phone..." style={styles.searchInput} />
+          {searchTerm && <button type="button" onClick={clearSearch} style={styles.clearButton}>×</button>}
         </div>
-        <button type="submit" style={styles.searchButton}>
-          Search Ledger
-        </button>
+        <button type="submit" style={styles.searchButton}>Search Ledger</button>
       </form>
 
-      {/* Results Count */}
-      {filteredOrders.length > 0 && (
-        <div style={styles.resultsCount}>
-          Found {filteredOrders.length} order(s) matching "{searchTerm}"
-        </div>
-      )}
+      {filteredOrders.length > 0 && <div style={styles.resultsCount}>Found {filteredOrders.length} order(s) matching "{searchTerm}"</div>}
+      {Object.keys(clientTimeline).length === 0 && searchTerm && <div style={styles.noResults}><p>No orders found matching "{searchTerm}"</p><button onClick={clearSearch} style={styles.clearSearchButton}>Clear Search</button></div>}
+      {Object.keys(clientTimeline).length === 0 && !searchTerm && <p style={styles.initialMessage}>Enter a business name, order number, or contact details to search the ledger.</p>}
 
-      {/* No Results Message */}
-      {Object.keys(clientTimeline).length === 0 && searchTerm && (
-        <div style={styles.noResults}>
-          <p>No orders found matching "{searchTerm}"</p>
-          <button onClick={clearSearch} style={styles.clearSearchButton}>
-            Clear Search
-          </button>
-        </div>
-      )}
-
-      {Object.keys(clientTimeline).length === 0 && !searchTerm && (
-        <p style={styles.initialMessage}>
-          Enter a business name, order number, or contact details to search the ledger.
-        </p>
-      )}
-
-      {/* Client Timeline Display */}
       {Object.entries(clientTimeline).map(([business, clientData]) => {
         const summary = calculateClientSummary(clientData.orders);
         const dateRange = getDateRange(clientData.timeline);
 
         return (
           <div key={business} style={styles.clientSection}>
-            {/* Client Header */}
             <div style={styles.clientHeader}>
               <h3 style={styles.businessName}>{business}</h3>
               <div style={styles.clientInfo}>
@@ -995,109 +701,65 @@ const formatCurrency = (amount) => {
               </div>
             </div>
 
-            {/* Header Content with Client Summary */}
             <div style={styles.headerContent}>
               <div style={styles.addressSection}>
                 <p style={styles.toText}>To,</p>
                 <p style={styles.companyName}>{business}</p>
                 <p style={styles.location}>Hyd</p>
               </div>
-
               <div style={styles.dateAmountSection}>
-                <p style={styles.dateRange}>
-                  {dateRange.start} - {dateRange.end}
-                </p>
+                <p style={styles.dateRange}>{dateRange.start} - {dateRange.end}</p>
                 <div style={styles.summaryContainer}>
-                  <div style={styles.summaryRow}>
-                    <span style={styles.summaryLabel}>Total Order Amount:</span>
-                    <span style={styles.summaryValue}>₹{summary.totalOrderAmount.toFixed(2)}</span>
-                  </div>
-                  <div style={styles.summaryRow}>
-                    <span style={styles.summaryLabel}>Total Paid:</span>
-                    <span style={{...styles.summaryValue, color: '#27ae60'}}>₹{summary.totalPaid.toFixed(2)}</span>
-                  </div>
-                  <div style={styles.summaryRow}>
-                    <span style={styles.summaryLabel}>Total Balance:</span>
-                    <span style={{
-                      ...styles.summaryValue,
-                      color: summary.totalBalance > 0 ? '#e74c3c' : '#27ae60',
-                      fontWeight: 'bold',
-                      fontSize: '18px'
-                    }}>
-                      ₹{summary.totalBalance.toFixed(2)}
-                    </span>
-                  </div>
+                  <div style={styles.summaryRow}><span>Total Order Amount:</span><span>₹{summary.totalOrderAmount.toFixed(2)}</span></div>
+                  <div style={styles.summaryRow}><span>Total Paid:</span><span style={{color: '#27ae60'}}>₹{summary.totalPaid.toFixed(2)}</span></div>
+                  <div style={styles.summaryRow}><span>Total Balance:</span><span style={{color: summary.totalBalance > 0 ? '#e74c3c' : '#27ae60', fontWeight: 'bold'}}>₹{summary.totalBalance.toFixed(2)}</span></div>
                 </div>
               </div>
             </div>
 
-            {/* Timeline Table */}
             <div style={styles.timelineContainer}>
               <table style={styles.timelineTable}>
-                <thead>
-                  <tr>
-                    <th style={styles.tableHeader}>Date</th>
-                    <th style={styles.tableHeader}>Order No</th>
-                    <th style={styles.tableHeader}>Requirements</th>
-                    <th style={styles.tableHeader}>Amount</th>
-                    <th style={styles.tableHeader}>Payment Method</th>
-                    <th style={styles.tableHeader}>Balance</th>
-                    <th style={styles.tableHeader}>Action</th>
-                  </tr>
-                </thead>
+                <thead><tr><th>Date</th><th>Order No</th><th>Requirements</th><th>Amount</th><th>Payment Method</th><th>Balance</th><th>Action</th></tr></thead>
                 <tbody>
                   {clientData.timeline.map((entry, index) => {
                     const order = clientData.orders.find(o => o._id === entry.orderId);
                     const currentBalance = order ? calculateCurrentBalance(order) : 0;
                     const isPaymentRowActive = activePaymentRow === entry.orderId && entry.type === 'order';
+                    const methodDisplay = getPaymentMethodDisplay(entry);
 
                     return (
                       <React.Fragment key={index}>
-                        <tr style={
-                          entry.type === 'order' ? styles.orderRow : styles.paymentRow
-                        }>
+                        <tr style={entry.type === 'order' ? styles.orderRow : styles.paymentRow}>
                           <td style={styles.tableCell}>{formatDateSafe(entry.date)}</td>
                           <td style={styles.tableCell}><strong>{entry.orderNo}</strong></td>
                           <td style={styles.tableCell}>
                             {entry.type === 'order' ? (
-                              <div style={styles.requirementsList}>
+                              <div>
                                 {entry.requirements.map((req, idx) => (
-                                  <div key={idx} style={styles.requirementItem}>
-                                    {req.requirement} - {req.quantity} × ₹{req.rate} = ₹{req.total}
-                                  </div>
+                                  <div key={idx}>{req.requirement} - {req.quantity} × ₹{req.rate} = ₹{req.total}</div>
                                 ))}
                               </div>
                             ) : (
-                              'Payment Received'
+                              <div>Payment Received</div>
                             )}
                           </td>
+                          <td style={styles.tableCell}>₹{(entry.totalAmount || entry.amount || 0).toFixed(2)}</td>
                           <td style={styles.tableCell}>
                             <span style={{
-                              fontWeight: '600',
-                              color: entry.type === 'order' ? '#003366' : '#27ae60'
+                              fontWeight: entry.type === 'payment' ? '500' : 'normal',
+                              color: entry.chequeNumber ? '#1565C0' : (entry.utrNumber ? '#00695C' : (entry.upiNumber ? '#6A1B9A' : 'inherit'))
                             }}>
-                              ₹{(entry.totalAmount || entry.amount || 0).toFixed(2)}
+                              {methodDisplay}
                             </span>
                           </td>
                           <td style={styles.tableCell}>
-                            {entry.method || '-'}
-                            {entry.upiNumber && ` (${entry.upiNumber})`}
-                            {entry.chequeNumber && ` (Cheque #${entry.chequeNumber})`}
-                          </td>
-                          <td style={styles.tableCell}>
-                            <span style={{
-                              color: currentBalance > 0 ? '#e74c3c' : '#27ae60',
-                              fontWeight: '600'
-                            }}>
+                            <span style={{color: currentBalance > 0 ? '#e74c3c' : '#27ae60', fontWeight: '600'}}>
                               ₹{currentBalance.toFixed(2)}
                             </span>
                           </td>
                           <td style={styles.tableCell}>
                             {entry.type === 'order' && currentBalance > 0 && (
-                              <button
-                                style={isPaymentRowActive ? styles.cancelButton : styles.payButton}
-                                onClick={() => togglePaymentRow(entry.orderId)}
-                              >
+                              <button style={isPaymentRowActive ? styles.cancelButton : styles.payButton} onClick={() => togglePaymentRow(entry.orderId)}>
                                 {isPaymentRowActive ? 'Cancel' : 'Record Payment'}
                               </button>
                             )}
@@ -1109,107 +771,55 @@ const formatCurrency = (amount) => {
                             <td colSpan="7" style={styles.paymentFormCell}>
                               <div style={styles.paymentForm}>
                                 <div style={styles.paymentFormHeader}>
-                                  <span style={styles.paymentFormTitle}>
-                                    Record Payment for Order {entry.orderNo}
-                                  </span>
-                                  <button 
-                                    style={styles.closeFormButton}
-                                    onClick={() => togglePaymentRow(entry.orderId)}
-                                  >
-                                    ×
+                                  <span>Record Payment for Order {entry.orderNo}</span>
+                                  <button onClick={() => togglePaymentRow(entry.orderId)} style={styles.closeFormButton}>×</button>
+                                </div>
+                                <div style={styles.orderSummary}>
+                                  <span>Order Total: ₹{entry.totalAmount.toFixed(2)}</span>
+                                  <span style={{marginLeft: '20px', color: currentBalance > 0 ? '#e74c3c' : '#27ae60'}}>Balance: ₹{currentBalance.toFixed(2)}</span>
+                                </div>
+                                <div style={styles.inputGroup}>
+                                  <input type="number" step="0.01" min="0.01" max={currentBalance} placeholder="Amount" value={newPayments[entry.orderId]?.amount || ''} onChange={(e) => handlePaymentChange(entry.orderId, 'amount', e.target.value)} style={styles.inputSmall} />
+                                  
+                                  <select value={newPayments[entry.orderId]?.method || ''} onChange={e => handlePaymentChange(entry.orderId, 'method', e.target.value)} style={styles.inputSmall} required>
+                                    <option value="">Select Method</option>
+                                    <option value="Cash">Cash</option>
+                                    <option value="UPI">UPI</option>
+                                    <option value="Cheque">Cheque</option>
+                                    <option value="Bank Transfer">Bank Transfer</option>
+                                  </select>
+                                  
+                                  <input type="date" value={newPayments[entry.orderId]?.date || new Date().toISOString().split('T')[0]} onChange={e => handlePaymentChange(entry.orderId, 'date', e.target.value)} style={styles.inputSmall} />
+                                  
+                                  {newPayments[entry.orderId]?.method === 'UPI' && (
+                                    <select value={newPayments[entry.orderId]?.upiNumber || ''} onChange={e => handlePaymentChange(entry.orderId, 'upiNumber', e.target.value)} style={styles.inputSmall}>
+                                      <option value="">Select UPI Number</option>
+                                      <option value="9985330008@Chary">9985330008@Chary</option>
+                                      <option value="9985330004@Swathi">9985330004@Swathi</option>
+                                      <option value="924642893@VenkatGupta">924642893@VenkatGupta</option>
+                                    </select>
+                                  )}
+                                  
+                                  {newPayments[entry.orderId]?.method === 'Cheque' && (
+                                    <input type="text" placeholder="Cheque Number *" maxLength="6" value={newPayments[entry.orderId]?.chequeNumber || ''} onChange={e => handlePaymentChange(entry.orderId, 'chequeNumber', e.target.value)} style={styles.inputSmall} required />
+                                  )}
+                                  
+                                  {newPayments[entry.orderId]?.method === 'Bank Transfer' && (
+                                    <input type="text" placeholder="UTR Number *" value={newPayments[entry.orderId]?.utrNumber || ''} onChange={e => handlePaymentChange(entry.orderId, 'utrNumber', e.target.value)} style={styles.inputSmall} required />
+                                  )}
+                                  
+                                  <button onClick={() => applyPayment(entry.orderId)} style={styles.addButton} 
+                                    disabled={
+                                      !newPayments[entry.orderId]?.amount || 
+                                      !newPayments[entry.orderId]?.method ||
+                                      (newPayments[entry.orderId]?.method === 'Bank Transfer' && !newPayments[entry.orderId]?.utrNumber) ||
+                                      (newPayments[entry.orderId]?.method === 'Cheque' && !newPayments[entry.orderId]?.chequeNumber) ||
+                                      (newPayments[entry.orderId]?.method === 'UPI' && !newPayments[entry.orderId]?.upiNumber)
+                                    }>
+                                    Add Payment
                                   </button>
                                 </div>
-                                <div style={styles.paymentFormContent}>
-                                  <div style={styles.orderSummary}>
-                                    <span>Order Total: ₹{entry.totalAmount.toFixed(2)}</span>
-                                    <span style={{
-                                      marginLeft: '20px',
-                                      color: currentBalance > 0 ? '#e74c3c' : '#27ae60',
-                                      fontWeight: 'bold'
-                                    }}>
-                                      Balance: ₹{currentBalance.toFixed(2)}
-                                    </span>
-                                  </div>
-                                  <div style={styles.inputGroup}>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0.01"
-                                      max={currentBalance}
-                                      placeholder="Amount"
-                                      value={newPayments[entry.orderId]?.amount || ''}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-                                        handlePaymentChange(entry.orderId, 'amount', value);
-                                      }}
-                                      style={styles.inputSmall}
-                                    />
-                                    <select
-                                      value={newPayments[entry.orderId]?.method || ''}
-                                      onChange={e => handlePaymentChange(entry.orderId, 'method', e.target.value)}
-                                      style={styles.inputSmall}
-                                      required
-                                    >
-                                      <option value="">Select Method</option>
-                                      <option value="Cash">Cash</option>
-                                      <option value="UPI">UPI</option>
-                                      <option value="Cheque">Cheque</option>
-                                    </select>
-
-                                    <input
-                                      type="date"
-                                      value={newPayments[entry.orderId]?.date || new Date().toISOString().split('T')[0]}
-                                      onChange={e => handlePaymentChange(entry.orderId, 'date', e.target.value)}
-                                      style={styles.inputSmall}
-                                    />
-
-                                    {newPayments[entry.orderId]?.method === 'UPI' && (
-                                      <select
-                                        value={newPayments[entry.orderId]?.upiNumber || ''}
-                                        onChange={e => handlePaymentChange(entry.orderId, 'upiNumber', e.target.value)}
-                                        style={styles.inputSmall}
-                                      >
-                                        <option value="">Select UPI Number</option>
-                                        <option value="9985330008@Chary">9985330008@Chary</option>
-                                        <option value="9985330004@Swathi">9985330004@Swathi</option>
-                                        <option value="924642893@VenkatGupta">924642893@VenkatGupta</option>
-                                      </select>
-                                    )}
-
-                                    {newPayments[entry.orderId]?.method === 'Cheque' && (
-                                      <input
-                                        type="text"
-                                        placeholder="Cheque Number"
-                                        maxLength={6}
-                                        value={newPayments[entry.orderId]?.chequeNumber || ''}
-                                        onChange={e => handlePaymentChange(entry.orderId, 'chequeNumber', e.target.value)}
-                                        style={styles.inputSmall}
-                                      />
-                                    )}
-
-                                    <button
-                                      onClick={() => applyPayment(entry.orderId)}
-                                      style={styles.addButton}
-                                      disabled={!newPayments[entry.orderId]?.amount || !newPayments[entry.orderId]?.method}
-                                    >
-                                      Add Payment
-                                    </button>
-                                  </div>
-
-                                  {paymentSuccess?.orderId === entry.orderId && (
-                                    <div style={styles.successMessage}>
-                                      <div>
-                                        {paymentSuccess.message} Remaining balance: ₹{paymentSuccess.balance?.toFixed(2) || '0.00'}
-                                      </div>
-                                      <button
-                                        style={styles.closeButton}
-                                        onClick={() => setPaymentSuccess(null)}
-                                      >
-                                        ×
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
+                                {paymentSuccess?.orderId === entry.orderId && <div style={styles.successMessage}>{paymentSuccess.message} Remaining balance: ₹{paymentSuccess.balance?.toFixed(2) || '0.00'}</div>}
                               </div>
                             </td>
                           </tr>
@@ -1221,20 +831,9 @@ const formatCurrency = (amount) => {
               </table>
             </div>
 
-            {/* Download and Print Buttons */}
             <div style={styles.exportButtonsContainer}>
-              <button
-                onClick={() => handlePrintClient(business, clientData)}
-                style={styles.printButton}
-              >
-                🖨️ Print Ledger
-              </button>
-              <button
-                onClick={() => handleDownloadClientPDF(business, clientData)}
-                style={styles.downloadButton}
-              >
-                📥 Download PDF
-              </button>
+              <button onClick={() => handlePrintClient(business, clientData)} style={styles.printButton}>🖨️ Print Ledger</button>
+              <button onClick={() => handleDownloadClientPDF(business, clientData)} style={styles.downloadButton}>📥 Download PDF</button>
             </div>
           </div>
         );
@@ -1244,464 +843,54 @@ const formatCurrency = (amount) => {
 };
 
 const styles = {
-  headerWithBack: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '20px',
-    marginBottom: '30px',
-  },
-  backButton: {
-    backgroundColor: '#6c757d',
-    color: 'white',
-    border: 'none',
-    padding: '8px 16px',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500',
-    ':hover': {
-      backgroundColor: '#5a6268',
-    },
-  },
-  title: {
-    textAlign: 'center',
-    color: '#003366',
-    fontSize: '28px',
-    fontWeight: 'bold',
-    margin: 0,
-    flex: 1,
-  },
-  exportButtonsContainer: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: '15px',
-    padding: '20px',
-    backgroundColor: '#f8f9fa',
-    borderTop: '2px solid #dee2e6',
-  },
-  printButton: {
-    backgroundColor: '#17a2b8',
-    color: 'white',
-    border: 'none',
-    padding: '10px 20px',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    ':hover': {
-      backgroundColor: '#138496',
-    },
-  },
-  downloadButton: {
-    backgroundColor: '#28a745',
-    color: 'white',
-    border: 'none',
-    padding: '10px 20px',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    ':hover': {
-      backgroundColor: '#218838',
-    },
-  },
-  container: {
-    maxWidth: '1400px',
-    margin: '30px auto',
-    padding: '20px',
-    backgroundColor: '#fff',
-    borderRadius: '8px',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-    fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
-  },
-  loadingContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '200px',
-  },
-  loadingText: {
-    fontSize: '18px',
-    color: '#666',
-  },
-  errorContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '200px',
-    gap: '20px',
-  },
-  errorText: {
-    fontSize: '18px',
-    color: '#dc3545',
-  },
-  retryButton: {
-    backgroundColor: '#003366',
-    color: 'white',
-    border: 'none',
-    padding: '10px 20px',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    ':hover': {
-      backgroundColor: '#002244',
-    },
-  },
-  searchForm: {
-    marginBottom: '30px',
-  },
-  searchContainer: {
-    position: 'relative',
-    marginBottom: '10px',
-  },
-  searchInput: {
-    width: '100%',
-    padding: '12px 40px 12px 15px',
-    fontSize: '16px',
-    borderRadius: '6px',
-    border: '1px solid #ccc',
-    boxSizing: 'border-box',
-    ':focus': {
-      outline: 'none',
-      borderColor: '#003366',
-    },
-  },
-  clearButton: {
-    position: 'absolute',
-    right: '10px',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    background: '#ccc',
-    border: 'none',
-    borderRadius: '50%',
-    width: '24px',
-    height: '24px',
-    cursor: 'pointer',
-    fontSize: '16px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ':hover': {
-      background: '#999',
-    },
-  },
-  searchButton: {
-    width: '100%',
-    backgroundColor: '#003366',
-    color: '#fff',
-    padding: '12px',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontWeight: '600',
-    fontSize: '16px',
-    ':hover': {
-      backgroundColor: '#002244',
-    },
-  },
-  resultsCount: {
-    backgroundColor: '#e3f2fd',
-    padding: '10px 15px',
-    borderRadius: '6px',
-    marginBottom: '20px',
-    color: '#003366',
-    fontWeight: '500',
-  },
-  noResults: {
-    textAlign: 'center',
-    padding: '40px',
-    color: '#666',
-  },
-  clearSearchButton: {
-    backgroundColor: '#6c757d',
-    color: 'white',
-    border: 'none',
-    padding: '8px 16px',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    marginTop: '10px',
-    ':hover': {
-      backgroundColor: '#5a6268',
-    },
-  },
-  initialMessage: {
-    textAlign: 'center',
-    color: '#666',
-    fontStyle: 'italic',
-    marginTop: '40px',
-  },
-  clientSection: {
-    marginBottom: '40px',
-    border: '1px solid #e0e0e0',
-    borderRadius: '8px',
-    overflow: 'hidden',
-  },
-  clientHeader: {
-    backgroundColor: '#003366',
-    color: 'white',
-    padding: '20px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    flexWrap: 'wrap',
-  },
-  businessName: {
-    margin: '0 0 10px 0',
-    fontSize: '24px',
-    fontWeight: 'bold',
-  },
-  clientInfo: {
-    display: 'flex',
-    gap: '20px',
-    flexWrap: 'wrap',
-    fontSize: '14px',
-  },
-  headerContent: {
-    padding: '20px',
-    backgroundColor: '#f8f9fa',
-    borderBottom: '1px solid #dee2e6',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    flexWrap: 'wrap',
-  },
-  addressSection: {
-    flex: '1',
-    minWidth: '200px',
-  },
-  toText: {
-    margin: '0 0 5px 0',
-    fontSize: '14px',
-    color: '#666',
-  },
-  companyName: {
-    margin: '0 0 5px 0',
-    fontSize: '18px',
-    fontWeight: 'bold',
-    color: '#003366',
-  },
-  location: {
-    margin: '0',
-    fontSize: '14px',
-    color: '#666',
-  },
-  dateAmountSection: {
-    textAlign: 'right',
-    flex: '1',
-    minWidth: '300px',
-  },
-  dateRange: {
-    margin: '0 0 10px 0',
-    fontSize: '14px',
-    color: '#666',
-  },
-  summaryContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-    backgroundColor: '#fff',
-    padding: '15px',
-    borderRadius: '6px',
-    border: '1px solid #dee2e6',
-  },
-  summaryRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '4px 0',
-    borderBottom: '1px dashed #dee2e6',
-  },
-  summaryLabel: {
-    fontSize: '14px',
-    color: '#666',
-  },
-  summaryValue: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#003366',
-  },
-  timelineContainer: {
-    overflowX: 'auto',
-  },
-  timelineTable: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    backgroundColor: '#fff',
-  },
-  tableHeader: {
-    backgroundColor: '#f8f9fa',
-    color: '#003366',
-    padding: '12px 15px',
-    textAlign: 'left',
-    fontWeight: '600',
-    borderBottom: '2px solid #dee2e6',
-    whiteSpace: 'nowrap',
-  },
-  tableCell: {
-    padding: '12px 15px',
-    borderBottom: '1px solid #dee2e6',
-    verticalAlign: 'top',
-  },
-  orderRow: {
-    backgroundColor: '#f8f9fa',
-    borderLeft: '4px solid #003366',
-  },
-  paymentRow: {
-    backgroundColor: '#f0fff0',
-    borderLeft: '4px solid #28a745',
-  },
-  requirementsList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  requirementItem: {
-    padding: '4px 0',
-    borderBottom: '1px dashed #eee',
-    fontSize: '13px',
-  },
-  payButton: {
-    backgroundColor: '#28a745',
-    color: 'white',
-    border: 'none',
-    padding: '6px 12px',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: '600',
-    ':hover': {
-      backgroundColor: '#218838',
-    },
-    ':disabled': {
-      backgroundColor: '#6c757d',
-      cursor: 'not-allowed',
-    },
-  },
-  cancelButton: {
-    backgroundColor: '#dc3545',
-    color: 'white',
-    border: 'none',
-    padding: '6px 12px',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: '600',
-    ':hover': {
-      backgroundColor: '#c82333',
-    },
-  },
-  paymentFormCell: {
-    padding: '15px',
-    backgroundColor: '#f8f9fa',
-    borderBottom: '2px solid #dee2e6',
-  },
-  paymentForm: {
-    backgroundColor: '#fff',
-    borderRadius: '8px',
-    padding: '20px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-  },
-  paymentFormHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '15px',
-  },
-  paymentFormTitle: {
-    color: '#003366',
-    fontSize: '16px',
-    fontWeight: '600',
-  },
-  closeFormButton: {
-    background: 'none',
-    border: 'none',
-    fontSize: '20px',
-    cursor: 'pointer',
-    color: '#666',
-    padding: '0 5px',
-    ':hover': {
-      color: '#333',
-    },
-  },
-  paymentFormContent: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '15px',
-  },
-  orderSummary: {
-    padding: '10px',
-    backgroundColor: '#e3f2fd',
-    borderRadius: '4px',
-    fontSize: '14px',
-    fontWeight: '500',
-  },
-  inputGroup: {
-    display: 'flex',
-    gap: '10px',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  inputSmall: {
-    flex: '1 1 150px',
-    padding: '8px',
-    fontSize: '14px',
-    borderRadius: '6px',
-    border: '1px solid #ccc',
-    minWidth: '120px',
-    ':focus': {
-      outline: 'none',
-      borderColor: '#003366',
-    },
-  },
-  addButton: {
-    backgroundColor: '#28a745',
-    color: '#fff',
-    padding: '8px 16px',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontWeight: '600',
-    fontSize: '14px',
-    minWidth: '120px',
-    ':hover': {
-      backgroundColor: '#218838',
-    },
-    ':disabled': {
-      backgroundColor: '#6c757d',
-      cursor: 'not-allowed',
-    },
-  },
-  successMessage: {
-    backgroundColor: '#d4edda',
-    color: '#155724',
-    padding: '10px 15px',
-    borderRadius: '4px',
-    margin: '10px 0',
-    border: '1px solid #c3e6cb',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  closeButton: {
-    background: 'none',
-    border: 'none',
-    color: '#155724',
-    cursor: 'pointer',
-    fontSize: '20px',
-    fontWeight: 'bold',
-    padding: '0 5px',
-    ':hover': {
-      color: '#0b5e2e',
-    },
-  },
+  headerWithBack: { display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '30px' },
+  backButton: { backgroundColor: '#6c757d', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '500' },
+  title: { textAlign: 'center', color: '#003366', fontSize: '28px', fontWeight: 'bold', margin: 0, flex: 1 },
+  exportButtonsContainer: { display: 'flex', justifyContent: 'flex-end', gap: '15px', padding: '20px', backgroundColor: '#f8f9fa', borderTop: '2px solid #dee2e6' },
+  printButton: { backgroundColor: '#17a2b8', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' },
+  downloadButton: { backgroundColor: '#28a745', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' },
+  container: { maxWidth: '1400px', margin: '30px auto', padding: '20px', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif' },
+  loadingContainer: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' },
+  loadingText: { fontSize: '18px', color: '#666' },
+  searchForm: { marginBottom: '30px' },
+  searchContainer: { position: 'relative', marginBottom: '10px' },
+  searchInput: { width: '100%', padding: '12px 40px 12px 15px', fontSize: '16px', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box' },
+  clearButton: { position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: '#ccc', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer', fontSize: '16px' },
+  searchButton: { width: '100%', backgroundColor: '#003366', color: '#fff', padding: '12px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '16px' },
+  resultsCount: { backgroundColor: '#e3f2fd', padding: '10px 15px', borderRadius: '6px', marginBottom: '20px', color: '#003366', fontWeight: '500' },
+  noResults: { textAlign: 'center', padding: '40px', color: '#666' },
+  clearSearchButton: { backgroundColor: '#6c757d', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', marginTop: '10px' },
+  initialMessage: { textAlign: 'center', color: '#666', fontStyle: 'italic', marginTop: '40px' },
+  clientSection: { marginBottom: '40px', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' },
+  clientHeader: { backgroundColor: '#003366', color: 'white', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' },
+  businessName: { margin: '0 0 10px 0', fontSize: '24px', fontWeight: 'bold' },
+  clientInfo: { display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '14px' },
+  headerContent: { padding: '20px', backgroundColor: '#f8f9fa', borderBottom: '1px solid #dee2e6', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' },
+  addressSection: { flex: '1', minWidth: '200px' },
+  toText: { margin: '0 0 5px 0', fontSize: '14px', color: '#666' },
+  companyName: { margin: '0 0 5px 0', fontSize: '18px', fontWeight: 'bold', color: '#003366' },
+  location: { margin: '0', fontSize: '14px', color: '#666' },
+  dateAmountSection: { textAlign: 'right', flex: '1', minWidth: '300px' },
+  dateRange: { margin: '0 0 10px 0', fontSize: '14px', color: '#666' },
+  summaryContainer: { display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: '#fff', padding: '15px', borderRadius: '6px', border: '1px solid #dee2e6' },
+  summaryRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px dashed #dee2e6' },
+  timelineContainer: { overflowX: 'auto' },
+  timelineTable: { width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' },
+  tableHeader: { backgroundColor: '#f8f9fa', color: '#003366', padding: '12px 15px', textAlign: 'left', fontWeight: '600', borderBottom: '2px solid #dee2e6', whiteSpace: 'nowrap' },
+  tableCell: { padding: '12px 15px', borderBottom: '1px solid #dee2e6', verticalAlign: 'top' },
+  orderRow: { backgroundColor: '#f8f9fa', borderLeft: '4px solid #003366' },
+  paymentRow: { backgroundColor: '#f0fff0', borderLeft: '4px solid #28a745' },
+  payButton: { backgroundColor: '#28a745', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' },
+  cancelButton: { backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' },
+  paymentFormCell: { padding: '15px', backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' },
+  paymentForm: { backgroundColor: '#fff', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
+  paymentFormHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', color: '#003366', fontSize: '16px', fontWeight: '600' },
+  closeFormButton: { background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#666' },
+  orderSummary: { padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '4px', fontSize: '14px', fontWeight: '500', marginBottom: '15px' },
+  inputGroup: { display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' },
+  inputSmall: { flex: '1 1 150px', padding: '8px', fontSize: '14px', borderRadius: '6px', border: '1px solid #ccc', minWidth: '120px' },
+  addButton: { backgroundColor: '#28a745', color: '#fff', padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '14px', minWidth: '120px' },
+  successMessage: { backgroundColor: '#d4edda', color: '#155724', padding: '10px 15px', borderRadius: '4px', marginTop: '15px', border: '1px solid #c3e6cb' }
 };
 
 export default Ledger;

@@ -36,7 +36,7 @@ const ViewProspective = () => {
   const isAdmin = role === 'Admin';
   
   // Define executive names who should see ALL prospects (like Admin)
-  const privilegedExecutives = ['Soujanya', 'Aleem', 'Sirisha', 'Rajesh'];
+  const privilegedExecutives = [ 'Aleem', 'Sirisha', 'Rajesh'];
   const isPrivilegedExecutive = privilegedExecutives.includes(userName);
   
   // Users who can see all prospects: Admin + privileged executives

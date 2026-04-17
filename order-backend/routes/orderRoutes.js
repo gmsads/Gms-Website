@@ -378,7 +378,6 @@ function parseOrderDate(dateValue) {
 // Month label arrays for logging
 const financialMonthLabels = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
 const calendarMonthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-// ============================
 router.post("/submit", async (req, res) => {
   try {
     console.log("Received order data:", req.body);
@@ -412,7 +411,8 @@ router.post("/submit", async (req, res) => {
       createdBy: req.body.createdBy || req.body.executive,
       // Ensure date fields are properly handled
       birthDate: req.body.birthDate || null,
-      anniversaryDate: req.body.anniversaryDate || null
+      anniversaryDate: req.body.anniversaryDate || null,
+      gstNumber: req.body.gstNumber || null  // ADD GST NUMBER
     };
 
     console.log('Final order data to save:', orderData);
@@ -427,9 +427,6 @@ router.post("/submit", async (req, res) => {
   }
 });
 
-// ============================
-// UPDATE an existing order (ENHANCED - allows editing all fields including advance and balance)
-// ============================
 router.put("/orders/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -443,6 +440,11 @@ router.put("/orders/:id", async (req, res) => {
 
     // Prepare update data
     const updateData = { ...req.body };
+    
+    // Ensure gstNumber is included
+    if (updateData.gstNumber === undefined) {
+      updateData.gstNumber = existingOrder.gstNumber || null;
+    }
     
     // Preserve createdBy if not provided
     if (!updateData.createdBy) {
@@ -516,7 +518,8 @@ router.put("/orders/:id", async (req, res) => {
       advance: updateData.advance,
       balance: updateData.balance,
       discount: updateData.discount,
-      discountedTotal: updateData.discountedTotal
+      discountedTotal: updateData.discountedTotal,
+      gstNumber: updateData.gstNumber
     });
 
     // Update the order
@@ -541,7 +544,6 @@ router.put("/orders/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update order: " + err.message });
   }
 });
-
 // ============================
 // GET all orders (with calendar year filtering - FIXED)
 // ============================
@@ -622,6 +624,37 @@ router.get("/orders", async (req, res) => {
     if (req.query.leadSource && req.query.leadSource !== 'undefined' && req.query.leadSource !== 'null') {
       query.leadSource = req.query.leadSource;
       console.log('📋 Lead source filter:', req.query.leadSource);
+    }
+
+    // NEW: Filter by GST Number
+    if (req.query.gstNumber && req.query.gstNumber !== 'undefined' && req.query.gstNumber !== 'null') {
+      // Case-insensitive search for GST number
+      query.gstNumber = { $regex: new RegExp(req.query.gstNumber, 'i') };
+      console.log('🔢 GST Number filter:', req.query.gstNumber);
+    }
+
+    // NEW: Filter by business name (case-insensitive)
+    if (req.query.business && req.query.business !== 'undefined' && req.query.business !== 'null') {
+      query.business = { $regex: new RegExp(req.query.business, 'i') };
+      console.log('🏢 Business filter:', req.query.business);
+    }
+
+    // NEW: Filter by contact person (case-insensitive)
+    if (req.query.contactPerson && req.query.contactPerson !== 'undefined' && req.query.contactPerson !== 'null') {
+      query.contactPerson = { $regex: new RegExp(req.query.contactPerson, 'i') };
+      console.log('👤 Contact person filter:', req.query.contactPerson);
+    }
+
+    // NEW: Filter by phone number
+    if (req.query.phone && req.query.phone !== 'undefined' && req.query.phone !== 'null') {
+      query.phone = { $regex: new RegExp(req.query.phone, 'i') };
+      console.log('📞 Phone filter:', req.query.phone);
+    }
+
+    // NEW: Filter by order number
+    if (req.query.orderNo && req.query.orderNo !== 'undefined' && req.query.orderNo !== 'null') {
+      query.orderNo = { $regex: new RegExp(req.query.orderNo, 'i') };
+      console.log('🔢 Order No filter:', req.query.orderNo);
     }
 
     console.log('Final MongoDB query:', JSON.stringify(query, null, 2));
@@ -999,19 +1032,14 @@ router.get("/orders/:id/follow-ups", async (req, res) => {
     });
   }
 });
+
 // ============================
-// POST: Record payment for order
-// ============================
-// ============================
-// RECORD PAYMENT for an order (COMPLETELY FIXED VERSION)
-// ============================
-// ============================
-// RECORD PAYMENT for an order (FIXED - handles edited orders)
+// RECORD PAYMENT for an order (FIXED - with chequeNumber and utrNumber)
 // ============================
 router.post("/orders/:id/record-payment", async (req, res) => {
   try {
     const { id } = req.params;
-    const { amount, method, upiNumber, chequeNumber, date, note } = req.body;
+    const { amount, method, upiNumber, chequeNumber, utrNumber, date, note } = req.body;
 
     console.log("========== PAYMENT RECORDING START ==========");
     console.log("Order ID:", id);
@@ -1083,22 +1111,27 @@ router.post("/orders/:id/record-payment", async (req, res) => {
       });
     }
 
-    // Create payment record
+    // Create payment record with ALL fields including chequeNumber and utrNumber
     const paymentRecord = {
       amount: paymentAmount,
       method: method,
       date: date ? new Date(date) : new Date(),
       note: note || 'Payment recorded',
-      reference: upiNumber || chequeNumber || '',
       createdAt: new Date()
     };
 
-    // Add UPI or cheque details if provided
+    // Add UPI, Cheque, or Bank Transfer details if provided
     if (method === 'UPI' && upiNumber) {
+      paymentRecord.upiNumber = upiNumber;
       paymentRecord.reference = upiNumber;
     }
     if (method === 'Cheque' && chequeNumber) {
+      paymentRecord.chequeNumber = chequeNumber;
       paymentRecord.reference = chequeNumber;
+    }
+    if (method === 'Bank Transfer' && utrNumber) {
+      paymentRecord.utrNumber = utrNumber;
+      paymentRecord.reference = utrNumber;
     }
 
     console.log("Creating payment record:", paymentRecord);
@@ -1135,7 +1168,7 @@ router.post("/orders/:id/record-payment", async (req, res) => {
 
     console.log("========== PAYMENT RECORDING END ==========");
 
-    // Return updated order
+    // Return updated order with all payment details
     res.json({
       success: true,
       message: `Payment of ₹${paymentAmount} recorded successfully`,

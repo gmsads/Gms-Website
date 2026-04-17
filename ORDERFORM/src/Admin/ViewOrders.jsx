@@ -613,6 +613,10 @@ function ViewOrders() {
               <strong>Balance Amt:</strong>
               <span>₹${balanceDue.toFixed(2)}</span>
             </div>
+            <div class="detail-item">
+              <strong>GST Number:</strong>
+              <span>${order.gstNumber || 'N/A'}</span>
+            </div>
           </div>
         </div>
         
@@ -826,7 +830,8 @@ function ViewOrders() {
       order.paymentDate || '',
       order.paymentMethod || '',
       order.chequeNumber || '',
-      order.createdBy || ''
+      order.createdBy || '',
+      order.gstNumber || ''  // ADDED: GST Number to search
     ];
 
     const rowFields = order.rows.flatMap(row => [
@@ -1059,210 +1064,187 @@ function ViewOrders() {
     }
   };
 
-// ===== 14. Handle URL parameters (CRITICAL - Handles filters from Performance page, Dashboard charts, etc.) =====
-useEffect(() => {
-  const params = new URLSearchParams(location.search);
-  
-  const yearFromUrl = params.get('year');
-  const monthFromUrl = params.get('month');
-  const clientTypeFromUrl = params.get('clientType');
-  const leadSourceFromUrl = params.get('leadSource');
-  const executiveFromUrl = params.get('executive');
-  const executiveTypeFromUrl = params.get('executiveType');
-  const executiveNameFromUrl = params.get('executiveName');
-  const requirement = params.get('requirement');
-  const startDateParam = params.get('startDate');
-  const endDateParam = params.get('endDate');
-  const fromDashboard = params.get('fromDashboard'); // New: track if coming from dashboard
+  // ===== 14. Handle URL parameters =====
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    
+    const yearFromUrl = params.get('year');
+    const monthFromUrl = params.get('month');
+    const clientTypeFromUrl = params.get('clientType');
+    const leadSourceFromUrl = params.get('leadSource');
+    const executiveFromUrl = params.get('executive');
+    const executiveTypeFromUrl = params.get('executiveType');
+    const executiveNameFromUrl = params.get('executiveName');
+    const requirement = params.get('requirement');
+    const startDateParam = params.get('startDate');
+    const endDateParam = params.get('endDate');
+    const fromDashboard = params.get('fromDashboard');
 
-  console.log('🔍 ViewOrders received URL params:', {
-    yearFromUrl,
-    monthFromUrl,
-    clientTypeFromUrl,
-    leadSourceFromUrl,
-    executiveFromUrl,
-    executiveTypeFromUrl,
-    executiveNameFromUrl,
-    requirement,
-    startDateParam,
-    endDateParam,
-    fromDashboard
-  });
-  
-  // Handle executive filter from URL (coming from Performance page)
-  if (executiveNameFromUrl && executiveNameFromUrl !== 'undefined' && executiveNameFromUrl !== 'null') {
-    const decodedExecutiveName = decodeURIComponent(executiveNameFromUrl);
-    console.log('👤 Setting executive filter from URL:', decodedExecutiveName);
-    setAppliedExecutiveFilters({
-      executive: executiveFromUrl || '',
-      executiveType: executiveTypeFromUrl || '',
-      executiveName: decodedExecutiveName
+    console.log('🔍 ViewOrders received URL params:', {
+      yearFromUrl,
+      monthFromUrl,
+      clientTypeFromUrl,
+      leadSourceFromUrl,
+      executiveFromUrl,
+      executiveTypeFromUrl,
+      executiveNameFromUrl,
+      requirement,
+      startDateParam,
+      endDateParam,
+      fromDashboard
     });
-  } else {
-    setAppliedExecutiveFilters({
-      executive: '',
-      executiveType: '',
-      executiveName: ''
-    });
-  }
-  
-  // Handle requirement filter
-  if (requirement && requirement !== 'undefined' && requirement !== 'null') {
-    setRequirementFilter(requirement);
-    setSearchTerm(requirement);
-  } else {
-    setRequirementFilter(null);
-  }
-  
-  // IMPORTANT: Clear any existing date range when month/year filters are present
-  // Handle date range FIRST - it takes precedence
-  if (startDateParam && endDateParam && startDateParam !== 'undefined' && endDateParam !== 'undefined') {
-    console.log('📅 Using date range filter');
-    setStartDate(startDateParam);
-    setEndDate(endDateParam);
-    setUseDateRange(true);
-    setMonthFilter(null);
-    setCurrentViewMonth(null);
-    // Don't set year filter when using date range
-    setYearFilter('all');
-  } 
-  // Handle month + year filter (PRIORITY for dashboard navigation)
-  else if (monthFromUrl && monthFromUrl !== 'undefined' && monthFromUrl !== 'null' && 
-           yearFromUrl && yearFromUrl !== 'undefined' && yearFromUrl !== 'null' && yearFromUrl !== 'all') {
-    const monthNum = parseInt(monthFromUrl);
-    const yearNum = yearFromUrl;
     
-    console.log(`📅 Setting SPECIFIC month+year filter: ${monthNum}/${yearNum}`);
-    
-    // Set month filter (1-12)
-    setMonthFilter(monthNum);
-    setCurrentViewMonth(monthNum);
-    
-    // Set year filter
-    setYearFilter(yearNum);
-    setCurrentViewYear(parseInt(yearNum));
-    
-    // Clear date range if active
-    setUseDateRange(false);
-    setStartDate('');
-    setEndDate('');
-    
-    // Clear any other filters that might interfere
-    if (!fromDashboard) {
-      // Optional: Clear client type and lead source if not explicitly set
-      if (!clientTypeFromUrl) setClientTypeFilter(null);
-      if (!leadSourceFromUrl) setLeadSourceFilter(null);
+    // Handle executive filter from URL
+    if (executiveNameFromUrl && executiveNameFromUrl !== 'undefined' && executiveNameFromUrl !== 'null') {
+      const decodedExecutiveName = decodeURIComponent(executiveNameFromUrl);
+      console.log('👤 Setting executive filter from URL:', decodedExecutiveName);
+      setAppliedExecutiveFilters({
+        executive: executiveFromUrl || '',
+        executiveType: executiveTypeFromUrl || '',
+        executiveName: decodedExecutiveName
+      });
+    } else {
+      setAppliedExecutiveFilters({
+        executive: '',
+        executiveType: '',
+        executiveName: ''
+      });
     }
-  }
-  // Handle year only filter
-  else if (yearFromUrl && yearFromUrl !== 'undefined' && yearFromUrl !== 'null' && yearFromUrl !== 'all') {
-    console.log(`📅 Setting year only filter: ${yearFromUrl}`);
-    setYearFilter(yearFromUrl);
-    setCurrentViewYear(parseInt(yearFromUrl));
-    setMonthFilter(null);
-    setCurrentViewMonth(null);
-    setUseDateRange(false);
-    setStartDate('');
-    setEndDate('');
-  }
-  // Handle month only filter (should not happen typically, but handle gracefully)
-  else if (monthFromUrl && monthFromUrl !== 'undefined' && monthFromUrl !== 'null') {
-    console.log(`📅 Setting month only filter: ${monthFromUrl} (using current year)`);
-    const currentYear = new Date().getFullYear().toString();
-    setMonthFilter(parseInt(monthFromUrl));
-    setCurrentViewMonth(parseInt(monthFromUrl));
-    setYearFilter(currentYear);
-    setCurrentViewYear(currentYear);
-    setUseDateRange(false);
-    setStartDate('');
-    setEndDate('');
-  }
-  // Default: no date filters
-  else {
-    console.log('📅 No date filters applied, showing all orders');
-    setMonthFilter(null);
-    setCurrentViewMonth(null);
-    setYearFilter('all');
-    setCurrentViewYear(new Date().getFullYear());
-    setUseDateRange(false);
-    setStartDate('');
-    setEndDate('');
-  }
-  
-  // Set client type filter (preserve from URL)
-  if (clientTypeFromUrl && clientTypeFromUrl !== 'undefined' && clientTypeFromUrl !== 'null') {
-    setClientTypeFilter(clientTypeFromUrl);
-  } else {
-    setClientTypeFilter(null);
-  }
-  
-  // Set lead source filter (preserve from URL)
-  if (leadSourceFromUrl && leadSourceFromUrl !== 'undefined' && leadSourceFromUrl !== 'null') {
-    setLeadSourceFilter(leadSourceFromUrl);
-  } else {
-    setLeadSourceFilter(null);
-  }
-  
-  // Fetch orders with the filters
-  const { role, name } = getUserInfo();
-  
-  // Determine if using date range
-  const isDateRange = !!(startDateParam && endDateParam && startDateParam !== 'undefined' && endDateParam !== 'undefined');
-  
-  // Determine month and year for fetchOrders
-  let fetchMonth = null;
-  let fetchYear = 'all';
-  
-  if (isDateRange) {
-    fetchMonth = null;
-    fetchYear = 'all';
-  } else if (monthFromUrl && monthFromUrl !== 'undefined' && monthFromUrl !== 'null' && 
+    
+    // Handle requirement filter
+    if (requirement && requirement !== 'undefined' && requirement !== 'null') {
+      setRequirementFilter(requirement);
+      setSearchTerm(requirement);
+    } else {
+      setRequirementFilter(null);
+    }
+    
+    // Handle date range filter
+    if (startDateParam && endDateParam && startDateParam !== 'undefined' && endDateParam !== 'undefined') {
+      console.log('📅 Using date range filter');
+      setStartDate(startDateParam);
+      setEndDate(endDateParam);
+      setUseDateRange(true);
+      setMonthFilter(null);
+      setCurrentViewMonth(null);
+      setYearFilter('all');
+    } 
+    // Handle month + year filter
+    else if (monthFromUrl && monthFromUrl !== 'undefined' && monthFromUrl !== 'null' && 
              yearFromUrl && yearFromUrl !== 'undefined' && yearFromUrl !== 'null' && yearFromUrl !== 'all') {
-    // Both month and year present - SPECIFIC month/year filter
-    fetchMonth = parseInt(monthFromUrl);
-    fetchYear = yearFromUrl;
-  } else if (yearFromUrl && yearFromUrl !== 'undefined' && yearFromUrl !== 'null' && yearFromUrl !== 'all') {
-    // Year only
-    fetchMonth = null;
-    fetchYear = yearFromUrl;
-  } else if (monthFromUrl && monthFromUrl !== 'undefined' && monthFromUrl !== 'null') {
-    // Month only (use current year)
-    fetchMonth = parseInt(monthFromUrl);
-    fetchYear = new Date().getFullYear().toString();
-  } else {
-    // No filters
-    fetchMonth = null;
-    fetchYear = 'all';
-  }
-  
-  console.log('📡 Calling fetchOrders with:', {
-    month: fetchMonth,
-    year: fetchYear,
-    clientType: clientTypeFromUrl,
-    executive: executiveFromUrl,
-    executiveName: executiveNameFromUrl,
-    leadSource: leadSourceFromUrl,
-    isDateRange,
-    startDate: startDateParam,
-    endDate: endDateParam
-  });
-  
-  // Call fetchOrders with the determined parameters
-  fetchOrders(
-    role, 
-    name, 
-    fetchMonth, 
-    fetchYear, 
-    clientTypeFromUrl, 
-    executiveFromUrl, 
-    executiveNameFromUrl, 
-    leadSourceFromUrl,
-    isDateRange,
-    startDateParam,
-    endDateParam
-  );
-  
-}, [location.search]);
+      const monthNum = parseInt(monthFromUrl);
+      const yearNum = yearFromUrl;
+      
+      console.log(`📅 Setting SPECIFIC month+year filter: ${monthNum}/${yearNum}`);
+      
+      setMonthFilter(monthNum);
+      setCurrentViewMonth(monthNum);
+      setYearFilter(yearNum);
+      setCurrentViewYear(parseInt(yearNum));
+      setUseDateRange(false);
+      setStartDate('');
+      setEndDate('');
+    }
+    // Handle year only filter
+    else if (yearFromUrl && yearFromUrl !== 'undefined' && yearFromUrl !== 'null' && yearFromUrl !== 'all') {
+      console.log(`📅 Setting year only filter: ${yearFromUrl}`);
+      setYearFilter(yearFromUrl);
+      setCurrentViewYear(parseInt(yearFromUrl));
+      setMonthFilter(null);
+      setCurrentViewMonth(null);
+      setUseDateRange(false);
+      setStartDate('');
+      setEndDate('');
+    }
+    // Handle month only filter
+    else if (monthFromUrl && monthFromUrl !== 'undefined' && monthFromUrl !== 'null') {
+      console.log(`📅 Setting month only filter: ${monthFromUrl} (using current year)`);
+      const currentYear = new Date().getFullYear().toString();
+      setMonthFilter(parseInt(monthFromUrl));
+      setCurrentViewMonth(parseInt(monthFromUrl));
+      setYearFilter(currentYear);
+      setCurrentViewYear(currentYear);
+      setUseDateRange(false);
+      setStartDate('');
+      setEndDate('');
+    }
+    // Default: no date filters
+    else {
+      console.log('📅 No date filters applied, showing all orders');
+      setMonthFilter(null);
+      setCurrentViewMonth(null);
+      setYearFilter('all');
+      setCurrentViewYear(new Date().getFullYear());
+      setUseDateRange(false);
+      setStartDate('');
+      setEndDate('');
+    }
+    
+    // Set client type filter
+    if (clientTypeFromUrl && clientTypeFromUrl !== 'undefined' && clientTypeFromUrl !== 'null') {
+      setClientTypeFilter(clientTypeFromUrl);
+    } else {
+      setClientTypeFilter(null);
+    }
+    
+    // Set lead source filter
+    if (leadSourceFromUrl && leadSourceFromUrl !== 'undefined' && leadSourceFromUrl !== 'null') {
+      setLeadSourceFilter(leadSourceFromUrl);
+    } else {
+      setLeadSourceFilter(null);
+    }
+    
+    // Fetch orders with the filters
+    const { role, name } = getUserInfo();
+    
+    const isDateRange = !!(startDateParam && endDateParam && startDateParam !== 'undefined' && endDateParam !== 'undefined');
+    
+    let fetchMonth = null;
+    let fetchYear = 'all';
+    
+    if (isDateRange) {
+      fetchMonth = null;
+      fetchYear = 'all';
+    } else if (monthFromUrl && monthFromUrl !== 'undefined' && monthFromUrl !== 'null' && 
+               yearFromUrl && yearFromUrl !== 'undefined' && yearFromUrl !== 'null' && yearFromUrl !== 'all') {
+      fetchMonth = parseInt(monthFromUrl);
+      fetchYear = yearFromUrl;
+    } else if (yearFromUrl && yearFromUrl !== 'undefined' && yearFromUrl !== 'null' && yearFromUrl !== 'all') {
+      fetchMonth = null;
+      fetchYear = yearFromUrl;
+    } else if (monthFromUrl && monthFromUrl !== 'undefined' && monthFromUrl !== 'null') {
+      fetchMonth = parseInt(monthFromUrl);
+      fetchYear = new Date().getFullYear().toString();
+    }
+    
+    console.log('📡 Calling fetchOrders with:', {
+      month: fetchMonth,
+      year: fetchYear,
+      clientType: clientTypeFromUrl,
+      executive: executiveFromUrl,
+      executiveName: executiveNameFromUrl,
+      leadSource: leadSourceFromUrl,
+      isDateRange,
+      startDate: startDateParam,
+      endDate: endDateParam
+    });
+    
+    fetchOrders(
+      role, 
+      name, 
+      fetchMonth, 
+      fetchYear, 
+      clientTypeFromUrl, 
+      executiveFromUrl, 
+      executiveNameFromUrl, 
+      leadSourceFromUrl,
+      isDateRange,
+      startDateParam,
+      endDateParam
+    );
+    
+  }, [location.search]);
+
   // ===== 15. CAPTURE REQUIREMENT FILTER FROM URL =====
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -1635,6 +1617,7 @@ useEffect(() => {
       balance: order.balance || 0,
       discountedTotal: order.discountedTotal || totalAmount,
       discount: order.discount || 0,
+      gstNumber: order.gstNumber || '',
       rows: order.rows.map(row => ({
         ...row,
         deliveryDate: formatDateForInput(row.deliveryDate),
@@ -1683,6 +1666,7 @@ useEffect(() => {
         advance: parseFloat(editingOrder.advance) || 0,
         balance: parseFloat(editingOrder.balance) || 0,
         discountedTotal: parseFloat(editingOrder.discountedTotal) || 0,
+        gstNumber: editingOrder.gstNumber || '',
         rows: editingOrder.rows.map(row => ({
           ...row,
           quantity: parseFloat(row.quantity) || 0,
@@ -1943,6 +1927,7 @@ useEffect(() => {
           <p><strong>Business:</strong> ${currentOrder.business}</p>
           <p><strong>Location:</strong> ${currentOrder.location}</p>
           <p><strong>Lead Source:</strong> ${currentOrder.leadSource || 'Not specified'}${currentOrder.otherLeadSource ? ` (${currentOrder.otherLeadSource})` : ''}</p>
+          <p><strong>GST Number:</strong> ${currentOrder.gstNumber || 'N/A'}</p>
           <p><strong>Total Amount:</strong> ₹${currentOrder.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0).toFixed(2)}</p>
           <p><strong>Discount:</strong> ₹${parseFloat(currentOrder.discount || 0).toFixed(2)}</p>
           <p><strong>Final Amount:</strong> ₹${parseFloat(currentOrder.discountedTotal || 0).toFixed(2)}</p>
@@ -2076,6 +2061,7 @@ useEffect(() => {
         'Order No': order.orderNo,
         'Order Date': formatDate(order.orderDate),
         'Client Type': order.clientType,
+        'GST Number': order.gstNumber || '',
         'Description': row.description,
         'Requirement': row.requirement,
         'Custom Requirement': row.customRequirement,
@@ -2157,6 +2143,7 @@ useEffect(() => {
             orderNo: item['Order No'] || `ORDER-${Math.random().toString(36).substr(2, 8)}`,
             orderDate: item['Order Date'],
             clientType: item['Client Type'],
+            gstNumber: item['GST Number'] || '',
             rows: [{
               description: item['Description'],
               requirement: item['Requirement'],
@@ -2922,7 +2909,7 @@ useEffect(() => {
         <div style={{ flex: 1, minWidth: '300px' }}>
           <input
             type="text"
-            placeholder="Search orders by executive, business, customer, phone, requirement..."
+            placeholder="Search orders by executive, business, customer, phone, requirement, GST number..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -2935,7 +2922,7 @@ useEffect(() => {
           />
           {searchTerm && (
             <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-              Searching in executive, business, customer, phone, order no, requirements...
+              Searching in executive, business, customer, phone, order no, requirements, GST number...
             </div>
           )}
         </div>
@@ -3194,6 +3181,7 @@ useEffect(() => {
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Order No</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Order Date</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '100px' }}>Client Type</th>
+                      <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>GST Number</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '250px' }}>Requirement</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '120px' }}>Quantity</th>
                       <th style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center', backgroundColor: '#218c74', minWidth: '150px' }}>Rate</th>
@@ -3353,6 +3341,20 @@ useEffect(() => {
                             <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.orderNo}</td>
                             <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.orderDate)}</td>
                             <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.clientType}</td>
+                            
+                            <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
+                              <span style={{
+                                backgroundColor: order.gstNumber ? '#e8f5e9' : '#f5f5f5',
+                                color: order.gstNumber ? '#2e7d32' : '#999',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                fontWeight: order.gstNumber ? '500' : 'normal',
+                                display: 'inline-block'
+                              }}>
+                                {order.gstNumber || '-'}
+                              </span>
+                            </td>
 
                             <td style={{ padding: '10px 8px', minWidth: '250px', fontWeight: '500', color: '#1976d2' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -3673,6 +3675,20 @@ useEffect(() => {
                               <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.orderNo}</td>
                               <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.orderDate)}</td>
                               <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.clientType}</td>
+                              
+                              <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
+                                <span style={{
+                                  backgroundColor: order.gstNumber ? '#e8f5e9' : '#f5f5f5',
+                                  color: order.gstNumber ? '#2e7d32' : '#999',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
+                                  fontWeight: order.gstNumber ? '500' : 'normal',
+                                  display: 'inline-block'
+                                }}>
+                                  {order.gstNumber || '-'}
+                                </span>
+                              </td>
 
                               <td style={{ padding: '10px 8px', minWidth: '250px' }}>
                                 <div>
@@ -3972,6 +3988,9 @@ useEffect(() => {
                   )}
                 </div>
                 <div>
+                  <strong>GST Number:</strong> {currentOrder.gstNumber || 'N/A'}
+                </div>
+                <div>
                   <strong>Created By:</strong> {currentOrder.createdBy || currentOrder.executive}
                 </div>
                 <div>
@@ -4163,7 +4182,7 @@ useEffect(() => {
 
                 {paymentData.method === 'Bank Transfer' && (
                   <div style={{ marginBottom: '15px' }}>
-                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Transaction ID *</label>
+                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Transaction ID / UTR Number *</label>
                     <input
                       type="text"
                       name="reference"
@@ -4176,6 +4195,7 @@ useEffect(() => {
                         borderRadius: '4px'
                       }}
                       required
+                      placeholder="Enter UTR/Transaction ID"
                     />
                   </div>
                 )}
@@ -4429,6 +4449,17 @@ useEffect(() => {
                   <option value="Renewal">Renewal</option>
                   <option value="Agent">Agent</option>
                 </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px' }}>GST Number</label>
+                <input
+                  name="gstNumber"
+                  value={editingOrder.gstNumber || ''}
+                  onChange={handleEditChange}
+                  placeholder="Enter GST number (optional)"
+                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                />
               </div>
 
               <div>

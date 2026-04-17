@@ -30,6 +30,7 @@ function OrderForm({
   const [clientLocation, setClientLocation] = useState("");
   const [isNewFromExisting, setIsNewFromExisting] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
+  const [gstNumber, setGstNumber] = useState("");
 
   // Customer special dates (optional)
   const [birthDate, setBirthDate] = useState("");
@@ -193,6 +194,7 @@ ${orderData.upiId ? `📱 *UPI ID:* ${orderData.upiId}` : ''}
 ${orderData.bankName ? `🏛️ *Bank Name:* ${orderData.bankName}` : ''}
 ${orderData.transactionRef ? `🔗 *Transaction Ref:* ${orderData.transactionRef}` : ''}
 ${orderData.poNumber ? `📄 *PO Number:* ${orderData.poNumber}` : ''}
+${orderData.gstNumber ? `🔢 *GST Number:* ${orderData.gstNumber}` : ''}
 ${specialDatesMessage}
 
 Thank you for your business! We'll keep you updated on your order status.
@@ -465,6 +467,9 @@ Global Marketing Solutions Team`;
     // Keep special dates if they exist
     setBirthDate(existingData?.birthDate || "");
     setAnniversaryDate(existingData?.anniversaryDate || "");
+    
+    // Keep GST number if exists
+    setGstNumber(existingData?.gstNumber || "");
 
     // Reset ALL order-specific fields for new order
     setSelectedExecutive(isAdmin ? "" : localStorage.getItem("userName") || "");
@@ -686,6 +691,7 @@ Global Marketing Solutions Team`;
         setCreatedBy(existingData.createdBy || "Admin");
         setBirthDate(existingData.birthDate || "");
         setAnniversaryDate(existingData.anniversaryDate || "");
+        setGstNumber(existingData.gstNumber || ""); // Load GST number
 
         if (existingData.rows && existingData.rows.length > 0) {
           setRows(existingData.rows.map((row) => ({
@@ -837,6 +843,7 @@ Global Marketing Solutions Team`;
         orderDate,
         target,
         clientType: clientType || "New",
+        gstNumber: gstNumber || "", // Add GST number to order data
   
         // Add the new date fields
         birthDate: birthDate || null,
@@ -911,6 +918,7 @@ Global Marketing Solutions Team`;
         bankName: bankName,
         transactionRef: transactionRef,
         poNumber: poNumber,
+        gstNumber: gstNumber,
         birthDate: birthDate,
         anniversaryDate: anniversaryDate
       };
@@ -1157,6 +1165,9 @@ Global Marketing Solutions Team`;
     return null;
   };
 
+  // Determine if the form should be read-only (when viewing an existing order and not creating a new one)
+  const isReadOnly = existingData && !isCreatingNew && !isNewFromExisting;
+
   // Render requirement row as card for mobile, or table row for desktop
   const renderRequirementRow = (row, index) => {
     const isTimeBased = isTimeBasedRequirement(row.requirement);
@@ -1173,31 +1184,33 @@ Global Marketing Solutions Team`;
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           position: 'relative'
         }}>
-          {/* Remove Button - Top Right Corner */}
-          <button
-            type="button"
-            onClick={() => handleRemoveRow(index)}
-            style={{
-              position: 'absolute',
-              top: '8px',
-              right: '8px',
-              background: '#f44336',
-              color: 'white',
-              border: 'none',
-              borderRadius: '50%',
-              width: '28px',
-              height: '28px',
-              cursor: 'pointer',
-              fontSize: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 10
-            }}
-            title="Remove item"
-          >
-            ×
-          </button>
+          {/* Remove Button - Top Right Corner (only show if not read-only) */}
+          {!isReadOnly && (
+            <button
+              type="button"
+              onClick={() => handleRemoveRow(index)}
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                background: '#f44336',
+                color: 'white',
+                border: 'none',
+                borderRadius: '50%',
+                width: '28px',
+                height: '28px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 10
+              }}
+              title="Remove item"
+            >
+              ×
+            </button>
+          )}
 
           {/* Card Header - Always visible */}
           <div className="card-header" style={{
@@ -1239,6 +1252,211 @@ Global Marketing Solutions Team`;
               {/* Requirement Select (if not selected or needs change) */}
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Requirement *</label>
+                {isReadOnly ? (
+                  <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                    {row.requirement === "other" ? row.customRequirement : row.requirement}
+                  </div>
+                ) : (
+                  <>
+                    <Select
+                      options={[
+                        { value: '', label: 'Select Requirement' },
+                        ...requirements.map(req => ({ value: req.name, label: req.name })),
+                        { value: 'other', label: 'Other (Specify)' }
+                      ]}
+                      value={row.requirement ? { value: row.requirement, label: row.requirement } : null}
+                      onChange={(selectedOption) => {
+                        const value = selectedOption ? selectedOption.value : '';
+                        handleRowChange(index, "requirement", value);
+                        if (value !== "other") handleRowChange(index, "customRequirement", "");
+                      }}
+                      isSearchable={true}
+                      placeholder="Search requirement..."
+                      className="requirement-select"
+                      classNamePrefix="react-select"
+                      styles={{
+                        control: (base) => ({ ...base, minHeight: '38px', fontSize: '14px' }),
+                        menu: (base) => ({ ...base, fontSize: '14px', zIndex: 999 }),
+                        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                      }}
+                      menuPortalTarget={document.body}
+                    />
+                    {row.requirement === "other" && (
+                      <input
+                        type="text"
+                        value={row.customRequirement || ""}
+                        onChange={(e) => handleRowChange(index, "customRequirement", e.target.value)}
+                        placeholder="Enter custom requirement"
+                        style={{ marginTop: '8px', width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Description */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Description</label>
+                {isReadOnly ? (
+                  <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                    {row.description || '-'}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={row.description}
+                    onChange={(e) => handleRowChange(index, "description", capitalizeFirst(e.target.value))}
+                    placeholder="Enter description"
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                  />
+                )}
+              </div>
+
+              {/* Quantity and Rate in row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Quantity</label>
+                  {isReadOnly ? (
+                    <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                      {row.quantity || '-'}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={row.quantity}
+                      onChange={(e) => handleRowChange(index, "quantity", e.target.value)}
+                      placeholder="0"
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                    />
+                  )}
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Rate (₹)</label>
+                  {isReadOnly ? (
+                    <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                      {row.rate || '-'}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={row.rate}
+                      onChange={(e) => handleRowChange(index, "rate", e.target.value)}
+                      placeholder="0.00"
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Days (if time-based) */}
+              {isTimeBased && (
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Days</label>
+                  {isReadOnly ? (
+                    <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                      {row.days || '-'}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={row.days}
+                      onChange={(e) => handleRowChange(index, "days", e.target.value)}
+                      placeholder="Number of days"
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* GST Checkbox */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: isReadOnly ? 'default' : 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={row.gstIncluded}
+                    onChange={(e) => !isReadOnly && handleRowChange(index, "gstIncluded", e.target.checked)}
+                    disabled={isReadOnly}
+                  />
+                  <span style={{ fontSize: '14px' }}>Include GST (18%)</span>
+                </label>
+              </div>
+
+              {/* Delivery Date */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>
+                  {isTimeBased ? 'Start Date' : 'Delivery Date'}
+                </label>
+                {isTimeBased ? (
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {isReadOnly ? (
+                      <>
+                        <div style={{ flex: 1, padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                          {row.startDate || '-'}
+                        </div>
+                        <span style={{ color: '#666' }}>→</span>
+                        <div style={{ flex: 1, padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                          {row.endDate || '-'}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          type="date"
+                          value={row.startDate}
+                          onChange={(e) => handleRowChange(index, "startDate", e.target.value)}
+                          style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                        />
+                        <span style={{ color: '#666' }}>→</span>
+                        <input
+                          type="date"
+                          value={row.endDate}
+                          readOnly
+                          style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: '#f5f5f5' }}
+                        />
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  isReadOnly ? (
+                    <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                      {row.deliveryDate || '-'}
+                    </div>
+                  ) : (
+                    <input
+                      type="date"
+                      value={row.deliveryDate}
+                      onChange={(e) => handleRowChange(index, "deliveryDate", e.target.value)}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                    />
+                  )
+                )}
+              </div>
+
+              {/* Total Display */}
+              <div style={{ 
+                backgroundColor: '#e8f5e9', 
+                padding: '10px', 
+                borderRadius: '4px',
+                textAlign: 'right'
+              }}>
+                <span style={{ fontSize: '12px', color: '#666' }}>Subtotal: </span>
+                <span style={{ fontWeight: 'bold', fontSize: '16px', color: '#4CAF50' }}>₹{row.total}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Desktop table view
+    return (
+      <tr key={index}>
+        <td data-label="Requirement">
+          <div className="requirement-select-container">
+            {isReadOnly ? (
+              <div className="readonly-cell">{row.requirement === "other" ? row.customRequirement : row.requirement}</div>
+            ) : (
+              <>
                 <Select
                   options={[
                     { value: '', label: 'Select Requirement' },
@@ -1268,190 +1486,60 @@ Global Marketing Solutions Team`;
                     value={row.customRequirement || ""}
                     onChange={(e) => handleRowChange(index, "customRequirement", e.target.value)}
                     placeholder="Enter custom requirement"
-                    style={{ marginTop: '8px', width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                    className="custom-requirement-input"
                   />
                 )}
-              </div>
-
-              {/* Description */}
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Description</label>
-                <input
-                  type="text"
-                  value={row.description}
-                  onChange={(e) => handleRowChange(index, "description", capitalizeFirst(e.target.value))}
-                  placeholder="Enter description"
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                />
-              </div>
-
-              {/* Quantity and Rate in row */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Quantity</label>
-                  <input
-                    type="text"
-                    value={row.quantity}
-                    onChange={(e) => handleRowChange(index, "quantity", e.target.value)}
-                    placeholder="0"
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Rate (₹)</label>
-                  <input
-                    type="text"
-                    value={row.rate}
-                    onChange={(e) => handleRowChange(index, "rate", e.target.value)}
-                    placeholder="0.00"
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                  />
-                </div>
-              </div>
-
-              {/* Days (if time-based) */}
-              {isTimeBased && (
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Days</label>
-                  <input
-                    type="text"
-                    value={row.days}
-                    onChange={(e) => handleRowChange(index, "days", e.target.value)}
-                    placeholder="Number of days"
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                  />
-                </div>
-              )}
-
-              {/* GST Checkbox */}
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={row.gstIncluded}
-                    onChange={(e) => handleRowChange(index, "gstIncluded", e.target.checked)}
-                  />
-                  <span style={{ fontSize: '14px' }}>Include GST (18%)</span>
-                </label>
-              </div>
-
-              {/* Delivery Date */}
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>
-                  {isTimeBased ? 'Start Date' : 'Delivery Date'}
-                </label>
-                {isTimeBased ? (
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <input
-                      type="date"
-                      value={row.startDate}
-                      onChange={(e) => handleRowChange(index, "startDate", e.target.value)}
-                      style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                    />
-                    <span style={{ color: '#666' }}>→</span>
-                    <input
-                      type="date"
-                      value={row.endDate}
-                      readOnly
-                      style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: '#f5f5f5' }}
-                    />
-                  </div>
-                ) : (
-                  <input
-                    type="date"
-                    value={row.deliveryDate}
-                    onChange={(e) => handleRowChange(index, "deliveryDate", e.target.value)}
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                  />
-                )}
-              </div>
-
-              {/* Total Display */}
-              <div style={{ 
-                backgroundColor: '#e8f5e9', 
-                padding: '10px', 
-                borderRadius: '4px',
-                textAlign: 'right'
-              }}>
-                <span style={{ fontSize: '12px', color: '#666' }}>Subtotal: </span>
-                <span style={{ fontWeight: 'bold', fontSize: '16px', color: '#4CAF50' }}>₹{row.total}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Desktop table view
-    return (
-      <tr key={index}>
-        <td data-label="Requirement">
-          <div className="requirement-select-container">
-            <Select
-              options={[
-                { value: '', label: 'Select Requirement' },
-                ...requirements.map(req => ({ value: req.name, label: req.name })),
-                { value: 'other', label: 'Other (Specify)' }
-              ]}
-              value={row.requirement ? { value: row.requirement, label: row.requirement } : null}
-              onChange={(selectedOption) => {
-                const value = selectedOption ? selectedOption.value : '';
-                handleRowChange(index, "requirement", value);
-                if (value !== "other") handleRowChange(index, "customRequirement", "");
-              }}
-              isSearchable={true}
-              placeholder="Search requirement..."
-              className="requirement-select"
-              classNamePrefix="react-select"
-              styles={{
-                control: (base) => ({ ...base, minHeight: '38px', fontSize: '14px' }),
-                menu: (base) => ({ ...base, fontSize: '14px', zIndex: 999 }),
-                menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-              }}
-              menuPortalTarget={document.body}
-            />
-            {row.requirement === "other" && (
-              <input
-                type="text"
-                value={row.customRequirement || ""}
-                onChange={(e) => handleRowChange(index, "customRequirement", e.target.value)}
-                placeholder="Enter custom requirement"
-                className="custom-requirement-input"
-              />
+              </>
             )}
           </div>
         </td>
         <td data-label="Description">
-          <input
-            type="text"
-            value={row.description}
-            onChange={(e) => handleRowChange(index, "description", capitalizeFirst(e.target.value))}
-          />
+          {isReadOnly ? (
+            <div className="readonly-cell">{row.description || '-'}</div>
+          ) : (
+            <input
+              type="text"
+              value={row.description}
+              onChange={(e) => handleRowChange(index, "description", capitalizeFirst(e.target.value))}
+            />
+          )}
         </td>
         <td data-label="Quantity">
-          <input
-            type="text"
-            value={row.quantity}
-            onChange={(e) => handleRowChange(index, "quantity", e.target.value)}
-            placeholder="0"
-          />
+          {isReadOnly ? (
+            <div className="readonly-cell">{row.quantity || '-'}</div>
+          ) : (
+            <input
+              type="text"
+              value={row.quantity}
+              onChange={(e) => handleRowChange(index, "quantity", e.target.value)}
+              placeholder="0"
+            />
+          )}
         </td>
         <td data-label="Rate (₹)">
-          <input
-            type="text"
-            value={row.rate}
-            onChange={(e) => handleRowChange(index, "rate", e.target.value)}
-            placeholder="0.00"
-          />
+          {isReadOnly ? (
+            <div className="readonly-cell">{row.rate || '-'}</div>
+          ) : (
+            <input
+              type="text"
+              value={row.rate}
+              onChange={(e) => handleRowChange(index, "rate", e.target.value)}
+              placeholder="0.00"
+            />
+          )}
         </td>
         <td data-label="Days">
           {isTimeBased ? (
-            <input
-              type="text"
-              value={row.days}
-              onChange={(e) => handleRowChange(index, "days", e.target.value)}
-              placeholder="1"
-            />
+            isReadOnly ? (
+              <div className="readonly-cell">{row.days || '-'}</div>
+            ) : (
+              <input
+                type="text"
+                value={row.days}
+                onChange={(e) => handleRowChange(index, "days", e.target.value)}
+                placeholder="1"
+              />
+            )
           ) : (
             <span>-</span>
           )}
@@ -1460,7 +1548,8 @@ Global Marketing Solutions Team`;
           <input
             type="checkbox"
             checked={row.gstIncluded}
-            onChange={(e) => handleRowChange(index, "gstIncluded", e.target.checked)}
+            onChange={(e) => !isReadOnly && handleRowChange(index, "gstIncluded", e.target.checked)}
+            disabled={isReadOnly}
           />
         </td>
         <td data-label="Total (₹)">₹{row.total}</td>
@@ -1468,39 +1557,53 @@ Global Marketing Solutions Team`;
           {isTimeBased ? (
             <div className="date-range">
               <div>Start:</div>
-              <input
-                type="date"
-                value={row.startDate}
-                onChange={(e) => handleRowChange(index, "startDate", e.target.value)}
-              />
+              {isReadOnly ? (
+                <div className="readonly-cell">{row.startDate || '-'}</div>
+              ) : (
+                <input
+                  type="date"
+                  value={row.startDate}
+                  onChange={(e) => handleRowChange(index, "startDate", e.target.value)}
+                />
+              )}
               <div>End:</div>
-              <input type="date" value={row.endDate} readOnly />
+              {isReadOnly ? (
+                <div className="readonly-cell">{row.endDate || '-'}</div>
+              ) : (
+                <input type="date" value={row.endDate} readOnly />
+              )}
             </div>
           ) : (
-            <input
-              type="date"
-              value={row.deliveryDate}
-              onChange={(e) => handleRowChange(index, "deliveryDate", e.target.value)}
-            />
+            isReadOnly ? (
+              <div className="readonly-cell">{row.deliveryDate || '-'}</div>
+            ) : (
+              <input
+                type="date"
+                value={row.deliveryDate}
+                onChange={(e) => handleRowChange(index, "deliveryDate", e.target.value)}
+              />
+            )
           )}
         </td>
         <td data-label="Remove" style={{ textAlign: 'center' }}>
-          <button
-            type="button"
-            onClick={() => handleRemoveRow(index)}
-            style={{
-              background: '#f44336',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '6px 12px',
-              cursor: 'pointer',
-              fontSize: '12px'
-            }}
-            title="Remove item"
-          >
-            ✕ Remove
-          </button>
+          {!isReadOnly && (
+            <button
+              type="button"
+              onClick={() => handleRemoveRow(index)}
+              style={{
+                background: '#f44336',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '6px 12px',
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+              title="Remove item"
+            >
+              ✕ Remove
+            </button>
+          )}
         </td>
       </tr>
     );
@@ -1643,7 +1746,7 @@ Global Marketing Solutions Team`;
         </div>
       )}
 
-      {/* Header with Order Already Exists message and Create New Order button */}
+      {/* Header with Order Already Exists message and Create New Order button (moved to top) */}
       {existingData && !isCreatingNew && !isNewFromExisting && (
         <div style={{
           backgroundColor: '#fff3cd',
@@ -1688,6 +1791,29 @@ Global Marketing Solutions Team`;
         </div>
       )}
 
+      {/* Read-Only Mode Notice */}
+      {isReadOnly && (
+        <div style={{
+          backgroundColor: '#e3f2fd',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          borderLeft: '4px solid #2196f3',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap'
+        }}>
+          <span style={{ fontSize: '20px' }}>🔒</span>
+          <div>
+            <strong style={{ color: '#1565c0' }}>Read-Only Mode</strong>
+            <div style={{ fontSize: '13px', color: '#1565c0' }}>
+              You are viewing an existing order. Use the "Create New Order" button above to place a new order for this customer.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Show "New Order from Existing" header when in new-from-existing mode */}
       {isNewFromExisting && (
         <div style={{
@@ -1704,8 +1830,8 @@ Global Marketing Solutions Team`;
         </div>
       )}
 
-      {/* Show full form when NOT editing existing (includes new orders and new from existing) */}
-      {!isEditingExisting && (
+      {/* Show full form when NOT in read-only mode (includes new orders and new from existing) */}
+      {!isReadOnly && (
         <>
           <div className="form-header">
             <h2 className="subtitle">ORDER FORM</h2>
@@ -1745,23 +1871,44 @@ Global Marketing Solutions Team`;
                   <input type="text" value={selectedExecutive} readOnly />
                 )}
               </label>
-              <label>
-                Order Type:
-                <select
-                  value={clientType}
-                  onChange={(e) => setClientType(e.target.value)}
-                  disabled={isNewFromExisting}
-                  style={{ backgroundColor: isNewFromExisting ? '#f5f5f5' : 'white' }}
-                >
-                  <option value="">Select</option>
-                  <option value="Retail">Retail</option>
-                  <option value="Renewal">Renewal</option>
-                  <option value="Agent">Agent</option>
-                  <option value="Renewal-Agent">Renewal-Agent</option>
-                  <option value="Corporate">Corporate</option>
-                  <option value="Walk-In">Walk-In</option>
-                </select>
-              </label>
+
+              {/* Order Type and GST Number - Side by side with smaller order type */}
+              <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '150px' }}>
+                  <label>
+                    Order Type:
+                    <select
+                      value={clientType}
+                      onChange={(e) => setClientType(e.target.value)}
+                      disabled={isNewFromExisting}
+                      style={{ 
+                        backgroundColor: isNewFromExisting ? '#f5f5f5' : 'white',
+                        width: '100%'
+                      }}
+                    >
+                      <option value="">Select</option>
+                      <option value="Retail">Retail</option>
+                      <option value="Renewal">Renewal</option>
+                      <option value="Agent">Agent</option>
+                      <option value="Renewal-Agent">Renewal-Agent</option>
+                      <option value="Corporate">Corporate</option>
+                      <option value="Walk-In">Walk-In</option>
+                    </select>
+                  </label>
+                </div>
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <label>
+                    GST Number (Optional):
+                    <input
+                      type="text"
+                      value={gstNumber}
+                      onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
+                      placeholder="Enter GST number"
+                      style={{ textTransform: 'uppercase' }}
+                    />
+                  </label>
+                </div>
+              </div>
 
               {/* Business Name and Contact Person side by side */}
               <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
@@ -1955,33 +2102,64 @@ Global Marketing Solutions Team`;
         </>
       )}
 
-      {/* Requirements Section - Always visible and fresh for new-from-existing */}
+      {/* Show read-only view for existing orders */}
+      {isReadOnly && (
+        <div className="readonly-order-view">
+          <div style={{ 
+            backgroundColor: '#f8f9fa', 
+            padding: '20px', 
+            borderRadius: '8px',
+            marginBottom: '20px'
+          }}>
+            <h3 style={{ marginBottom: '15px', color: '#333' }}>Order Details</h3>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+              <div><strong>Executive:</strong> {selectedExecutive}</div>
+              <div><strong>Order Type:</strong> {clientType || '-'}</div>
+              <div><strong>GST Number:</strong> {gstNumber || '-'}</div>
+              <div><strong>Business Name:</strong> {business}</div>
+              <div><strong>Contact Person:</strong> {contactPerson}</div>
+              <div><strong>Contact Number:</strong> {contactNumber}</div>
+              <div><strong>Location:</strong> {clientLocation || '-'}</div>
+              <div><strong>Lead Source:</strong> {leadSource === 'Other Specify' ? otherLeadSource : leadSource || '-'}</div>
+              <div><strong>Order Date:</strong> {new Date(orderDate).toLocaleDateString()}</div>
+              {birthDate && <div><strong>Birth Date:</strong> {new Date(birthDate).toLocaleDateString()}</div>}
+              {anniversaryDate && <div><strong>Anniversary Date:</strong> {new Date(anniversaryDate).toLocaleDateString()}</div>}
+              <div><strong>Design Status:</strong> {design === "yes" ? "Design Provided" : "Need Design"}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Requirements Section - Always visible */}
       <div className="rows-section">
         <h3 style={{ marginBottom: '15px', color: '#333' }}>
-          {isNewFromExisting ? 'New Order Requirements' : (isEditingExisting ? 'Edit Requirements' : 'Order Requirements')}
+          {isNewFromExisting ? 'New Order Requirements' : (isReadOnly ? 'Order Requirements' : (isEditingExisting ? 'Edit Requirements' : 'Order Requirements'))}
         </h3>
         
         {isMobile ? (
           <div>
             {rows.map((row, index) => renderRequirementRow(row, index))}
-            <button 
-              onClick={handleAddRow} 
-              className="add-item-btn"
-              style={{
-                width: '100%',
-                padding: '12px',
-                backgroundColor: '#4CAF50',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                marginTop: '12px'
-              }}
-            >
-              + ADD ITEM
-            </button>
+            {!isReadOnly && (
+              <button 
+                onClick={handleAddRow} 
+                className="add-item-btn"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  marginTop: '12px'
+                }}
+              >
+                + ADD ITEM
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -2005,31 +2183,46 @@ Global Marketing Solutions Team`;
                 </tbody>
               </table>
             </div>
-            <button onClick={handleAddRow} className="add-item-btn">+ ADD ITEM</button>
+            {!isReadOnly && (
+              <button onClick={handleAddRow} className="add-item-btn">+ ADD ITEM</button>
+            )}
           </>
         )}
       </div>
 
+      {/* Payment Section - Show for all but read-only is slightly different */}
       <div className="payment-section">
         <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '150px' }}>
             <label>
               Advance Date:
-              <input
-                type="date"
-                value={advanceDate}
-                onChange={(e) => setAdvanceDate(e.target.value)}
-              />
+              {isReadOnly ? (
+                <div className="readonly-field" style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px', marginTop: '5px' }}>
+                  {advanceDate ? new Date(advanceDate).toLocaleDateString() : '-'}
+                </div>
+              ) : (
+                <input
+                  type="date"
+                  value={advanceDate}
+                  onChange={(e) => setAdvanceDate(e.target.value)}
+                />
+              )}
             </label>
           </div>
           <div style={{ flex: 1, minWidth: '150px' }}>
             <label>
               Payment Date:
-              <input
-                type="date"
-                value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-              />
+              {isReadOnly ? (
+                <div className="readonly-field" style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px', marginTop: '5px' }}>
+                  {paymentDate ? new Date(paymentDate).toLocaleDateString() : '-'}
+                </div>
+              ) : (
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                />
+              )}
             </label>
           </div>
         </div>
@@ -2038,14 +2231,20 @@ Global Marketing Solutions Team`;
           <div style={{ flex: 1, minWidth: '120px' }}>
             <label>
               Advance (₹):
-              <input
-                type="text"
-                value={advance}
-                onChange={(e) => handleAdvanceChange(e.target.value)}
-                placeholder="0.00"
-                className={advanceError ? "error-input" : ""}
-              />
-              {advanceError && (
+              {isReadOnly ? (
+                <div className="readonly-field" style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px', marginTop: '5px' }}>
+                  ₹{advance || '0'}
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={advance}
+                  onChange={(e) => handleAdvanceChange(e.target.value)}
+                  placeholder="0.00"
+                  className={advanceError ? "error-input" : ""}
+                />
+              )}
+              {!isReadOnly && advanceError && (
                 <div className="error-message" style={{ color: "red", fontSize: "12px", marginTop: "5px" }}>
                   {advanceError}
                 </div>
@@ -2067,12 +2266,18 @@ Global Marketing Solutions Team`;
           <div style={{ flex: 1, minWidth: '120px' }}>
             <label>
               Discount (₹):
-              <input
-                type="text"
-                value={discount}
-                onChange={(e) => handleDiscountChange(e.target.value)}
-                placeholder="0.00"
-              />
+              {isReadOnly ? (
+                <div className="readonly-field" style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px', marginTop: '5px' }}>
+                  ₹{discount || '0'}
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={discount}
+                  onChange={(e) => handleDiscountChange(e.target.value)}
+                  placeholder="0.00"
+                />
+              )}
             </label>
           </div>
           <div style={{ flex: 1, minWidth: '120px' }}>
@@ -2083,155 +2288,170 @@ Global Marketing Solutions Team`;
           </div>
         </div>
 
-        {renderAdvanceValidation()}
+        {!isReadOnly && renderAdvanceValidation()}
       </div>
 
-      <div className="payment-method-section">
-        <label>Payment Method:</label>
-        <div className="payment-options">
-          {["Cash", "UPI", "Cheque", "Bank Transfer", "Others", "PO"].map((method) => (
-            <label key={method} style={{ marginRight: "15px", cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={paymentMethods.includes(method)}
-                onChange={() => handlePaymentMethodChange(method)}
-                style={{ marginRight: "5px", cursor: 'pointer' }}
-              />
-              {method}
-            </label>
-          ))}
+      {/* Payment Method Section - Only show if not read-only */}
+      {!isReadOnly && (
+        <div className="payment-method-section">
+          <label>Payment Method:</label>
+          <div className="payment-options">
+            {["Cash", "UPI", "Cheque", "Bank Transfer", "Others", "PO"].map((method) => (
+              <label key={method} style={{ marginRight: "15px", cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={paymentMethods.includes(method)}
+                  onChange={() => handlePaymentMethodChange(method)}
+                  style={{ marginRight: "5px", cursor: 'pointer' }}
+                />
+                {method}
+              </label>
+            ))}
+          </div>
+
+          {paymentMethods.includes("UPI") && (
+            <div className="upi-section" style={{ marginTop: "10px" }}>
+              <label>
+                UPI ID:
+                <select
+                  value={selectedUpi}
+                  onChange={(e) => setSelectedUpi(e.target.value)}
+                  style={{ marginLeft: "10px" }}
+                >
+                  <option value="">Select UPI</option>
+                  {upiOptions.map((upi) => (
+                    <option key={upi} value={upi}>{upi}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+
+          {paymentMethods.includes("Cheque") && (
+            <div className="cheque-section" style={{ marginTop: "10px" }}>
+              <div style={{ marginBottom: "10px" }}>
+                <label>
+                  Cheque Number:
+                  <input
+                    type="text"
+                    value={chequeNumber}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (/^\d{0,6}$/.test(value)) setChequeNumber(value);
+                    }}
+                    maxLength="6"
+                    style={{ marginLeft: "10px" }}
+                  />
+                </label>
+              </div>
+              <div>
+                <label>
+                  Cheque Image:
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setChequeImage(e.target.files[0])}
+                    style={{ marginLeft: "10px" }}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
+          {paymentMethods.includes("PO") && (
+            <div className="po-section" style={{ marginTop: "10px" }}>
+              <div style={{ marginBottom: "10px" }}>
+                <label>
+                  PO Number:
+                  <input
+                    type="text"
+                    value={poNumber}
+                    onChange={(e) => setPoNumber(e.target.value)}
+                    style={{ marginLeft: "10px" }}
+                  />
+                </label>
+              </div>
+              <div>
+                <label>
+                  PO Document:
+                  <input
+                    type="file"
+                    accept=".pdf,image/*"
+                    onChange={(e) => setPoDocument(e.target.files[0])}
+                    style={{ marginLeft: "10px" }}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
+          {paymentMethods.includes("Bank Transfer") && (
+            <div className="bank-transfer-section" style={{ marginTop: "10px" }}>
+              <div style={{ marginBottom: "10px" }}>
+                <label>
+                  Bank Name:
+                  <input
+                    type="text"
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    style={{ marginLeft: "10px" }}
+                  />
+                </label>
+              </div>
+              <div>
+                <label>
+                  Transaction Reference:
+                  <input
+                    type="text"
+                    value={transactionRef}
+                    onChange={(e) => setTransactionRef(e.target.value)}
+                    style={{ marginLeft: "10px" }}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
+          {paymentMethods.includes("Others") && (
+            <div className="other-method-section" style={{ marginTop: "10px" }}>
+              <label>
+                Specify Method:
+                <input
+                  type="text"
+                  value={otherMethod}
+                  onChange={(e) => setOtherMethod(e.target.value)}
+                  style={{ marginLeft: "10px" }}
+                />
+              </label>
+            </div>
+          )}
         </div>
+      )}
 
-        {paymentMethods.includes("UPI") && (
-          <div className="upi-section" style={{ marginTop: "10px" }}>
-            <label>
-              UPI ID:
-              <select
-                value={selectedUpi}
-                onChange={(e) => setSelectedUpi(e.target.value)}
-                style={{ marginLeft: "10px" }}
-              >
-                <option value="">Select UPI</option>
-                {upiOptions.map((upi) => (
-                  <option key={upi} value={upi}>{upi}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-        )}
+      {/* Form Actions - Only show if not read-only */}
+      {!isReadOnly && (
+        <div className="form-actions no-print">
+          <button type="button" onClick={onBack} className="btn btn-secondary">
+            Back to Search
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting || (!isAdmin && advanceError && !hasAdvanceApproval)}
+            className="btn btn-primary"
+          >
+            {isSubmitting ? "Submitting..." : "Submit Order"}
+          </button>
+        </div>
+      )}
 
-        {paymentMethods.includes("Cheque") && (
-          <div className="cheque-section" style={{ marginTop: "10px" }}>
-            <div style={{ marginBottom: "10px" }}>
-              <label>
-                Cheque Number:
-                <input
-                  type="text"
-                  value={chequeNumber}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (/^\d{0,6}$/.test(value)) setChequeNumber(value);
-                  }}
-                  maxLength="6"
-                  style={{ marginLeft: "10px" }}
-                />
-              </label>
-            </div>
-            <div>
-              <label>
-                Cheque Image:
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setChequeImage(e.target.files[0])}
-                  style={{ marginLeft: "10px" }}
-                />
-              </label>
-            </div>
-          </div>
-        )}
-
-        {paymentMethods.includes("PO") && (
-          <div className="po-section" style={{ marginTop: "10px" }}>
-            <div style={{ marginBottom: "10px" }}>
-              <label>
-                PO Number:
-                <input
-                  type="text"
-                  value={poNumber}
-                  onChange={(e) => setPoNumber(e.target.value)}
-                  style={{ marginLeft: "10px" }}
-                />
-              </label>
-            </div>
-            <div>
-              <label>
-                PO Document:
-                <input
-                  type="file"
-                  accept=".pdf,image/*"
-                  onChange={(e) => setPoDocument(e.target.files[0])}
-                  style={{ marginLeft: "10px" }}
-                />
-              </label>
-            </div>
-          </div>
-        )}
-
-        {paymentMethods.includes("Bank Transfer") && (
-          <div className="bank-transfer-section" style={{ marginTop: "10px" }}>
-            <div style={{ marginBottom: "10px" }}>
-              <label>
-                Bank Name:
-                <input
-                  type="text"
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
-                  style={{ marginLeft: "10px" }}
-                />
-              </label>
-            </div>
-            <div>
-              <label>
-                Transaction Reference:
-                <input
-                  type="text"
-                  value={transactionRef}
-                  onChange={(e) => setTransactionRef(e.target.value)}
-                  style={{ marginLeft: "10px" }}
-                />
-              </label>
-            </div>
-          </div>
-        )}
-
-        {paymentMethods.includes("Others") && (
-          <div className="other-method-section" style={{ marginTop: "10px" }}>
-            <label>
-              Specify Method:
-              <input
-                type="text"
-                value={otherMethod}
-                onChange={(e) => setOtherMethod(e.target.value)}
-                style={{ marginLeft: "10px" }}
-              />
-            </label>
-          </div>
-        )}
-      </div>
-
-      <div className="form-actions no-print">
-        <button type="button" onClick={onBack} className="btn btn-secondary">
-          Back to Search
-        </button>
-        <button
-          onClick={handleSubmit}
-          disabled={isSubmitting || (!isAdmin && advanceError && !hasAdvanceApproval)}
-          className="btn btn-primary"
-        >
-          {isSubmitting ? "Submitting..." : "Submit Order"}
-        </button>
-      </div>
+      {/* Back button for read-only mode */}
+      {isReadOnly && (
+        <div className="form-actions no-print">
+          <button type="button" onClick={onBack} className="btn btn-secondary">
+            Back to Search
+          </button>
+        </div>
+      )}
 
       <style>{`
         .form-header {
@@ -2332,6 +2552,12 @@ Global Marketing Solutions Team`;
         .requirements-table th {
           background-color: #1a237e;
           color: white;
+        }
+        .readonly-cell {
+          padding: 8px;
+          background-color: #f5f5f5;
+          border-radius: 4px;
+          min-height: 38px;
         }
         .add-item-btn {
           padding: 8px 16px;

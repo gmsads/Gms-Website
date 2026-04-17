@@ -9,7 +9,8 @@ const paymentSchema = new mongoose.Schema({
   chequeImage: String,
   bankName: String,
   transactionRef: String,
-  otherMethod: String
+  otherMethod: String,
+    utrNumber: String
 });
 
 const orderSchema = new mongoose.Schema({
@@ -34,6 +35,8 @@ const orderSchema = new mongoose.Schema({
   // NEW: Customer special dates (optional)
   birthDate: { type: Date, default: null },
   anniversaryDate: { type: Date, default: null },
+  
+    gstNumber: { type: String, default: null, trim: true },
   // Client Info
   executive: { type: String, required: true },
   business: { type: String, required: true },

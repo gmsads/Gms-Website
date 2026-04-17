@@ -28,6 +28,261 @@ const COLORS = [
   "#36A2EB"
 ];
 
+// Banner Slider Component - Compact Version
+const BannerSlider = () => {
+  const [banners, setBanners] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchActiveBanners();
+  }, []);
+
+  // Auto-slide every 5 seconds
+  useEffect(() => {
+    if (banners.length > 1) {
+      const interval = setInterval(() => {
+        setCurrentIndex((prevIndex) => (prevIndex + 1) % banners.length);
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [banners.length]);
+
+  const fetchActiveBanners = async () => {
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await axios.get(`${API_BASE_URL}/banners/active`);
+      if (response.data.success && response.data.banners.length > 0) {
+        setBanners(response.data.banners);
+      }
+    } catch (error) {
+      console.error('Error fetching banners:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrev = () => {
+    setCurrentIndex((prevIndex) => (prevIndex - 1 + banners.length) % banners.length);
+  };
+
+  const handleNext = () => {
+    setCurrentIndex((prevIndex) => (prevIndex + 1) % banners.length);
+  };
+
+  const handleBannerClick = (banner) => {
+    if (banner.clickUrl) {
+      window.open(banner.clickUrl, '_blank');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '180px',
+        backgroundColor: '#f5f5f5',
+        borderRadius: '8px',
+        marginBottom: '1rem',
+      }}>
+        <div style={{
+          width: '30px',
+          height: '30px',
+          border: '3px solid #f3f3f3',
+          borderTop: '3px solid #1976d2',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite',
+        }}></div>
+      </div>
+    );
+  }
+
+  if (banners.length === 0) {
+    return null;
+  }
+
+  return (
+    <div style={{
+      width: '100%',
+      marginBottom: '1rem',
+      position: 'relative',
+      borderRadius: '8px',
+      overflow: 'hidden',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      backgroundColor: '#000',
+    }}>
+      <div style={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        {/* Left Arrow */}
+        {banners.length > 1 && (
+          <button 
+            onClick={handlePrev} 
+            style={{
+              position: 'absolute',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              left: '10px',
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '50%',
+              width: '32px',
+              height: '32px',
+              fontSize: '18px',
+              cursor: 'pointer',
+              zIndex: 10,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.3s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.8)';
+              e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.5)';
+              e.currentTarget.style.transform = 'translateY(-50%) scale(1)';
+            }}
+          >
+            ❮
+          </button>
+        )}
+
+        {/* Banner Image */}
+        <div 
+          style={{
+            width: '100%',
+            cursor: 'pointer',
+            position: 'relative',
+          }}
+          onClick={() => handleBannerClick(banners[currentIndex])}
+        >
+          <img 
+            src={banners[currentIndex].imageUrl} 
+            alt={banners[currentIndex].title}
+            style={{
+              width: '100%',
+              height: '180px',
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          />
+          
+          {/* Banner Overlay with Title and Description */}
+          <div style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)',
+            padding: '1rem',
+            color: 'white',
+          }}>
+            <div style={{
+              maxWidth: '80%',
+            }}>
+              <h2 style={{
+                fontSize: '1.2rem',
+                fontWeight: 'bold',
+                marginBottom: '0.25rem',
+                margin: 0,
+                textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
+              }}>{banners[currentIndex].title}</h2>
+              {banners[currentIndex].description && (
+                <p style={{
+                  fontSize: '0.85rem',
+                  opacity: 0.9,
+                  margin: 0,
+                  textShadow: '1px 1px 1px rgba(0,0,0,0.5)',
+                }}>{banners[currentIndex].description}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Arrow */}
+        {banners.length > 1 && (
+          <button 
+            onClick={handleNext} 
+            style={{
+              position: 'absolute',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              right: '10px',
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '50%',
+              width: '32px',
+              height: '32px',
+              fontSize: '18px',
+              cursor: 'pointer',
+              zIndex: 10,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.3s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.8)';
+              e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.5)';
+              e.currentTarget.style.transform = 'translateY(-50%) scale(1)';
+            }}
+          >
+            ❯
+          </button>
+        )}
+      </div>
+
+      {/* Dots Indicator */}
+      {banners.length > 1 && (
+        <div style={{
+          position: 'absolute',
+          bottom: '8px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          gap: '6px',
+          zIndex: 10,
+        }}>
+          {banners.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => setCurrentIndex(index)}
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+                transition: 'all 0.3s ease',
+                backgroundColor: index === currentIndex ? '#fff' : 'rgba(255,255,255,0.5)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Custom MonthPicker Component
 const MonthPicker = ({ selectedDate, onChange, onClose }) => {
   const months = [
@@ -195,7 +450,7 @@ const ExecutiveDashboard = ({
   executiveName, 
   onNavigateToPendingPayments, 
   onNavigateToAppointments,
-  onNavigateToViewOrders // NEW PROP for navigating to view orders tab
+  onNavigateToViewOrders
 }) => {
   const [hasNewAppointments, setHasNewAppointments] = useState(false);
   const [selectedExecutive, setSelectedExecutive] = useState('');
@@ -228,8 +483,6 @@ const ExecutiveDashboard = ({
   });
   const [isFieldExec, setIsFieldExec] = useState(false);
   const [buttonsLoaded, setButtonsLoaded] = useState(false);
-  
-  // NEW STATE for client distribution with counts and amounts
   const [clientDistribution, setClientDistribution] = useState([]);
   const [totalClients, setTotalClients] = useState(0);
   const [totalAmountByClient, setTotalAmountByClient] = useState(0);
@@ -242,13 +495,10 @@ const ExecutiveDashboard = ({
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
-  // Check if user is a field executive - SIMPLIFIED VERSION
+  // Check if user is a field executive
   const checkFieldExecutiveRole = useCallback((role) => {
     if (!role) return false;
-    
     const normalizedRole = role.toString().toLowerCase().trim();
-    console.log('Checking role for field executive:', normalizedRole);
-    
     const fieldExecutiveRoles = [
       'fieldexecutive',
       'field executive', 
@@ -257,7 +507,6 @@ const ExecutiveDashboard = ({
       'field_executive',
       'field-executive'
     ];
-    
     return fieldExecutiveRoles.includes(normalizedRole);
   }, []);
 
@@ -276,11 +525,8 @@ const ExecutiveDashboard = ({
       };
       
       setUserProfile(updatedUserProfile);
-      
-      // Update field executive status when profile is saved
       const fieldExecStatus = checkFieldExecutiveRole(updatedProfile.role);
       setIsFieldExec(fieldExecStatus);
-      
       return true;
     } catch (error) {
       console.error("Update failed:", error);
@@ -290,7 +536,7 @@ const ExecutiveDashboard = ({
 
   const handleNewAppointmentsClick = () => {
     if (onNavigateToAppointments) {
-      onNavigateToAppointments(); // This sets the tab to viewAppointments
+      onNavigateToAppointments();
     } else {
       localStorage.setItem('lastSeenAppointmentCount', appointmentCount.toString());
       setHasNewAppointments(false);
@@ -304,7 +550,7 @@ const ExecutiveDashboard = ({
 
   const handlePendingPaymentsClick = () => {
     if (onNavigateToPendingPayments) {
-      onNavigateToPendingPayments(); // This sets the tab to pending-payments
+      onNavigateToPendingPayments();
     } else {
       navigate('/pending-payments', { 
         state: { 
@@ -325,8 +571,6 @@ const ExecutiveDashboard = ({
   };
 
   const handleMonthYearChange = (date) => {
-    console.log('Date changed to:', date);
-    console.log('Month:', date.getMonth() + 1, 'Year:', date.getFullYear());
     setSelectedDate(date);
     setShowMonthPicker(false);
   };
@@ -355,12 +599,9 @@ const ExecutiveDashboard = ({
     }
   };
 
-  // NEW: Handle client bar click to navigate to view orders filtered by client type
   const handleClientBarClick = (data) => {
     if (data && data.activePayload && data.activePayload.length > 0) {
       const clientType = data.activePayload[0].payload.name;
-      
-      // First, save the filters to localStorage so ViewOrders can read them
       const filters = {
         clientType: clientType,
         month: selectedDate.getMonth() + 1,
@@ -368,17 +609,13 @@ const ExecutiveDashboard = ({
         executive: selectedExecutive
       };
       localStorage.setItem('viewOrdersFilters', JSON.stringify(filters));
-      
-      // Call the navigation prop to switch to viewOrders tab (just like appointments)
       if (onNavigateToViewOrders) {
-        onNavigateToViewOrders(); // This will set activeTab to "viewOrders" in Admin
+        onNavigateToViewOrders();
       }
     }
   };
 
-  // NEW: Handle breakdown item click
   const handleBreakdownItemClick = (clientType) => {
-    // Save filters to localStorage
     const filters = {
       clientType: clientType,
       month: selectedDate.getMonth() + 1,
@@ -386,72 +623,45 @@ const ExecutiveDashboard = ({
       executive: selectedExecutive
     };
     localStorage.setItem('viewOrdersFilters', JSON.stringify(filters));
-    
-    // Call the navigation prop to switch to viewOrders tab
     if (onNavigateToViewOrders) {
-      onNavigateToViewOrders(); // This will set activeTab to "viewOrders" in Admin
+      onNavigateToViewOrders();
     }
   };
 
-  // ===== FIXED: fetchExecutiveData now only counts Retail/New orders for target =====
   const fetchExecutiveData = useCallback(async (executiveName) => {
     try {
       const month = selectedDate.getMonth() + 1;
       const year = selectedDate.getFullYear();
-
-      console.log(`Fetching executive data for ${executiveName} - Month: ${month}, Year: ${year}`);
 
       const res = await axios.get(`/api/executive/${executiveName}`, {
         params: { month, year }
       });
       const orders = res.data;
 
-      console.log(`Executive data received:`, orders);
-
       let totalAchieved = 0;
       let executiveTarget = 100;
       let completed = 0;
       let pending = 0;
-      let retailCount = 0;
-      let excludedCount = 0;
 
       orders.forEach(order => {
-        // Get target from first order (if present)
         if (order.target) executiveTarget = parseFloat(order.target) || 100;
         
-        // Check client type - ONLY count for target if Retail or New
         const clientType = (order.clientType || '').toString().toLowerCase().trim();
         
-        // Calculate order total
         let orderTotal = 0;
         order.rows?.forEach(row => {
           const rowTotal = parseFloat(row.total || 0);
           orderTotal += rowTotal;
           
-          // Service tracking (for all orders, regardless of type)
           const deliveryDate = row.deliveryDate ? parseISO(row.deliveryDate) : null;
           const isExpired = deliveryDate && isBefore(deliveryDate, new Date());
           if (row.isCompleted || isExpired) completed++;
           else pending++;
         });
         
-        // ONLY ADD TO ACHIEVED if client type is Retail or New
         if (clientType === 'retail' || clientType === 'new') {
           totalAchieved += orderTotal;
-          retailCount++;
-          console.log(`✅ RETAIL order ${order.orderNo}: ₹${orderTotal} (${order.clientType}) ADDED to target`);
-        } else {
-          excludedCount++;
-          console.log(`❌ EXCLUDED order ${order.orderNo}: ₹${orderTotal} (${order.clientType || 'No type'}) NOT counted in target`);
         }
-      });
-
-      console.log(`📊 Target calculation:`, {
-        target: executiveTarget,
-        achieved: totalAchieved,
-        retailOrders: retailCount,
-        excludedOrders: excludedCount,
-        totalOrders: orders.length
       });
 
       setTarget(executiveTarget);
@@ -467,8 +677,6 @@ const ExecutiveDashboard = ({
       const month = selectedDate.getMonth() + 1;
       const year = selectedDate.getFullYear();
 
-      console.log(`Fetching payments for ${selectedExecutive} - Month: ${month}, Year: ${year}`);
-
       const res = await axios.get('/api/orders/pending-payments', {
         params: { month, year }
       });
@@ -476,8 +684,6 @@ const ExecutiveDashboard = ({
 
       const totalAdvance = orders.reduce((sum, o) => sum + parseFloat(o.advance || 0), 0);
       const totalBalance = orders.reduce((sum, o) => sum + parseFloat(o.balance || 0), 0);
-
-      console.log(`Payments - Paid: ${totalAdvance}, Unpaid: ${totalBalance}`);
 
       setPaymentData([
         { name: 'Paid', value: totalAdvance, fill: '#4CAF50' },
@@ -493,8 +699,6 @@ const ExecutiveDashboard = ({
       const month = selectedDate.getMonth() + 1;
       const year = selectedDate.getFullYear();
 
-      console.log(`Fetching appointments for ${selectedExecutive} - Month: ${month}, Year: ${year}`);
-
       const res = await axios.get('/api/appointments', {
         params: { month, year }
       });
@@ -504,7 +708,6 @@ const ExecutiveDashboard = ({
       const newCount = assigned.length;
       const storedCount = parseInt(localStorage.getItem('lastSeenAppointmentCount')) || 0;
 
-      console.log(`Appointments count: ${newCount}`);
       setHasNewAppointments(newCount > storedCount);
       setAppointmentCount(newCount);
     } catch (error) {
@@ -517,8 +720,6 @@ const ExecutiveDashboard = ({
       const month = selectedDate.getMonth() + 1;
       const year = selectedDate.getFullYear();
 
-      console.log(`Fetching follow-ups for ${selectedExecutive} - Month: ${month}, Year: ${year}`);
-
       const res = await axios.get('/api/follow-ups', {
         params: {
           month,
@@ -527,17 +728,14 @@ const ExecutiveDashboard = ({
         }
       });
       const count = res.data.length || 0;
-      console.log(`Follow-ups count: ${count}`);
       setFollowUpCount(count);
     } catch (error) {
       console.error('Error fetching follow-up count:', error);
     }
   }, [selectedExecutive, selectedDate]);
 
-  // SIMPLIFIED: Fetch user profile with immediate role detection
   const fetchUserProfile = useCallback(async (executiveName) => {
     try {
-      console.log('Fetching profile for:', executiveName);
       const response = await axios.get('/api/user-profile', {
         params: { name: executiveName }
       });
@@ -550,17 +748,12 @@ const ExecutiveDashboard = ({
         };
         
         setUserProfile(userData);
-        
-        // Update field executive status immediately
         const fieldExecStatus = checkFieldExecutiveRole(userData.role);
-        console.log('Field executive status determined:', fieldExecStatus);
         setIsFieldExec(fieldExecStatus);
-        
         return userData;
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
-      // Set default values if API fails
       const defaultUserData = {
         name: executiveName,
         phone: '',
@@ -577,8 +770,6 @@ const ExecutiveDashboard = ({
       const month = selectedDate.getMonth() + 1;
       const year = selectedDate.getFullYear();
 
-      console.log(`Fetching prospects for ${selectedExecutive} - Month: ${month}, Year: ${year}, Role: ${userProfile.role}`);
-
       const res = await axios.get('/api/prospective-clients', {
         params: {
           month,
@@ -589,8 +780,6 @@ const ExecutiveDashboard = ({
       });
 
       const prospects = res.data || [];
-      console.log(`Prospects count: ${prospects.length}`);
-      
       const statusCount = {};
 
       prospects.forEach((prospect) => {
@@ -618,13 +807,10 @@ const ExecutiveDashboard = ({
     }
   }, [selectedExecutive, selectedDate, userProfile.role]);
 
-  // NEW FUNCTION: Fetch client distribution data with counts and amounts
   const fetchClientDistribution = useCallback(async () => {
     try {
       const month = selectedDate.getMonth() + 1;
       const year = selectedDate.getFullYear();
-
-      console.log(`Fetching client distribution for ${selectedExecutive} - Month: ${month}, Year: ${year}`);
 
       const res = await axios.get('/api/orders', {
         params: { 
@@ -635,8 +821,6 @@ const ExecutiveDashboard = ({
       });
       
       const orders = res.data;
-      
-      // Initialize distribution object with counts and amounts
       const distribution = {
         'Retail': { count: 0, amount: 0 },
         'Agent': { count: 0, amount: 0 },
@@ -649,8 +833,6 @@ const ExecutiveDashboard = ({
       
       orders.forEach(order => {
         const clientType = order.clientType || 'Retail';
-        
-        // Calculate order total from rows
         let orderTotal = 0;
         if (order.rows && Array.isArray(order.rows)) {
           orderTotal = order.rows.reduce((sum, row) => {
@@ -658,12 +840,10 @@ const ExecutiveDashboard = ({
           }, 0);
         }
         
-        // Add to appropriate client type
         if (distribution.hasOwnProperty(clientType)) {
           distribution[clientType].count++;
           distribution[clientType].amount += orderTotal;
         } else {
-          // Default to Retail if unknown
           distribution['Retail'].count++;
           distribution['Retail'].amount += orderTotal;
         }
@@ -672,20 +852,15 @@ const ExecutiveDashboard = ({
         totalAmountSum += orderTotal;
       });
       
-      // Convert to array format for chart
       const distributionArray = Object.keys(distribution).map(key => ({
         name: key,
         count: distribution[key].count,
         amount: distribution[key].amount
       }));
       
-      console.log('Client distribution with amounts:', distributionArray);
-      console.log('Total amount:', totalAmountSum);
-      
       setClientDistribution(distributionArray);
       setTotalClients(totalClientsCount);
       setTotalAmountByClient(totalAmountSum);
-      
     } catch (err) {
       console.error('Error fetching client distribution:', err);
       setClientDistribution([]);
@@ -694,7 +869,6 @@ const ExecutiveDashboard = ({
     }
   }, [selectedExecutive, selectedDate]);
 
-  // NEW: Format currency for display
   const formatCurrency = (value) => {
     if (value >= 10000000) {
       return `₹${(value / 10000000).toFixed(2)}Cr`;
@@ -727,37 +901,24 @@ const ExecutiveDashboard = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Initialize user
   useEffect(() => {
     const loggedInUser = localStorage.getItem('userName');
-    console.log('Initializing user:', loggedInUser);
-    
     if (loggedInUser) {
       setUserName(loggedInUser);
       setSelectedExecutive(loggedInUser);
-      
-      // Show buttons immediately while fetching profile in background
       setButtonsLoaded(true);
-      
-      // Fetch profile in background
       fetchUserProfile(loggedInUser);
     }
   }, [fetchUserProfile]);
 
-  // MAIN DATA FETCHING EFFECT - This triggers when selectedDate changes
   useEffect(() => {
     if (selectedExecutive) {
-      console.log('=== FETCHING ALL DATA FOR SELECTED MONTH/YEAR ===');
-      console.log('Date:', selectedDate);
-      console.log('Month:', selectedDate.getMonth() + 1);
-      console.log('Year:', selectedDate.getFullYear());
-      
       fetchExecutiveData(selectedExecutive);
       fetchPendingPayments();
       fetchAppointmentCount();
       fetchFollowUpCount();
       fetchProspects();
-      fetchClientDistribution(); // NEW: Fetch client distribution with amounts
+      fetchClientDistribution();
     }
   }, [
     selectedExecutive, 
@@ -770,7 +931,6 @@ const ExecutiveDashboard = ({
     fetchClientDistribution
   ]);
 
-  // Auto-refresh interval
   useEffect(() => {
     const interval = setInterval(() => {
       if (selectedExecutive) {
@@ -788,7 +948,6 @@ const ExecutiveDashboard = ({
     fetchProspects
   ]);
 
-  // Data for charts
   const pieData = [
     { name: 'Achieved', value: achieved, fill: '#4CAF50' },
     { name: 'Remaining', value: Math.max(0, target - achieved), fill: '#F44336' }
@@ -799,6 +958,9 @@ const ExecutiveDashboard = ({
 
   return (
     <div className="dashboard-container">
+      {/* Banner Slider at the top - Compact Version */}
+      <BannerSlider />
+
       {/* Congratulations Popup */}
       {showCongrats && (
         <div className="congrats-popup">
@@ -816,7 +978,6 @@ const ExecutiveDashboard = ({
       {/* Header */}
       <header className="dashboard-header">
         <div className="header-left">
-          {/* Name positioned above calendar */}
           <div className="name-calendar-container">
             <h2 className="executive-name">{selectedExecutive}</h2>
             <button onClick={handleCalendarClick} className="calendar-btn">
@@ -828,7 +989,6 @@ const ExecutiveDashboard = ({
           </div>
         </div>
 
-        {/* Mobile Menu Button Container */}
         <div 
           className="mobile-menu-wrapper" 
           style={{
@@ -864,11 +1024,9 @@ const ExecutiveDashboard = ({
           </button>
         </div>
 
-        {/* BUTTONS CONTAINER - Show all buttons immediately */}
         {buttonsLoaded && (
           <div className={`header-right ${mobileMenuOpen ? 'mobile-open' : ''}`}>
             <div className="action-buttons">
-              {/* Pending Payments Button - ORANGE COLOR */}
               <button
                 onClick={handlePendingPaymentsClick}
                 className="pending-payments-btn"
@@ -876,7 +1034,6 @@ const ExecutiveDashboard = ({
                 Pending Payments
               </button>
 
-              {/* Follow Ups Button - PURPLE COLOR */}
               <button
                 onClick={handleFollowUpsClick}
                 className="follow-ups-btn"
@@ -889,7 +1046,6 @@ const ExecutiveDashboard = ({
                 )}
               </button>
 
-              {/* New Appointments Button - DEEP BLUE COLOR */}
               <button
                 onClick={handleNewAppointmentsClick}
                 className="appointments-btn"
@@ -902,7 +1058,6 @@ const ExecutiveDashboard = ({
                 )}
               </button>
 
-              {/* Field Executive Button - TEAL COLOR */}
               {isFieldExec && (
                 <button
                   onClick={handleFieldExecutivePage}
@@ -913,7 +1068,6 @@ const ExecutiveDashboard = ({
               )}
             </div>
 
-            {/* User Avatar positioned slightly lower */}
             <div className="user-avatar-container">
               <button
                 className="user-avatar"
@@ -938,7 +1092,7 @@ const ExecutiveDashboard = ({
       )}
 
       <main className="dashboard-content">
-        {/* Target Card - Large */}
+        {/* Target Card */}
         <div className="dashboard-card target-card">
           <div className="card-header">
             <h3>🎯 Target - {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
@@ -976,19 +1130,6 @@ const ExecutiveDashboard = ({
                     <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
                 </Pie>
-                {achieved > target && (
-                  <Pie
-                    data={[{ name: 'Extra', value: achieved - target }, { name: 'Remainder', value: achieved }]}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={isMobile ? 90 : 110}
-                    outerRadius={isMobile ? 100 : 120}
-                    dataKey="value"
-                  >
-                    <Cell fill="#2196F3" />
-                    <Cell fill="transparent" />
-                  </Pie>
-                )}
                 <Tooltip formatter={(value, name) => [`₹${value}`, name]} />
                 <Legend />
               </PieChart>
@@ -996,7 +1137,7 @@ const ExecutiveDashboard = ({
           </div>
         </div>
 
-        {/* CLIENT OVERVIEW CARD - UPDATED with combined count and amount on single bar */}
+        {/* Client Overview Card */}
         <div className="dashboard-card client-overview-card">
           <div className="card-header">
             <h3>📊 Client Overview - {selectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</h3>
@@ -1081,7 +1222,7 @@ const ExecutiveDashboard = ({
           </div>
         </div>
 
-        {/* Services Card - Medium */}
+        {/* Services Card */}
         <div className="dashboard-card services-card">
           <div className="card-header">
             <h3>🛠 Services Status - {selectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</h3>
@@ -1116,7 +1257,7 @@ const ExecutiveDashboard = ({
           </div>
         </div>
 
-        {/* Payments Card - Small */}
+        {/* Payments Card */}
         <div className="dashboard-card payments-card">
           <div className="card-header">
             <h3>💳 Payment Status - {selectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</h3>
@@ -1149,7 +1290,7 @@ const ExecutiveDashboard = ({
           </div>
         </div>
 
-        {/* Prospects Card - Small */}
+        {/* Prospects Card */}
         <div className="dashboard-card prospects-card">
           <div className="card-header">
             <h3>👥 Prospects - {selectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</h3>
@@ -1254,7 +1395,6 @@ const ExecutiveDashboard = ({
           flex: 1;
         }
 
-        /* Name and Calendar Container */
         .name-calendar-container {
           display: flex;
           flex-direction: column;
@@ -1271,7 +1411,6 @@ const ExecutiveDashboard = ({
           line-height: 1.2;
         }
 
-        /* Calendar Button */
         .calendar-btn {
           display: flex;
           align-items: center;
@@ -1319,14 +1458,12 @@ const ExecutiveDashboard = ({
           justify-content: flex-end;
         }
 
-        /* User Avatar Container - Positioned slightly lower */
         .user-avatar-container {
           display: flex;
           align-items: center;
           margin-top: 0.5rem;
         }
 
-        /* Pending Payments Button - ORANGE COLOR */
         .pending-payments-btn {
           position: relative;
           padding: 0.75rem 1.5rem;
@@ -1352,7 +1489,6 @@ const ExecutiveDashboard = ({
           box-shadow: 0 6px 20px rgba(255, 140, 0, 0.5);
         }
 
-        /* Follow Ups Button - PURPLE COLOR */
         .follow-ups-btn {
           position: relative;
           padding: 0.75rem 1.5rem;
@@ -1378,7 +1514,6 @@ const ExecutiveDashboard = ({
           box-shadow: 0 6px 20px rgba(123, 31, 162, 0.5);
         }
 
-        /* New Appointments Button - DEEP BLUE COLOR */
         .appointments-btn {
           position: relative;
           padding: 0.75rem 1.5rem;
@@ -1404,7 +1539,6 @@ const ExecutiveDashboard = ({
           box-shadow: 0 6px 20px rgba(21, 101, 192, 0.5);
         }
 
-        /* Field Executive Button - TEAL COLOR */
         .field-executive-btn {
           position: relative;
           padding: 0.75rem 1.5rem;
@@ -1496,7 +1630,6 @@ const ExecutiveDashboard = ({
           grid-column: span 6;
         }
 
-        /* Client Overview Card - takes 6 columns (half of first row) */
         .client-overview-card {
           grid-column: span 6;
         }
@@ -1619,7 +1752,6 @@ const ExecutiveDashboard = ({
           font-weight: 600;
         }
 
-        /* Prospects Chart Styles */
         .prospect-chart {
           flex: 1;
           width: 100%;
@@ -1641,7 +1773,6 @@ const ExecutiveDashboard = ({
           text-align: center;
         }
 
-        /* Congratulations Popup */
         .congrats-popup {
           position: fixed;
           top: 1.5rem;
@@ -1688,7 +1819,6 @@ const ExecutiveDashboard = ({
           font-size: 1rem;
         }
 
-        /* Month Picker Overlay - Colorful */
         .month-picker-overlay {
           position: fixed;
           top: 0;
@@ -1777,7 +1907,6 @@ const ExecutiveDashboard = ({
           transform: translateY(-1px);
         }
 
-        /* Modal Styles */
         .modal-overlay {
           position: fixed;
           top: 0;
@@ -1842,7 +1971,6 @@ const ExecutiveDashboard = ({
           margin-top: 1.5rem;
         }
 
-        /* Custom Tooltip */
         .custom-tooltip {
           background-color: white;
           border: 1px solid #ccc;
@@ -1851,11 +1979,15 @@ const ExecutiveDashboard = ({
           box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
 
-        /* Animations */
         @keyframes blink {
           0% { opacity: 1; }
           50% { opacity: 0.5; }
           100% { opacity: 1; }
+        }
+
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
 
         /* Mobile Responsive Styles */
@@ -1908,7 +2040,6 @@ const ExecutiveDashboard = ({
             font-size: 0.8rem;
           }
 
-          /* Mobile Menu Button display for mobile */
           .mobile-menu-btn {
             display: flex !important;
           }
@@ -2082,7 +2213,6 @@ const ExecutiveDashboard = ({
           }
         }
 
-        /* Chart text visibility fixes */
         .recharts-legend-wrapper {
           font-size: 12px;
         }

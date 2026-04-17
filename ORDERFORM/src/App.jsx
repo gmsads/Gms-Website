@@ -84,7 +84,7 @@ import VideoEditorDashboard from './VideoEditors/VideoEditorDashboard.jsx';
 import AssignedVideos from './VideoEditors/AssignedVideos.jsx';
 import UploadVideo from './VideoEditors/UploadVideo.jsx';
 import MyWork from './VideoEditors/MyWork.jsx';
-
+import BannerManagement  from './Admin/BannerManagement';
 // ============ WRAPPER COMPONENT FOR HR ATTENDANCE ============
 const AttendanceWithEmployees = () => {
   const [employees, setEmployees] = useState([]);
@@ -294,6 +294,7 @@ function App() {
           <Route path="quotation" element={<Quotation/>}/>
           <Route path="advance-approvals" element={<AdvanceApprovalPage/>}/>
           <Route path="fieldvisitsadmin" element={<FieldVisitsAdmin/>} />
+            <Route path="create-banner" element={<BannerManagement/>} />
         </Route>
 
         {/* Agent Dashboard Routes */}
