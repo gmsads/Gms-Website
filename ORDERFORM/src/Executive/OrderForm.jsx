@@ -528,60 +528,77 @@ Global Marketing Solutions Team`;
     // Call onNewOrder callback if provided
     if (onNewOrder) onNewOrder();
   };
+const submitAdvanceApprovalRequest = async () => {
+  if (!approvalReason.trim()) {
+    alert("Please provide a reason for low advance payment");
+    return;
+  }
 
-  const submitAdvanceApprovalRequest = async () => {
-    if (!approvalReason.trim()) {
-      alert("Please provide a reason for low advance payment");
-      return;
+  setIsSubmittingApproval(true);
+  try {
+    const advanceNum = parseFloat(advance) || 0;
+    const totalNum = parseFloat(total) || 0;
+    const advancePercentage = totalNum > 0 ? (advanceNum / totalNum) * 100 : 0;
+
+    const requestData = {
+      executive: selectedExecutive,
+      business,
+      contactPerson,
+      contactNumber,
+      totalAmount: totalNum,
+      advanceAmount: advanceNum,
+      advancePercentage: advancePercentage.toFixed(1),
+      reason: approvalReason,
+      orderData: {
+        clientLocation,
+        orderDate,
+        clientType,
+        target,
+        rows: rows.map(row => ({
+          requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
+          description: row.description,
+          quantity: row.quantity,
+          rate: row.rate,
+          total: row.total,
+          gstIncluded: row.gstIncluded
+        })),
+        discount,
+        paymentMethods
+      }
+    };
+
+    console.log('Submitting approval request:', requestData); // Debug log
+
+    const response = await axios.post("/api/advance-approval-requests", requestData);
+    
+    console.log('Approval response:', response.data); // Debug log
+
+    setShowAdvanceApprovalModal(false);
+    setApprovalRequested(true);
+    setApprovalReason("");
+
+    alert("Advance approval request submitted! The system will automatically check for approval every 5 seconds. You'll be notified when approved.");
+  } catch (error) {
+    console.error("Error submitting approval request:", error);
+    
+    // More detailed error message
+    if (error.response) {
+      // Server responded with error
+      console.error('Response data:', error.response.data);
+      console.error('Response status:', error.response.status);
+      alert(`Failed to submit approval request: ${error.response.data.error || error.response.data.message || 'Server error'}`);
+    } else if (error.request) {
+      // Request was made but no response
+      console.error('No response received:', error.request);
+      alert("Network error: Could not connect to server. Please check your connection.");
+    } else {
+      // Something else
+      alert(`Error: ${error.message}`);
     }
-
-    setIsSubmittingApproval(true);
-    try {
-      const advanceNum = parseFloat(advance) || 0;
-      const totalNum = parseFloat(total) || 0;
-      const advancePercentage = (advanceNum / totalNum) * 100;
-
-      const requestData = {
-        executive: selectedExecutive,
-        business,
-        contactPerson,
-        contactNumber,
-        totalAmount: totalNum,
-        advanceAmount: advanceNum,
-        advancePercentage: advancePercentage.toFixed(1),
-        reason: approvalReason,
-        orderData: {
-          clientLocation,
-          orderDate,
-          clientType,
-          target,
-          rows: rows.map(row => ({
-            requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
-            description: row.description,
-            quantity: row.quantity,
-            rate: row.rate,
-            total: row.total,
-            gstIncluded: row.gstIncluded
-          })),
-          discount,
-          paymentMethods
-        }
-      };
-
-      await axios.post("/api/advance-approval-requests", requestData);
-
-      setShowAdvanceApprovalModal(false);
-      setApprovalRequested(true);
-      setApprovalReason("");
-
-      alert("Advance approval request submitted! The system will automatically check for approval every 5 seconds. You'll be notified when approved.");
-    } catch (error) {
-      console.error("Error submitting approval request:", error);
-      alert("Failed to submit approval request. Please try again.");
-    } finally {
-      setIsSubmittingApproval(false);
-    }
-  };
+  } finally {
+    setIsSubmittingApproval(false);
+  }
+};
 
   useEffect(() => {
     const fetchAllExecutives = async () => {

@@ -691,7 +691,7 @@ function AdminDashboard() {
   const getAvailableYears = () => {
     const currentYear = new Date().getFullYear();
     const years = ['all'];
-    for (let i = 2015; i <= currentYear + 5; i++) {
+    for (let i = 2024; i <= currentYear + 5; i++) {
       years.push(i.toString());
     }
     return years;

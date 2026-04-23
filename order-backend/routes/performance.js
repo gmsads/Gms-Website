@@ -277,10 +277,8 @@ router.get('/', async (req, res) => {
           orders: 0,
           prospects: 0,
           totalAmount: 0,
-          retailCount: 0,
-          retailAmount: 0,
-          newCount: 0,
-          newAmount: 0,
+          newRetailCount: 0,
+          newRetailAmount: 0,
           agentCount: 0,
           agentAmount: 0,
           renewalCount: 0,
@@ -294,30 +292,28 @@ router.get('/', async (req, res) => {
       monthlyData[key].totalAmount += orderTotal;
       monthlyData[key].orders += 1;
       
+      // Get advance amount
+      const advanceAmount = Number(order.advance) || 0;
+      
       // Add to client type breakdown
       if (clientType === 'retail') {
-        monthlyData[key].retailCount += 1;
-        monthlyData[key].retailAmount += orderTotal;
-        // Only Retail counts toward achieved
+        monthlyData[key].newRetailCount += 1;
+        monthlyData[key].newRetailAmount += orderTotal;
         monthlyData[key].achieved += orderTotal;
-      } else if (clientType === 'new') {
-        monthlyData[key].newCount += 1;
-        monthlyData[key].newAmount += orderTotal;
-        // Only New counts toward achieved
-        monthlyData[key].achieved += orderTotal;
+        monthlyData[key].advance += advanceAmount;
       } else if (clientType === 'agent') {
         monthlyData[key].agentCount += 1;
         monthlyData[key].agentAmount += orderTotal;
+        // Agent orders do NOT get advance
       } else if (clientType === 'renewal') {
         monthlyData[key].renewalCount += 1;
         monthlyData[key].renewalAmount += orderTotal;
+        // Renewal orders do NOT get advance
       } else if (clientType === 'renewalAgent') {
         monthlyData[key].renewalAgentCount += 1;
         monthlyData[key].renewalAgentAmount += orderTotal;
+        // Renewal Agent orders do NOT get advance
       }
-      
-      // Add advance
-      monthlyData[key].advance += Number(order.advance) || 0;
     });
 
     // Process targets
@@ -334,10 +330,8 @@ router.get('/', async (req, res) => {
           orders: 0,
           prospects: 0,
           totalAmount: 0,
-          retailCount: 0,
-          retailAmount: 0,
-          newCount: 0,
-          newAmount: 0,
+          newRetailCount: 0,
+          newRetailAmount: 0,
           agentCount: 0,
           agentAmount: 0,
           renewalCount: 0,
@@ -372,10 +366,8 @@ router.get('/', async (req, res) => {
           orders: 0,
           prospects: 1,
           totalAmount: 0,
-          retailCount: 0,
-          retailAmount: 0,
-          newCount: 0,
-          newAmount: 0,
+          newRetailCount: 0,
+          newRetailAmount: 0,
           agentCount: 0,
           agentAmount: 0,
           renewalCount: 0,
@@ -395,10 +387,8 @@ router.get('/', async (req, res) => {
       orders: m.orders,
       prospects: m.prospects,
       totalAmount: m.totalAmount,
-      retailCount: m.retailCount,
-      retailAmount: m.retailAmount,
-      newCount: m.newCount,
-      newAmount: m.newAmount,
+      newRetailCount: m.newRetailCount,
+      newRetailAmount: m.newRetailAmount,
       agentCount: m.agentCount,
       agentAmount: m.agentAmount,
       renewalCount: m.renewalCount,
@@ -423,10 +413,8 @@ router.get('/', async (req, res) => {
     const totalMonthlyProspects = detailedMonthlyData.reduce((sum, m) => sum + m.prospects, 0);
     const totalMonthlyAmount = detailedMonthlyData.reduce((sum, m) => sum + m.totalAmount, 0);
     
-    const totalRetailCount = detailedMonthlyData.reduce((sum, m) => sum + m.retailCount, 0);
-    const totalRetailAmount = detailedMonthlyData.reduce((sum, m) => sum + m.retailAmount, 0);
-    const totalNewCount = detailedMonthlyData.reduce((sum, m) => sum + m.newCount, 0);
-    const totalNewAmount = detailedMonthlyData.reduce((sum, m) => sum + m.newAmount, 0);
+    const totalNewRetailCount = detailedMonthlyData.reduce((sum, m) => sum + m.newRetailCount, 0);
+    const totalNewRetailAmount = detailedMonthlyData.reduce((sum, m) => sum + m.newRetailAmount, 0);
     const totalAgentCount = detailedMonthlyData.reduce((sum, m) => sum + m.agentCount, 0);
     const totalAgentAmount = detailedMonthlyData.reduce((sum, m) => sum + m.agentAmount, 0);
     const totalRenewalCount = detailedMonthlyData.reduce((sum, m) => sum + m.renewalCount, 0);
@@ -468,11 +456,8 @@ router.get('/', async (req, res) => {
       advance: totalMonthlyAdvance,
       totalAmount: totalMonthlyAmount,
       achievedPercentage,
-      // Client breakdown totals
-      retailCount: totalRetailCount,
-      retailAmount: totalRetailAmount,
-      newCount: totalNewCount,
-      newAmount: totalNewAmount,
+      newRetailCount: totalNewRetailCount,
+      newRetailAmount: totalNewRetailAmount,
       agentCount: totalAgentCount,
       agentAmount: totalAgentAmount,
       renewalCount: totalRenewalCount,
@@ -604,7 +589,5 @@ router.get('/overall/all-time', async (req, res) => {
     });
   }
 });
-
-
 
 module.exports = router;

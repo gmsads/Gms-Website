@@ -2041,68 +2041,82 @@ function ViewOrders() {
     setPaymentData(prev => ({ ...prev, [name]: value }));
   };
 
-  // ===== 24. EXPORT/IMPORT FUNCTIONS =====
-  const handleExportToExcel = () => {
-    let ordersToExport = filteredOrders;
-    if (shouldSeeOnlyOwnOrders()) {
-      ordersToExport = filteredOrders.filter(order => order.executive === executiveName);
-    }
+ // ===== 24. EXPORT/IMPORT FUNCTIONS =====
+const handleExportToExcel = () => {
+  let ordersToExport = filteredOrders;
+  if (shouldSeeOnlyOwnOrders()) {
+    ordersToExport = filteredOrders.filter(order => order.executive === executiveName);
+  }
 
-    const flattenedOrders = ordersToExport.flatMap(order =>
-      order.rows.map(row => ({
-        'S.No': ordersToExport.indexOf(order) + 1,
-        'Executive': order.executive,
-        'Business': order.business,
-        'Customer': order.contactPerson,
-        'Location': order.location,
-        'Lead Source': order.leadSource || '',
-        'Other Lead Source': order.otherLeadSource || '',
-        'Contact': `${order.contactCode} ${order.phone}`,
-        'Order No': order.orderNo,
-        'Order Date': formatDate(order.orderDate),
-        'Client Type': order.clientType,
-        'GST Number': order.gstNumber || '',
-        'Description': row.description,
-        'Requirement': row.requirement,
-        'Custom Requirement': row.customRequirement,
-        'Qty': row.quantity,
-        'Rate': row.rate,
-        'Total': row.total,
-        'Discount': order.discount,
-        'Final Amount': order.discountedTotal,
-        'Delivery Date': formatDate(row.deliveryDate),
-        'Service Assigned': row.assignedExecutive || 'Not Assigned',
-        'Status': row.status,
-        'Remark': row.remark,
-        'Is Completed': row.isCompleted ? 'Yes' : 'No',
-        'Advance': order.advance,
-        'Balance': order.balance,
-        'Advance Date': formatDate(order.advanceDate),
-        'Payment Date': formatDate(order.paymentDate),
-        'Payment Method': order.paymentMethod,
-        'Cheque Number': order.chequeNumber,
-        'Created By': order.createdBy || order.executive,
-        'Payments': order.paymentHistory ?
-          order.paymentHistory.map(p => `${formatDate(p.date)}: ₹${p.amount} (${p.method})`).join('; ') : ''
-      }))
-    );
+  // ✅ CRITICAL FIX: Sort orders from OLDEST to NEWEST for Excel export
+  const sortedOrdersForExport = [...ordersToExport].sort((a, b) => {
+    const dateA = new Date(a.orderDate || 0);
+    const dateB = new Date(b.orderDate || 0);
+    return dateA - dateB; // Ascending order (oldest first)
+  });
 
-    const worksheet = XLSX.utils.json_to_sheet(flattenedOrders);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+  console.log('📊 Exporting orders:', {
+    displayCount: ordersToExport.length,
+    exportCount: sortedOrdersForExport.length,
+    firstOrder: sortedOrdersForExport[0]?.orderDate,
+    lastOrder: sortedOrdersForExport[sortedOrdersForExport.length - 1]?.orderDate
+  });
 
-    let filename;
-    if (shouldSeeOnlyOwnOrders()) {
-      filename = `my_orders_${yearFilter}_${executiveName}_export.xlsx`;
-    } else if (appliedExecutiveFilters.executiveName) {
-      filename = `orders_${appliedExecutiveFilters.executiveName}_${yearFilter}_export.xlsx`;
-    } else {
-      filename = `orders_${yearFilter}_export.xlsx`;
-    }
+  const flattenedOrders = sortedOrdersForExport.flatMap(order =>
+    order.rows.map(row => ({
+      'S.No': sortedOrdersForExport.indexOf(order) + 1,
+      'Executive': order.executive,
+      'Business': order.business,
+      'Customer': order.contactPerson,
+      'Location': order.location,
+      'Lead Source': order.leadSource || '',
+      'Other Lead Source': order.otherLeadSource || '',
+      'Contact': `${order.contactCode} ${order.phone}`,
+      'Order No': order.orderNo,
+      'Order Date': formatDate(order.orderDate),
+      'Client Type': order.clientType,
+      'GST Number': order.gstNumber || '',
+      'Description': row.description,
+      'Requirement': row.requirement,
+      'Custom Requirement': row.customRequirement,
+      'Qty': row.quantity,
+      'Rate': row.rate,
+      'Total': row.total,
+      'Discount': order.discount,
+      'Final Amount': order.discountedTotal,
+      'Delivery Date': formatDate(row.deliveryDate),
+      'Service Assigned': row.assignedExecutive || 'Not Assigned',
+      'Status': row.status,
+      'Remark': row.remark,
+      'Is Completed': row.isCompleted ? 'Yes' : 'No',
+      'Advance': order.advance,
+      'Balance': order.balance,
+      'Advance Date': formatDate(order.advanceDate),
+      'Payment Date': formatDate(order.paymentDate),
+      'Payment Method': order.paymentMethod,
+      'Cheque Number': order.chequeNumber,
+      'Created By': order.createdBy || order.executive,
+      'Payments': order.paymentHistory ?
+        order.paymentHistory.map(p => `${formatDate(p.date)}: ₹${p.amount} (${p.method})`).join('; ') : ''
+    }))
+  );
 
-    XLSX.writeFile(workbook, filename);
-    toast.success(`Excel file "${filename}" downloaded successfully!`);
-  };
+  const worksheet = XLSX.utils.json_to_sheet(flattenedOrders);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+
+  let filename;
+  if (shouldSeeOnlyOwnOrders()) {
+    filename = `my_orders_${yearFilter}_${executiveName}_export.xlsx`;
+  } else if (appliedExecutiveFilters.executiveName) {
+    filename = `orders_${appliedExecutiveFilters.executiveName}_${yearFilter}_export.xlsx`;
+  } else {
+    filename = `orders_${yearFilter}_export.xlsx`;
+  }
+
+  XLSX.writeFile(workbook, filename);
+  toast.success(`Excel file "${filename}" downloaded successfully! (Sorted from oldest to newest)`);
+};
 
   const handleImportFromExcel = async (e) => {
     if (!canImportFromExcel()) {

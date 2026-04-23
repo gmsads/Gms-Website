@@ -156,7 +156,6 @@ const PerformanceView = () => {
       totalOrders: acc.totalOrders + (month.orders || 0),
       totalProspects: acc.totalProspects + (month.prospects || 0),
       totalAmount: acc.totalAmount + (month.totalAmount || 0),
-      // Combined New + Retail
       newRetailCount: acc.newRetailCount + (month.newRetailCount || 0),
       newRetailAmount: acc.newRetailAmount + (month.newRetailAmount || 0),
       agentCount: acc.agentCount + (month.agentCount || 0),
@@ -1031,11 +1030,12 @@ const PerformanceView = () => {
       paddingBottom: '5px'
     },
     clientBreakdownItem: {
-      display: 'flex',
-      justifyContent: 'space-between',
+      display: 'grid',
+      gridTemplateColumns: '1fr auto auto',
+      gap: '8px',
       alignItems: 'center',
       fontSize: '12px',
-      padding: '4px 0',
+      padding: '6px 0',
       borderBottom: '1px dotted #e9ecef'
     },
     targetBox: {
@@ -1263,7 +1263,7 @@ const PerformanceView = () => {
         <div>
           <strong style={{ color: '#2e7d32' }}>Target Calculation:</strong>
           <span style={{ marginLeft: '8px', color: '#555', fontSize: '13px' }}>
-            Only <strong style={{ color: '#4CAF50' }}>New</strong> and <strong style={{ color: '#8BC34A' }}>Retail</strong> client orders count toward target achievement.
+            Only <strong style={{ color: '#4CAF50' }}>New</strong> OR <strong style={{ color: '#8BC34A' }}>Retail</strong> client orders count toward target achievement. Advance is only applicable for New & Retail orders.
           </span>
         </div>
       </div>
@@ -1408,7 +1408,7 @@ const PerformanceView = () => {
               {renderPerformanceBox(calculateTotals.achievedPercentage)}
               
               <div style={styles.cardItem}>
-                <span style={styles.cardLabel}>Advance:</span>
+                <span style={styles.cardLabel}>Advance (New/Retail only):</span>
                 <span style={styles.cardValue}>{formatCurrency(calculateTotals.advance)}</span>
               </div>
               <div style={styles.cardItem}>
@@ -1425,14 +1425,10 @@ const PerformanceView = () => {
                 <div style={styles.clientBreakdownTitle}>📋 Client Breakdown:</div>
                 
                 <div style={styles.clientBreakdownItem}>
-                  <span>Total:</span>
-                  <span>{calculateTotals.totalOrders} orders</span>
-                  <span>{formatCurrency(calculateTotals.totalAmount)}</span>
-                </div>
-                
-                <div style={styles.clientBreakdownItem}>
-                  <span>New/Retail:</span>
-                  <span>{calculateTotals.newRetailCount} orders</span>
+                  <span>New & Retail:</span>
+                  <span style={{ fontWeight: 'bold', color: '#4CAF50' }}>
+                    {calculateTotals.newRetailCount} orders
+                  </span>
                   <span>{formatCurrency(calculateTotals.newRetailAmount)}</span>
                 </div>
                 
@@ -1477,6 +1473,7 @@ const PerformanceView = () => {
                   
                   const target = monthData.target || 0;
                   const achieved = monthData.achieved || 0;
+                  const advance = monthData.advance || 0;
                   const percentage = target > 0 ? (achieved / target) * 100 : (achieved > 0 ? 100 : 0);
                   
                   return (
@@ -1485,11 +1482,11 @@ const PerformanceView = () => {
                       
                       <div style={styles.targetBox}>
                         <div style={styles.cardItem}>
-                          <span>Target:</span>
+                          <span style={styles.cardLabel}>Target:</span>
                           <span style={styles.targetValue}>{formatCurrency(target)}</span>
                         </div>
                         <div style={styles.cardItem}>
-                          <span>Achieved (New/Retail):</span>
+                          <span style={styles.cardLabel}>Achieved (New/Retail):</span>
                           <span style={styles.achievedValue}>{formatCurrency(achieved)}</span>
                         </div>
                       </div>
@@ -1497,16 +1494,51 @@ const PerformanceView = () => {
                       {renderPerformanceBox(percentage)}
                       
                       <div style={styles.cardItem}>
-                        <span>Advance:</span>
-                        <span>{formatCurrency(monthData.advance || 0)}</span>
+                        <span style={styles.cardLabel}>Advance (New/Retail only):</span>
+                        <span style={styles.cardValue}>{formatCurrency(advance)}</span>
                       </div>
-                      <div style={{ ...styles.clickableCardItem, cursor: canNavigateToOrders ? 'pointer' : 'not-allowed', opacity: canNavigateToOrders ? 1 : 0.7 }} onClick={() => canNavigateToOrders ? handleMonthClick({ ...monthData, month: displayMonth }) : null}>
-                        <span>Orders:</span>
-                        <span>{monthData.orders || 0}</span>
+                      
+                      <div style={{ ...styles.clickableCardItem, cursor: canNavigateToOrders ? 'pointer' : 'not-allowed', opacity: canNavigateToOrders ? 1 : 0.7 }} 
+                           onClick={() => canNavigateToOrders ? handleMonthClick({ ...monthData, month: displayMonth }) : null}>
+                        <span style={styles.cardLabel}>Total Orders:</span>
+                        <span style={styles.cardValue}>{monthData.orders || 0}</span>
                       </div>
-                      <div style={{ ...styles.clickableCardItem, cursor: canNavigateToProspects ? 'pointer' : 'not-allowed', opacity: canNavigateToProspects ? 1 : 0.7 }} onClick={() => canNavigateToProspects ? handleMonthlyProspectsClick({ ...monthData, month: displayMonth }) : null}>
-                        <span>Prospects:</span>
-                        <span>{monthData.prospects || 0}</span>
+                      
+                      <div style={{ ...styles.clickableCardItem, cursor: canNavigateToProspects ? 'pointer' : 'not-allowed', opacity: canNavigateToProspects ? 1 : 0.7 }} 
+                           onClick={() => canNavigateToProspects ? handleMonthlyProspectsClick({ ...monthData, month: displayMonth }) : null}>
+                        <span style={styles.cardLabel}>Prospects:</span>
+                        <span style={styles.cardValue}>{monthData.prospects || 0}</span>
+                      </div>
+                      
+                      {/* Client Breakdown - Aligned properly */}
+                      <div style={styles.clientBreakdown}>
+                        <div style={styles.clientBreakdownTitle}>📋 Client Breakdown:</div>
+                        
+                        <div style={styles.clientBreakdownItem}>
+                          <span>New & Retail:</span>
+                          <span style={{ fontWeight: 'bold', color: '#4CAF50' }}>
+                            {monthData.newRetailCount || 0} orders
+                          </span>
+                          <span>{formatCurrency(monthData.newRetailAmount || 0)}</span>
+                        </div>
+                        
+                        <div style={styles.clientBreakdownItem}>
+                          <span>Agent:</span>
+                          <span>{monthData.agentCount || 0} orders</span>
+                          <span>{formatCurrency(monthData.agentAmount || 0)}</span>
+                        </div>
+                        
+                        <div style={styles.clientBreakdownItem}>
+                          <span>Renewal:</span>
+                          <span>{monthData.renewalCount || 0} orders</span>
+                          <span>{formatCurrency(monthData.renewalAmount || 0)}</span>
+                        </div>
+                        
+                        <div style={styles.clientBreakdownItem}>
+                          <span>Renewal-Agent:</span>
+                          <span>{monthData.renewalAgentCount || 0} orders</span>
+                          <span>{formatCurrency(monthData.renewalAgentAmount || 0)}</span>
+                        </div>
                       </div>
                     </div>
                   );
