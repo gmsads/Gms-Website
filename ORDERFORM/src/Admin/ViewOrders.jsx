@@ -1847,7 +1847,7 @@ function ViewOrders() {
       }
       
       const totalPaid = advancePaid + paymentHistoryTotal;
-      const actualBalance = finalAmount - totalPaid;
+      const actualBalance = finalAmount - advancePaid;
 
       const updatedOrder = {
         ...order,
