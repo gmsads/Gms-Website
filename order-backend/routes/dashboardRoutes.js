@@ -935,7 +935,7 @@ router.get('/top-products', async (req, res) => {
 
     console.log(`Analyzing ${filteredOrders.length} orders for top products`);
 
-    // Initialize product tracking with quantity
+    // Initialize product tracking with quantity and amount
     const productStats = {};
     
     // Initialize all requirements with zero stats
@@ -945,7 +945,7 @@ router.get('/top-products', async (req, res) => {
         productStats[productName] = {
           orderCount: 0,
           totalQuantity: 0,
-          totalAmount: 0
+          totalAmount: 0  // This will store ONLY the amount for THIS product
         };
       }
     });
@@ -955,23 +955,16 @@ router.get('/top-products', async (req, res) => {
 
     // Process each order
     filteredOrders.forEach(order => {
-      // Calculate total order amount (after discount)
-      let totalOrderAmount = 0;
-      if (order.rows && Array.isArray(order.rows)) {
-        totalOrderAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-      }
-      
-      const discount = parseFloat(order.discount) || 0;
-      const finalOrderAmount = totalOrderAmount - discount;
-      
       // Track which products we've already counted for order count (once per order per product)
       const productsCountedForOrder = new Set();
       
       if (order.rows && Array.isArray(order.rows)) {
         order.rows.forEach(row => {
-          // Get quantity
+          // Get quantity for this specific product
           const quantity = parseFloat(row.quantity) || 0;
-          const rowAmount = parseFloat(row.total) || 0;
+          
+          // Get the amount for this SPECIFIC product (not the whole order)
+          const productAmount = parseFloat(row.total) || 0;
           
           // Get product name from various possible fields
           let productName = null;
@@ -1003,13 +996,16 @@ router.get('/top-products', async (req, res) => {
             // If no match found, use the original name
             const finalProductName = matchedProduct || productName;
             
+            // Debug logging to verify amounts
+            console.log(`Product: ${finalProductName}, Quantity: ${quantity}, Amount: ${productAmount}`);
+            
             // Check if product exists in productStats
             if (productStats[finalProductName]) {
-              // Add quantity (always add quantity from each row)
+              // ✅ Add quantity for this specific product
               productStats[finalProductName].totalQuantity += quantity;
               
-              // Add amount
-              productStats[finalProductName].totalAmount += rowAmount;
+              // ✅ Add amount for this SPECIFIC product (NOT the whole order total)
+              productStats[finalProductName].totalAmount += productAmount;
               
               // Only count order once per product
               if (!productsCountedForOrder.has(finalProductName)) {
@@ -1026,7 +1022,7 @@ router.get('/top-products', async (req, res) => {
                 };
               }
               extraProducts[finalProductName].totalQuantity += quantity;
-              extraProducts[finalProductName].totalAmount += rowAmount;
+              extraProducts[finalProductName].totalAmount += productAmount;  // ✅ Add per-product amount
               if (!productsCountedForOrder.has(finalProductName)) {
                 productsCountedForOrder.add(finalProductName);
                 extraProducts[finalProductName].orderCount++;
@@ -1039,17 +1035,24 @@ router.get('/top-products', async (req, res) => {
 
     // Merge extra products into productStats
     Object.entries(extraProducts).forEach(([name, stats]) => {
-      productStats[name] = stats;
+      if (productStats[name]) {
+        // If product already exists, merge the stats
+        productStats[name].totalQuantity += stats.totalQuantity;
+        productStats[name].totalAmount += stats.totalAmount;
+        productStats[name].orderCount += stats.orderCount;
+      } else {
+        productStats[name] = stats;
+      }
     });
 
-    // Convert to array, filter out zero orderCount, and sort by orderCount
+    // Convert to array, filter out zero orderCount, and sort by orderCount (most ordered first)
     const allProductsArray = Object.entries(productStats)
       .filter(([, stats]) => stats.orderCount > 0 || stats.totalQuantity > 0)
       .map(([name, stats]) => ({
         name,
         orderCount: stats.orderCount,
         totalQuantity: stats.totalQuantity,
-        totalAmount: stats.totalAmount
+        totalAmount: stats.totalAmount  // This is now the correct per-product amount
       }))
       .sort((a, b) => b.orderCount - a.orderCount);
 
@@ -1062,6 +1065,14 @@ router.get('/top-products', async (req, res) => {
     top3Products.forEach((p, i) => {
       console.log(`${i+1}. ${p.name}: ${p.orderCount} orders, ${p.totalQuantity} units, Amount: ₹${p.totalAmount.toFixed(2)}`);
     });
+    
+    // Also log a sample of other products for verification
+    if (allProductsArray.length > 3) {
+      console.log(`Sample of other products:`);
+      allProductsArray.slice(3, 8).forEach((p, i) => {
+        console.log(`  ${i+4}. ${p.name}: ${p.orderCount} orders, ₹${p.totalAmount.toFixed(2)}`);
+      });
+    }
 
     res.json({
       topProducts: top3Products,
@@ -1070,6 +1081,7 @@ router.get('/top-products', async (req, res) => {
       totalRequirements: allRequirements.length,
       totalOrdersAnalyzed: filteredOrders.length,
       totalQuantitySum: allProductsArray.reduce((sum, p) => sum + p.totalQuantity, 0),
+      totalAmountSum: allProductsArray.reduce((sum, p) => sum + p.totalAmount, 0),
       timePeriod: {
         year: selectedYear || 'all',
         month: selectedMonth !== null ? selectedMonth + 1 : null,
@@ -1081,5 +1093,4 @@ router.get('/top-products', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 module.exports = router;

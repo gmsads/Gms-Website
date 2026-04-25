@@ -287,7 +287,7 @@ function ViewOrders() {
     const paymentHistoryTotal = order.paymentHistory ?
       order.paymentHistory.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0) : 0;
     const totalPaid = advancePaid + paymentHistoryTotal;
-    const balanceDue = orderTotal - totalPaid;
+    const balanceDue = orderTotal - advancePaid;
 
     const iframe = document.createElement('iframe');
     iframe.style.position = 'absolute';

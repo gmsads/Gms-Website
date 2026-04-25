@@ -653,6 +653,7 @@ function AdminDashboard() {
   const [prospectiveData, setProspectiveData] = useState(null);
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(true);
+  // eslint-disable-next-line no-unused-vars
   const [weeklyLoading, setWeeklyLoading] = useState(false);
   const [topProducts, setTopProducts] = useState(null);
   const [productsLoading, setProductsLoading] = useState(false);

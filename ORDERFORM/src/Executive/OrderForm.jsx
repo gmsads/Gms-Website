@@ -429,26 +429,29 @@ Global Marketing Solutions Team`;
   // CRITICAL FUNCTION: Create a fresh new order from existing client data
   const createNewOrderFromExisting = () => {
     // Determine the new order type based on existing order type
-    let newClientType = "";
-    if (existingData?.clientType) {
-      switch (existingData.clientType) {
-        case "Retail":
-          newClientType = "Renewal";
-          break;
-        case "Agent":
-          newClientType = "Renewal-Agent";
-          break;
-        case "Renewal":
-        case "Renewal-Agent":
-        case "Corporate":
-        case "Walk-In":
-          newClientType = existingData.clientType;
-          break;
-        default:
-          newClientType = "";
-      }
-    }
+ // In createNewOrderFromExisting function, update the client type mapping:
 
+// Determine the new order type based on existing order type
+let newClientType = "";
+if (existingData?.clientType) {
+  switch (existingData.clientType) {
+    case "Retail":
+      newClientType = "Retail-Renewal";
+      break;
+    case "Agent":
+      newClientType = "Renewal-Agent";
+      break;
+    case "Retail-Renewal":
+    case "Renewal-Agent":
+    case "Corporate":
+    case "Corporate-Renewal":
+    case "Walk-In":
+      newClientType = existingData.clientType;
+      break;
+    default:
+      newClientType = "";
+  }
+}
     // Set mode to "new from existing"
     setIsNewFromExisting(true);
     
@@ -1889,43 +1892,44 @@ const submitAdvanceApprovalRequest = async () => {
                 )}
               </label>
 
-              {/* Order Type and GST Number - Side by side with smaller order type */}
-              <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: '150px' }}>
-                  <label>
-                    Order Type:
-                    <select
-                      value={clientType}
-                      onChange={(e) => setClientType(e.target.value)}
-                      disabled={isNewFromExisting}
-                      style={{ 
-                        backgroundColor: isNewFromExisting ? '#f5f5f5' : 'white',
-                        width: '100%'
-                      }}
-                    >
-                      <option value="">Select</option>
-                      <option value="Retail">Retail</option>
-                      <option value="Renewal">Renewal</option>
-                      <option value="Agent">Agent</option>
-                      <option value="Renewal-Agent">Renewal-Agent</option>
-                      <option value="Corporate">Corporate</option>
-                      <option value="Walk-In">Walk-In</option>
-                    </select>
-                  </label>
-                </div>
-                <div style={{ flex: 1, minWidth: '200px' }}>
-                  <label>
-                    GST Number (Optional):
-                    <input
-                      type="text"
-                      value={gstNumber}
-                      onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
-                      placeholder="Enter GST number"
-                      style={{ textTransform: 'uppercase' }}
-                    />
-                  </label>
-                </div>
-              </div>
+            
+<div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
+  <div style={{ flex: 1, minWidth: '150px' }}>
+    <label>
+      Order Type:
+      <select
+        value={clientType}
+        onChange={(e) => setClientType(e.target.value)}
+        disabled={isNewFromExisting}
+        style={{ 
+          backgroundColor: isNewFromExisting ? '#f5f5f5' : 'white',
+          width: '100%'
+        }}
+      >
+        <option value="">Select</option>
+        <option value="Retail">Retail</option>
+        <option value="Retail-Renewal">Retail-Renewal</option>
+        <option value="Agent">Agent</option>
+        <option value="Renewal-Agent">Renewal-Agent</option>
+        <option value="Corporate">Corporate</option>
+        <option value="Corporate-Renewal">Corporate-Renewal</option>
+        <option value="Walk-In">Walk-In</option>
+      </select>
+    </label>
+  </div>
+  <div style={{ flex: 1, minWidth: '200px' }}>
+    <label>
+      GST Number (Optional):
+      <input
+        type="text"
+        value={gstNumber}
+        onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
+        placeholder="Enter GST number"
+        style={{ textTransform: 'uppercase' }}
+      />
+    </label>
+  </div>
+</div>
 
               {/* Business Name and Contact Person side by side */}
               <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
