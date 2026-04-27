@@ -541,7 +541,7 @@ function ViewOrders() {
           </div>
           <div class="company-info">
             <div class="company-name">GLOBAL MARKETING SOLUTION</div>
-            <div class="gst-info">GST: 22AAAAA0000A1Z5</div>
+            <div class="gst-info">GST: 36AAQFG7654Q2ZB</div>
             <div style="font-size: 10px; color: #666;">Order #${order.orderNo}</div>
           </div>
         </div>
