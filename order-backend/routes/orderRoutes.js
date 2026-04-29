@@ -2814,17 +2814,7 @@ router.post("/orders/:orderId/record-settlement", async (req, res) => {
     });
   }
 });
-// GET orders with pending payments (balance > 0)
-router.get("/orders/pending-payments", async (req, res) => {
-  try {
-    const orders = await Order.find({ balance: { $gt: 0 } })
-      .sort({ orderDate: -1, createdAt: -1 });
-    res.json(orders);
-  } catch (err) {
-    console.error("Error fetching pending payments:", err);
-    res.status(500).json({ error: "Failed to fetch pending payments" });
-  }
-});
+
 
 // Get all settlements for an order
 router.get("/orders/:orderId/settlements", async (req, res) => {
@@ -2974,17 +2964,7 @@ router.post("/orders/:orderId/record-settlement", async (req, res) => {
     });
   }
 });
-// GET orders with pending payments (balance > 0)
-router.get("/orders/pending-payments", async (req, res) => {
-  try {
-    const orders = await Order.find({ balance: { $gt: 0 } })
-      .sort({ orderDate: -1, createdAt: -1 });
-    res.json(orders);
-  } catch (err) {
-    console.error("Error fetching pending payments:", err);
-    res.status(500).json({ error: "Failed to fetch pending payments" });
-  }
-});
+
 
 // ============================
 // GET all orders with advanced filtering for payments dashboard

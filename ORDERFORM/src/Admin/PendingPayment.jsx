@@ -94,11 +94,17 @@ function PendingPayment({ executiveFilter = null }) {
   // Filter states
   const [year, setYear] = useState(() => {
     const urlYear = searchParams.get('year');
-    return urlYear ? parseInt(urlYear) : today.getFullYear();
+    if (urlYear && urlYear !== 'undefined' && urlYear !== 'null' && urlYear !== 'all') {
+      return urlYear;
+    }
+    return today.getFullYear().toString();
   });
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const urlMonth = searchParams.get('month');
-    return urlMonth ? parseInt(urlMonth) - 1 : today.getMonth();
+    if (urlMonth && urlMonth !== 'undefined' && urlMonth !== 'null' && urlMonth !== 'all') {
+      return urlMonth;
+    }
+    return 'all';
   });
   const [selectedDate, setSelectedDate] = useState(() => {
     const urlDate = searchParams.get('date');
@@ -106,7 +112,8 @@ function PendingPayment({ executiveFilter = null }) {
   });
   const [useDateFilter, setUseDateFilter] = useState(() => {
     const urlDate = searchParams.get('date');
-    return urlDate ? true : false;
+    const urlMonth = searchParams.get('month');
+    return urlDate ? true : (urlMonth ? false : false);
   });
   const [useMonthYearFilter, setUseMonthYearFilter] = useState(() => {
     const urlDate = searchParams.get('date');
@@ -136,10 +143,10 @@ function PendingPayment({ executiveFilter = null }) {
   const years = useMemo(() => {
     const currentYear = today.getFullYear();
     const yearsArray = ['all'];
-    for (let y = currentYear - 5; y <= currentYear + 5; y++) {
-      yearsArray.push(y);
+    for (let y = 2020; y <= currentYear + 5; y++) {
+      yearsArray.push(y.toString());
     }
-    return yearsArray;
+    return [...new Set(yearsArray)];
   }, [today]);
 
   // Check if screen is mobile
@@ -153,17 +160,6 @@ function PendingPayment({ executiveFilter = null }) {
     
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  // Memoized function to check if order has delivery today
-  const hasDeliveryToday = useCallback((order) => {
-    if (!order?.rows?.length) return false;
-    const todayString = today.toISOString().split('T')[0];
-    return order.rows.some(row => {
-      if (!row.deliveryDate) return false;
-      const deliveryDateString = new Date(row.deliveryDate).toISOString().split('T')[0];
-      return deliveryDateString === todayString;
-    });
-  }, [today]);
 
   // Memoized function to get delivery date
   const getDeliveryDate = useCallback((order) => {
@@ -230,137 +226,141 @@ function PendingPayment({ executiveFilter = null }) {
     return colors[type] || '#7f8c8d';
   }, []);
 
-  // Fetch orders
-  useEffect(() => {
-    fetchOrders();
-  }, [year, selectedMonth, selectedDate, useDateFilter, activeFilter, executiveFilter, filterType]);
-
-  // Client-side search filter
-  useEffect(() => {
-    if (orders.length > 0) {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-
-      searchTimeoutRef.current = setTimeout(() => {
-        let filtered = orders;
-        
-        if (searchTerm.trim()) {
-          const term = searchTerm.toLowerCase().trim();
-          filtered = orders.filter(order => {
-            return (
-              (order?.executive?.toLowerCase() || '').includes(term) ||
-              (order?.business?.toLowerCase() || '').includes(term) ||
-              (order?.contactPerson?.toLowerCase() || '').includes(term) ||
-              (order?.phone?.toString() || '').includes(term) ||
-              (order?.contactCode?.toLowerCase() || '').includes(term) ||
-              (order?.orderNo?.toLowerCase() || '').includes(term) ||
-              (order?.gstNo?.toLowerCase() || '').includes(term)
-            );
-          });
-        }
-        
-        setFilteredOrders(filtered);
-        calculatePaymentSummaries(filtered);
-      }, 300);
-    }
-
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [searchTerm, orders]);
-
-  // Update URL when filters change
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams);
-    
-    if (filterType) params.set('filterType', filterType);
-    if (year && year !== 'all') params.set('year', year.toString());
-    if (selectedMonth !== null && selectedMonth !== 'all' && !useDateFilter) {
-      params.set('month', (selectedMonth + 1).toString());
-    }
-    if (selectedDate && useDateFilter) params.set('date', selectedDate);
-    
-    setSearchParams(params);
-  }, [filterType, year, selectedMonth, selectedDate, useDateFilter, setSearchParams]);
-
-  // Handle scroll for fixed columns
-  useEffect(() => {
-    const handleScroll = () => {
-      if (tableContainerRef.current) {
-        setScrollPosition(tableContainerRef.current.scrollLeft);
-      }
-    };
-    const container = tableContainerRef.current;
-    if (container) {
-      container.addEventListener('scroll', handleScroll);
-      return () => container.removeEventListener('scroll', handleScroll);
-    }
-  }, []);
-
+  // Fetch ALL orders and apply filters client-side
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
+      // Fetch ALL orders from the main endpoint
+      const res = await axios.get('/api/orders/all');
+      let allOrders = res.data;
       
-      if (executiveFilter) params.append('executive', executiveFilter);
-      if (activeFilter) params.append('filterType', activeFilter);
+      // Calculate advance and balance for each order
+      allOrders = allOrders.map(order => {
+        const orderTotal = order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0) || 0;
+        const advance = order?.advance || 0;
+        const balance = orderTotal - advance;
+        return { ...order, orderTotal, advance, balance };
+      });
       
-      if (useDateFilter && selectedDate) {
-        params.append('date', selectedDate);
-      } else if (useMonthYearFilter) {
-        if (year && year !== 'all') params.append('year', year.toString());
-        if (selectedMonth !== null && selectedMonth !== 'all') params.append('month', (selectedMonth + 1).toString());
-      }
-
-      const res = await axios.get('/api/orders/payments-dashboard?' + params.toString());
+      setOrders(allOrders);
       
-      let fetchedOrders = res.data;
-      
-      // Apply filter based on filterType from URL
-      if (filterType === 'pending') {
-        fetchedOrders = fetchedOrders.filter(order => order.balance > 0);
-      } else if (filterType === 'completed') {
-        fetchedOrders = fetchedOrders.filter(order => order.balance <= 0);
-      }
-      
-      setOrders(fetchedOrders);
-      
-      // Apply search filter if there's an existing search term
-      let filtered = fetchedOrders;
-      if (searchTerm.trim()) {
-        const term = searchTerm.toLowerCase().trim();
-        filtered = fetchedOrders.filter(order => {
-          return (
-            (order?.executive?.toLowerCase() || '').includes(term) ||
-            (order?.business?.toLowerCase() || '').includes(term) ||
-            (order?.contactPerson?.toLowerCase() || '').includes(term) ||
-            (order?.phone?.toString() || '').includes(term) ||
-            (order?.contactCode?.toLowerCase() || '').includes(term) ||
-            (order?.orderNo?.toLowerCase() || '').includes(term) ||
-            (order?.gstNo?.toLowerCase() || '').includes(term)
-          );
-        });
-      }
-      
-      setFilteredOrders(filtered);
-      calculatePaymentSummaries(filtered);
+      // Apply all filters client-side
+      applyFilters(allOrders);
       
     } catch (err) {
       console.error('Error fetching orders:', err);
       alert('Failed to fetch orders. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
+
+  // Apply all filters client-side
+  const applyFilters = useCallback((ordersData = orders) => {
+    if (!ordersData.length) {
+      setFilteredOrders([]);
+      setLoading(false);
+      return;
+    }
+
+    let result = [...ordersData];
+
+    // Apply date filters based on orderDate
+    if (useDateFilter && selectedDate) {
+      const filterDate = new Date(selectedDate);
+      filterDate.setHours(0, 0, 0, 0);
+      const nextDay = new Date(filterDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      
+      result = result.filter(order => {
+        const orderDate = new Date(order.orderDate);
+        return orderDate >= filterDate && orderDate < nextDay;
+      });
+    } 
+    // Apply month/year filters
+    else if (useMonthYearFilter) {
+      if (year !== 'all') {
+        const targetYear = parseInt(year);
+        
+        result = result.filter(order => {
+          try {
+            const orderDate = new Date(order.orderDate);
+            if (!orderDate || isNaN(orderDate.getTime())) return false;
+            
+            const orderYear = orderDate.getFullYear();
+            
+            if (orderYear !== targetYear) return false;
+            
+            if (selectedMonth !== 'all') {
+              const orderMonth = orderDate.getMonth() + 1;
+              const filterMonth = parseInt(selectedMonth);
+              if (orderMonth !== filterMonth) return false;
+            }
+            
+            return true;
+          } catch (e) {
+            console.error('Error processing date:', order.orderDate, e);
+            return false;
+          }
+        });
+      } else {
+        if (selectedMonth !== 'all') {
+          const filterMonth = parseInt(selectedMonth);
+          
+          result = result.filter(order => {
+            try {
+              const orderDate = new Date(order.orderDate);
+              if (!orderDate || isNaN(orderDate.getTime())) return false;
+              
+              const orderMonth = orderDate.getMonth() + 1;
+              return orderMonth === filterMonth;
+            } catch (e) {
+              return false;
+            }
+          });
+        }
+      }
+    }
+
+    // Apply filter type (pending/completed)
+    if (filterType === 'pending') {
+      result = result.filter(order => order.balance > 0);
+    } else if (filterType === 'completed') {
+      result = result.filter(order => order.balance <= 0);
+    }
+
+    // Apply executive filter if provided
+    if (executiveFilter) {
+      result = result.filter(order => 
+        order.executive?.toLowerCase() === executiveFilter.toLowerCase()
+      );
+    }
+
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      result = result.filter(order => {
+        return (
+          (order?.executive?.toLowerCase() || '').includes(term) ||
+          (order?.business?.toLowerCase() || '').includes(term) ||
+          (order?.contactPerson?.toLowerCase() || '').includes(term) ||
+          (order?.phone?.toString() || '').includes(term) ||
+          (order?.contactCode?.toLowerCase() || '').includes(term) ||
+          (order?.orderNo?.toLowerCase() || '').includes(term) ||
+          (order?.gstNo?.toLowerCase() || '').includes(term)
+        );
+      });
+    }
+
+    setFilteredOrders(result);
+    calculatePaymentSummaries(result);
+    setLoading(false);
+  }, [orders, useDateFilter, selectedDate, useMonthYearFilter, year, selectedMonth, filterType, executiveFilter, searchTerm]);
 
   const calculatePaymentSummaries = (ordersData) => {
     let total = 0, received = 0, pending = 0, todayCollected = 0, todayCount = 0;
 
     ordersData.forEach(order => {
-      const orderTotal = order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0) || 0;
+      const orderTotal = order?.orderTotal || 0;
       const advance = order?.advance || 0;
       const balance = order?.balance || 0;
 
@@ -445,13 +445,12 @@ function PendingPayment({ executiveFilter = null }) {
 
   const handleFollowUp = (order) => {
     setCurrentOrder(order);
-    setFollowUpData(prev => ({
-      ...prev,
+    setFollowUpData({
       date: today.toISOString().split('T')[0],
       description: '',
       nextFollowUpDate: '',
       status: 'Pending'
-    }));
+    });
     setShowFollowUpModal(true);
   };
 
@@ -612,11 +611,13 @@ function PendingPayment({ executiveFilter = null }) {
     setSelectedDate(today.toISOString().split('T')[0]);
     setUseDateFilter(false);
     setUseMonthYearFilter(true);
+    setYear('all');
+    setSelectedMonth('all');
   };
 
   const clearMonthYearFilter = () => {
-    setSelectedMonth(today.getMonth());
-    setYear(today.getFullYear());
+    setYear('all');
+    setSelectedMonth('all');
   };
 
   const clearSearch = () => {
@@ -626,14 +627,21 @@ function PendingPayment({ executiveFilter = null }) {
   const handleFilterModeChange = (useDate) => {
     setUseDateFilter(useDate);
     setUseMonthYearFilter(!useDate);
+    if (useDate) {
+      setYear('all');
+      setSelectedMonth('all');
+    } else {
+      setSelectedDate(today.toISOString().split('T')[0]);
+    }
   };
 
   const resetToCurrentMonth = () => {
     const currentDate = new Date();
-    setYear(currentDate.getFullYear());
-    setSelectedMonth(currentDate.getMonth());
+    setYear(currentDate.getFullYear().toString());
+    setSelectedMonth((currentDate.getMonth() + 1).toString());
     setUseDateFilter(false);
     setUseMonthYearFilter(true);
+    setSelectedDate(today.toISOString().split('T')[0]);
   };
 
   const clearAllFilters = () => {
@@ -642,7 +650,7 @@ function PendingPayment({ executiveFilter = null }) {
     setUseDateFilter(false);
     setUseMonthYearFilter(true);
     setSearchTerm('');
-    setActiveFilter('pending');
+    setSelectedDate(today.toISOString().split('T')[0]);
   };
 
   const getFilterDescription = useCallback(() => {
@@ -653,8 +661,9 @@ function PendingPayment({ executiveFilter = null }) {
     if (useDateFilter && selectedDate) {
       description += ` - Date: ${new Date(selectedDate).toLocaleDateString()}`;
     } else if (useMonthYearFilter) {
-      if (selectedMonth !== null && selectedMonth !== 'all') {
-        description += ` - ${monthLabels[selectedMonth]} ${year === 'all' ? 'All Years' : year}`;
+      if (selectedMonth !== 'all') {
+        const monthIndex = parseInt(selectedMonth) - 1;
+        description += ` - ${monthLabels[monthIndex]} ${year === 'all' ? 'All Years' : year}`;
       } else if (year !== 'all') {
         description += ` - Year ${year}`;
       } else {
@@ -667,17 +676,38 @@ function PendingPayment({ executiveFilter = null }) {
     return description;
   }, [executiveFilter, filterType, useDateFilter, selectedDate, useMonthYearFilter, selectedMonth, year, searchTerm, monthLabels]);
 
+  const getFilterDisplayText = () => {
+    let text = '';
+    
+    if (useDateFilter && selectedDate) {
+      text = new Date(selectedDate).toLocaleDateString();
+    } else if (useMonthYearFilter) {
+      if (year === 'all' && selectedMonth === 'all') {
+        text = 'All Time';
+      } else if (year === 'all') {
+        const monthIndex = parseInt(selectedMonth) - 1;
+        text = `All Years, ${monthLabels[monthIndex]}`;
+      } else if (selectedMonth === 'all') {
+        text = `${year} - All Months`;
+      } else {
+        const monthIndex = parseInt(selectedMonth) - 1;
+        text = `${monthLabels[monthIndex]} ${year}`;
+      }
+    }
+    
+    return text;
+  };
+
   const handleExportToExcel = useCallback(() => {
     const exportData = filteredOrders.map((order, orderIndex) => {
       const latestFollowUp = getLatestFollowUp(order);
-      const latestSettlement = getLatestSettlement(order);
       return {
         'S.No': orderIndex + 1,
         'Executive': order?.executive || '',
         'Business': order?.business || '',
         'Customer': order?.contactPerson || '',
         'Contact': `${order?.contactCode || ''} ${order?.phone || ''}`.trim(),
-        'Total': order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0) || 0,
+        'Total': order?.orderTotal || 0,
         'Advance': order?.advance || 0,
         'Balance': order?.balance || 0,
         'Delivery Date': getDeliveryDate(order),
@@ -694,7 +724,7 @@ function PendingPayment({ executiveFilter = null }) {
 
     const fileName = `${filterType}_payments_report_${getFilterDescription().replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`;
     XLSX.writeFile(workbook, fileName);
-  }, [filteredOrders, getLatestFollowUp, getLatestSettlement, getDeliveryDate, getFilterDescription, filterType]);
+  }, [filteredOrders, getLatestFollowUp, getDeliveryDate, getFilterDescription, filterType]);
 
   const handleExportToWord = async () => {
     setExportLoading(true);
@@ -725,7 +755,7 @@ function PendingPayment({ executiveFilter = null }) {
                     order.business || '', 
                     order.contactPerson || '',
                     `${order.contactCode || ''} ${order.phone || ''}`.trim(),
-                    `₹${order.rows?.reduce((s, r) => s + (r?.total || 0), 0)}`,
+                    `₹${order.orderTotal || 0}`,
                     `₹${order.advance || 0}`, 
                     `₹${order.balance || 0}`,
                     getDeliveryDate(order), 
@@ -765,7 +795,7 @@ function PendingPayment({ executiveFilter = null }) {
         order.executive || '', 
         order.business || '', 
         order.contactPerson || '',
-        `₹${order.rows?.reduce((s, r) => s + (r?.total || 0), 0)}`,
+        `₹${order.orderTotal || 0}`,
         `₹${order.advance || 0}`, 
         `₹${order.balance || 0}`, 
         getDeliveryDate(order)
@@ -785,6 +815,50 @@ function PendingPayment({ executiveFilter = null }) {
       setExportLoading(false);
     }
   };
+
+  // Fetch orders when component mounts
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  // Apply filters when dependencies change
+  useEffect(() => {
+    if (orders.length > 0) {
+      applyFilters(orders);
+    }
+  }, [useDateFilter, selectedDate, useMonthYearFilter, year, selectedMonth, filterType, executiveFilter, searchTerm]);
+
+  // Update URL when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    
+    if (filterType) params.set('filterType', filterType);
+    if (year && year !== 'all') params.set('year', year.toString());
+    if (selectedMonth && selectedMonth !== 'all' && !useDateFilter) {
+      params.set('month', selectedMonth.toString());
+    }
+    if (selectedDate && useDateFilter) params.set('date', selectedDate);
+    if (executiveFilter) params.set('executive', executiveFilter);
+    
+    const currentParams = new URLSearchParams(window.location.search);
+    if (params.toString() !== currentParams.toString()) {
+      setSearchParams(params, { replace: true });
+    }
+  }, [filterType, year, selectedMonth, selectedDate, useDateFilter, executiveFilter]);
+
+  // Handle scroll for fixed columns
+  useEffect(() => {
+    const handleScroll = () => {
+      if (tableContainerRef.current) {
+        setScrollPosition(tableContainerRef.current.scrollLeft);
+      }
+    };
+    const container = tableContainerRef.current;
+    if (container) {
+      container.addEventListener('scroll', handleScroll);
+      return () => container.removeEventListener('scroll', handleScroll);
+    }
+  }, []);
 
   // Responsive column widths
   const getColumnWidths = () => {
@@ -851,7 +925,7 @@ function PendingPayment({ executiveFilter = null }) {
     flex: isMobile ? 1 : 'auto',
   });
 
-  // Styles object
+  // Styles object (simplified - keeping essential styles)
   const styles = {
     container: {
       padding: isMobile ? '10px' : '20px',
@@ -1680,26 +1754,6 @@ function PendingPayment({ executiveFilter = null }) {
     },
   };
 
-  const getFilterDisplayText = () => {
-    let text = '';
-    
-    if (useDateFilter && selectedDate) {
-      text = new Date(selectedDate).toLocaleDateString();
-    } else if (useMonthYearFilter) {
-      if (year === 'all' && (selectedMonth === 'all' || selectedMonth === null)) {
-        text = 'All Time';
-      } else if (year === 'all') {
-        text = `All Years, ${monthLabels[selectedMonth]}`;
-      } else if (selectedMonth === 'all' || selectedMonth === null) {
-        text = `${year} - All Months`;
-      } else {
-        text = `${monthLabels[selectedMonth]} ${year}`;
-      }
-    }
-    
-    return text;
-  };
-
   return (
     <div style={styles.container}>
       <h2 style={styles.title}>
@@ -1737,9 +1791,6 @@ function PendingPayment({ executiveFilter = null }) {
         <button 
           style={filterButtonStyle('pending')} 
           onClick={() => {
-            const params = new URLSearchParams(searchParams);
-            params.set('filterType', 'pending');
-            setSearchParams(params);
             setActiveFilter('pending');
           }}
         >
@@ -1748,9 +1799,6 @@ function PendingPayment({ executiveFilter = null }) {
         <button 
           style={filterButtonStyle('completed')} 
           onClick={() => {
-            const params = new URLSearchParams(searchParams);
-            params.set('filterType', 'completed');
-            setSearchParams(params);
             setActiveFilter('completed');
           }}
         >
@@ -1823,8 +1871,8 @@ function PendingPayment({ executiveFilter = null }) {
               <label htmlFor="year-select" style={styles.filterLabel}>Year:</label>
               <select
                 id="year-select"
-                value={year === 'all' ? 'all' : year}
-                onChange={(e) => setYear(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
                 style={styles.filterSelect}
               >
                 {years.map(y => (
@@ -1837,8 +1885,8 @@ function PendingPayment({ executiveFilter = null }) {
               <label htmlFor="month-select" style={styles.filterLabel}>Month:</label>
               <select
                 id="month-select"
-                value={selectedMonth === 'all' ? 'all' : (selectedMonth !== null ? selectedMonth + 1 : '')}
-                onChange={(e) => setSelectedMonth(e.target.value === 'all' ? 'all' : parseInt(e.target.value) - 1)}
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
                 style={styles.filterSelect}
               >
                 <option value="all">ALL MONTHS</option>
@@ -1851,14 +1899,28 @@ function PendingPayment({ executiveFilter = null }) {
             <button onClick={resetToCurrentMonth} style={styles.currentMonthButton}>
               Current Month
             </button>
-            {(year !== 'all' || (selectedMonth !== 'all' && selectedMonth !== null) || useDateFilter) && (
-              <button onClick={clearMonthYearFilter} style={styles.clearFilterButton}>
-                Clear
-              </button>
-            )}
           </div>
         )}
         
+        <div style={styles.filterRow}>
+          <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
+            {(useDateFilter && selectedDate) || (!useDateFilter && (year !== 'all' || selectedMonth !== 'all')) && (
+              <button onClick={() => {
+                if (useDateFilter) clearDateFilter();
+                else clearMonthYearFilter();
+              }} style={styles.clearFilterButton}>
+                Clear {useDateFilter ? 'Date' : 'Month/Year'}
+              </button>
+            )}
+            
+            {(year !== 'all' || selectedMonth !== 'all' || useDateFilter || searchTerm || filterType !== 'pending') && (
+              <button onClick={clearAllFilters} style={styles.clearAllButton}>
+                Clear All Filters
+              </button>
+            )}
+          </div>
+        </div>
+
         <div style={styles.currentFilterInfo}>
           <span>
             Currently showing: <strong>{getFilterDisplayText() || 'All Time'}</strong>
@@ -1913,6 +1975,7 @@ function PendingPayment({ executiveFilter = null }) {
                   const settlementCount = order.settlements?.length || 0;
                   const isCompleted = order.balance <= 0;
                   const rowBgColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
+                  const orderTotal = order?.orderTotal || 0;
 
                   return (
                     <tr key={order?._id || index} style={{ backgroundColor: rowBgColor }}>
@@ -1937,7 +2000,7 @@ function PendingPayment({ executiveFilter = null }) {
                         <div style={styles.textCell}>{order?.contactCode || ''} {order?.phone || ''}</div>
                       </td>
                       <td style={styles.regularTd(columnWidths.total)}>
-                        ₹{(order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0)?.toLocaleString() || '0')}
+                        ₹{orderTotal.toLocaleString()}
                       </td>
                       <td style={styles.regularTd(columnWidths.advance)}>
                         ₹{(order?.advance || 0).toLocaleString()}
@@ -2032,8 +2095,8 @@ function PendingPayment({ executiveFilter = null }) {
                             </>
                           )}
                         </div>
-                       </td>
-                     </tr>
+                      </td>
+                    </tr>
                   );
                 })
               )}
@@ -2226,7 +2289,6 @@ function PendingPayment({ executiveFilter = null }) {
                   name="amount"
                   value={settlementData.amount}
                   onChange={handleSettlementChange}
-                  placeholder={`Enter amount (max: ₹${currentOrder.balance ? parseFloat(currentOrder.balance).toLocaleString('en-IN') : '0'})`}
                   style={styles.paymentFormInput}
                   required
                   min="0.01"

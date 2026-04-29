@@ -4459,9 +4459,13 @@ const handleExportToExcel = () => {
                   onChange={handleEditChange}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 >
-                  <option value="New">New</option>
-                  <option value="Renewal">Renewal</option>
-                  <option value="Agent">Agent</option>
+                   <option value="Retail">Retail</option>
+        <option value="Retail-Renewal">Retail-Renewal</option>
+        <option value="Agent">Agent</option>
+        <option value="Renewal-Agent">Renewal-Agent</option>
+        <option value="Corporate">Corporate</option>
+        <option value="Corporate-Renewal">Corporate-Renewal</option>
+        <option value="Walk-In">Walk-In</option>
                 </select>
               </div>
 
