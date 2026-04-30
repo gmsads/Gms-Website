@@ -718,6 +718,12 @@ function Admin() {
     }
   };
 
+  // Function to handle navigation back to dashboard from children components
+  const handleNavigateToDashboard = (tabName = "executive-dashboard") => {
+    setActiveTab(tabName);
+    closeSidebarOnMobile();
+  };
+
   const styles = {
     whatsappButton: {
       position: 'fixed',
@@ -1246,6 +1252,7 @@ function Admin() {
               onNavigateToPendingPayments={() => setActiveTab("pending-payments")}
               onNavigateToFollowUps={() => setActiveTab("follow-ups")}
               onNavigateToAppointments={() => setActiveTab("viewAppointments")}
+              onNavigateToTab={handleNavigateToDashboard}
             />
           )}
 
@@ -1255,7 +1262,15 @@ function Admin() {
           {activeTab === "viewOrders" && <ViewOrders userRole={userRole} executiveName={selectedExecutive} />}
           {activeTab === "price-list" && <Pricelist />}
           {activeTab === "viewAppointments" && <ViewAppointments executiveName={selectedExecutive} />}
-          {activeTab === "prospective" && <Prospective executiveName={selectedExecutive} />}
+          
+          {/* Pass onBackToDashboard prop to Prospective */}
+          {activeTab === "prospective" && (
+            <Prospective 
+              executiveName={selectedExecutive}
+              onBackToDashboard={() => handleNavigateToDashboard("executive-dashboard")}
+            />
+          )}
+          
           {activeTab === "leave-request" && <LeaveRequest executiveName={selectedExecutive} />}
           {activeTab === "view-leave" && <ViewRequest executiveName={selectedExecutive} />}
           {activeTab === "viewProspects" && <ViewProspective executiveName={selectedExecutive} />}

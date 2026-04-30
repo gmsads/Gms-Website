@@ -145,7 +145,7 @@ const styles = {
   }
 };
 
-const Prospective = () => {
+const Prospective = ({ executiveName, onBackToDashboard }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const userName = localStorage.getItem('userName') || '';
@@ -153,7 +153,7 @@ const Prospective = () => {
   const canSelectExecutive = role === 'Admin';
 
   const [formData, setFormData] = useState({
-    executiveName: userName,
+    executiveName: executiveName || userName,
     businessName: location.state?.businessName || '',
     phoneNumber: location.state?.phoneNumber || '',
     contactPerson: location.state?.customerName || '',
@@ -185,6 +185,21 @@ const Prospective = () => {
     'Walk-in',
     'Other Specify'
   ];
+
+  // Function to navigate back to appropriate dashboard based on role
+  const handleBackToDashboard = () => {
+    if (role === 'Admin') {
+      navigate('/admin-dashboard');
+    } else {
+      // Use the prop function to go back to executive dashboard with sidebar
+      if (onBackToDashboard) {
+        onBackToDashboard();
+      } else {
+        // Fallback: navigate to executive dashboard route
+        navigate('/executive-dashboard');
+      }
+    }
+  };
 
   useEffect(() => {
     if (canSelectExecutive) {
@@ -337,7 +352,7 @@ const Prospective = () => {
 
   const resetForm = () => {
     setFormData({
-      executiveName: userName,
+      executiveName: executiveName || userName,
       businessName: '',
       phoneNumber: '',
       contactPerson: '',
@@ -355,15 +370,11 @@ const Prospective = () => {
     setViewMode(false);
   };
 
-  const handleBackToDashboard = () => {
-    navigate('/prospects');
-  };
-
   return (
     <div style={styles.container}>
       {!showProspectForm && !viewMode && !location.state?.phoneNumber ? (
         <div style={styles.searchContainer}>
-          <h1 style={styles.formTitle}>Search</h1>
+          <h1 style={styles.formTitle}>Search Prospect</h1>
           <div>
             <label style={styles.inputLabel}>Enter Phone Number:</label>
             <input
@@ -673,7 +684,7 @@ const Prospective = () => {
               onClick={() => {
                 setShowPopup(false);
                 resetForm();
-                navigate('/prospects');
+                handleBackToDashboard();
               }}
             >
               Close

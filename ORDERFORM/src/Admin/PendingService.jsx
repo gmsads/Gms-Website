@@ -44,24 +44,22 @@ function PendingService() {
     });
   };
   
- // Initialize filters from URL parameters
-const [selectedYear, setSelectedYear] = useState(() => {
-  const urlYear = searchParams.get('year');
-  if (urlYear && urlYear !== 'undefined' && urlYear !== 'null' && urlYear !== 'all') {
-    return urlYear;
-  }
-  // Default to current calendar year
-  return currentDate.getFullYear().toString();
-});
+  // Initialize filters from URL parameters
+  const [selectedYear, setSelectedYear] = useState(() => {
+    const urlYear = searchParams.get('year');
+    if (urlYear && urlYear !== 'undefined' && urlYear !== 'null' && urlYear !== 'all') {
+      return urlYear;
+    }
+    return currentDate.getFullYear().toString();
+  });
 
-const [selectedCalendarMonth, setSelectedCalendarMonth] = useState(() => {
-  const urlMonth = searchParams.get('month');
-  if (urlMonth && urlMonth !== 'undefined' && urlMonth !== 'null' && urlMonth !== 'all') {
-    return urlMonth;
-  }
-  // Default to 'all' for showing all months
-  return 'all';
-});
+  const [selectedCalendarMonth, setSelectedCalendarMonth] = useState(() => {
+    const urlMonth = searchParams.get('month');
+    if (urlMonth && urlMonth !== 'undefined' && urlMonth !== 'null' && urlMonth !== 'all') {
+      return urlMonth;
+    }
+    return 'all';
+  });
   
   const [statusFilter, setStatusFilter] = useState(() => {
     const urlStatus = searchParams.get('status');
@@ -116,10 +114,10 @@ const [selectedCalendarMonth, setSelectedCalendarMonth] = useState(() => {
     }
   }, [searchParams]);
 
-// Fetch orders when filters change
-useEffect(() => {
-  fetchOrders();
-}, [selectedYear, selectedCalendarMonth, statusFilter]); // Add dependencies
+  // Fetch orders when filters change
+  useEffect(() => {
+    fetchOrders();
+  }, [selectedYear, selectedCalendarMonth, statusFilter]);
 
   useEffect(() => {
     applyFilters();
@@ -150,124 +148,76 @@ useEffect(() => {
     }
   }, [selectedYear, selectedCalendarMonth, statusFilter, setSearchParams]);
 
- const fetchOrders = async () => {
-  setLoading(true);
-  try {
-    // Build query params for backend filtering
-    const params = new URLSearchParams();
-    
-    // Pass year and month to backend for server-side filtering
-    if (selectedYear && selectedYear !== 'all') {
-      params.append('year', selectedYear);
-    }
-    if (selectedCalendarMonth && selectedCalendarMonth !== 'all') {
-      params.append('month', selectedCalendarMonth);
-    }
-    if (statusFilter && statusFilter !== 'all') {
-      params.append('status', statusFilter);
-    }
-    
-    // Add timestamp to prevent caching
-    params.append('_', new Date().getTime());
-    
-    const res = await axios.get(`/api/orders?${params.toString()}`);
-    
-    const allOrders = res.data.filter(order => 
-      order.rows && order.rows.length > 0
-    );
-    
-    const sortedOrders = allOrders.sort((a, b) => {
-      const dateA = new Date(a.createdAt || a.date || new Date());
-      const dateB = new Date(b.createdAt || b.date || new Date());
-      return dateB - dateA;
-    });
-    
-    setOrders(sortedOrders);
-  } catch (err) {
-    console.error('Error fetching orders:', err);
-  } finally {
-    setLoading(false);
-  }
-};
-
- const applyFilters = () => {
-  if (!orders.length) {
-    setFilteredOrders([]);
-    return;
-  }
-
-  let result = [...orders];
-
-  // Helper function to safely parse delivery date
-  const parseDeliveryDate = (dateValue) => {
-    if (!dateValue) return null;
+  const fetchOrders = async () => {
+    setLoading(true);
     try {
-      if (typeof dateValue === 'string') {
-        // Handle DD-MM-YYYY format
-        if (dateValue.includes('-')) {
-          const parts = dateValue.split('-');
-          if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
-            // DD-MM-YYYY to Date
-            return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-          } else {
-            return new Date(dateValue);
-          }
-        } else {
-          return new Date(dateValue);
-        }
+      const params = new URLSearchParams();
+      
+      if (selectedYear && selectedYear !== 'all') {
+        params.append('year', selectedYear);
       }
-      return dateValue instanceof Date ? dateValue : new Date(dateValue);
-    } catch (e) {
-      console.error('Error parsing delivery date:', dateValue, e);
-      return null;
+      if (selectedCalendarMonth && selectedCalendarMonth !== 'all') {
+        params.append('month', selectedCalendarMonth);
+      }
+      if (statusFilter && statusFilter !== 'all') {
+        params.append('status', statusFilter);
+      }
+      
+      params.append('_', new Date().getTime());
+      
+      const res = await axios.get(`/api/orders?${params.toString()}`);
+      
+      const allOrders = res.data.filter(order => 
+        order.rows && order.rows.length > 0
+      );
+      
+      const sortedOrders = allOrders.sort((a, b) => {
+        const dateA = new Date(a.createdAt || a.date || new Date());
+        const dateB = new Date(b.createdAt || b.date || new Date());
+        return dateB - dateA;
+      });
+      
+      setOrders(sortedOrders);
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Apply calendar year and month filters based on delivery date
-  if (selectedYear !== 'all') {
-    const targetYear = parseInt(selectedYear);
-    
-    result = result.map(order => {
-      const filteredRows = order.rows.filter(row => {
-        try {
-          if (!row.deliveryDate) return false;
-          
-          const deliveryDate = parseDeliveryDate(row.deliveryDate);
-          if (!deliveryDate || isNaN(deliveryDate.getTime())) {
-            console.log('Invalid delivery date:', row.deliveryDate);
-            return false;
-          }
-          
-          // Get the calendar year of this delivery date
-          const orderYear = deliveryDate.getFullYear();
-          
-          // Apply year filter
-          if (orderYear !== targetYear) {
-            return false;
-          }
-          
-          // Apply calendar month filter ONLY if a specific month is selected (not 'all')
-          if (selectedCalendarMonth !== 'all') {
-            const orderMonth = deliveryDate.getMonth() + 1; // 1-12
-            const filterMonth = parseInt(selectedCalendarMonth);
-            if (orderMonth !== filterMonth) {
-              return false;
+  const applyFilters = () => {
+    if (!orders.length) {
+      setFilteredOrders([]);
+      return;
+    }
+
+    let result = [...orders];
+
+    const parseDeliveryDate = (dateValue) => {
+      if (!dateValue) return null;
+      try {
+        if (typeof dateValue === 'string') {
+          if (dateValue.includes('-')) {
+            const parts = dateValue.split('-');
+            if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+              return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+            } else {
+              return new Date(dateValue);
             }
+          } else {
+            return new Date(dateValue);
           }
-          
-          return true;
-        } catch (e) {
-          console.error('Error processing date:', row.deliveryDate, e);
-          return false;
         }
-      });
-      
-      return { ...order, rows: filteredRows };
-    }).filter(order => order.rows.length > 0);
-  } else {
-    // If year is 'all', but specific month is selected
-    if (selectedCalendarMonth !== 'all') {
-      const filterMonth = parseInt(selectedCalendarMonth);
+        return dateValue instanceof Date ? dateValue : new Date(dateValue);
+      } catch (e) {
+        console.error('Error parsing delivery date:', dateValue, e);
+        return null;
+      }
+    };
+
+    // Apply calendar year and month filters based on delivery date
+    if (selectedYear !== 'all') {
+      const targetYear = parseInt(selectedYear);
       
       result = result.map(order => {
         const filteredRows = order.rows.filter(row => {
@@ -275,100 +225,143 @@ useEffect(() => {
             if (!row.deliveryDate) return false;
             
             const deliveryDate = parseDeliveryDate(row.deliveryDate);
-            if (!deliveryDate || isNaN(deliveryDate.getTime())) return false;
+            if (!deliveryDate || isNaN(deliveryDate.getTime())) {
+              return false;
+            }
             
-            const orderMonth = deliveryDate.getMonth() + 1;
-            return orderMonth === filterMonth;
+            const orderYear = deliveryDate.getFullYear();
+            
+            if (orderYear !== targetYear) {
+              return false;
+            }
+            
+            if (selectedCalendarMonth !== 'all') {
+              const orderMonth = deliveryDate.getMonth() + 1;
+              const filterMonth = parseInt(selectedCalendarMonth);
+              if (orderMonth !== filterMonth) {
+                return false;
+              }
+            }
+            
+            return true;
           } catch (e) {
+            console.error('Error processing date:', row.deliveryDate, e);
             return false;
           }
         });
+        
+        return { ...order, rows: filteredRows };
+      }).filter(order => order.rows.length > 0);
+    } else {
+      if (selectedCalendarMonth !== 'all') {
+        const filterMonth = parseInt(selectedCalendarMonth);
+        
+        result = result.map(order => {
+          const filteredRows = order.rows.filter(row => {
+            try {
+              if (!row.deliveryDate) return false;
+              
+              const deliveryDate = parseDeliveryDate(row.deliveryDate);
+              if (!deliveryDate || isNaN(deliveryDate.getTime())) return false;
+              
+              const orderMonth = deliveryDate.getMonth() + 1;
+              return orderMonth === filterMonth;
+            } catch (e) {
+              return false;
+            }
+          });
+          return { ...order, rows: filteredRows };
+        }).filter(order => order.rows.length > 0);
+      }
+    }
+
+    // Apply status filter - FIXED for better matching
+    if (statusFilter !== 'all') {
+      result = result.map(order => {
+        const filteredRows = order.rows.filter(row => {
+          // Normalize the remark for comparison
+          const currentRemark = row.remark ? row.remark.toLowerCase().trim() : 'pending';
+          const filterValue = statusFilter.toLowerCase();
+          
+          // Handle different status types
+          if (filterValue === 'pending') {
+            return currentRemark === 'pending' || currentRemark === '' || !currentRemark;
+          }
+          
+          if (filterValue === 'assigned to') {
+            return currentRemark.includes('assigned to');
+          }
+          
+          if (filterValue === 'updated') {
+            return currentRemark.includes('updated:');
+          }
+          
+          if (filterValue === 'completed') {
+            // Check both remark field AND isCompleted flag
+            return currentRemark === 'completed' || 
+                   currentRemark === 'complete' ||
+                   row.isCompleted === true;
+          }
+          
+          if (filterValue === 'design pending') {
+            return currentRemark === 'design pending';
+          }
+          
+          if (filterValue === 'printing') {
+            return currentRemark === 'printing';
+          }
+          
+          if (filterValue === 'installation pending') {
+            return currentRemark === 'installation pending';
+          }
+          
+          if (filterValue === 'onboarding') {
+            return currentRemark === 'onboarding';
+          }
+          
+          return currentRemark === filterValue;
+        });
+        
         return { ...order, rows: filteredRows };
       }).filter(order => order.rows.length > 0);
     }
-  }
 
-  // Apply status filter (same as before)
-  if (statusFilter !== 'all') {
-    result = result.map(order => {
-      const filteredRows = order.rows.filter(row => {
-        const currentRemark = row.remark ? row.remark.toLowerCase() : 'pending';
-        
-        if (statusFilter === 'pending') {
-          return currentRemark === 'pending' || currentRemark === '' || !currentRemark;
-        }
-        
-        if (statusFilter === 'assigned to') {
-          return currentRemark.includes('assigned to');
-        }
-        
-        if (statusFilter === 'updated') {
-          return currentRemark.includes('updated:');
-        }
-        
-        if (statusFilter === 'completed') {
-          return currentRemark === 'completed';
-        }
-        
-        if (statusFilter === 'design pending') {
-          return currentRemark === 'design pending';
-        }
-        
-        if (statusFilter === 'printing') {
-          return currentRemark === 'printing';
-        }
-        
-        if (statusFilter === 'installation pending') {
-          return currentRemark === 'installation pending';
-        }
-        
-        if (statusFilter === 'onboarding') {
-          return currentRemark === 'onboarding';
-        }
-        
-        return currentRemark === statusFilter.toLowerCase();
-      });
-      
-      return { ...order, rows: filteredRows };
-    }).filter(order => order.rows.length > 0);
-  }
+    // Apply search filter
+    if (searchTerm) {
+      result = result.map(order => {
+        const filteredRows = order.rows.filter(row => {
+          const valuesToSearch = [
+            order.executive,
+            order.business,
+            order.contactPerson,
+            `${order.contactCode} ${order.phone}`,
+            row.requirement,
+            row.quantity,
+            row.rate,
+            row.total,
+            row.deliveryDate,
+            row.remark || 'Pending',
+            order.balance,
+          ];
 
-  // Apply search filter (same as before)
-  if (searchTerm) {
-    result = result.map(order => {
-      const filteredRows = order.rows.filter(row => {
-        const valuesToSearch = [
-          order.executive,
-          order.business,
-          order.contactPerson,
-          `${order.contactCode} ${order.phone}`,
-          row.requirement,
-          row.quantity,
-          row.rate,
-          row.total,
-          row.deliveryDate,
-          row.remark || 'Pending',
-          order.balance,
-        ];
+          return valuesToSearch.some(val =>
+            String(val).toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        });
 
-        return valuesToSearch.some(val =>
-          String(val).toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      });
+        return { ...order, rows: filteredRows };
+      }).filter(order => order.rows.length > 0);
+    }
 
-      return { ...order, rows: filteredRows };
-    }).filter(order => order.rows.length > 0);
-  }
-
-  setFilteredOrders(result);
-};
+    setFilteredOrders(result);
+  };
 
   const handleRemarkChange = async (orderId, rowIndex, newRemark) => {
     try {
       let remarkValue = newRemark;
       let isCompleted = false;
       let assignedExecutive = '';
-      let updateTimestamp = null;
+      let updateTimestamp = new Date().toISOString(); // Always set timestamp
 
       if (newRemark === 'assigned to') {
         if (!assignedToText.trim()) {
@@ -377,26 +370,46 @@ useEffect(() => {
         }
         remarkValue = `assigned to ${assignedToText.trim()}`;
         assignedExecutive = assignedToText.trim();
+        isCompleted = false;
       } 
       else if (newRemark === 'updated') {
         if (!updateDescription.trim()) {
           alert('Please enter an update description');
           return;
         }
-        updateTimestamp = new Date().toISOString();
         const formattedTime = formatDateTime(updateTimestamp);
         remarkValue = `updated: ${updateDescription.trim()} (${formattedTime})`;
+        isCompleted = false;
       }
       else if (newRemark === 'completed') {
         isCompleted = true;
         remarkValue = 'completed';
+        // updateTimestamp already set
+      }
+      else if (newRemark === 'design pending') {
+        remarkValue = 'design pending';
+        isCompleted = false;
+      }
+      else if (newRemark === 'printing') {
+        remarkValue = 'printing';
+        isCompleted = false;
+      }
+      else if (newRemark === 'installation pending') {
+        remarkValue = 'installation pending';
+        isCompleted = false;
+      }
+      else if (newRemark === 'onboarding') {
+        remarkValue = 'onboarding';
+        isCompleted = false;
+      }
+      else {
+        if (!remarkValue) {
+          alert('Please select a remark');
+          return;
+        }
       }
 
-      if (!remarkValue && newRemark !== 'completed' && newRemark !== 'updated') {
-        alert('Please select a remark');
-        return;
-      }
-
+      // Update local state first
       setOrders(prevOrders => 
         prevOrders.map(order => {
           if (order._id === orderId) {
@@ -405,10 +418,10 @@ useEffect(() => {
                 ? { 
                     ...row, 
                     remark: remarkValue,
-                    assignedExecutive: assignedExecutive,
+                    assignedExecutive: assignedExecutive || row.assignedExecutive,
                     isCompleted: isCompleted,
-                    updatedAt: new Date().toISOString(),
-                    lastUpdateTime: updateTimestamp || row.lastUpdateTime
+                    updatedAt: updateTimestamp,
+                    lastUpdateTime: updateTimestamp
                   } 
                 : row
             );
@@ -416,7 +429,7 @@ useEffect(() => {
             const updatedOrder = {
               ...order,
               rows: updatedRows,
-              updatedAt: new Date().toISOString()
+              updatedAt: updateTimestamp
             };
 
             return updatedOrder;
@@ -429,6 +442,7 @@ useEffect(() => {
         })
       );
 
+      // Send to backend
       const response = await axios.put(
         `/api/pending-services/${orderId}/row/${rowIndex}/remark`, 
         { 
@@ -440,8 +454,15 @@ useEffect(() => {
       );
 
       if (!response.data.success) {
-        fetchOrders();
+        await fetchOrders();
         throw new Error(response.data.error || 'Update failed');
+      }
+
+      // Show success message for completed
+      if (isCompleted) {
+        setTimeout(() => {
+          alert('✓ Service marked as Completed!');
+        }, 100);
       }
 
       setEditingRemark(null);
@@ -451,7 +472,7 @@ useEffect(() => {
     } catch (err) {
       console.error('Update failed:', err);
       alert(`Failed to update: ${err.response?.data?.error || err.message}`);
-      fetchOrders();
+      await fetchOrders();
     }
   };
 
@@ -468,7 +489,13 @@ useEffect(() => {
         setUpdateDescription(descriptionMatch[1].trim());
       }
     } else {
-      setTempRemark(currentRemark === 'Pending' ? '' : currentRemark || '');
+      // Normalize the remark for display
+      const remarkLower = currentRemark ? currentRemark.toLowerCase().trim() : '';
+      if (remarkLower === 'completed' || remarkLower === 'complete') {
+        setTempRemark('completed');
+      } else {
+        setTempRemark(currentRemark === 'Pending' ? '' : currentRemark || '');
+      }
     }
   };
 
@@ -594,21 +621,21 @@ useEffect(() => {
     return text;
   };
 
-const resetToCurrentPeriod = () => {
-  const currentDate = new Date();
-  const currentYear = currentDate.getFullYear();
+  const resetToCurrentPeriod = () => {
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    
+    setSelectedYear(currentYear.toString());
+    setSelectedCalendarMonth('all');
+    
+    const params = new URLSearchParams(searchParams);
+    params.set('year', currentYear.toString());
+    params.set('month', 'all');
+    setSearchParams(params);
+    
+    fetchOrders();
+  };
   
-  setSelectedYear(currentYear.toString());
-  setSelectedCalendarMonth('all'); // Set to 'all' to show all months of current year
-  
-  const params = new URLSearchParams(searchParams);
-  params.set('year', currentYear.toString());
-  params.set('month', 'all');
-  setSearchParams(params);
-  
-  // Fetch orders with new filters
-  fetchOrders();
-};
   const clearAllFilters = () => {
     setSelectedYear('all');
     setSelectedCalendarMonth('all');
@@ -621,6 +648,7 @@ const resetToCurrentPeriod = () => {
     setSearchParams(params);
   };
 
+  // FIXED: Improved getRemarkStyle with better completed detection
   const getRemarkStyle = (remark = false) => {
     const baseStyle = {
       padding: '4px 8px',
@@ -634,9 +662,11 @@ const resetToCurrentPeriod = () => {
       cursor: 'pointer',
     };
 
-    const remarkLower = remark ? remark.toLowerCase() : '';
+    const remarkStr = remark ? String(remark) : '';
+    const remarkLower = remarkStr.toLowerCase().trim();
     
-    if (remarkLower === 'completed') {
+    // FIXED: Better completed detection
+    if (remarkLower === 'completed' || remarkLower === 'complete') {
       return {
         ...baseStyle,
         backgroundColor: '#2ecc71',
@@ -1236,13 +1266,11 @@ const resetToCurrentPeriod = () => {
             <table style={styles.table}>
               <thead style={styles.tableHeader}>
                 <tr>
-                  {/* Sticky columns */}
                   <th style={styles.stickyHeader(0, columnWidths.sno, getLeftPosition(0))}>S.No</th>
                   <th style={styles.stickyHeader(1, columnWidths.executive, getLeftPosition(1))}>Executive</th>
                   <th style={styles.stickyHeader(2, columnWidths.business, getLeftPosition(2))}>Business</th>
                   <th style={styles.stickyHeader(3, columnWidths.customer, getLeftPosition(3))}>Customer</th>
                   
-                  {/* Regular columns */}
                   <th style={styles.regularHeader(columnWidths.contact)}>Contact</th>
                   <th style={styles.regularHeader(columnWidths.requirement)}>Requirement</th>
                   <th style={styles.regularHeader(columnWidths.qty)}>Qty</th>
@@ -1262,17 +1290,18 @@ const resetToCurrentPeriod = () => {
                     <td colSpan="15" style={styles.noData}>
                       No services found for {getFilterDisplayText()}
                       {statusFilter !== 'all' ? ` with status "${statusOptions.find(opt => opt.value === statusFilter)?.label}"` : ''}
-                     </td>
+                    </td>
                   </tr>
                 ) : (
                   filteredOrders.map((order, orderIndex) =>
                     order.rows.map((row, rowIndex) => {
                       const rowBgColor = (orderIndex + rowIndex) % 2 === 0 ? '#ffffff' : '#f8f9fa';
-                      const isCompleted = row.remark === 'completed';
+                      // FIXED: Better completed detection for row styling
+                      const remarkLower = row.remark ? row.remark.toLowerCase().trim() : '';
+                      const isCompleted = remarkLower === 'completed' || remarkLower === 'complete' || row.isCompleted === true;
                       const completedBgColor = '#d4edda';
                       const backgroundColor = isCompleted ? completedBgColor : rowBgColor;
                       
-                      // Calculate calendar info for display
                       let displayYear = '';
                       let displayMonth = '';
                       let deliveryDateObj = null;
@@ -1298,57 +1327,55 @@ const resetToCurrentPeriod = () => {
                             ...(isCompleted && styles.completedRow),
                           }}
                         >
-                          {/* Sticky columns */}
                           <td style={styles.stickyCell(0, columnWidths.sno, getLeftPosition(0), backgroundColor)}>
                             {orderIndex + 1}
-                           </td>
+                          </td>
                           
                           <td style={styles.stickyCell(1, columnWidths.executive, getLeftPosition(1), backgroundColor)}>
                             <div style={styles.textCell}>
                               {order.executive}
                             </div>
-                           </td>
+                          </td>
                           
                           <td style={styles.stickyCell(2, columnWidths.business, getLeftPosition(2), backgroundColor)}>
                             <div style={styles.textCell}>
                               {order.business}
                             </div>
-                           </td>
+                          </td>
                           
                           <td style={styles.stickyCell(3, columnWidths.customer, getLeftPosition(3), backgroundColor)}>
                             <div style={styles.textCell}>
                               {order.contactPerson}
                             </div>
-                           </td>
+                          </td>
                           
-                          {/* Regular columns */}
                           <td style={styles.regularTd(columnWidths.contact)}>
                             <div style={styles.textCell}>
                               {order.contactCode} {order.phone}
                             </div>
-                           </td>
+                          </td>
                           
                           <td style={styles.regularTd(columnWidths.requirement)}>
                             <div style={styles.textCell}>
                               {row.requirement}
                             </div>
-                           </td>
+                          </td>
                           
                           <td style={styles.regularTd(columnWidths.qty)}>
                             {row.quantity}
-                           </td>
+                          </td>
                           
                           <td style={styles.regularTd(columnWidths.rate)}>
                             {row.rate}
-                           </td>
+                          </td>
                           
                           <td style={styles.regularTd(columnWidths.total)}>
                             {row.total}
-                           </td>
+                          </td>
                           
                           <td style={styles.regularTd(columnWidths.deliveryDate)}>
                             {formatDate(row.deliveryDate)}
-                           </td>
+                          </td>
                           
                           <td style={styles.regularTd(columnWidths.year)}>
                             <span style={{
@@ -1363,7 +1390,7 @@ const resetToCurrentPeriod = () => {
                             }}>
                               {displayYear || '-'}
                             </span>
-                           </td>
+                          </td>
                           
                           <td style={styles.regularTd(columnWidths.month)}>
                             <span style={{
@@ -1378,7 +1405,7 @@ const resetToCurrentPeriod = () => {
                             }}>
                               {displayMonth || '-'}
                             </span>
-                           </td>
+                          </td>
                           
                           <td style={styles.regularTd(columnWidths.assignedTo)}>
                             {row.assignedExecutive ? (
@@ -1404,7 +1431,7 @@ const resetToCurrentPeriod = () => {
                                 Not Assigned
                               </span>
                             )}
-                           </td>
+                          </td>
                           
                           <td style={styles.regularTd(columnWidths.remarks)}>
                             {editingRemark?.orderId === order._id && editingRemark?.rowIndex === rowIndex ? (
@@ -1415,6 +1442,7 @@ const resetToCurrentPeriod = () => {
                                   style={styles.remarkSelect}
                                 >
                                   <option value="">Select Remark</option>
+                                  <option value="pending">Pending</option>
                                   <option value="completed">Completed</option>
                                   <option value="assigned to">Assigned to</option>
                                   <option value="updated">Updated</option>
@@ -1476,15 +1504,15 @@ const resetToCurrentPeriod = () => {
                                 title="Click to edit remark"
                               >
                                 {row.remark || 'Pending'}
-                                {row.remark === 'completed' && ' ✓'}
+                                {(row.remark === 'completed' || row.remark === 'complete') && ' ✓'}
                               </div>
                             )}
-                           </td>
+                          </td>
                           
                           <td style={styles.regularTd(columnWidths.lastUpdateTime)}>
                             {row.lastUpdateTime ? formatDateTime(row.lastUpdateTime) : '-'}
-                           </td>
-                         </tr>
+                          </td>
+                        </tr>
                       );
                     })
                   )

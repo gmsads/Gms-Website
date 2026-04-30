@@ -4451,24 +4451,7 @@ const handleExportToExcel = () => {
                 />
               </div>
 
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px' }}>Client Type</label>
-                <select
-                  name="clientType"
-                  value={editingOrder.clientType}
-                  onChange={handleEditChange}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                >
-                   <option value="Retail">Retail</option>
-        <option value="Retail-Renewal">Retail-Renewal</option>
-        <option value="Agent">Agent</option>
-        <option value="Renewal-Agent">Renewal-Agent</option>
-        <option value="Corporate">Corporate</option>
-        <option value="Corporate-Renewal">Corporate-Renewal</option>
-        <option value="Walk-In">Walk-In</option>
-                </select>
-              </div>
-
+     
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>GST Number</label>
                 <input

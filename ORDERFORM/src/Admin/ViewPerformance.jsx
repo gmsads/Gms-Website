@@ -702,6 +702,7 @@ const PerformanceView = () => {
           <div style={{ display: 'flex', alignItems: 'center', margin: '0 5px' }}><div style={{ width: '12px', height: '12px', backgroundColor: '#ff69b4', marginRight: '4px' }}></div><span style={{ fontSize: '11px' }}>150%+ (1.5x+)</span></div>
         </div>
       </div>
+      
     );
   };
 
@@ -964,7 +965,7 @@ const PerformanceView = () => {
     },
     balanceValue: {
       fontWeight: '600',
-      color: overallBalance >= 0 ? '#27ae60' : '#e74c3c',
+      color: '#27ae60',
       textAlign: 'right'
     },
     monthlySection: {
@@ -1403,6 +1404,15 @@ const PerformanceView = () => {
                   <span style={styles.cardLabel}>Achieved (New/Retail):</span>
                   <span style={styles.achievedValue}>{formatCurrency(calculateTotals.achieved)}</span>
                 </div>
+                <div style={{...styles.cardItem, borderTop: '1px solid #dee2e6', marginTop: '8px', paddingTop: '8px'}}>
+                  <span style={styles.cardLabel}>Total Achieved (All):</span>
+                  <span style={{fontWeight: 'bold', color: '#ff9800', fontSize: '15px'}}>
+                    {formatCurrency(calculateTotals.totalAmount)}
+                  </span>
+                </div>
+                <div style={{fontSize: '11px', color: '#666', textAlign: 'center', marginTop: '5px'}}>
+                  (Includes New, Retail, Agent, Renewal, Renewal-Agent)
+                </div>
               </div>
               
               {renderPerformanceBox(calculateTotals.achievedPercentage)}
@@ -1488,6 +1498,12 @@ const PerformanceView = () => {
                         <div style={styles.cardItem}>
                           <span style={styles.cardLabel}>Achieved (New/Retail):</span>
                           <span style={styles.achievedValue}>{formatCurrency(achieved)}</span>
+                        </div>
+                        <div style={{...styles.cardItem, borderTop: '1px solid #dee2e6', marginTop: '8px', paddingTop: '8px'}}>
+                          <span style={styles.cardLabel}>Total Achieved (All):</span>
+                          <span style={{fontWeight: 'bold', color: '#ff9800', fontSize: '14px'}}>
+                            {formatCurrency(monthData.totalAmount || 0)}
+                          </span>
                         </div>
                       </div>
                       
