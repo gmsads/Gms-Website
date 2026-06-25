@@ -428,7 +428,7 @@ Global Marketing Solutions Team`;
 
   // CRITICAL FUNCTION: Create a fresh new order from existing client data
   const createNewOrderFromExisting = () => {
-    // Determine the new order type based on existing order type
+    // Determine the new order type based on existing 
  // In createNewOrderFromExisting function, update the client type mapping:
 
 // Determine the new order type based on existing order type

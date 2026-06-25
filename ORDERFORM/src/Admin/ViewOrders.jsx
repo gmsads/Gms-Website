@@ -4462,7 +4462,43 @@ const handleExportToExcel = () => {
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-
+              <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
+  <div style={{ flex: 1, minWidth: '150px' }}>
+    <label>
+      Order Type:
+      <select
+        value={clientType}
+        onChange={(e) => setClientType(e.target.value)}
+        disabled={isNewFromExisting}
+        style={{ 
+          backgroundColor: isNewFromExisting ? '#f5f5f5' : 'white',
+          width: '100%'
+        }}
+      >
+        <option value="">Select</option>
+        <option value="Retail">Retail</option>
+        <option value="Retail-Renewal">Retail-Renewal</option>
+        <option value="Agent">Agent</option>
+        <option value="Renewal-Agent">Renewal-Agent</option>
+        <option value="Corporate">Corporate</option>
+        <option value="Corporate-Renewal">Corporate-Renewal</option>
+        <option value="Walk-In">Walk-In</option>
+      </select>
+    </label>
+  </div>
+  <div style={{ flex: 1, minWidth: '200px' }}>
+    <label>
+      GST Number (Optional):
+      <input
+        type="text"
+        value={gstNumber}
+        onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
+        placeholder="Enter GST number"
+        style={{ textTransform: 'uppercase' }}
+      />
+    </label>
+  </div>
+</div>
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Created By</label>
                 <input
