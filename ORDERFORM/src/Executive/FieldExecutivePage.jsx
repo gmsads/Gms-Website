@@ -218,8 +218,15 @@ const FieldExecutivePage = () => {
                         );
                         const data = await response.json();
 
-                        const address = data.address;
-                        let locationName = address?.neighbourhood || address?.suburb || address?.city_district || address?.city || data.display_name.split(',')[0];
+                        const address = data.address || {};
+                        const area = address.suburb || address.neighbourhood || address.residential || address.city_district || address.quarter;
+                        const road = address.road;
+                        const city = address.city || address.town || address.village || address.county;
+                        const parts = [area, road, city].filter(Boolean);
+                        const uniqueParts = [...new Set(parts)];
+                        let locationName = uniqueParts.length > 0 
+                            ? `${uniqueParts.join(', ')} (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})` 
+                            : `${(data.display_name || '').split(',').slice(0, 3).join(', ')} (GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)})`;
 
                         const location = {
                             latitude,
@@ -338,7 +345,7 @@ const FieldExecutivePage = () => {
     };
 
     // Handle gallery selection
-    const handleGallerySelect = (e) => {
+    const handleGallerySelect = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -352,7 +359,8 @@ const FieldExecutivePage = () => {
             return;
         }
 
-        setNewVisit(prev => ({ ...prev, photo: file }));
+        const tracedLoc = await getCurrentLocation();
+        setNewVisit(prev => ({ ...prev, photo: file, location: tracedLoc.locationName }));
         if (cameraInputRef.current) cameraInputRef.current.value = '';
     };
 
@@ -455,6 +463,11 @@ const FieldExecutivePage = () => {
 
         if (!/^\d{10}$/.test(newVisit.contactNumber)) {
             alert('Phone number must be exactly 10 digits');
+            return;
+        }
+
+        if (!newVisit.photo) {
+            alert('Mandatory Requirement: Please take or attach a live photo of the visit location before submitting!');
             return;
         }
 
@@ -640,7 +653,6 @@ const FieldExecutivePage = () => {
             <header className="page-header">
                 <div className="header-left">
                     <button className="mobile-menu-btn" onClick={() => setShowMobileMenu(!showMobileMenu)}>☰</button>
-                    <button onClick={() => navigate('/order')} className="back-btn">&larr; Dashboard</button>
                 </div>
                 <h1>Field Executive Dashboard</h1>
                 <div className="header-actions">
@@ -1001,6 +1013,7 @@ const FieldExecutivePage = () => {
                                                 ref={galleryInputRef} 
                                                 onChange={handleGallerySelect} 
                                                 accept="image/*" 
+                                                style={{ display: 'none' }}
                                                 className="hidden-file-input" 
                                                 id="gallery-upload" 
                                             />
@@ -1010,6 +1023,7 @@ const FieldExecutivePage = () => {
                                                 onChange={handleGallerySelect} 
                                                 accept="image/*" 
                                                 capture="environment" 
+                                                style={{ display: 'none' }}
                                                 className="hidden-file-input" 
                                                 id="camera-capture" 
                                             />
@@ -1281,10 +1295,11 @@ const FieldExecutivePage = () => {
                     justify-content: space-between; 
                     margin-bottom: 2rem; 
                     padding: 1.2rem 2rem; 
-                    background: linear-gradient(135deg,rgb(205, 82, 160),rgb(235, 238, 147)); 
-                    color: #1f2937; 
-                    border-radius: 20px; 
-                    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+                    background: #ffffff; 
+                    color: #2c3e50; 
+                    border: 1px solid #e0e0e0;
+                    border-radius: 12px; 
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                 }
                 .header-left { 
                     display: flex; 
@@ -1299,14 +1314,14 @@ const FieldExecutivePage = () => {
                     font-size: 1.2rem; 
                     cursor: pointer; 
                     padding: 0.5rem 1rem;
-                    border-radius: 10px;
+                    border-radius: 8px;
                 }
                 .back-btn { 
                     padding: 0.6rem 1.2rem; 
-                    background: #f3f4f6; 
-                    color: #4b5563; 
-                    border: none; 
-                    border-radius: 12px; 
+                    background: #f8f9fa; 
+                    color: #2c3e50; 
+                    border: 1px solid #ddd; 
+                    border-radius: 8px; 
                     cursor: pointer; 
                     font-weight: 500;
                 }
@@ -1315,16 +1330,15 @@ const FieldExecutivePage = () => {
                 }
                 .toggle-calendar-btn { 
                     padding: 0.6rem 1.2rem; 
-                    background: linear-gradient(135deg, #6366f1, #8b5cf6); 
+                    background: #3498db; 
                     color: white; 
                     border: none; 
-                    border-radius: 12px; 
+                    border-radius: 8px; 
                     cursor: pointer; 
                     font-weight: 500;
                 }
                 .toggle-calendar-btn:hover {
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4);
+                    background: #2980b9;
                 }
                 
                 /* Add Schedule Button */
@@ -1336,14 +1350,15 @@ const FieldExecutivePage = () => {
                     align-items: center;
                     gap: 0.8rem;
                     padding: 1rem 2rem;
-                    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+                    background: #3498db;
                     color: white;
                     border: none;
-                    border-radius: 16px;
+                    border-radius: 8px;
                     font-size: 1.1rem;
                     font-weight: 600;
                     cursor: pointer;
                     transition: all 0.3s ease;
+                    box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
                     box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.3);
                 }
                 .add-schedule-btn:hover {
@@ -1805,12 +1820,7 @@ const FieldExecutivePage = () => {
                 
                 /* Photo Upload */
                 .hidden-file-input { 
-                    position: absolute; 
-                    width: 1px; 
-                    height: 1px; 
-                    padding: 0; 
-                    margin: -1px; 
-                    overflow: hidden; 
+                    display: none !important;
                 }
                 .photo-upload-buttons { 
                     display: flex; 
@@ -1960,12 +1970,12 @@ const FieldExecutivePage = () => {
                     .main-content-layout { 
                         grid-template-columns: 1fr; 
                     }
-                    .welcome-text { 
+                    .welcome-text, .toggle-calendar-btn { 
                         display: none; 
                     }
                     
                     .page-header h1 {
-                        font-size: 1.2rem;
+                        font-size: 1.1rem;
                     }
                     
                     .add-schedule-btn {

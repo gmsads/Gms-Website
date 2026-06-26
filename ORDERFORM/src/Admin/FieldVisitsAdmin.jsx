@@ -25,6 +25,13 @@ const FieldVisitsAdmin = () => {
     status: 'all',
     date: ''
   });
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     fetchVisits();
@@ -35,26 +42,15 @@ const FieldVisitsAdmin = () => {
     applyFilters();
   }, [filters, visits]);
 
-  // Format Cloudinary image URL
+  // Format image URL
   const formatImageUrl = (photoUrl) => {
     if (!photoUrl) return null;
-
-    console.log('Original photo URL:', photoUrl);
-
-    // If it's already a full URL (Cloudinary URL), return as is
-    if (photoUrl.startsWith('http')) {
-      return photoUrl;
+    if (photoUrl.startsWith('http') || photoUrl.startsWith('data:')) return photoUrl;
+    if (photoUrl.startsWith('/uploads') || photoUrl.startsWith('uploads')) {
+      const prefix = photoUrl.startsWith('/') ? '' : '/';
+      return `http://localhost:5000${prefix}${photoUrl}`;
     }
-
-    // If it's a local path but we're in production, try to construct Cloudinary URL
-    // Extract filename from path
-    const filename = photoUrl.split('/').pop();
-    
-    // Your Cloudinary configuration
-    const CLOUDINARY_BASE_URL = 'https://res.cloudinary.com/dqy7wlhyg/image/upload';
-    
-    // Return Cloudinary URL with the filename
-    return `${CLOUDINARY_BASE_URL}/visits/${filename}`;
+    return photoUrl;
   };
 
   const fetchVisits = async () => {
@@ -392,15 +388,7 @@ const FieldVisitsAdmin = () => {
             </select>
           </div>
 
-          <div className="filter-group">
-            <label>Date:</label>
-            <input
-              type="date"
-              name="date"
-              value={filters.date}
-              onChange={handleFilterChange}
-            />
-          </div>
+
 
           <button onClick={resetFilters} className="reset-filters-btn">
             Reset Filters
@@ -510,88 +498,130 @@ const FieldVisitsAdmin = () => {
         </div>
       )}
 
-      {/* Visits Table */}
+      {/* Visits List / Table */}
       <div className="visits-table-section">
         <h2>Field Visits ({filteredVisits.length} records)</h2>
         <div className="table-container">
-          <table className="visits-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Executive</th>
-                <th>Client</th>
-                <th>Contact Number</th>
-                <th>Business Name</th>
-                <th>Location</th>
-                <th>Purpose</th>
-                <th>Status</th>
-                <th>Photo</th>
-                <th>Notes</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+          {isMobile ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '8px' }}>
               {filteredVisits.length > 0 ? (
                 filteredVisits.map((visit, index) => (
-                  <tr key={visit._id || index}>
-                    <td>{visit.date ? format(new Date(visit.date), 'MMM dd, yyyy') : 'N/A'}</td>
-                    <td>{visit.executive || 'Unknown'}</td>
-                    <td>{visit.client || 'N/A'}</td>
-                    <td>{visit.contactNumber || 'N/A'}</td>
-                    <td>{visit.businessName || 'N/A'}</td>
-                    <td>{visit.location || 'N/A'}</td>
-                    <td>{visit.purpose || 'N/A'}</td>
-                    <td>
-                      <span className={`status-badge ${visit.status || 'scheduled'}`}>
+                  <div key={visit._id || index} style={{ backgroundColor: 'white', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px solid #edf2f7', paddingBottom: '6px' }}>
+                      <span style={{ fontWeight: 'bold', color: '#1e3c72', fontSize: '14px' }}>{visit.client || 'Unnamed Client'}</span>
+                      <span className={`status-badge ${visit.status || 'scheduled'}`} style={{ fontSize: '11px' }}>
                         {visit.status || 'scheduled'}
                       </span>
-                    </td>
-                    <td>
-                      {visit.photo ? (
-                        <button
-                          className="view-photo-btn"
-                          onClick={() => openImageModal(visit.photo)}
-                          title="View Photo"
-                        >
-                          📷 View
-                        </button>
-                      ) : (
-                        <span className="no-photo">No Photo</span>
-                      )}
-                    </td>
-                    <td className="notes-cell">{visit.notes || '-'}</td>
-                    <td>
-                      <div className="action-buttons">
-                        <button
-                          className="edit-btn"
-                          onClick={() => startEdit(visit)}
-                          title="Edit Visit"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          className="delete-btn"
-                          onClick={() => deleteVisit(visit._id)}
-                          title="Delete Visit"
-                        >
-                          🗑️
-                        </button>
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#4a5568', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '8px' }}>
+                      <div><strong>Date:</strong> {visit.date ? format(new Date(visit.date), 'MMM dd, yyyy') : 'N/A'}</div>
+                      <div><strong>Exec:</strong> {visit.executive || 'Unknown'}</div>
+                      <div><strong>Phone:</strong> {visit.contactNumber || 'N/A'}</div>
+                      <div><strong>Purpose:</strong> {visit.purpose || 'N/A'}</div>
+                      <div style={{ gridColumn: '1 / -1' }}><strong>Location:</strong> {visit.location || 'N/A'}</div>
+                      <div style={{ gridColumn: '1 / -1' }}><strong>Notes:</strong> {visit.notes || '-'}</div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #edf2f7' }}>
+                      <div>
+                        {visit.photo ? (
+                          <button className="view-photo-btn" onClick={() => openImageModal(visit.photo)} style={{ padding: '6px 10px', fontSize: '12px' }}>
+                            📷 View Photo
+                          </button>
+                        ) : (
+                          <span className="no-photo" style={{ fontSize: '12px' }}>No Photo</span>
+                        )}
                       </div>
-                    </td>
-                  </tr>
+                      <div className="action-buttons" style={{ display: 'flex', gap: '8px' }}>
+                        <button className="edit-btn" onClick={() => startEdit(visit)} title="Edit">✏️</button>
+                        <button className="delete-btn" onClick={() => deleteVisit(visit._id)} title="Delete">🗑️</button>
+                      </div>
+                    </div>
+                  </div>
                 ))
               ) : (
-                <tr>
-                  <td colSpan="11" className="no-data">
-                    {filters.date || filters.executive !== 'all' || filters.status !== 'all'
-                      ? 'No field visits found matching your filters'
-                      : 'No field visits found'
-                    }
-                  </td>
-                </tr>
+                <div style={{ textAlign: 'center', padding: '20px', color: '#a0aec0' }}>No field visits found</div>
               )}
-            </tbody>
-          </table>
+            </div>
+          ) : (
+            <table className="visits-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Executive</th>
+                  <th>Client</th>
+                  <th>Contact Number</th>
+                  <th>Business Name</th>
+                  <th>Location</th>
+                  <th>Purpose</th>
+                  <th>Status</th>
+                  <th>Photo</th>
+                  <th>Notes</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredVisits.length > 0 ? (
+                  filteredVisits.map((visit, index) => (
+                    <tr key={visit._id || index}>
+                      <td>{visit.date ? format(new Date(visit.date), 'MMM dd, yyyy') : 'N/A'}</td>
+                      <td>{visit.executive || 'Unknown'}</td>
+                      <td>{visit.client || 'N/A'}</td>
+                      <td>{visit.contactNumber || 'N/A'}</td>
+                      <td>{visit.businessName || 'N/A'}</td>
+                      <td>{visit.location || 'N/A'}</td>
+                      <td>{visit.purpose || 'N/A'}</td>
+                      <td>
+                        <span className={`status-badge ${visit.status || 'scheduled'}`}>
+                          {visit.status || 'scheduled'}
+                        </span>
+                      </td>
+                      <td>
+                        {visit.photo ? (
+                          <button
+                            className="view-photo-btn"
+                            onClick={() => openImageModal(visit.photo)}
+                            title="View Photo"
+                          >
+                            📷 View
+                          </button>
+                        ) : (
+                          <span className="no-photo">No Photo</span>
+                        )}
+                      </td>
+                      <td className="notes-cell">{visit.notes || '-'}</td>
+                      <td>
+                        <div className="action-buttons">
+                          <button
+                            className="edit-btn"
+                            onClick={() => startEdit(visit)}
+                            title="Edit Visit"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            className="delete-btn"
+                            onClick={() => deleteVisit(visit._id)}
+                            title="Delete Visit"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="11" className="no-data">
+                      {filters.date || filters.executive !== 'all' || filters.status !== 'all'
+                        ? 'No field visits found matching your filters'
+                        : 'No field visits found'
+                      }
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 

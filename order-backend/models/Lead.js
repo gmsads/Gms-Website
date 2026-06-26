@@ -43,6 +43,42 @@ const leadSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  assigned_to: {
+    type: String,
+    default: ''
+  },
+  created_by: {
+    type: String,
+    default: ''
+  },
+  assigned_at: {
+    type: Date
+  },
+  call_status: {
+    type: String,
+    enum: ['pending', 'connected', 'not_connected', 'callback', 'sale', 'not_interested'],
+    default: 'pending'
+  },
+  disposition_reason: {
+    type: String,
+    default: ''
+  },
+  next_followup_date: {
+    type: String,
+    default: ''
+  },
+  recording_url: {
+    type: String,
+    default: ''
+  },
+  last_call_result: {
+    type: String,
+    default: ''
+  },
+  total_call_duration: {
+    type: Number,
+    default: 0
+  },
   called_at: {
     type: Date
   }
@@ -51,6 +87,8 @@ const leadSchema = new mongoose.Schema({
 });
 
 leadSchema.index({ status: 1 });
+leadSchema.index({ assigned_to: 1 });
+leadSchema.index({ next_followup_date: 1 });
 leadSchema.index({ createdAt: -1 });
 leadSchema.index({ phone: 1 });
 

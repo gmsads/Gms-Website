@@ -441,6 +441,7 @@ const NAV = [
       { to: 'Employees', label: 'Employees', emoji: '👨‍💼' },
       { to: 'advance-approvals', label: 'Advance Approvals', emoji: '✅' },
       { to: 'tele-breaks', label: 'Tele Breaks', emoji: '☕' },
+      { to: 'lead-distribution', label: 'Tele Lead Distribution', emoji: '📞' },
       { to: 'unit-attendance', label: 'Unit Attendance', emoji: '🕐' },
       { to: 'view-leaves', label: 'View Leave Requests', emoji: '🏖️' },
       { to: 'activity', label: 'Target', emoji: '🎯' },
@@ -825,7 +826,7 @@ function AdminDashboard() {
   useEffect(() => {
     const fetchUnreadCount = async () => {
       try {
-        const response = await axios.get('/api/whatsapp/unread-count');
+        const response = await axios.get('/api/dashboard/whatsapp/unread-count');
         setUnreadCount(response.data.count || 0);
       } catch (error) {
         console.error('Error fetching unread count:', error);

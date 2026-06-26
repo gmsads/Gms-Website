@@ -70,6 +70,7 @@ import AdvanceApprovalPage  from './Admin/AdvanceApprovalPage';
 import ServiceForm from './Service/ServiceForm.jsx';
 import Purchase from './Admin/Purchase';
 import TeleBreaks from './Admin/TeleBreaks.jsx';
+import AdminLeadDistribution from './Admin/AdminLeadDistribution.jsx';
 import HRDashboard from './HR/HRDashboards.jsx';
 import GreetingdesignForm from './Designer/GreetingDesignForm.jsx'
 import GreetingDesign from './Admin/GreetingDesign.jsx';
@@ -262,6 +263,7 @@ function App() {
            <Route path="view-leaves" element={<ViewLeave />} />
           <Route path="greeting-design" element={<GreetingDesign/>} />
           <Route path="tele-breaks" element={<TeleBreaks/>} />
+          <Route path="lead-distribution" element={<AdminLeadDistribution/>} />
           <Route path="appointments" element={<Appointment />} />
           <Route path="prospects" element={<Prospective />} />
           <Route path="vendors" element={<Vendors />} />

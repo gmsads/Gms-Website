@@ -8,23 +8,30 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'GMS App',
-        short_name: 'GMS',
-        description: 'Your MERN Order Form App',
-        theme_color: '#ffffff',
+        name: 'Global Marketing Solutions',
+        short_name: 'GMS App',
+        description: 'Global Marketing Solutions CRM & Order Form',
+        theme_color: '#0b5b8a',
         background_color: '#ffffff',
         display: 'standalone',
+        orientation: 'portrait',
         start_url: '/',
         icons: [
           {
-            src: '/icons/icon-192x192.png',
+            src: '/icon-192x192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: '/icons/icon-512x512.png',
+            src: '/logo512.png',
             sizes: '512x512',
             type: 'image/png'
+          },
+          {
+            src: '/maskable-icon.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
           }
         ]
       },
@@ -44,33 +51,6 @@ export default defineConfig({
     }
   },
   build: {
-    chunkSizeWarningLimit: 1000, // Optional: increase warning threshold for chunks
-  }
-})
-VitePWA({
-  registerType: 'autoUpdate',
-  manifest: {
-    name: 'GMS App',
-    short_name: 'GMS',
-    description: 'Your MERN Order Form App',
-    theme_color: '#ffffff',
-    background_color: '#ffffff',
-    display: 'standalone',
-    start_url: '/',
-    icons: [
-      {
-        src: '/icons/icon-192x192.png',
-        sizes: '192x192',
-        type: 'image/png'
-      },
-      {
-        src: '/icons/icon-512x512.png',
-        sizes: '512x512',
-        type: 'image/png'
-      }
-    ]
-  },
-  workbox: {
-    maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB
+    chunkSizeWarningLimit: 1000,
   }
 })

@@ -25,7 +25,7 @@ const callLogSchema = new mongoose.Schema({
   },
   call_status: {
     type: String,
-    enum: ['initiated', 'completed', 'sale', 'not_interested', 'callback', 'no_answer'],
+    enum: ['initiated', 'completed', 'connected', 'not_connected', 'sale', 'not_interested', 'callback', 'no_answer'],
     default: 'initiated'
   },
   call_duration: {
@@ -33,6 +33,10 @@ const callLogSchema = new mongoose.Schema({
     default: 0
   },
   notes: {
+    type: String,
+    default: ''
+  },
+  recording_url: {
     type: String,
     default: ''
   },

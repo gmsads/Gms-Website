@@ -229,6 +229,7 @@ function AssignService() {
   // NEW: Generate WhatsApp message with company name
   const generateWhatsAppMessage = (order, row, executive) => {
     const deliveryDate = row.deliveryDate ? new Date(row.deliveryDate).toLocaleDateString() : 'Not specified';
+    const descriptionStr = row.description && row.description.trim() !== '' ? `\n📝 Description: ${row.description.trim()}` : '';
     
     return `Your order has been assigned to service executive!
 
@@ -236,7 +237,7 @@ Order Details:
 📋 Order No: ${order.orderNo}
 👤 Executive: ${executive.name}
 📞 Contact: ${executive.phone}
-🛠️ Requirement: ${row.requirement}
+🛠️ Requirement: ${row.requirement}${descriptionStr}
 📅 Delivery Date: ${deliveryDate}
 📦 Quantity: ${row.quantity || '1'}
 

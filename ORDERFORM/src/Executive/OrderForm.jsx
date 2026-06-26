@@ -164,6 +164,17 @@ function OrderForm({
         specialDatesMessage += `\nAnniversary: ${new Date(orderData.anniversaryDate).toLocaleDateString()}`;
       }
 
+      let reqDisplay = orderData.requirements || "";
+      if (orderData.requirementDetails && Array.isArray(orderData.requirementDetails) && orderData.requirementDetails.length > 0) {
+        reqDisplay = orderData.requirementDetails.map(req => {
+          let str = `▪️ *${req.quantity || 1} x ${req.name}*`;
+          if (req.description && req.description.trim() !== "") {
+            str += `\n   📝 _Description:_ ${req.description.trim()}`;
+          }
+          return str;
+        }).join('\n');
+      }
+
       const message = `🎉 *Order Confirmation* 🎉
 
 Dear ${orderData.contactPerson},
@@ -178,7 +189,7 @@ Your order has been successfully placed with *Global Marketing Solutions*!
 📍 *Location:* ${orderData.location || 'Not specified'}
 
 *Requirements:*
-${orderData.requirements}
+${reqDisplay}
 
 *Payment Summary:*
 💰 *Total Amount:* ₹${orderData.total}
@@ -1653,6 +1664,61 @@ const submitAdvanceApprovalRequest = async () => {
     );
   }
 
+  const handleSendExistingWhatsApp = () => {
+    if (!contactNumber) {
+      alert("Customer phone number not available.");
+      return;
+    }
+
+    const requirementDetails = rows
+      .filter((row) => row.requirement)
+      .map((row) => ({
+        name: row.requirement === "other" ? row.customRequirement : row.requirement,
+        quantity: parseFloat(row.quantity) || 1,
+        rate: parseFloat(row.rate) || 0,
+        total: parseFloat(row.total) || 0,
+        description: row.description || ""
+      }));
+
+    const allRequirements = requirementDetails
+      .map(req => `${req.quantity} x ${req.name}`)
+      .join(", ");
+
+    let paymentMethodStr = paymentMethods.includes("UPI") && selectedUpi
+      ? paymentMethods.map((m) => m === "UPI" ? `UPI - ${selectedUpi}` : m).join(" + ")
+      : paymentMethods.join(" + ");
+
+    const totalNum = rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+    const advanceNum = parseFloat(advance) || 0;
+    const balanceNum = (totalNum - advanceNum - (parseFloat(discount) || 0)).toFixed(2);
+
+    const orderDataForWhatsApp = {
+      business: business,
+      contactPerson: contactPerson || "Customer",
+      orderNumber: existingData?.orderNumber || `ORD-${Date.now()}`,
+      requirements: allRequirements,
+      requirementDetails: requirementDetails,
+      total: totalNum.toFixed(2),
+      advance: advanceNum.toFixed(2),
+      balance: balanceNum,
+      orderDate: orderDate || new Date(),
+      location: clientLocation || "",
+      paymentMethods: paymentMethodStr || "Not specified",
+      advanceDate: advanceDate,
+      paymentDate: paymentDate,
+      chequeNumber: chequeNumber,
+      upiId: selectedUpi,
+      bankName: bankName,
+      transactionRef: transactionRef,
+      poNumber: poNumber,
+      gstNumber: gstNumber,
+      birthDate: birthDate,
+      anniversaryDate: anniversaryDate
+    };
+
+    sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
+  };
+
   // Check if we are editing an existing order (not a new order from existing)
   const isEditingExisting = existingData && !isCreatingNew && !isNewFromExisting;
 
@@ -2451,10 +2517,30 @@ const submitAdvanceApprovalRequest = async () => {
 
       {/* Form Actions - Only show if not read-only */}
       {!isReadOnly && (
-        <div className="form-actions no-print">
+        <div className="form-actions no-print" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button type="button" onClick={onBack} className="btn btn-secondary">
             Back to Search
           </button>
+          {existingData && (
+            <button
+              type="button"
+              onClick={handleSendExistingWhatsApp}
+              style={{
+                backgroundColor: '#25D366',
+                color: 'white',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '6px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              💬 Send WhatsApp
+            </button>
+          )}
           <button
             onClick={handleSubmit}
             disabled={isSubmitting || (!isAdmin && advanceError && !hasAdvanceApproval)}
@@ -2467,10 +2553,30 @@ const submitAdvanceApprovalRequest = async () => {
 
       {/* Back button for read-only mode */}
       {isReadOnly && (
-        <div className="form-actions no-print">
+        <div className="form-actions no-print" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button type="button" onClick={onBack} className="btn btn-secondary">
             Back to Search
           </button>
+          {existingData && (
+            <button
+              type="button"
+              onClick={handleSendExistingWhatsApp}
+              style={{
+                backgroundColor: '#25D366',
+                color: 'white',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '6px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              💬 Send WhatsApp
+            </button>
+          )}
         </div>
       )}
 
