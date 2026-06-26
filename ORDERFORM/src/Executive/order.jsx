@@ -1207,6 +1207,7 @@ function Admin() {
           <div className="nav-menu" style={{ marginTop: '0' }}>
             {[
               { key: "executive-dashboard", icon: "🏠", text: "Dashboard" },
+                 { key: "tele", icon: "📞", text: "My Leads" },
               { key: "record", icon: "📊", text: "Performance Record" },
               { key: "viewRecord", icon: "📈", text: "View Records" }, 
               { key: "order", icon: "📝", text: "Create Order ➕" },
@@ -1221,7 +1222,7 @@ function Admin() {
               { key: "view-leave", icon: "📂", text: "View Leave Request" },
               { key: "price-list", icon: "💰", text: "Price List" },
               { key: "pending-payments", icon: "💰", text: "Pending Payments" },
-              { key: "tele", icon: "📞", text: "Tele-CRM" },
+           
             ].map(({ key, icon, text }) => (
               <div
                 key={key}
