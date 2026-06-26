@@ -127,10 +127,7 @@ const TeleCRM = () => {
     setCallTimer(0);
     setRecordedAudioUrl('');
 
-    // Trigger phone dialer
-    window.location.href = `tel:${lead.phone}`;
-
-    // Request Mic & Start Recording
+    // Request Mic & Start Recording FIRST before mobile OS switches apps
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -139,7 +136,9 @@ const TeleCRM = () => {
         mediaRecorderRef.current = mediaRecorder;
 
         mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) audioChunksRef.current.push(event.data);
+          if (event.data && event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
         };
 
         mediaRecorder.onstop = async () => {
@@ -163,13 +162,18 @@ const TeleCRM = () => {
           stream.getTracks().forEach(track => track.stop());
         };
 
-        mediaRecorder.start();
+        mediaRecorder.start(1000); // Flush chunks every 1 second
         setIsRecording(true);
       } catch (err) {
         console.warn('Microphone permission denied or unavailable:', err);
         setIsRecording(false);
       }
     }
+
+    // Delay dialer launch slightly to guarantee mobile browser initializes recording stream
+    setTimeout(() => {
+      window.location.href = `tel:${lead.phone}`;
+    }, 600);
   };
 
   // End Call & Open Outcome Modal
@@ -585,36 +589,12 @@ const TeleCRM = () => {
               />
             </div>
 
-            {/* Direct Mobile Audio Attachment */}
-            <div style={{ marginBottom: '16px', backgroundColor: '#f8f9fa', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#444', marginBottom: '6px' }}>
-                🎙️ Attach Mobile Phone Call Recording Audio File
-              </label>
-              <input 
-                type="file" 
-                accept="audio/*"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const formData = new FormData();
-                  formData.append('file', file);
-                  try {
-                    const upRes = await axios.post('/api/upload', formData);
-                    if (upRes.data?.url) setRecordedAudioUrl(upRes.data.url);
-                    else setRecordedAudioUrl(URL.createObjectURL(file));
-                  } catch (err) {
-                    setRecordedAudioUrl(URL.createObjectURL(file));
-                  }
-                }}
-                style={{ fontSize: '12px', width: '100%', color: '#666' }}
-              />
-            </div>
-
-            {recordedAudioUrl && (
-              <div style={{ fontSize: '12px', color: '#28a745', marginBottom: '16px', fontWeight: '600' }}>
-                🎧 Call audio ready to save
+            {/* Automatic Recording Confirmation Status */}
+            <div style={{ marginBottom: '16px', backgroundColor: recordedAudioUrl ? '#d4edda' : '#e8f4fd', padding: '12px', borderRadius: '6px', border: recordedAudioUrl ? '1px solid #c3e6cb' : '1px solid #b8daff', textAlign: 'center' }}>
+              <div style={{ fontSize: '13px', fontWeight: '700', color: recordedAudioUrl ? '#155724' : '#004085' }}>
+                {recordedAudioUrl ? "🎙️ Call Audio Automatically Recorded & Ready" : "🎙️ Audio Captured Automatically via CRM"}
               </div>
-            )}
+            </div>
 
             <button 
               onClick={handleSubmitDisposition}

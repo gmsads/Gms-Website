@@ -174,7 +174,7 @@ router.post('/executive', async (req, res) => {
       return false;
     });
 
-    res.json({ success: true, data: activeLeads, allAssigned: allLeads });
+    res.json({ success: true, data: allLeads, activeAssigned: activeLeads });
   } catch (error) {
     console.error('Error fetching executive leads:', error);
     res.status(500).json({ error: error.message });
