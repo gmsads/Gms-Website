@@ -446,9 +446,7 @@ const AdminLeadDistribution = () => {
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', borderTop: '1px solid #edf2f7', paddingTop: '8px' }}>
                       {lead.recording_url ? (
-                        <a href={lead.recording_url} target="_blank" rel="noreferrer" style={{ color: '#3182ce', textDecoration: 'none', fontWeight: '600', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          🎧 Listen Recording
-                        </a>
+                        <audio controls preload="none" style={{ height: '30px', maxWidth: '160px' }} src={lead.recording_url} />
                       ) : <span style={{ fontSize: '12px', color: '#a0aec0' }}>No Audio</span>}
 
                       <button 
@@ -504,9 +502,7 @@ const AdminLeadDistribution = () => {
                         </td>
                         <td style={{ padding: '12px' }}>
                           {lead.recording_url ? (
-                            <a href={lead.recording_url} target="_blank" rel="noreferrer" style={{ color: '#3182ce', textDecoration: 'none', fontWeight: '600' }}>
-                              🎧 Listen
-                            </a>
+                            <audio controls preload="none" style={{ height: '32px', width: '160px' }} src={lead.recording_url} />
                           ) : '-'}
                         </td>
                         <td style={{ padding: '12px' }}>

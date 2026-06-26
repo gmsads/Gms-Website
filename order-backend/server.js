@@ -51,6 +51,7 @@ const greetingsRoutes = require('./routes/greetings');
 const leaveRoutes = require('./routes/leaveRoutes');
 const hrReportsRouter = require('./routes/hrReports');
 const bannerRoutes = require('./routes/bannerRoutes'); // ADDED BANNER ROUTES
+const locationTrackingRoutes = require('./routes/LocationTracking');
 
 const app = express();
 runReminderCron();
@@ -65,6 +66,7 @@ app.use('/api/purchases', purchase); // ADD THIS LINE
 app.use('/', hrReportsRouter);
 app.use("/api/followup",whatsapp);
 app.use('/api/banners', bannerRoutes); // ADDED BANNER ROUTES - Mount banner routes
+app.use('/api/tracking', locationTrackingRoutes);
 
 // Upload endpoint
 app.use("/api/upload", uploadRoute);

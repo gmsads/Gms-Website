@@ -128,6 +128,51 @@ const FieldExecutivePage = () => {
         checkAuthorization();
     }, [navigate]);
 
+    // Background GPS Route Timeline Tracker Loop
+    const lastPingRef = useRef({ time: 0, lat: null, lng: null });
+
+    useEffect(() => {
+        if (!navigator.geolocation) return;
+        const userName = localStorage.getItem('userName') || 'Field Executive';
+
+        const watchId = navigator.geolocation.watchPosition(
+            async (position) => {
+                const now = Date.now();
+                const { latitude, longitude, speed } = position.coords;
+                const last = lastPingRef.current;
+
+                // Ping if >2.5 minutes elapsed OR if moved >40 meters
+                const timeDiff = now - last.time;
+                const distDiff = last.lat !== null ? Math.hypot(latitude - last.lat, longitude - last.lng) * 111000 : 999;
+
+                if (timeDiff > 150000 || distDiff > 40) {
+                    lastPingRef.current = { time: now, lat: latitude, lng: longitude };
+                    try {
+                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`);
+                        const data = await res.json();
+                        const addr = data.address || {};
+                        const area = addr.suburb || addr.neighbourhood || addr.residential || addr.city_district || addr.quarter || addr.city || 'Location Active';
+
+                        await axios.post('/api/tracking/ping', {
+                            executiveName: userName,
+                            lat: latitude,
+                            lng: longitude,
+                            area: `${area}`,
+                            speed: speed || 0,
+                            type: last.time === 0 ? 'checkin' : 'ping'
+                        });
+                    } catch (err) {
+                        console.log('Tracking ping fallback:', err);
+                    }
+                }
+            },
+            (err) => console.log('Background GPS watch error:', err),
+            { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 }
+        );
+
+        return () => navigator.geolocation.clearWatch(watchId);
+    }, []);
+
     // Fetch data
     const fetchFieldData = async () => {
         try {
@@ -496,6 +541,18 @@ const FieldExecutivePage = () => {
             await axios.post('/api/field-executive/visit', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
+
+            if (currentLocation && currentLocation.latitude) {
+                const userName = localStorage.getItem('userName') || 'Field Executive';
+                axios.post('/api/tracking/ping', {
+                    executiveName: userName,
+                    lat: currentLocation.latitude,
+                    lng: currentLocation.longitude,
+                    area: currentLocation.locationName || newVisit.location || 'Client Visit',
+                    type: 'visit',
+                    notes: `Visit: ${newVisit.client} (${newVisit.businessName})`
+                }).catch(() => {});
+            }
 
             resetAddVisitProcess();
             setSuccessMessage('Visit scheduled successfully!');

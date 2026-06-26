@@ -447,7 +447,6 @@ const NAV = [
       { to: 'activity', label: 'Target', emoji: '🎯' },
       { to: 'executives-logins', label: 'Executive Login Time', emoji: '🔐' },
       { to: 'daily-report', label: 'Daily Report', emoji: '📄' },
-      { to: 'fieldvisitsadmin', label: 'Field Visits', emoji: '📍' },
     ],
   },
   {

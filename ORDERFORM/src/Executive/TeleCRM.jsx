@@ -417,9 +417,7 @@ const TeleCRM = () => {
                       <td style={{ padding: '14px 18px', color: '#555' }}>{lead.next_followup_date || '-'}</td>
                       <td style={{ padding: '14px 18px' }}>
                         {lead.recording_url ? (
-                          <a href={lead.recording_url} target="_blank" rel="noreferrer" style={{ color: '#3498db', textDecoration: 'none', fontWeight: '600' }}>
-                            🎧 Listen
-                          </a>
+                          <audio controls preload="none" style={{ height: '32px', width: '160px' }} src={lead.recording_url} />
                         ) : '-'}
                       </td>
                       <td style={{ padding: '14px 18px', textAlign: 'right' }}>

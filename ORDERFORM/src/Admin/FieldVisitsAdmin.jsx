@@ -27,6 +27,33 @@ const FieldVisitsAdmin = () => {
   });
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
+  // Timeline States
+  const [activeTab, setActiveTab] = useState('visits'); // 'visits' | 'timeline'
+  const [timelineExec, setTimelineExec] = useState('');
+  const [timelineDate, setTimelineDate] = useState(new Date().toISOString().split('T')[0]);
+  const [timelineLog, setTimelineLog] = useState(null);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState('');
+
+  const fetchRouteTimeline = async (exec, dateStr) => {
+    if (!exec || !dateStr) return;
+    setTimelineLoading(true);
+    setTimelineError('');
+    setTimelineLog(null);
+    try {
+      const res = await axios.get(`/api/tracking/${encodeURIComponent(exec)}/${dateStr}`);
+      if (res.data?.data) {
+        setTimelineLog(res.data.data);
+      } else {
+        setTimelineError(res.data?.message || 'No GPS tracking points recorded for this executive on this date.');
+      }
+    } catch (err) {
+      setTimelineError('Failed to fetch GPS timeline data.');
+    } finally {
+      setTimelineLoading(false);
+    }
+  };
+
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener('resize', handleResize);
@@ -306,6 +333,29 @@ const FieldVisitsAdmin = () => {
         </div>
       </header>
 
+      {/* Tab Selector Navigation */}
+      <div style={{ display: 'flex', gap: '12px', margin: '16px 0', borderBottom: '2px solid #e2e8f0', paddingBottom: '12px' }}>
+        <button 
+          onClick={() => setActiveTab('visits')} 
+          style={{ padding: '10px 20px', border: 'none', background: activeTab === 'visits' ? '#1e3c72' : '#f1f5f9', color: activeTab === 'visits' ? 'white' : '#475569', fontWeight: '800', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', boxShadow: activeTab === 'visits' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none' }}
+        >
+          📋 Field Visit Reports
+        </button>
+        <button 
+          onClick={() => {
+            setActiveTab('timeline');
+            if (executives.length > 0 && !timelineExec) {
+              const defaultExec = executives[0];
+              setTimelineExec(defaultExec);
+              fetchRouteTimeline(defaultExec, timelineDate);
+            }
+          }} 
+          style={{ padding: '10px 20px', border: 'none', background: activeTab === 'timeline' ? '#1e3c72' : '#f1f5f9', color: activeTab === 'timeline' ? 'white' : '#475569', fontWeight: '800', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', boxShadow: activeTab === 'timeline' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none' }}
+        >
+          🗺️ Live Route Timeline (GPS Map)
+        </button>
+      </div>
+
       {error && (
         <div className="error-message">
           <strong>Error:</strong> {error}
@@ -322,153 +372,168 @@ const FieldVisitsAdmin = () => {
         </div>
       )}
 
-      {/* Stats Overview */}
-      <div className="stats-overview">
-        <div className="stat-card">
-          <h3>Total Visits</h3>
-          <p className="stat-value">{stats.total}</p>
-        </div>
-        <div className="stat-card scheduled">
-          <h3>Scheduled</h3>
-          <p className="stat-value">{stats.scheduled}</p>
-        </div>
-        <div className="stat-card completed">
-          <h3>Completed</h3>
-          <p className="stat-value">{stats.completed}</p>
-        </div>
-        <div className="stat-card not-interested">
-          <h3>Not Interested</h3>
-          <p className="stat-value">{stats['not-interested']}</p>
-        </div>
-        <div className="stat-card follow-up">
-          <h3>Follow Up</h3>
-          <p className="stat-value">{stats['follow-up']}</p>
-        </div>
-        <div className="stat-card sale-close">
-          <h3>Sale Close</h3>
-          <p className="stat-value">{stats['sale-close']}</p>
-        </div>
-        <div className="stat-card photos">
-          <h3>With Photos</h3>
-          <p className="stat-value">{stats.withPhotos}</p>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="filters-section">
-        <h2>Filters</h2>
-        <div className="filter-controls">
-          <div className="filter-group">
-            <label>Executive:</label>
-            <select
-              name="executive"
-              value={filters.executive}
-              onChange={handleFilterChange}
-            >
-              <option value="all">All Executives</option>
-              {executives.map((exec, index) => (
-                <option key={exec || index} value={exec}>{exec || 'Unknown'}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label>Status:</label>
-            <select
-              name="status"
-              value={filters.status}
-              onChange={handleFilterChange}
-            >
-              <option value="all">All Statuses</option>
-              <option value="scheduled">Scheduled</option>
-              <option value="completed">Completed</option>
-              <option value="not-interested">Not Interested</option>
-              <option value="follow-up">Follow Up</option>
-              <option value="sale-close">Sale Close</option>
-            </select>
-          </div>
-
-
-
-          <button onClick={resetFilters} className="reset-filters-btn">
-            Reset Filters
-          </button>
-        </div>
-      </div>
-
-      {/* Debug Info */}
-      <div className="debug-info">
-        <small>Showing {filteredVisits.length} of {visits.length} visits</small>
-        {filters.date && (
-          <small> | Filtered by: {format(new Date(filters.date), 'MMM dd, yyyy')}</small>
-        )}
-      </div>
-
-      {/* Edit Modal */}
-      {editingVisit && (
-        <div className="edit-modal-overlay" onClick={cancelEdit}>
-          <div className="edit-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="edit-modal-header">
-              <h3>Edit Visit</h3>
-              <button className="modal-close-btn" onClick={cancelEdit}>
-                ✕
-              </button>
+      {activeTab === 'timeline' ? (
+        <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '24px', alignItems: 'center', backgroundColor: '#f8fafc', padding: '18px', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: '6px' }}>Select Field Executive</label>
+              <select 
+                value={timelineExec} 
+                onChange={(e) => {
+                  setTimelineExec(e.target.value);
+                  fetchRouteTimeline(e.target.value, timelineDate);
+                }}
+                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #94a3b8', fontWeight: '700', minWidth: '220px', fontSize: '14px', outline: 'none' }}
+              >
+                <option value="">-- Choose Executive --</option>
+                {executives.map((ex, i) => <option key={i} value={ex}>{ex}</option>)}
+              </select>
             </div>
-            <div className="edit-form">
-              <div className="form-group">
-                <label>Client:</label>
-                <input
-                  type="text"
-                  name="client"
-                  value={editForm.client}
-                  onChange={handleEditChange}
-                />
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: '6px' }}>Select Date</label>
+              <input 
+                type="date" 
+                value={timelineDate} 
+                onChange={(e) => {
+                  setTimelineDate(e.target.value);
+                  fetchRouteTimeline(timelineExec, e.target.value);
+                }}
+                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #94a3b8', fontWeight: '700', fontSize: '14px', outline: 'none' }}
+              />
+            </div>
+            <button 
+              onClick={() => fetchRouteTimeline(timelineExec, timelineDate)}
+              style={{ marginTop: '20px', padding: '10px 24px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '800', cursor: 'pointer', fontSize: '14px', boxShadow: '0 2px 4px rgba(59,130,246,0.3)' }}
+            >
+              🔄 Refresh Route
+            </button>
+          </div>
+
+          {timelineLoading && <div style={{ textAlign: 'center', padding: '60px', fontWeight: '700', color: '#64748b', fontSize: '16px' }}>📡 Retrieving GPS waypoints & rendering Google Maps route timeline...</div>}
+          
+          {timelineError && <div style={{ textAlign: 'center', padding: '40px', color: '#ef4444', backgroundColor: '#fef2f2', borderRadius: '12px', fontWeight: '700', border: '1px solid #fecaca' }}>⚠️ {timelineError}</div>}
+
+          {timelineLog && !timelineLoading && (
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: '24px' }}>
+              {/* Interactive OpenStreetMap Polyline Route View */}
+              <div style={{ borderRadius: '16px', overflow: 'hidden', border: '2px solid #cbd5e1', height: '540px', position: 'relative', backgroundColor: '#e2e8f0' }}>
+                {timelineLog.trajectory?.length > 0 ? (
+                  <iframe 
+                    title="Executive Route Trajectory Map"
+                    width="100%" 
+                    height="100%" 
+                    frameBorder="0" 
+                    scrolling="no" 
+                    marginHeight="0" 
+                    marginWidth="0" 
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${Math.min(...timelineLog.trajectory.map(t=>t.lng))-0.01}%2C${Math.min(...timelineLog.trajectory.map(t=>t.lat))-0.01}%2C${Math.max(...timelineLog.trajectory.map(t=>t.lng))+0.01}%2C${Math.max(...timelineLog.trajectory.map(t=>t.lat))+0.01}&layer=mapnik&marker=${timelineLog.trajectory[timelineLog.trajectory.length-1].lat}%2C${timelineLog.trajectory[timelineLog.trajectory.length-1].lng}`}
+                  />
+                ) : <div style={{ padding: '60px', textAlign: 'center', fontWeight: '700' }}>No GPS coordinates found for this date</div>}
+                
+                <div style={{ position: 'absolute', bottom: '16px', left: '16px', backgroundColor: 'rgba(255,255,255,0.95)', padding: '10px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: '800', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', color: '#1e293b' }}>
+                  🟢 Start Position • 🔵 Travel Path ({timelineLog.trajectory?.length || 0} GPS waypoints) • 🔴 Latest Active Ping
+                </div>
               </div>
-              <div className="form-group">
-                <label>Contact Number:</label>
-                <input
-                  type="text"
-                  name="contactNumber"
-                  value={editForm.contactNumber}
-                  onChange={handleEditChange}
-                  maxLength="10"
-                  pattern="\d{10}"
-                />
+
+              {/* Chronological Google Maps Timeline Feed Sidebar */}
+              <div style={{ backgroundColor: '#f8fafc', padding: '20px', borderRadius: '16px', maxHeight: '540px', overflowY: 'auto', border: '1px solid #cbd5e1' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '12px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '900', color: '#0f172a', margin: 0 }}>📍 Daily Itinerary Feed</h3>
+                  <span style={{ fontSize: '11px', fontWeight: '800', backgroundColor: timelineLog.status === 'completed' ? '#d1fae5' : '#dbeafe', color: timelineLog.status === 'completed' ? '#065f46' : '#1e40af', padding: '4px 10px', borderRadius: '20px' }}>
+                    {timelineLog.status?.toUpperCase() || 'ACTIVE'}
+                  </span>
+                </div>
+
+                <div style={{ position: 'relative', paddingLeft: '24px', borderLeft: '3px solid #3b82f6', marginLeft: '10px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
+                  {timelineLog.trajectory?.map((pt, idx) => (
+                    <div key={idx} style={{ position: 'relative' }}>
+                      {/* Timeline Node Dot Pin */}
+                      <div style={{ position: 'absolute', left: '-31px', top: '4px', width: '14px', height: '14px', borderRadius: '50%', backgroundColor: pt.type === 'visit' ? '#f59e0b' : (idx === 0 ? '#10b981' : '#3b82f6'), border: '3px solid white', boxShadow: '0 0 0 2px #94a3b8' }} />
+                      
+                      <div style={{ backgroundColor: 'white', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '900', color: '#1e293b' }}>
+                            {pt.formattedTime || new Date(pt.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </span>
+                          <span style={{ fontSize: '11px', fontWeight: '800', color: pt.type==='visit' ? '#d97706' : '#475569', backgroundColor: pt.type==='visit' ? '#fef3c7' : '#f1f5f9', padding: '2px 8px', borderRadius: '6px' }}>
+                            {pt.type === 'visit' ? '📸 Client Visit' : (idx === 0 ? '🟢 Check-In' : '📍 En Route')}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
+                          {pt.area}
+                        </div>
+                        {pt.notes && <div style={{ fontSize: '12px', color: '#b45309', fontWeight: '700', backgroundColor: '#fffbeb', padding: '6px 10px', borderRadius: '6px', marginTop: '6px', borderLeft: '3px solid #f59e0b' }}>{pt.notes}</div>}
+                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px', fontWeight: '600' }}>
+                          GPS: {pt.lat?.toFixed(4)}, {pt.lng?.toFixed(4)} {pt.speed > 0 ? `• Speed: ${pt.speed} km/h` : ''}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="form-group">
-                <label>Business Name:</label>
-                <input
-                  type="text"
-                  name="businessName"
-                  value={editForm.businessName}
-                  onChange={handleEditChange}
-                />
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Stats Overview */}
+          <div className="stats-overview">
+            <div className="stat-card">
+              <h3>Total Visits</h3>
+              <p className="stat-value">{stats.total}</p>
+            </div>
+            <div className="stat-card scheduled">
+              <h3>Scheduled</h3>
+              <p className="stat-value">{stats.scheduled}</p>
+            </div>
+            <div className="stat-card completed">
+              <h3>Completed</h3>
+              <p className="stat-value">{stats.completed}</p>
+            </div>
+            <div className="stat-card not-interested">
+              <h3>Not Interested</h3>
+              <p className="stat-value">{stats['not-interested']}</p>
+            </div>
+            <div className="stat-card follow-up">
+              <h3>Follow Up</h3>
+              <p className="stat-value">{stats['follow-up']}</p>
+            </div>
+            <div className="stat-card sale-close">
+              <h3>Sale Close</h3>
+              <p className="stat-value">{stats['sale-close']}</p>
+            </div>
+            <div className="stat-card photos">
+              <h3>With Photos</h3>
+              <p className="stat-value">{stats.withPhotos}</p>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="filters-section">
+            <h2>Filters</h2>
+            <div className="filter-controls">
+              <div className="filter-group">
+                <label>Executive:</label>
+                <select
+                  name="executive"
+                  value={filters.executive}
+                  onChange={handleFilterChange}
+                >
+                  <option value="all">All Executives</option>
+                  {executives.map((exec, index) => (
+                    <option key={exec || index} value={exec}>{exec || 'Unknown'}</option>
+                  ))}
+                </select>
               </div>
-              <div className="form-group">
-                <label>Location:</label>
-                <input
-                  type="text"
-                  name="location"
-                  value={editForm.location}
-                  onChange={handleEditChange}
-                />
-              </div>
-              <div className="form-group">
-                <label>Purpose:</label>
-                <input
-                  type="text"
-                  name="purpose"
-                  value={editForm.purpose}
-                  onChange={handleEditChange}
-                />
-              </div>
-              <div className="form-group">
+
+              <div className="filter-group">
                 <label>Status:</label>
                 <select
                   name="status"
-                  value={editForm.status}
-                  onChange={handleEditChange}
+                  value={filters.status}
+                  onChange={handleFilterChange}
                 >
+                  <option value="all">All Statuses</option>
                   <option value="scheduled">Scheduled</option>
                   <option value="completed">Completed</option>
                   <option value="not-interested">Not Interested</option>
@@ -476,154 +541,245 @@ const FieldVisitsAdmin = () => {
                   <option value="sale-close">Sale Close</option>
                 </select>
               </div>
-              <div className="form-group">
-                <label>Notes:</label>
-                <textarea
-                  name="notes"
-                  value={editForm.notes}
-                  onChange={handleEditChange}
-                  rows="3"
-                />
-              </div>
-            </div>
-            <div className="edit-modal-footer">
-              <button onClick={cancelEdit} className="cancel-btn">
-                Cancel
-              </button>
-              <button onClick={saveEdit} className="save-btn">
-                Save Changes
+
+
+
+              <button onClick={resetFilters} className="reset-filters-btn">
+                Reset Filters
               </button>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Visits List / Table */}
-      <div className="visits-table-section">
-        <h2>Field Visits ({filteredVisits.length} records)</h2>
-        <div className="table-container">
-          {isMobile ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '8px' }}>
-              {filteredVisits.length > 0 ? (
-                filteredVisits.map((visit, index) => (
-                  <div key={visit._id || index} style={{ backgroundColor: 'white', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px solid #edf2f7', paddingBottom: '6px' }}>
-                      <span style={{ fontWeight: 'bold', color: '#1e3c72', fontSize: '14px' }}>{visit.client || 'Unnamed Client'}</span>
-                      <span className={`status-badge ${visit.status || 'scheduled'}`} style={{ fontSize: '11px' }}>
-                        {visit.status || 'scheduled'}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '13px', color: '#4a5568', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '8px' }}>
-                      <div><strong>Date:</strong> {visit.date ? format(new Date(visit.date), 'MMM dd, yyyy') : 'N/A'}</div>
-                      <div><strong>Exec:</strong> {visit.executive || 'Unknown'}</div>
-                      <div><strong>Phone:</strong> {visit.contactNumber || 'N/A'}</div>
-                      <div><strong>Purpose:</strong> {visit.purpose || 'N/A'}</div>
-                      <div style={{ gridColumn: '1 / -1' }}><strong>Location:</strong> {visit.location || 'N/A'}</div>
-                      <div style={{ gridColumn: '1 / -1' }}><strong>Notes:</strong> {visit.notes || '-'}</div>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #edf2f7' }}>
-                      <div>
-                        {visit.photo ? (
-                          <button className="view-photo-btn" onClick={() => openImageModal(visit.photo)} style={{ padding: '6px 10px', fontSize: '12px' }}>
-                            📷 View Photo
-                          </button>
-                        ) : (
-                          <span className="no-photo" style={{ fontSize: '12px' }}>No Photo</span>
-                        )}
-                      </div>
-                      <div className="action-buttons" style={{ display: 'flex', gap: '8px' }}>
-                        <button className="edit-btn" onClick={() => startEdit(visit)} title="Edit">✏️</button>
-                        <button className="delete-btn" onClick={() => deleteVisit(visit._id)} title="Delete">🗑️</button>
-                      </div>
-                    </div>
+          {/* Debug Info */}
+          <div className="debug-info">
+            <small>Showing {filteredVisits.length} of {visits.length} visits</small>
+            {filters.date && (
+              <small> | Filtered by: {format(new Date(filters.date), 'MMM dd, yyyy')}</small>
+            )}
+          </div>
+
+          {/* Edit Modal */}
+          {editingVisit && (
+            <div className="edit-modal-overlay" onClick={cancelEdit}>
+              <div className="edit-modal-content" onClick={(e) => e.stopPropagation()}>
+                <div className="edit-modal-header">
+                  <h3>Edit Visit</h3>
+                  <button className="modal-close-btn" onClick={cancelEdit}>
+                    ✕
+                  </button>
+                </div>
+                <div className="edit-form">
+                  <div className="form-group">
+                    <label>Client:</label>
+                    <input
+                      type="text"
+                      name="client"
+                      value={editForm.client}
+                      onChange={handleEditChange}
+                    />
                   </div>
-                ))
+                  <div className="form-group">
+                    <label>Contact Number:</label>
+                    <input
+                      type="text"
+                      name="contactNumber"
+                      value={editForm.contactNumber}
+                      onChange={handleEditChange}
+                      maxLength="10"
+                      pattern="\d{10}"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Business Name:</label>
+                    <input
+                      type="text"
+                      name="businessName"
+                      value={editForm.businessName}
+                      onChange={handleEditChange}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Location:</label>
+                    <input
+                      type="text"
+                      name="location"
+                      value={editForm.location}
+                      onChange={handleEditChange}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Purpose:</label>
+                    <input
+                      type="text"
+                      name="purpose"
+                      value={editForm.purpose}
+                      onChange={handleEditChange}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Status:</label>
+                    <select
+                      name="status"
+                      value={editForm.status}
+                      onChange={handleEditChange}
+                    >
+                      <option value="scheduled">Scheduled</option>
+                      <option value="completed">Completed</option>
+                      <option value="not-interested">Not Interested</option>
+                      <option value="follow-up">Follow Up</option>
+                      <option value="sale-close">Sale Close</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Notes:</label>
+                    <textarea
+                      name="notes"
+                      value={editForm.notes}
+                      onChange={handleEditChange}
+                      rows="3"
+                    />
+                  </div>
+                </div>
+                <div className="edit-modal-footer">
+                  <button onClick={cancelEdit} className="cancel-btn">
+                    Cancel
+                  </button>
+                  <button onClick={saveEdit} className="save-btn">
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Visits List / Table */}
+          <div className="visits-table-section">
+            <h2>Field Visits ({filteredVisits.length} records)</h2>
+            <div className="table-container">
+              {isMobile ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '8px' }}>
+                  {filteredVisits.length > 0 ? (
+                    filteredVisits.map((visit, index) => (
+                      <div key={visit._id || index} style={{ backgroundColor: 'white', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px solid #edf2f7', paddingBottom: '6px' }}>
+                          <span style={{ fontWeight: 'bold', color: '#1e3c72', fontSize: '14px' }}>{visit.client || 'Unnamed Client'}</span>
+                          <span className={`status-badge ${visit.status || 'scheduled'}`} style={{ fontSize: '11px' }}>
+                            {visit.status || 'scheduled'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#4a5568', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '8px' }}>
+                          <div><strong>Date:</strong> {visit.date ? format(new Date(visit.date), 'MMM dd, yyyy') : 'N/A'}</div>
+                          <div><strong>Exec:</strong> {visit.executive || 'Unknown'}</div>
+                          <div><strong>Phone:</strong> {visit.contactNumber || 'N/A'}</div>
+                          <div><strong>Purpose:</strong> {visit.purpose || 'N/A'}</div>
+                          <div style={{ gridColumn: '1 / -1' }}><strong>Location:</strong> {visit.location || 'N/A'}</div>
+                          <div style={{ gridColumn: '1 / -1' }}><strong>Notes:</strong> {visit.notes || '-'}</div>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #edf2f7' }}>
+                          <div>
+                            {visit.photo ? (
+                              <button className="view-photo-btn" onClick={() => openImageModal(visit.photo)} style={{ padding: '6px 10px', fontSize: '12px' }}>
+                                📷 View Photo
+                              </button>
+                            ) : (
+                              <span className="no-photo" style={{ fontSize: '12px' }}>No Photo</span>
+                            )}
+                          </div>
+                          <div className="action-buttons" style={{ display: 'flex', gap: '8px' }}>
+                            <button className="edit-btn" onClick={() => startEdit(visit)} title="Edit">✏️</button>
+                            <button className="delete-btn" onClick={() => deleteVisit(visit._id)} title="Delete">🗑️</button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '20px', color: '#a0aec0' }}>No field visits found</div>
+                  )}
+                </div>
               ) : (
-                <div style={{ textAlign: 'center', padding: '20px', color: '#a0aec0' }}>No field visits found</div>
+                <table className="visits-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Executive</th>
+                      <th>Client</th>
+                      <th>Contact Number</th>
+                      <th>Business Name</th>
+                      <th>Location</th>
+                      <th>Purpose</th>
+                      <th>Status</th>
+                      <th>Photo</th>
+                      <th>Notes</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredVisits.length > 0 ? (
+                      filteredVisits.map((visit, index) => (
+                        <tr key={visit._id || index}>
+                          <td>{visit.date ? format(new Date(visit.date), 'MMM dd, yyyy') : 'N/A'}</td>
+                          <td>{visit.executive || 'Unknown'}</td>
+                          <td>{visit.client || 'N/A'}</td>
+                          <td>{visit.contactNumber || 'N/A'}</td>
+                          <td>{visit.businessName || 'N/A'}</td>
+                          <td>{visit.location || 'N/A'}</td>
+                          <td>{visit.purpose || 'N/A'}</td>
+                          <td>
+                            <span className={`status-badge ${visit.status || 'scheduled'}`}>
+                              {visit.status || 'scheduled'}
+                            </span>
+                          </td>
+                          <td>
+                            {visit.photo ? (
+                              <button
+                                className="view-photo-btn"
+                                onClick={() => openImageModal(visit.photo)}
+                                title="View Photo"
+                              >
+                                📷 View
+                              </button>
+                            ) : (
+                              <span className="no-photo">No Photo</span>
+                            )}
+                          </td>
+                          <td className="notes-cell">{visit.notes || '-'}</td>
+                          <td>
+                            <div className="action-buttons">
+                              <button
+                                className="edit-btn"
+                                onClick={() => startEdit(visit)}
+                                title="Edit Visit"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                className="delete-btn"
+                                onClick={() => deleteVisit(visit._id)}
+                                title="Delete Visit"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="11" className="no-data">
+                          {filters.date || filters.executive !== 'all' || filters.status !== 'all'
+                            ? 'No field visits found matching your filters'
+                            : 'No field visits found'
+                          }
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               )}
             </div>
-          ) : (
-            <table className="visits-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Executive</th>
-                  <th>Client</th>
-                  <th>Contact Number</th>
-                  <th>Business Name</th>
-                  <th>Location</th>
-                  <th>Purpose</th>
-                  <th>Status</th>
-                  <th>Photo</th>
-                  <th>Notes</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredVisits.length > 0 ? (
-                  filteredVisits.map((visit, index) => (
-                    <tr key={visit._id || index}>
-                      <td>{visit.date ? format(new Date(visit.date), 'MMM dd, yyyy') : 'N/A'}</td>
-                      <td>{visit.executive || 'Unknown'}</td>
-                      <td>{visit.client || 'N/A'}</td>
-                      <td>{visit.contactNumber || 'N/A'}</td>
-                      <td>{visit.businessName || 'N/A'}</td>
-                      <td>{visit.location || 'N/A'}</td>
-                      <td>{visit.purpose || 'N/A'}</td>
-                      <td>
-                        <span className={`status-badge ${visit.status || 'scheduled'}`}>
-                          {visit.status || 'scheduled'}
-                        </span>
-                      </td>
-                      <td>
-                        {visit.photo ? (
-                          <button
-                            className="view-photo-btn"
-                            onClick={() => openImageModal(visit.photo)}
-                            title="View Photo"
-                          >
-                            📷 View
-                          </button>
-                        ) : (
-                          <span className="no-photo">No Photo</span>
-                        )}
-                      </td>
-                      <td className="notes-cell">{visit.notes || '-'}</td>
-                      <td>
-                        <div className="action-buttons">
-                          <button
-                            className="edit-btn"
-                            onClick={() => startEdit(visit)}
-                            title="Edit Visit"
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            className="delete-btn"
-                            onClick={() => deleteVisit(visit._id)}
-                            title="Delete Visit"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="11" className="no-data">
-                      {filters.date || filters.executive !== 'all' || filters.status !== 'all'
-                        ? 'No field visits found matching your filters'
-                        : 'No field visits found'
-                      }
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+          </div>
+        </>
+      )}
 
       {/* Image Modal */}
       {selectedImage && (
