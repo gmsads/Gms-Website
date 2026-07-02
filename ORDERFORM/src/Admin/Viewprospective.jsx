@@ -286,7 +286,7 @@ const ViewProspective = () => {
 
       await axios.patch(`/api/prospective-clients/${id}`, {
         status,
-        ...(date && { followUpDate: date })
+        ...(date ? { followUpDate: date } : (['sale closed', 'not interested'].includes(status) ? { followUpDate: null } : {}))
       });
 
       // Refresh the data
@@ -525,7 +525,7 @@ const ViewProspective = () => {
                     <td>${p.location || ''}</td>
                     <td>${p.leadFrom || 'N/A'}</td>
                     <td>${p.requirementDescription || 'N/A'}</td>
-                    <td>${p.followUpDate ? format(new Date(p.followUpDate), 'MMM dd, yyyy') : 'N/A'}</td>
+                    <td>${['followup', 'next month', 'new', ''].includes((p.status || '').toLowerCase()) && p.followUpDate ? format(new Date(p.followUpDate), 'MMM dd, yyyy') : '-'}</td>
                     <td>
                       <span class="status-badge" style="
                         ${p.status === 'sale closed' ? 'background-color: #d4edda; color: #155724;' : ''}
@@ -917,7 +917,7 @@ const ViewProspective = () => {
                   <td style={styles.td}>{p.leadFrom || 'N/A'}</td>
                   <td style={styles.td}>{p.requirementDescription || 'N/A'}</td>
                   <td style={styles.td}>
-                    {p.followUpDate ? format(new Date(p.followUpDate), 'MMM dd, yyyy') : 'N/A'}
+                    {['followup', 'next month', 'new', ''].includes((p.status || '').toLowerCase()) && p.followUpDate ? format(new Date(p.followUpDate), 'MMM dd, yyyy') : '-'}
                   </td>
                   <td style={styles.td}>
                     <span style={getStatusStyle(p.status)}>

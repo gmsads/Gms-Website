@@ -3,6 +3,10 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import AutoLogout from "../mainpage/AutoLogout";
 import OrderForm from "../Executive/OrderForm";
+import ViewOrders from "../Admin/ViewOrders";
+import Quotation from "../Admin/Quotation";
+import Prospective from "../Executive/Prospective";
+import ViewProspective from "../Admin/Viewprospective";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -1017,6 +1021,7 @@ function AgentDashboard() {
     },
   };
 
+  // Stats for dashboard - Only showing relevant stats for agents
   const stats = [
     { label: 'Total Revenue', value: `₹${(dashboardStats.totalRevenue / 100000).toFixed(1)}L`, icon: '💰', trend: `+${dashboardStats.revenueGrowth}%` },
     { label: 'Total Orders', value: dashboardStats.totalOrders, icon: '📦', trend: `+${dashboardStats.ordersGrowth}%` },
@@ -1026,15 +1031,14 @@ function AgentDashboard() {
     { label: 'Prospective', value: dashboardStats.prospective, icon: '👥', trend: '' },
   ];
 
+  // Updated menu items - Added Create Prospect and View Prospects
   const menuItems = [
     { path: '/agent-dashboard', label: 'Dashboard', icon: '📊' },
     { path: '/agent-dashboard/create-order', label: 'Create Order', icon: '➕' },
-    { path: '/total-revenue', label: 'Total Revenue', icon: '💰' },
-    { path: '/total-orders', label: 'Total Orders', icon: '📦' },
-    { path: '/pending-status', label: 'Pending Status', icon: '⏳' },
-    { path: '/service-status', label: 'Service Status', icon: '🛠️' },
-    { path: '/appointments', label: 'Appointments', icon: '📅' },
-    { path: '/prospective', label: 'Prospective', icon: '👥' },
+    { path: '/agent-dashboard/view-orders', label: 'View Orders', icon: '📋' },
+    { path: '/agent-dashboard/create-prospect', label: 'Create Prospect', icon: '🔍' },
+    { path: '/agent-dashboard/view-prospects', label: 'View Prospects', icon: '👁️' },
+    { path: '/agent-dashboard/quotation', label: 'Quotation', icon: '💬' },
   ];
 
   return (
@@ -1195,7 +1199,7 @@ function AgentDashboard() {
                 </div>
               </div>
 
-              {/* Recent Orders */}
+              {/* Recent Orders - Only showing agent's orders */}
               <div style={styles.recentOrdersCard}>
                 <h3 style={styles.sectionTitle}>Recent Orders</h3>
                 {orders.length > 0 ? (
@@ -1297,9 +1301,41 @@ function AgentDashboard() {
             />
           )}
 
+          {/* View Orders - Filtered to show only agent's orders */}
+          {location.pathname === '/agent-dashboard/view-orders' && (
+            <ViewOrders 
+              userRole="Agent" 
+              executiveName={user?.name} 
+            />
+          )}
+
+          {/* Create Prospect */}
+          {location.pathname === '/agent-dashboard/create-prospect' && (
+            <Prospective 
+              executiveName={user?.name}
+              onBackToDashboard={() => {
+                navigate('/agent-dashboard');
+              }}
+            />
+          )}
+
+          {/* View Prospects - Filtered to show only agent's prospects */}
+          {location.pathname === '/agent-dashboard/view-prospects' && (
+            <ViewProspective executiveName={user?.name} />
+          )}
+
+          {/* Quotation */}
+          {location.pathname === '/agent-dashboard/quotation' && (
+            <Quotation executiveName={user?.name} />
+          )}
+
           {/* Other routes */}
           {location.pathname !== '/agent-dashboard' && 
-           location.pathname !== '/agent-dashboard/create-order' && 
+           location.pathname !== '/agent-dashboard/create-order' &&
+           location.pathname !== '/agent-dashboard/view-orders' &&
+           location.pathname !== '/agent-dashboard/create-prospect' &&
+           location.pathname !== '/agent-dashboard/view-prospects' &&
+           location.pathname !== '/agent-dashboard/quotation' && 
            <Outlet />}
         </div>
       </div>

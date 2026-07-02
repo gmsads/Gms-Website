@@ -72,7 +72,7 @@ const Followup = () => {
         try {
             await axios.patch(`/api/prospective-clients/${id}`, {
                 status,
-                ...(date && { followUpDate: date })
+                ...(date ? { followUpDate: date } : (['sale closed', 'not interested'].includes(status) ? { followUpDate: null } : {}))
             });
             fetchFollowups();
         } catch (err) {
@@ -159,7 +159,7 @@ const Followup = () => {
                                     <td>{client.contactPerson}</td>
                                     <td>{client.phoneNumber}</td>
                                     <td>
-                                        {client.followUpDate ? format(new Date(client.followUpDate), 'MMM dd, yyyy') : 'N/A'}
+                                        {['followup', 'next month', 'new', ''].includes((client.status || '').toLowerCase()) && client.followUpDate ? format(new Date(client.followUpDate), 'MMM dd, yyyy') : '-'}
                                     </td>
                                     <td>
                                         <span style={getStatusStyle(client.status)}>

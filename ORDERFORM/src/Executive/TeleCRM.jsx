@@ -194,7 +194,8 @@ const TeleCRM = () => {
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
     const finalOutcome = isConnected ? dispositionOutcome : 'not_connected';
-    const followupTarget = isConnected ? nextFollowup : (nextFollowup || tomorrowStr);
+    const isFollowUpOutcome = finalOutcome === 'callback' || finalOutcome === 'not_connected';
+    const followupTarget = isFollowUpOutcome ? (isConnected ? nextFollowup : (nextFollowup || tomorrowStr)) : '';
 
     const updates = {
       call_status: finalOutcome,
@@ -368,6 +369,12 @@ const TeleCRM = () => {
                     </div>
                   )}
 
+                  {['callback', 'followup', 'follow-up'].includes((lead.call_status || lead.status || '').toLowerCase()) && lead.next_followup_date && (
+                    <div style={{ fontSize: '12px', color: '#e67e22', fontWeight: '600' }}>
+                      🔄 Follow-up: {lead.next_followup_date}
+                    </div>
+                  )}
+
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #eee', paddingTop: '10px', marginTop: '2px' }}>
                     <span style={{ fontSize: '11px', color: '#888' }}>📅 {lead.Date}</span>
 
@@ -414,7 +421,9 @@ const TeleCRM = () => {
                           {(lead.call_status || lead.status || 'pending').replace('_', ' ')}
                         </span>
                       </td>
-                      <td style={{ padding: '14px 18px', color: '#555' }}>{lead.next_followup_date || '-'}</td>
+                      <td style={{ padding: '14px 18px', color: '#555' }}>
+                        {['callback', 'followup', 'follow-up'].includes((lead.call_status || lead.status || '').toLowerCase()) && lead.next_followup_date ? lead.next_followup_date : '-'}
+                      </td>
                       <td style={{ padding: '14px 18px' }}>
                         {lead.recording_url ? (
                           <audio controls preload="none" style={{ height: '32px', width: '160px' }} src={lead.recording_url} />
@@ -527,17 +536,19 @@ const TeleCRM = () => {
                   </select>
                 </div>
 
-                <div style={{ marginBottom: '14px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#444', marginBottom: '4px' }}>
-                    Next Follow-up Date
-                  </label>
-                  <input 
-                    type="date"
-                    value={nextFollowup}
-                    onChange={e => setNextFollowup(e.target.value)}
-                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', boxSizing: 'border-box' }}
-                  />
-                </div>
+                {dispositionOutcome === 'callback' && (
+                  <div style={{ marginBottom: '14px' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#444', marginBottom: '4px' }}>
+                      Next Follow-up Date
+                    </label>
+                    <input 
+                      type="date"
+                      value={nextFollowup}
+                      onChange={e => setNextFollowup(e.target.value)}
+                      style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                )}
               </>
             ) : (
               /* Not Connected Fields */

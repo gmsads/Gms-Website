@@ -66,7 +66,7 @@ import Parties from './Admin/Parties';
 import Quotation from './Admin/Quotation';
 import InstallPWAButton from './components/InstallPWAButton';
 import FieldVisitsAdmin from './Admin/FieldVisitsAdmin';
-import AdvanceApprovalPage  from './Admin/AdvanceApprovalPage';
+import AdvanceApprovalPage from './Admin/AdvanceApprovalPage';
 import ServiceForm from './Service/ServiceForm.jsx';
 import Purchase from './Admin/Purchase';
 import TeleBreaks from './Admin/TeleBreaks.jsx';
@@ -85,7 +85,7 @@ import VideoEditorDashboard from './VideoEditors/VideoEditorDashboard.jsx';
 import AssignedVideos from './VideoEditors/AssignedVideos.jsx';
 import UploadVideo from './VideoEditors/UploadVideo.jsx';
 import MyWork from './VideoEditors/MyWork.jsx';
-import BannerManagement  from './Admin/BannerManagement';
+import BannerManagement from './Admin/BannerManagement';
 // ============ WRAPPER COMPONENT FOR HR ATTENDANCE ============
 const AttendanceWithEmployees = () => {
   const [employees, setEmployees] = useState([]);
@@ -96,7 +96,7 @@ const AttendanceWithEmployees = () => {
       try {
         const response = await axios.get('/api/employees');
         const employeesData = response.data;
-        
+
         let allEmployees = [];
         Object.keys(employeesData).forEach(role => {
           const roleEmployees = employeesData[role].map(emp => ({
@@ -106,7 +106,7 @@ const AttendanceWithEmployees = () => {
           }));
           allEmployees = [...allEmployees, ...roleEmployees];
         });
-        
+
         setEmployees(allEmployees);
       } catch (error) {
         console.error('Error fetching employees:', error);
@@ -120,11 +120,11 @@ const AttendanceWithEmployees = () => {
 
   if (loading) {
     return (
-      <div style={{ 
-        padding: '40px', 
-        textAlign: 'center', 
-        fontSize: '18px', 
-        color: '#666' 
+      <div style={{
+        padding: '40px',
+        textAlign: 'center',
+        fontSize: '18px',
+        color: '#666'
       }}>
         Loading employees...
       </div>
@@ -169,18 +169,18 @@ function App() {
           }
         >
           <Route index element={<HRDashboard />} />
-          
+
           {/* Using existing Admin components for HR */}
           <Route path="hour" element={<Hourrecord />} />
           <Route path="hour-reeport" element={<HourReport />} />
-          <Route path="fieldvisitsadmin" element={<FieldVisitsAdmin/>} />
+          <Route path="fieldvisitsadmin" element={<FieldVisitsAdmin />} />
           <Route path="daily-report" element={<DailyReport />} />
           <Route path="employees" element={<Employees />} />
-           <Route path="hr-report" element={<DailyHrDashbaord />} />
+          <Route path="hr-report" element={<DailyHrDashbaord />} />
           <Route path="add-employee" element={<AddExecutiveAdmin />} />
           <Route path="view-performance" element={<ViewPerformance />} />
-            <Route path="view-leaves" element={<ViewLeave />} />
-             <Route path="advance-approvals" element={<AdvanceApprovalPage/>}/>
+          <Route path="view-leaves" element={<ViewLeave />} />
+          <Route path="advance-approvals" element={<AdvanceApprovalPage />} />
           {/* HR specific components - NOW WITH EMPLOYEES PROP */}
           <Route path="salary" element={<SalaryComponent />} />
           <Route path="attendance" element={<AttendanceWithEmployees />} />
@@ -220,7 +220,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        
+
         {/* IT Dashboard Routes */}
         <Route
           path="/it-dashboard"
@@ -244,7 +244,7 @@ function App() {
           <Route path="schedule" element={<DailySchedule />} />
           <Route path="logout-history" element={<LogoutHistory />} />
         </Route>
-        
+
         {/* Prospects Route */}
         <Route path="/prospects" element={<Prospective />} />
 
@@ -258,12 +258,12 @@ function App() {
           }
         >
           <Route path="purchase" element={<Purchase />} />
-             <Route path="hour-reeport" element={<HourReport />} />
-             <Route path="view-hrreport" element={<ViewHRReports />} />
-           <Route path="view-leaves" element={<ViewLeave />} />
-          <Route path="greeting-design" element={<GreetingDesign/>} />
-          <Route path="tele-breaks" element={<TeleBreaks/>} />
-          <Route path="lead-distribution" element={<AdminLeadDistribution/>} />
+          <Route path="hour-reeport" element={<HourReport />} />
+          <Route path="view-hrreport" element={<ViewHRReports />} />
+          <Route path="view-leaves" element={<ViewLeave />} />
+          <Route path="greeting-design" element={<GreetingDesign />} />
+          <Route path="tele-breaks" element={<TeleBreaks />} />
+          <Route path="lead-distribution" element={<AdminLeadDistribution />} />
           <Route path="appointments" element={<Appointment />} />
           <Route path="prospects" element={<Prospective />} />
           <Route path="vendors" element={<Vendors />} />
@@ -293,10 +293,10 @@ function App() {
           <Route path="hour-reeport" element={<HourReport />} />
           <Route path="design-report" element={<DesignReport />} />
           <Route path="parties" element={<Parties />} />
-          <Route path="quotation" element={<Quotation/>}/>
-          <Route path="advance-approvals" element={<AdvanceApprovalPage/>}/>
-          <Route path="fieldvisitsadmin" element={<FieldVisitsAdmin/>} />
-            <Route path="create-banner" element={<BannerManagement/>} />
+          <Route path="quotation" element={<Quotation />} />
+          <Route path="advance-approvals" element={<AdvanceApprovalPage />} />
+          <Route path="fieldvisitsadmin" element={<FieldVisitsAdmin />} />
+          <Route path="create-banner" element={<BannerManagement />} />
         </Route>
 
         {/* Agent Dashboard Routes */}
@@ -311,12 +311,9 @@ function App() {
           <Route index element={<AgentDashboard />} />
           <Route path="create-order" element={<CreateOrder />} />
           <Route path="view-orders" element={<ViewOrders />} />
-          <Route path="record" element={<Record />} />
-          <Route path="view-record" element={<DailyReport />} />
-          <Route path="price-list" element={<Pricelist />} />
-          <Route path="create-prospect" element={<Prospective />} />
-          <Route path="view-prospects" element={<Viewprospective />} />
-        </Route>
+          <Route path="quotation" element={<Quotation />} />
+  <Route path="create-prospect" element={<Prospective />} />
+          <Route path="view-prospects" element={<Viewprospective />} />        </Route>
 
         {/* Field Executive Route */}
         <Route
@@ -349,7 +346,7 @@ function App() {
           <Route path="assign-service" element={<AssignService />} />
           <Route path="price-list" element={<Pricelist />} />
         </Route>
-        
+
         {/* Vendor Dashboard Routes */}
         <Route
           path="/vendor-dashboard"
@@ -406,7 +403,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        
+
         {/* Performance Route */}
         <Route path="/performance" element={<ViewPerformance />} />
 
@@ -429,7 +426,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        
+
         {/* Pending Service Route */}
         <Route
           path="/pending-service"
@@ -439,7 +436,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        
+
         {/* New Appointment Route */}
         <Route
           path="/new-appointment"
@@ -449,7 +446,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        
+
         {/* Service Dashboard Routes */}
         <Route
           path="/service-dashboard"
@@ -479,10 +476,10 @@ function App() {
           <Route path="daily-report" element={<DailyReport />} />
           <Route path="daily-record" element={<Record />} />
           <Route path="inventory" element={<Inventory />} />
-          <Route path="serviceform" element={<ServiceForm/>} />
-          <Route path="field-executive" element={<FieldExecutivePage/>} />
+          <Route path="serviceform" element={<ServiceForm />} />
+          <Route path="field-executive" element={<FieldExecutivePage />} />
         </Route>
-        
+
         {/* Designer Dashboard Routes */}
         <Route
           path="/designer-dashboard"
@@ -497,9 +494,9 @@ function App() {
           <Route path="assigned-designs" element={<AssignedDesigns />} />
           <Route path="greetingdesignform" element={<GreetingdesignForm />} />
           <Route path="start-design" element={<StartDesign />} />
-             <Route path="hour" element={<Hourrecord />} />
+          <Route path="hour" element={<Hourrecord />} />
         </Route>
-        
+
         {/* Digital Marketing Dashboard Route */}
         <Route
           path="/digital-dashboard"
@@ -509,7 +506,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        
+
         {/* Account Dashboard Routes */}
         <Route
           path="/account-dashboard"

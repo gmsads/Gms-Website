@@ -430,7 +430,7 @@ const AdminLeadDistribution = () => {
                       <span>👤 <strong>{lead.assigned_to || lead.employee_name || 'Unassigned'}</strong></span>
                       <span>•</span>
                       <span>📅 {lead.Date}</span>
-                      {lead.next_followup_date && (
+                      {['callback', 'followup', 'follow-up'].includes((lead.call_status || lead.status || '').toLowerCase()) && lead.next_followup_date && (
                         <>
                           <span>•</span>
                           <span style={{ color: '#3182ce' }}>🔄 Followup: {lead.next_followup_date}</span>
@@ -498,7 +498,7 @@ const AdminLeadDistribution = () => {
                           )}
                         </td>
                         <td style={{ padding: '12px', color: '#4a5568' }}>
-                          {lead.next_followup_date || '-'}
+                          {['callback', 'followup', 'follow-up'].includes((lead.call_status || lead.status || '').toLowerCase()) && lead.next_followup_date ? lead.next_followup_date : '-'}
                         </td>
                         <td style={{ padding: '12px' }}>
                           {lead.recording_url ? (
