@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
@@ -7,6 +9,7 @@ import ViewOrders from "../Admin/ViewOrders";
 import Quotation from "../Admin/Quotation";
 import Prospective from "../Executive/Prospective";
 import ViewProspective from "../Admin/Viewprospective";
+import PriceList from "../Service/Pricelist";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -20,7 +23,7 @@ import {
   LineElement,
   Filler
 } from 'chart.js';
-import { Pie, Bar, Line, Doughnut } from 'react-chartjs-2';
+import { Pie, Bar } from 'react-chartjs-2';
 
 // Import the logo
 import GMSLogo from '../assets/GMS_LOGO_.png';
@@ -45,30 +48,23 @@ function AgentDashboard() {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [hoveredItem, setHoveredItem] = useState('');
   const [user, setUser] = useState(null);
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [targetData, setTargetData] = useState({
-    target: 0,
-    achieved: 0,
-    formattedTarget: "₹0",
-    formattedAchieved: "₹0",
-  });
+  const [, setOrders] = useState([]);
+  const [, setLoading] = useState(true);
   
-  // Dashboard statistics
+  // Filter states
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  
+  // Dashboard statistics - Real data from backend
   const [dashboardStats, setDashboardStats] = useState({
     totalRevenue: 0,
+    totalPaid: 0,
     totalOrders: 0,
-    pendingStatus: 0,
-    serviceStatus: 0,
-    appointments: 0,
-    prospective: 0,
+    pendingPayments: 0,
+    pendingPaymentAmount: 0,
+    prospects: 0,
     completedOrders: 0,
-    inProgressOrders: 0,
-    cancelledOrders: 0,
-    monthlyRevenue: [0, 0, 0, 0, 0, 0],
-    weeklyOrders: [0, 0, 0, 0, 0, 0, 0],
-    revenueGrowth: 0,
-    ordersGrowth: 0
+    monthlyOrders: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
   });
   
   // Phone validation states
@@ -81,7 +77,38 @@ function AgentDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Handle window resize - update isMobile state
+  // Generate month options
+  const monthOptions = [
+    { value: 1, label: 'January' },
+    { value: 2, label: 'February' },
+    { value: 3, label: 'March' },
+    { value: 4, label: 'April' },
+    { value: 5, label: 'May' },
+    { value: 6, label: 'June' },
+    { value: 7, label: 'July' },
+    { value: 8, label: 'August' },
+    { value: 9, label: 'September' },
+    { value: 10, label: 'October' },
+    { value: 11, label: 'November' },
+    { value: 12, label: 'December' }
+  ];
+
+  // Generate year options
+  const currentYear = new Date().getFullYear();
+  const yearOptions = [];
+  for (let i = currentYear - 5; i <= currentYear + 1; i++) {
+    yearOptions.push(i);
+  }
+
+  // Handle filter changes
+  useEffect(() => {
+    if (user?.name) {
+      fetchDashboardStats();
+      fetchRecentOrders();
+    }
+  }, [selectedMonth, selectedYear, user]);
+
+  // Handle window resize
   useEffect(() => {
     const handleResize = () => {
       const mobile = window.innerWidth <= 768;
@@ -115,7 +142,7 @@ function AgentDashboard() {
     }
   };
 
-  // Add global styles for better mobile UI
+  // Add global styles
   useEffect(() => {
     const style = document.createElement('style');
     style.textContent = `
@@ -367,10 +394,9 @@ function AgentDashboard() {
       display: (isMobile && mobileMenuOpen) ? 'block' : 'none',
       animation: 'fadeIn 0.3s ease-out',
     },
-    // Dashboard Cards - Mobile Optimized
     statsGrid: {
       display: 'grid',
-      gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(280px, 1fr))',
+      gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
       gap: isMobile ? '12px' : '20px',
       marginBottom: '20px',
     },
@@ -414,17 +440,9 @@ function AgentDashboard() {
       color: '#1a2634',
       marginBottom: '2px',
     },
-    statTrend: {
-      fontSize: '10px',
-      color: '#28a745',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '3px',
-    },
-    // Charts Grid - Mobile Optimized
     chartsGrid: {
       display: 'grid',
-      gridTemplateColumns: '1fr',
+      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
       gap: isMobile ? '16px' : '25px',
       marginBottom: '20px',
     },
@@ -450,109 +468,6 @@ function AgentDashboard() {
       height: isMobile ? '250px' : '300px',
       position: 'relative',
     },
-    // Target Card - Mobile Optimized
-    targetCard: {
-      backgroundColor: 'white',
-      padding: isMobile ? '16px' : '20px',
-      borderRadius: isMobile ? '12px' : '12px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-      marginBottom: '20px',
-      border: '1px solid #eef2f6',
-    },
-    targetHeader: {
-      display: 'flex',
-      flexDirection: isMobile ? 'column' : 'row',
-      justifyContent: 'space-between',
-      alignItems: isMobile ? 'flex-start' : 'center',
-      gap: isMobile ? '8px' : '0',
-      marginBottom: '12px',
-    },
-    targetTitle: {
-      fontSize: isMobile ? '15px' : '16px',
-      fontWeight: '600',
-      color: '#1a2634',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      margin: 0,
-    },
-    targetValues: {
-      fontSize: isMobile ? '13px' : '15px',
-      color: '#6c757d',
-      fontWeight: '500',
-    },
-    progressBar: {
-      height: '10px',
-      backgroundColor: '#e9ecef',
-      borderRadius: '6px',
-      overflow: 'hidden',
-      marginTop: '10px',
-    },
-    progressFill: {
-      height: '100%',
-      backgroundColor: '#003366',
-      borderRadius: '6px',
-      transition: 'width 0.3s ease',
-    },
-    // Recent Orders - Mobile Optimized
-    recentOrdersCard: {
-      backgroundColor: 'white',
-      padding: isMobile ? '16px' : '20px',
-      borderRadius: isMobile ? '12px' : '12px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-      border: '1px solid #eef2f6',
-    },
-    sectionTitle: {
-      fontSize: isMobile ? '16px' : '18px',
-      fontWeight: '600',
-      color: '#1a2634',
-      marginBottom: '15px',
-      paddingBottom: '10px',
-      borderBottom: '2px solid #003366',
-    },
-    ordersGrid: {
-      display: 'grid',
-      gridTemplateColumns: '1fr',
-      gap: '12px',
-    },
-    orderCard: {
-      border: '1px solid #eef2f6',
-      borderRadius: '10px',
-      padding: isMobile ? '14px' : '15px',
-      backgroundColor: '#fafbfc',
-      transition: 'all 0.2s ease',
-    },
-    orderHeader: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '10px',
-    },
-    orderId: {
-      fontWeight: '600',
-      color: '#003366',
-      fontSize: isMobile ? '13px' : '14px',
-    },
-    statusBadge: {
-      padding: '4px 10px',
-      borderRadius: '6px',
-      fontSize: '11px',
-      fontWeight: '500',
-    },
-    orderInfo: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      marginBottom: '8px',
-      fontSize: isMobile ? '12px' : '13px',
-    },
-    infoLabel: {
-      color: '#6c757d',
-    },
-    infoValue: {
-      fontWeight: '500',
-      color: '#1a2634',
-    },
-    // Phone Search - Mobile Optimized
     phoneSearchContainer: {
       maxWidth: '500px',
       margin: isMobile ? '20px auto' : '50px auto',
@@ -626,29 +541,35 @@ function AgentDashboard() {
       marginBottom: '20px',
       gap: '12px',
     },
-    dateFilter: {
-      padding: '10px 14px',
-      border: '1px solid #eef2f6',
-      borderRadius: '10px',
-      fontSize: '14px',
-      color: '#1a2634',
-      backgroundColor: 'white',
-      width: isMobile ? '100%' : 'auto',
-    },
     emptyState: {
       color: '#6c757d',
       textAlign: 'center',
       padding: '40px 20px',
       fontSize: '14px',
     },
+    filterContainer: {
+      display: 'flex',
+      gap: '12px',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+    },
+    filterSelect: {
+      padding: '8px 12px',
+      border: '1px solid #eef2f6',
+      borderRadius: '8px',
+      fontSize: '13px',
+      color: '#1a2634',
+      backgroundColor: 'white',
+      cursor: 'pointer',
+      outline: 'none',
+      minWidth: '120px',
+    },
   };
 
   useEffect(() => {
     checkAuthentication();
     fetchUserData();
-    fetchRecentOrders();
-    fetchTargetData();
-    fetchDashboardStats();
+   
   }, []);
 
   const checkAuthentication = () => {
@@ -670,6 +591,8 @@ function AgentDashboard() {
       const userName = localStorage.getItem('userName');
       const res = await axios.get('/api/user-profile', { params: { name: userName } });
       setUser(res.data);
+      fetchDashboardStats();
+      fetchRecentOrders();
     } catch (err) {
       console.error(err);
     }
@@ -678,7 +601,14 @@ function AgentDashboard() {
   const fetchRecentOrders = async () => {
     try {
       const userName = localStorage.getItem('userName');
-      const res = await axios.get('/api/orders', { params: { executive: userName, limit: 10 } });
+      const res = await axios.get('/api/orders', { 
+        params: { 
+          executive: userName, 
+          month: selectedMonth,
+          year: selectedYear,
+          limit: 10 
+        } 
+      });
       setOrders(res.data);
     } catch (err) {
       console.error(err);
@@ -690,99 +620,115 @@ function AgentDashboard() {
   const fetchDashboardStats = async () => {
     try {
       const userName = localStorage.getItem('userName');
-      const res = await axios.get('/api/orders', { params: { executive: userName } });
-      const allOrders = res.data;
       
-      const totalRevenue = allOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
-      const pendingOrders = allOrders.filter(o => o.status === 'pending').length;
-      const serviceOrders = allOrders.filter(o => o.status === 'in-progress' || o.status === 'assigned-to-service').length;
-      const completedOrders = allOrders.filter(o => o.status === 'completed').length;
-      const cancelledOrders = allOrders.filter(o => o.status === 'cancelled').length;
+      // Fetch orders with month/year filter
+      const res = await axios.get('/api/orders', { 
+        params: { 
+          executive: userName,
+          month: selectedMonth,
+          year: selectedYear
+        } 
+      });
+      const allOrders = res.data || [];
       
-      const appointments = 12;
-      const prospective = 34;
-      const monthlyRevenue = [45000, 52000, 48000, 61000, 58000, 72000];
-      const weeklyOrders = [8, 12, 15, 10, 18, 14, 9];
+      console.log('Orders fetched:', allOrders.length);
+      
+      // Initialize variables
+      let totalRevenue = 0;
+      let totalPaid = 0;
+      let pendingPayments = 0;
+      let pendingPaymentAmount = 0;
+      let totalOrders = allOrders.length;
+      let completedOrders = 0;
+      
+      allOrders.forEach((order) => {
+        // Calculate order total from rows
+        let orderTotal = 0;
+        if (order.rows && Array.isArray(order.rows) && order.rows.length > 0) {
+          orderTotal = order.rows.reduce((sum, row) => {
+            return sum + (parseFloat(row.total) || 0);
+          }, 0);
+        }
+        
+        // Use discounted total if available, otherwise use orderTotal
+        const finalAmount = parseFloat(order.discountedTotal) || orderTotal || parseFloat(order.totalAmount) || 0;
+        totalRevenue += finalAmount;
+        
+        // Calculate paid amount (advance)
+        const advance = parseFloat(order.advance) || 0;
+        totalPaid += advance;
+        
+        // Calculate pending (balance)
+        const balance = parseFloat(order.balance) || 0;
+        if (balance > 0) {
+          pendingPayments++;
+          pendingPaymentAmount += balance;
+        }
+        
+        // Count completed orders
+        if (order.status === 'completed' || order.status === 'Completed') {
+          completedOrders++;
+        }
+      });
+      
+      // Get prospects count
+      let prospects = 0;
+      try {
+        const prospectsRes = await axios.get('/api/prospective-clients', { 
+          params: { userName: userName }
+        });
+        prospects = prospectsRes.data?.length || 0;
+      } catch (e) {
+        console.log('Prospects API not available');
+      }
+      
+      // Calculate monthly orders for the selected year (all 12 months)
+      const monthlyOrders = [];
+      for (let i = 0; i < 12; i++) {
+        const monthStart = new Date(selectedYear, i, 1);
+        const monthEnd = new Date(selectedYear, i + 1, 0);
+        
+        const monthOrders = allOrders.filter(order => {
+          if (!order.orderDate) return false;
+          const orderDate = new Date(order.orderDate);
+          return orderDate >= monthStart && orderDate <= monthEnd;
+        });
+        
+        monthlyOrders.push(monthOrders.length);
+      }
+      
+      console.log('Dashboard Stats:', {
+        totalRevenue,
+        totalPaid,
+        totalOrders,
+        pendingPayments,
+        pendingPaymentAmount,
+        prospects,
+        completedOrders
+      });
       
       setDashboardStats({
         totalRevenue,
-        totalOrders: allOrders.length,
-        pendingStatus: pendingOrders,
-        serviceStatus: serviceOrders,
-        appointments,
-        prospective,
+        totalPaid,
+        totalOrders,
+        pendingPayments,
+        pendingPaymentAmount,
+        prospects,
         completedOrders,
-        inProgressOrders: serviceOrders,
-        cancelledOrders,
-        monthlyRevenue,
-        weeklyOrders,
-        revenueGrowth: 12.5,
-        ordersGrowth: 8.2
+        monthlyOrders
       });
     } catch (err) {
       console.error('Error fetching dashboard stats:', err);
       setDashboardStats({
-        totalRevenue: 1250000,
-        totalOrders: 156,
-        pendingStatus: 23,
-        serviceStatus: 45,
-        appointments: 12,
-        prospective: 34,
-        completedOrders: 78,
-        inProgressOrders: 45,
-        cancelledOrders: 10,
-        monthlyRevenue: [85000, 92000, 88000, 95000, 102000, 125000],
-        weeklyOrders: [12, 18, 22, 15, 24, 19, 14],
-        revenueGrowth: 12.5,
-        ordersGrowth: 8.2
+        totalRevenue: 0,
+        totalPaid: 0,
+        totalOrders: 0,
+        pendingPayments: 0,
+        pendingPaymentAmount: 0,
+        prospects: 0,
+        completedOrders: 0,
+        monthlyOrders: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
       });
-    }
-  };
-
-  const fetchTargetData = async () => {
-    try {
-      setLoading(true);
-      const currentExecutive = localStorage.getItem('userName') || '';
-      const response = await axios.get(`/api/executive/${currentExecutive}`);
-      const data = response.data;
-
-      let totalTarget = 0;
-      let totalAchieved = 0;
-
-      if (Array.isArray(data)) {
-        data.forEach((order) => {
-          if (order.target) totalTarget = parseFloat(order.target) || 0;
-          if (order.rows) {
-            order.rows.forEach((row) => {
-              totalAchieved += parseFloat(row.total || 0);
-            });
-          }
-        });
-      } else if (data && typeof data === "object") {
-        if (data.target) totalTarget = parseFloat(data.target) || 0;
-        if (data.rows) {
-          data.rows.forEach((row) => {
-            totalAchieved += parseFloat(row.total || 0);
-          });
-        }
-      }
-
-      setTargetData({
-        target: totalTarget,
-        achieved: totalAchieved,
-        formattedTarget: `₹${(totalTarget / 100000).toFixed(1)}L`,
-        formattedAchieved: `₹${(totalAchieved / 100000).toFixed(1)}L`,
-      });
-    } catch (error) {
-      console.error("Error fetching target data:", error);
-      setTargetData({
-        target: 1000000,
-        achieved: 750000,
-        formattedTarget: "₹10L",
-        formattedAchieved: "₹7.5L",
-      });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -837,81 +783,38 @@ function AgentDashboard() {
       location.pathname.includes(item.toLowerCase().replace(' ', '-')) ? '600' : 'normal',
   });
 
-  const targetPercentage =
-    targetData.target > 0
-      ? Math.min(100, Math.round((targetData.achieved / targetData.target) * 100))
-      : 0;
-
   const getProfileInitials = (name) =>
     name
       ? name.split(" ").map((part) => part[0]?.toUpperCase() || "").join("").substring(0, 2)
       : "AG";
 
-  // Chart configurations
-  const orderStatusData = {
-    labels: ['Completed', 'In Progress', 'Pending', 'Cancelled'],
+  // Pending Payment Chart - Shows Paid vs Pending amounts
+  const pendingPaymentData = {
+    labels: ['Paid', 'Pending'],
     datasets: [
       {
         data: [
-          dashboardStats.completedOrders,
-          dashboardStats.inProgressOrders,
-          dashboardStats.pendingStatus,
-          dashboardStats.cancelledOrders
+          dashboardStats.totalPaid,
+          dashboardStats.pendingPaymentAmount
         ],
-        backgroundColor: ['#28a745', '#ffc107', '#dc3545', '#6c757d'],
-        borderColor: ['#218838', '#e0a800', '#c82333', '#5a6268'],
+        backgroundColor: ['#28a745', '#dc3545'],
+        borderColor: ['#218838', '#c82333'],
         borderWidth: 1,
       },
     ],
   };
 
-  const revenueDistributionData = {
-    labels: ['Revenue', 'Pending', 'In Service', 'Appointments', 'Prospective'],
+  // Total Orders Bar Chart - Monthly orders
+  const monthlyOrdersData = {
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     datasets: [
       {
-        data: [
-          dashboardStats.totalRevenue / 1000,
-          dashboardStats.pendingStatus * 25000,
-          dashboardStats.serviceStatus * 35000,
-          dashboardStats.appointments * 15000,
-          dashboardStats.prospective * 10000
-        ],
-        backgroundColor: ['#003366', '#ffc107', '#17a2b8', '#28a745', '#6f42c1'],
-        borderColor: ['#002244', '#e0a800', '#138496', '#218838', '#5a32a3'],
-        borderWidth: 1,
-      },
-    ],
-  };
-
-  const monthlyRevenueData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-    datasets: [
-      {
-        label: 'Monthly Revenue (₹)',
-        data: dashboardStats.monthlyRevenue,
+        label: `Orders (${selectedYear})`,
+        data: dashboardStats.monthlyOrders,
         backgroundColor: '#003366',
-        borderRadius: 6,
-        barPercentage: 0.7,
+        borderRadius: 4,
+        barPercentage: 0.6,
         categoryPercentage: 0.8,
-      },
-    ],
-  };
-
-  const weeklyOrdersData = {
-    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    datasets: [
-      {
-        label: 'Orders',
-        data: dashboardStats.weeklyOrders,
-        borderColor: '#003366',
-        backgroundColor: 'rgba(0, 51, 102, 0.1)',
-        tension: 0.4,
-        fill: true,
-        pointBackgroundColor: '#003366',
-        pointBorderColor: '#fff',
-        pointBorderWidth: 2,
-        pointRadius: isMobile ? 3 : 4,
-        pointHoverRadius: 5,
       },
     ],
   };
@@ -937,8 +840,9 @@ function AgentDashboard() {
             const label = context.label || '';
             const value = context.raw || 0;
             const total = context.dataset.data.reduce((a, b) => a + b, 0);
-            const percentage = ((value / total) * 100).toFixed(1);
-            return `${label}: ${value.toLocaleString()} (${percentage}%)`;
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+            const formattedValue = value >= 1000 ? `₹${(value / 1000).toFixed(1)}K` : `₹${value}`;
+            return `${label}: ${formattedValue} (${percentage}%)`;
           }
         }
       }
@@ -946,45 +850,6 @@ function AgentDashboard() {
   };
 
   const barOptions = {
-    responsive: true,
-    maintainAspectRatio: true,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        bodyFont: { size: isMobile ? 11 : 12 },
-        callbacks: {
-          label: function(context) {
-            return `₹${context.parsed.y.toLocaleString()}`;
-          }
-        }
-      }
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        ticks: {
-          callback: function(value) {
-            return '₹' + (value / 1000).toFixed(0) + 'k';
-          },
-          font: { size: isMobile ? 10 : 11 },
-        },
-        grid: {
-          display: true,
-          drawBorder: false,
-        }
-      },
-      x: {
-        ticks: {
-          font: { size: isMobile ? 10 : 11 },
-        },
-        grid: {
-          display: false,
-        }
-      }
-    },
-  };
-
-  const lineOptions = {
     responsive: true,
     maintainAspectRatio: true,
     plugins: {
@@ -1002,7 +867,7 @@ function AgentDashboard() {
       y: {
         beginAtZero: true,
         ticks: {
-          stepSize: 5,
+          stepSize: 1,
           font: { size: isMobile ? 10 : 11 },
         },
         grid: {
@@ -1021,17 +886,14 @@ function AgentDashboard() {
     },
   };
 
-  // Stats for dashboard - Only showing relevant stats for agents
+  // Stats cards - 4 cards with real data from backend
   const stats = [
-    { label: 'Total Revenue', value: `₹${(dashboardStats.totalRevenue / 100000).toFixed(1)}L`, icon: '💰', trend: `+${dashboardStats.revenueGrowth}%` },
-    { label: 'Total Orders', value: dashboardStats.totalOrders, icon: '📦', trend: `+${dashboardStats.ordersGrowth}%` },
-    { label: 'Pending', value: dashboardStats.pendingStatus, icon: '⏳', trend: '' },
-    { label: 'In Service', value: dashboardStats.serviceStatus, icon: '🛠️', trend: '' },
-    { label: 'Appointments', value: dashboardStats.appointments, icon: '📅', trend: '' },
-    { label: 'Prospective', value: dashboardStats.prospective, icon: '👥', trend: '' },
+  
+    { label: 'Total Orders', value: dashboardStats.totalOrders, icon: '📦' },
+    { label: 'Pending Payments', value: dashboardStats.pendingPayments, icon: '⏳' },
   ];
 
-  // Updated menu items - Added Create Prospect and View Prospects
+  // Menu items
   const menuItems = [
     { path: '/agent-dashboard', label: 'Dashboard', icon: '📊' },
     { path: '/agent-dashboard/create-order', label: 'Create Order', icon: '➕' },
@@ -1039,6 +901,7 @@ function AgentDashboard() {
     { path: '/agent-dashboard/create-prospect', label: 'Create Prospect', icon: '🔍' },
     { path: '/agent-dashboard/view-prospects', label: 'View Prospects', icon: '👁️' },
     { path: '/agent-dashboard/quotation', label: 'Quotation', icon: '💬' },
+    { path: '/agent-dashboard/price-list', label: 'Price List', icon: '💰' },
   ];
 
   return (
@@ -1048,12 +911,10 @@ function AgentDashboard() {
       {/* Navbar */}
       <div style={styles.navbar}>
         <div style={styles.navLeft}>
-          {/* Menu button - visible only on mobile */}
           <div style={styles.menuButton} onClick={toggleSidebar}>
             {mobileMenuOpen ? '✕' : '☰'}
           </div>
           
-          {/* Logo */}
           <img 
             src={GMSLogo} 
             alt="GMS Logo" 
@@ -1082,10 +943,8 @@ function AgentDashboard() {
       </div>
 
       <div style={styles.container}>
-        {/* Mobile overlay */}
         <div style={styles.mobileOverlay} onClick={() => setMobileMenuOpen(false)} />
 
-        {/* Sidebar */}
         <div style={styles.sidebar}>
           {menuItems.map(({ path, label, icon }) => (
             <NavLink
@@ -1106,25 +965,43 @@ function AgentDashboard() {
           ))}
         </div>
 
-        {/* Main Content */}
         <div style={styles.content}>
-          {/* Dashboard Home */}
           {location.pathname === '/agent-dashboard' && (
             <>
               <div style={styles.summaryRow}>
                 <div style={styles.welcomeMessage}>
                   Welcome back, {user?.name?.split(' ')[0] || 'Agent'}! 👋
                 </div>
-                <select style={styles.dateFilter}>
-                  <option>Last 30 Days</option>
-                  <option>This Month</option>
-                  <option>Last Month</option>
-                  <option>This Quarter</option>
-                  <option>This Year</option>
-                </select>
+                
+                {/* Month/Year Filter */}
+                <div style={styles.filterContainer}>
+                  <select 
+                    style={styles.filterSelect}
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                  >
+                    {monthOptions.map(month => (
+                      <option key={month.value} value={month.value}>
+                        {month.label}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  <select 
+                    style={styles.filterSelect}
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  >
+                    {yearOptions.map(year => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              {/* Stats Cards */}
+              {/* Stats Cards - 4 cards with real data */}
               <div style={styles.statsGrid}>
                 {stats.map((stat, idx) => (
                   <div key={idx} style={styles.statCard}>
@@ -1132,108 +1009,38 @@ function AgentDashboard() {
                     <div style={styles.statContent}>
                       <div style={styles.statLabel}>{stat.label}</div>
                       <div style={styles.statValue}>{stat.value}</div>
-                      {stat.trend && <div style={styles.statTrend}>↑ {stat.trend}</div>}
                     </div>
                   </div>
                 ))}
               </div>
 
-              {/* Target Card */}
-              <div style={styles.targetCard}>
-                <div style={styles.targetHeader}>
-                  <h3 style={styles.targetTitle}>
-                    <span>🎯</span> Monthly Target Progress
-                  </h3>
-                  <div style={styles.targetValues}>
-                    {targetData.formattedAchieved} / {targetData.formattedTarget}
-                  </div>
-                </div>
-                <div style={styles.progressBar}>
-                  <div style={{ ...styles.progressFill, width: `${targetPercentage}%` }}></div>
-                </div>
-                <div style={{ marginTop: '10px', fontSize: '12px', color: '#6c757d' }}>
-                  {targetPercentage}% achieved
-                </div>
-              </div>
-
-              {/* Charts Section */}
+              {/* Charts Section - 2 charts side by side */}
               <div style={styles.chartsGrid}>
-                {/* Order Status Pie Chart */}
+                {/* Pending Payment Chart */}
                 <div style={styles.chartCard}>
                   <h3 style={styles.chartTitle}>
-                    <span>📊</span> Order Status Distribution
+                    <span>💰</span> Pending Payments
                   </h3>
                   <div style={styles.chartWrapper}>
-                    <Pie data={orderStatusData} options={pieOptions} />
+                    <Pie data={pendingPaymentData} options={pieOptions} />
+                  </div>
+                  <div style={{ marginTop: '10px', textAlign: 'center', fontSize: '13px', color: '#6c757d' }}>
+                    Pending Amount: ₹{dashboardStats.pendingPaymentAmount.toLocaleString()}
                   </div>
                 </div>
 
-                {/* Revenue Distribution Doughnut Chart */}
+                {/* Total Orders Chart */}
                 <div style={styles.chartCard}>
                   <h3 style={styles.chartTitle}>
-                    <span>💰</span> Revenue Distribution
+                    <span>📊</span> Total Orders - {selectedYear}
                   </h3>
                   <div style={styles.chartWrapper}>
-                    <Doughnut data={revenueDistributionData} options={pieOptions} />
+                    <Bar data={monthlyOrdersData} options={barOptions} />
+                  </div>
+                  <div style={{ marginTop: '10px', textAlign: 'center', fontSize: '13px', color: '#6c757d' }}>
+                    Total Orders: {dashboardStats.totalOrders}
                   </div>
                 </div>
-
-                {/* Monthly Revenue Bar Chart */}
-                <div style={styles.chartCard}>
-                  <h3 style={styles.chartTitle}>
-                    <span>📈</span> Monthly Revenue Trend
-                  </h3>
-                  <div style={styles.chartWrapper}>
-                    <Bar data={monthlyRevenueData} options={barOptions} />
-                  </div>
-                </div>
-
-                {/* Weekly Orders Line Chart */}
-                <div style={styles.chartCard}>
-                  <h3 style={styles.chartTitle}>
-                    <span>📉</span> Weekly Orders
-                  </h3>
-                  <div style={styles.chartWrapper}>
-                    <Line data={weeklyOrdersData} options={lineOptions} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Recent Orders - Only showing agent's orders */}
-              <div style={styles.recentOrdersCard}>
-                <h3 style={styles.sectionTitle}>Recent Orders</h3>
-                {orders.length > 0 ? (
-                  <div style={styles.ordersGrid}>
-                    {orders.slice(0, 5).map(order => (
-                      <div key={order._id} style={styles.orderCard}>
-                        <div style={styles.orderHeader}>
-                          <span style={styles.orderId}>#{order.orderId || 'N/A'}</span>
-                          <span className={`status-badge ${order.status?.toLowerCase()}`} style={styles.statusBadge}>
-                            {order.status || 'Pending'}
-                          </span>
-                        </div>
-                        <div style={styles.orderInfo}>
-                          <span style={styles.infoLabel}>Customer:</span>
-                          <span style={styles.infoValue}>{order.customerName || 'N/A'}</span>
-                        </div>
-                        <div style={styles.orderInfo}>
-                          <span style={styles.infoLabel}>Amount:</span>
-                          <span style={styles.infoValue}>₹{order.amount?.toLocaleString('en-IN') || '0'}</span>
-                        </div>
-                        <div style={styles.orderInfo}>
-                          <span style={styles.infoLabel}>Date:</span>
-                          <span style={styles.infoValue}>
-                            {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p style={styles.emptyState}>
-                    No recent orders found
-                  </p>
-                )}
               </div>
             </>
           )}
@@ -1301,7 +1108,7 @@ function AgentDashboard() {
             />
           )}
 
-          {/* View Orders - Filtered to show only agent's orders */}
+          {/* View Orders */}
           {location.pathname === '/agent-dashboard/view-orders' && (
             <ViewOrders 
               userRole="Agent" 
@@ -1319,7 +1126,7 @@ function AgentDashboard() {
             />
           )}
 
-          {/* View Prospects - Filtered to show only agent's prospects */}
+          {/* View Prospects */}
           {location.pathname === '/agent-dashboard/view-prospects' && (
             <ViewProspective executiveName={user?.name} />
           )}
@@ -1329,13 +1136,19 @@ function AgentDashboard() {
             <Quotation executiveName={user?.name} />
           )}
 
+          {/* Price List */}
+          {location.pathname === '/agent-dashboard/price-list' && (
+            <PriceList />
+          )}
+
           {/* Other routes */}
           {location.pathname !== '/agent-dashboard' && 
            location.pathname !== '/agent-dashboard/create-order' &&
            location.pathname !== '/agent-dashboard/view-orders' &&
            location.pathname !== '/agent-dashboard/create-prospect' &&
            location.pathname !== '/agent-dashboard/view-prospects' &&
-           location.pathname !== '/agent-dashboard/quotation' && 
+           location.pathname !== '/agent-dashboard/quotation' &&
+           location.pathname !== '/agent-dashboard/price-list' && 
            <Outlet />}
         </div>
       </div>

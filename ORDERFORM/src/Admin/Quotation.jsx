@@ -26,8 +26,8 @@ const Quotation = () => {
   const [allQuotations, setAllQuotations] = useState([]);
   const [selectedQuotation, setSelectedQuotation] = useState(null);
   const [showQuotationDetails, setShowQuotationDetails] = useState(false);
-  const [logoLoaded, setLogoLoaded] = useState(false);
-  const [signatureLoaded, setSignatureLoaded] = useState(false);
+  const [, setLogoLoaded] = useState(false);
+  const [, setSignatureLoaded] = useState(false);
   const [logoUrl, setLogoUrl] = useState(null);
   const [signatureUrl, setSignatureUrl] = useState(null);
 

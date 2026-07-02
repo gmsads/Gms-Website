@@ -312,7 +312,9 @@ function App() {
           <Route path="create-order" element={<CreateOrder />} />
           <Route path="view-orders" element={<ViewOrders />} />
           <Route path="quotation" element={<Quotation />} />
-  <Route path="create-prospect" element={<Prospective />} />
+          <Route path="create-prospect" element={<Prospective />} />
+          <Route path="price-list" element={<Pricelist />} />
+
           <Route path="view-prospects" element={<Viewprospective />} />        </Route>
 
         {/* Field Executive Route */}
