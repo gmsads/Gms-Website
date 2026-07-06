@@ -1033,9 +1033,7 @@ router.get("/orders/:id/follow-ups", async (req, res) => {
   }
 });
 
-// ============================
-// RECORD PAYMENT for an order (FIXED - with chequeNumber and utrNumber)
-// ============================
+// In your orders.js backend file - Update the payment route
 router.post("/orders/:id/record-payment", async (req, res) => {
   try {
     const { id } = req.params;
@@ -1047,7 +1045,6 @@ router.post("/orders/:id/record-payment", async (req, res) => {
 
     // Validate required fields
     if (!amount || !method) {
-      console.log("Missing required fields");
       return res.status(400).json({ 
         success: false, 
         error: "Amount and method are required" 
@@ -1111,7 +1108,7 @@ router.post("/orders/:id/record-payment", async (req, res) => {
       });
     }
 
-    // Create payment record with ALL fields including chequeNumber and utrNumber
+    // Create payment record - REMOVED createdBy
     const paymentRecord = {
       amount: paymentAmount,
       method: method,
@@ -1187,6 +1184,19 @@ router.post("/orders/:id/record-payment", async (req, res) => {
     console.error("Error name:", err.name);
     console.error("Error message:", err.message);
     console.error("Error stack:", err.stack);
+    
+    // Check if it's a validation error
+    if (err.name === 'ValidationError') {
+      const errors = Object.keys(err.errors).map(key => ({
+        field: key,
+        message: err.errors[key].message
+      }));
+      return res.status(400).json({ 
+        success: false, 
+        error: "Validation failed",
+        details: errors
+      });
+    }
     
     res.status(500).json({ 
       success: false, 

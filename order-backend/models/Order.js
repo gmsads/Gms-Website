@@ -50,7 +50,7 @@ const orderSchema = new mongoose.Schema({
   otherLeadSource: String,
   // Order Details
   clientType: String,
-   createdBy: { type: String, required: true },
+   createdBy: { type: String },
   target: String,
   rows: [{
     requirement: String,
