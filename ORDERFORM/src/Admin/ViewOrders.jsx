@@ -283,11 +283,13 @@ function ViewOrders() {
   // ===== 6. PRINT FUNCTION =====
   const handlePrintOrder = (order) => {
     const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+    const finalAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '') 
+      ? parseFloat(order.discountedTotal) 
+      : orderTotal;
     const advancePaid = parseFloat(order.advance) || 0;
-    const paymentHistoryTotal = order.paymentHistory ?
-      order.paymentHistory.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0) : 0;
-    const totalPaid = advancePaid + paymentHistoryTotal;
-    const balanceDue = orderTotal - advancePaid;
+    const balanceDue = (order.balance !== undefined && order.balance !== null && order.balance !== '')
+      ? parseFloat(order.balance)
+      : Math.max(0, finalAmount - advancePaid);
 
     const iframe = document.createElement('iframe');
     iframe.style.position = 'absolute';
@@ -910,17 +912,14 @@ function ViewOrders() {
           };
         }
 
-        let orderAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-        const orderAdvance = parseFloat(order.advance) || 0;
-        let paymentHistoryTotal = 0;
-
-        if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
-          paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) =>
-            sum + (parseFloat(payment.amount) || 0), 0);
-        }
-
-        const orderReceived = orderAdvance + paymentHistoryTotal;
-        const orderBalance = orderAmount - orderReceived;
+        const rowTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+        const orderAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '') 
+          ? parseFloat(order.discountedTotal) 
+          : rowTotal;
+        const orderReceived = parseFloat(order.advance) || 0;
+        const orderBalance = (order.balance !== undefined && order.balance !== null && order.balance !== '') 
+          ? parseFloat(order.balance) 
+          : Math.max(0, orderAmount - orderReceived);
 
         grouped[monthYearKey].totals.amount += orderAmount;
         grouped[monthYearKey].totals.received += orderReceived;
@@ -941,21 +940,18 @@ function ViewOrders() {
     let totalBalance = 0;
 
     filteredOrders.forEach(order => {
-      const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-      totalAmount += orderTotal;
+      const rowTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+      const orderAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '') 
+        ? parseFloat(order.discountedTotal) 
+        : rowTotal;
+      totalAmount += orderAmount;
 
-      const advanceReceived = parseFloat(order.advance) || 0;
-      
-      let paymentHistoryTotal = 0;
-      if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
-        paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) =>
-          sum + (parseFloat(payment.amount) || 0), 0);
-      }
-
-      const received = advanceReceived + paymentHistoryTotal;
+      const received = parseFloat(order.advance) || 0;
       totalReceived += received;
       
-      const orderBalance = orderTotal - received;
+      const orderBalance = (order.balance !== undefined && order.balance !== null && order.balance !== '') 
+        ? parseFloat(order.balance) 
+        : Math.max(0, orderAmount - received);
       totalBalance += orderBalance;
     });
 
@@ -1774,7 +1770,9 @@ function ViewOrders() {
       setCurrentOrder(order);
 
       const totalAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-      const finalAmount = parseFloat(order.discountedTotal) || totalAmount;
+      const finalAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '') 
+        ? parseFloat(order.discountedTotal) 
+        : totalAmount;
       const advancePaid = parseFloat(order.advance) || 0;
       
       let paymentHistoryTotal = 0;
@@ -1783,25 +1781,26 @@ function ViewOrders() {
           sum + (parseFloat(payment.amount) || 0), 0);
       }
       
-      const totalPaid = advancePaid + paymentHistoryTotal;
-      const actualBalance = finalAmount - totalPaid;
+      const actualBalance = (order.balance !== undefined && order.balance !== null && order.balance !== '')
+        ? parseFloat(order.balance)
+        : Math.max(0, finalAmount - advancePaid);
 
       console.log('Payment setup:', {
         totalAmount,
         finalAmount,
         advancePaid,
         paymentHistoryTotal,
-        totalPaid,
         actualBalance,
         orderBalance: order.balance
       });
 
       const payments = [];
+      const initialAdvance = Math.max(0, advancePaid - paymentHistoryTotal);
 
-      if (advancePaid > 0) {
+      if (initialAdvance > 0) {
         payments.push({
           date: order.advanceDate || order.orderDate,
-          amount: advancePaid,
+          amount: initialAdvance,
           method: 'Advance',
           reference: '',
           note: 'Initial advance payment'
@@ -1837,7 +1836,9 @@ function ViewOrders() {
       setCurrentOrder(order);
 
       const totalAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-      const finalAmount = parseFloat(order.discountedTotal) || totalAmount;
+      const finalAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '') 
+        ? parseFloat(order.discountedTotal) 
+        : totalAmount;
       const advancePaid = parseFloat(order.advance) || 0;
       
       let paymentHistoryTotal = 0;
@@ -1846,8 +1847,9 @@ function ViewOrders() {
           sum + (parseFloat(payment.amount) || 0), 0);
       }
       
-      const totalPaid = advancePaid + paymentHistoryTotal;
-      const actualBalance = finalAmount - advancePaid;
+      const actualBalance = (order.balance !== undefined && order.balance !== null && order.balance !== '')
+        ? parseFloat(order.balance)
+        : Math.max(0, finalAmount - advancePaid);
 
       const updatedOrder = {
         ...order,
@@ -1857,11 +1859,12 @@ function ViewOrders() {
       setCurrentOrder(updatedOrder);
 
       const payments = [];
+      const initialAdvance = Math.max(0, advancePaid - paymentHistoryTotal);
 
-      if (advancePaid > 0) {
+      if (initialAdvance > 0) {
         payments.push({
           date: order.advanceDate || order.orderDate,
-          amount: advancePaid,
+          amount: initialAdvance,
           method: 'Advance',
           reference: '',
           note: 'Initial advance payment'
