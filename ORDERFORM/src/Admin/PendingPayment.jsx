@@ -226,33 +226,42 @@ function PendingPayment({ executiveFilter = null }) {
     return colors[type] || '#7f8c8d';
   }, []);
 
-  // Fetch ALL orders and apply filters client-side
-  const fetchOrders = async () => {
-    setLoading(true);
-    try {
-      // Fetch ALL orders from the main endpoint
-      const res = await axios.get('/api/orders/all');
-      let allOrders = res.data;
+ const fetchOrders = async () => {
+  setLoading(true);
+  try {
+    // Fetch ALL orders from the main endpoint
+    const res = await axios.get('/api/orders/all');
+    let allOrders = res.data;
+    
+    // Calculate orderTotal from rows, but use database values for advance and balance
+    allOrders = allOrders.map(order => {
+      // Calculate total from rows (for display purposes)
+      const orderTotal = order?.rows?.reduce((sum, r) => sum + (parseFloat(r?.total) || 0), 0) || 0;
       
-      // Calculate advance and balance for each order
-      allOrders = allOrders.map(order => {
-        const orderTotal = order?.rows?.reduce((sum, r) => sum + (r?.total || 0), 0) || 0;
-        const advance = order?.advance || 0;
-        const balance = orderTotal - advance;
-        return { ...order, orderTotal, advance, balance };
-      });
+      // ✅ CRITICAL FIX: Use database values directly, don't recalculate
+      // This ensures consistency with View Orders page
+      const advance = parseFloat(order?.advance) || 0;
+      const balance = parseFloat(order?.balance) || 0;
       
-      setOrders(allOrders);
-      
-      // Apply all filters client-side
-      applyFilters(allOrders);
-      
-    } catch (err) {
-      console.error('Error fetching orders:', err);
-      alert('Failed to fetch orders. Please try again.');
-      setLoading(false);
-    }
-  };
+      return { 
+        ...order, 
+        orderTotal: orderTotal, 
+        advance: advance, 
+        balance: balance 
+      };
+    });
+    
+    setOrders(allOrders);
+    
+    // Apply all filters client-side
+    applyFilters(allOrders);
+    
+  } catch (err) {
+    console.error('Error fetching orders:', err);
+    alert('Failed to fetch orders. Please try again.');
+    setLoading(false);
+  }
+};
 
   // Apply all filters client-side
   const applyFilters = useCallback((ordersData = orders) => {
@@ -321,40 +330,47 @@ function PendingPayment({ executiveFilter = null }) {
       }
     }
 
-    // Apply filter type (pending/completed)
-    if (filterType === 'pending') {
-      result = result.filter(order => order.balance > 0);
-    } else if (filterType === 'completed') {
-      result = result.filter(order => order.balance <= 0);
-    }
+     if (filterType === 'pending') {
+    // Only include orders where balance > 0 (using database value)
+    result = result.filter(order => {
+      const balance = parseFloat(order.balance) || 0;
+      return balance > 0.001; // Small threshold to handle floating point
+    });
+  } else if (filterType === 'completed') {
+    // Only include orders where balance <= 0 (using database value)
+    result = result.filter(order => {
+      const balance = parseFloat(order.balance) || 0;
+      return balance <= 0.001; // Small threshold to handle floating point
+    });
+  }
 
-    // Apply executive filter if provided
-    if (executiveFilter) {
-      result = result.filter(order => 
-        order.executive?.toLowerCase() === executiveFilter.toLowerCase()
+  // Apply executive filter if provided
+  if (executiveFilter) {
+    result = result.filter(order => 
+      order.executive?.toLowerCase() === executiveFilter.toLowerCase()
+    );
+  }
+
+  // Apply search filter
+  if (searchTerm.trim()) {
+    const term = searchTerm.toLowerCase().trim();
+    result = result.filter(order => {
+      return (
+        (order?.executive?.toLowerCase() || '').includes(term) ||
+        (order?.business?.toLowerCase() || '').includes(term) ||
+        (order?.contactPerson?.toLowerCase() || '').includes(term) ||
+        (order?.phone?.toString() || '').includes(term) ||
+        (order?.contactCode?.toLowerCase() || '').includes(term) ||
+        (order?.orderNo?.toLowerCase() || '').includes(term) ||
+        (order?.gstNo?.toLowerCase() || '').includes(term)
       );
-    }
+    });
+  }
 
-    // Apply search filter
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim();
-      result = result.filter(order => {
-        return (
-          (order?.executive?.toLowerCase() || '').includes(term) ||
-          (order?.business?.toLowerCase() || '').includes(term) ||
-          (order?.contactPerson?.toLowerCase() || '').includes(term) ||
-          (order?.phone?.toString() || '').includes(term) ||
-          (order?.contactCode?.toLowerCase() || '').includes(term) ||
-          (order?.orderNo?.toLowerCase() || '').includes(term) ||
-          (order?.gstNo?.toLowerCase() || '').includes(term)
-        );
-      });
-    }
-
-    setFilteredOrders(result);
-    calculatePaymentSummaries(result);
-    setLoading(false);
-  }, [orders, useDateFilter, selectedDate, useMonthYearFilter, year, selectedMonth, filterType, executiveFilter, searchTerm]);
+  setFilteredOrders(result);
+  calculatePaymentSummaries(result);
+  setLoading(false);
+}, [orders, useDateFilter, selectedDate, useMonthYearFilter, year, selectedMonth, filterType, executiveFilter, searchTerm]);
 
   const calculatePaymentSummaries = (ordersData) => {
     let total = 0, received = 0, pending = 0, todayCollected = 0, todayCount = 0;
