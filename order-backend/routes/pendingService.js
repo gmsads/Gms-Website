@@ -52,6 +52,11 @@ router.put('/:orderId/row/:rowIndex/remark', async (req, res) => {
     
     if (isCompleted !== undefined) {
       order.rows[index].isCompleted = isCompleted;
+      if (isCompleted) {
+        order.rows[index].status = 'Completed';
+      } else if (order.rows[index].status === 'Completed') {
+        order.rows[index].status = 'Pending';
+      }
     }
     
     // CRITICAL: Store completedDate when marked as completed

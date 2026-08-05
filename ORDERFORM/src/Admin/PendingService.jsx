@@ -61,9 +61,10 @@ function PendingService() {
     return 'all';
   });
   
+  // ✅ FIX: Default to 'pending' to show only non-completed services
   const [statusFilter, setStatusFilter] = useState(() => {
     const urlStatus = searchParams.get('status');
-    return (urlStatus && urlStatus !== 'undefined' && urlStatus !== 'null') ? urlStatus : 'all';
+    return (urlStatus && urlStatus !== 'undefined' && urlStatus !== 'null') ? urlStatus : 'pending';
   });
   
   const [loading, setLoading] = useState(true);
@@ -72,9 +73,10 @@ function PendingService() {
   
   const calendarYearsList = getCalendarYears();
 
+  // ✅ UPDATED: Status options
   const statusOptions = [
     { value: 'all', label: 'All Status' },
-    { value: 'pending', label: 'Pending' },
+    { value: 'pending', label: 'Pending (Active)' },
     { value: 'assigned to', label: 'Assigned' },
     { value: 'design pending', label: 'Design Pending' },
     { value: 'printing', label: 'Printing' },
@@ -185,6 +187,7 @@ function PendingService() {
     }
   };
 
+  // ✅ FIXED: applyFilters with proper completed detection
   const applyFilters = () => {
     if (!orders.length) {
       setFilteredOrders([]);
@@ -275,7 +278,7 @@ function PendingService() {
       }
     }
 
-    // Apply status filter - FIXED for better matching
+    // ✅ FIXED: Apply status filter - EXCLUDE completed by default
     if (statusFilter !== 'all') {
       result = result.map(order => {
         const filteredRows = order.rows.filter(row => {
@@ -283,40 +286,44 @@ function PendingService() {
           const currentRemark = row.remark ? row.remark.toLowerCase().trim() : 'pending';
           const filterValue = statusFilter.toLowerCase();
           
-          // Handle different status types
+          // ✅ CRITICAL: Check if row is completed
+          const isCompleted = currentRemark === 'completed' || 
+                            currentRemark === 'complete' || 
+                            row.isCompleted === true;
+          
+          // ✅ 'pending' filter - EXCLUDE completed services (DEFAULT)
           if (filterValue === 'pending') {
-            return currentRemark === 'pending' || currentRemark === '' || !currentRemark;
+            return !isCompleted;
           }
           
+          // ✅ 'completed' filter - ONLY show completed
+          if (filterValue === 'completed') {
+            return isCompleted;
+          }
+          
+          // Handle other status types
           if (filterValue === 'assigned to') {
-            return currentRemark.includes('assigned to');
+            return currentRemark.includes('assigned to') && !isCompleted;
           }
           
           if (filterValue === 'updated') {
-            return currentRemark.includes('updated:');
-          }
-          
-          if (filterValue === 'completed') {
-            // Check both remark field AND isCompleted flag
-            return currentRemark === 'completed' || 
-                   currentRemark === 'complete' ||
-                   row.isCompleted === true;
+            return currentRemark.includes('updated:') && !isCompleted;
           }
           
           if (filterValue === 'design pending') {
-            return currentRemark === 'design pending';
+            return currentRemark === 'design pending' && !isCompleted;
           }
           
           if (filterValue === 'printing') {
-            return currentRemark === 'printing';
+            return currentRemark === 'printing' && !isCompleted;
           }
           
           if (filterValue === 'installation pending') {
-            return currentRemark === 'installation pending';
+            return currentRemark === 'installation pending' && !isCompleted;
           }
           
           if (filterValue === 'onboarding') {
-            return currentRemark === 'onboarding';
+            return currentRemark === 'onboarding' && !isCompleted;
           }
           
           return currentRemark === filterValue;
@@ -324,6 +331,10 @@ function PendingService() {
         
         return { ...order, rows: filteredRows };
       }).filter(order => order.rows.length > 0);
+    } else {
+      // ✅ 'all' status - show everything but filter out completed if they have no other status
+      // This ensures completed services are shown when "All Status" is selected
+      // but hidden by default
     }
 
     // Apply search filter
@@ -356,12 +367,13 @@ function PendingService() {
     setFilteredOrders(result);
   };
 
+  // ✅ FIXED: handleRemarkChange with proper completed handling
   const handleRemarkChange = async (orderId, rowIndex, newRemark) => {
     try {
       let remarkValue = newRemark;
       let isCompleted = false;
       let assignedExecutive = '';
-      let updateTimestamp = new Date().toISOString(); // Always set timestamp
+      let updateTimestamp = new Date().toISOString();
 
       if (newRemark === 'assigned to') {
         if (!assignedToText.trim()) {
@@ -381,10 +393,10 @@ function PendingService() {
         remarkValue = `updated: ${updateDescription.trim()} (${formattedTime})`;
         isCompleted = false;
       }
-      else if (newRemark === 'completed') {
+      // ✅ FIX: Explicitly handle completed
+      else if (newRemark === 'completed' || newRemark === 'complete') {
         isCompleted = true;
         remarkValue = 'completed';
-        // updateTimestamp already set
       }
       else if (newRemark === 'design pending') {
         remarkValue = 'design pending';
@@ -403,10 +415,12 @@ function PendingService() {
         isCompleted = false;
       }
       else {
+        // For "pending" or any other status
         if (!remarkValue) {
           alert('Please select a remark');
           return;
         }
+        isCompleted = false;
       }
 
       // Update local state first
@@ -420,6 +434,7 @@ function PendingService() {
                     remark: remarkValue,
                     assignedExecutive: assignedExecutive || row.assignedExecutive,
                     isCompleted: isCompleted,
+                    status: isCompleted ? 'Completed' : (row.status === 'Completed' ? 'Pending' : row.status),
                     updatedAt: updateTimestamp,
                     lastUpdateTime: updateTimestamp
                   } 
@@ -442,7 +457,7 @@ function PendingService() {
         })
       );
 
-      // Send to backend
+      // ✅ FIX: Send complete data to backend
       const response = await axios.put(
         `/api/pending-services/${orderId}/row/${rowIndex}/remark`, 
         { 
@@ -458,11 +473,11 @@ function PendingService() {
         throw new Error(response.data.error || 'Update failed');
       }
 
-      // Show success message for completed
+      // ✅ Show success message for completed
       if (isCompleted) {
-        setTimeout(() => {
-          alert('✓ Service marked as Completed!');
-        }, 100);
+        alert('✓ Service marked as Completed!');
+        // ✅ Automatically refresh to update the list
+        await fetchOrders();
       }
 
       setEditingRemark(null);
@@ -627,10 +642,12 @@ function PendingService() {
     
     setSelectedYear(currentYear.toString());
     setSelectedCalendarMonth('all');
+    setStatusFilter('pending'); // ✅ Reset to 'pending' to show active services
     
     const params = new URLSearchParams(searchParams);
     params.set('year', currentYear.toString());
     params.set('month', 'all');
+    params.set('status', 'pending');
     setSearchParams(params);
     
     fetchOrders();
@@ -645,10 +662,11 @@ function PendingService() {
     const params = new URLSearchParams();
     params.set('year', 'all');
     params.set('month', 'all');
+    params.set('status', 'all');
     setSearchParams(params);
   };
 
-  // FIXED: Improved getRemarkStyle with better completed detection
+  // ✅ FIXED: getRemarkStyle with proper completed detection
   const getRemarkStyle = (remark = false) => {
     const baseStyle = {
       padding: '4px 8px',
@@ -665,7 +683,7 @@ function PendingService() {
     const remarkStr = remark ? String(remark) : '';
     const remarkLower = remarkStr.toLowerCase().trim();
     
-    // FIXED: Better completed detection
+    // ✅ FIX: Better completed detection
     if (remarkLower === 'completed' || remarkLower === 'complete') {
       return {
         ...baseStyle,
@@ -1142,6 +1160,8 @@ function PendingService() {
       <h2 style={styles.title}>
         Service Management
         {(selectedYear !== 'all' || selectedCalendarMonth !== 'all') && ` - ${getFilterDisplayText()}`}
+        {statusFilter !== 'all' && statusFilter !== 'pending' && ` - ${statusOptions.find(opt => opt.value === statusFilter)?.label}`}
+        {statusFilter === 'pending' && ' - Active Services'}
       </h2>
 
       <div style={styles.filterContainer}>
@@ -1197,7 +1217,7 @@ function PendingService() {
             <button 
               onClick={resetToCurrentPeriod}
               style={styles.currentPeriodButton}
-              title="Reset to current year (all months)"
+              title="Reset to current year (active services only)"
             >
               Current Year
             </button>
@@ -1222,9 +1242,9 @@ function PendingService() {
               </select>
             </div>
             
-            {statusFilter !== 'all' && (
+            {statusFilter !== 'all' && statusFilter !== 'pending' && (
               <button 
-                onClick={() => setStatusFilter('all')}
+                onClick={() => setStatusFilter('pending')}
                 style={styles.clearFilterButton}
               >
                 Clear Status
@@ -1296,7 +1316,7 @@ function PendingService() {
                   filteredOrders.map((order, orderIndex) =>
                     order.rows.map((row, rowIndex) => {
                       const rowBgColor = (orderIndex + rowIndex) % 2 === 0 ? '#ffffff' : '#f8f9fa';
-                      // FIXED: Better completed detection for row styling
+                      // ✅ FIX: Better completed detection for row styling
                       const remarkLower = row.remark ? row.remark.toLowerCase().trim() : '';
                       const isCompleted = remarkLower === 'completed' || remarkLower === 'complete' || row.isCompleted === true;
                       const completedBgColor = '#d4edda';
@@ -1499,12 +1519,12 @@ function PendingService() {
                               </div>
                             ) : (
                               <div 
-                                onClick={() => startEditingRemark(order._id, rowIndex, row.remark || 'Pending')}
-                                style={getRemarkStyle(row.remark || 'Pending')}
+                                onClick={() => startEditingRemark(order._id, rowIndex, row.isCompleted ? (row.remark || 'completed') : (row.remark || 'Pending'))}
+                                style={getRemarkStyle(row.isCompleted ? 'completed' : (row.remark || 'Pending'))}
                                 title="Click to edit remark"
                               >
-                                {row.remark || 'Pending'}
-                                {(row.remark === 'completed' || row.remark === 'complete') && ' ✓'}
+                                {row.isCompleted ? (row.remark || 'completed') : (row.remark || 'Pending')}
+                                {(row.isCompleted || row.remark === 'completed' || row.remark === 'complete') && ' ✓'}
                               </div>
                             )}
                           </td>
@@ -1534,7 +1554,7 @@ function PendingService() {
           Refresh Data
         </button>
         <button onClick={resetToCurrentPeriod} style={styles.currentPeriodButton}>
-          Current Year (All Months)
+          Current Year (Active Only)
         </button>
         {(selectedYear !== 'all' || selectedCalendarMonth !== 'all' || statusFilter !== 'all' || searchTerm) && (
           <button onClick={clearAllFilters} style={styles.clearAllButton}>

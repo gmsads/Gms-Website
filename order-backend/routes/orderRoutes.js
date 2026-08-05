@@ -82,6 +82,31 @@ router.get("/requirements", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch requirements" });
   }
 });
+
+// ============================
+// POST a new requirement
+// ============================
+router.post("/requirements", async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: "Requirement name is required" });
+    }
+    
+    // Check if it already exists case-insensitively
+    const existing = await Requirement.findOne({ name: { $regex: new RegExp(`^${name.trim()}$`, 'i') } });
+    if (existing) {
+      return res.json(existing);
+    }
+    
+    const newRequirement = new Requirement({ name: name.trim() });
+    await newRequirement.save();
+    res.status(201).json(newRequirement);
+  } catch (err) {
+    console.error("Error creating requirement:", err);
+    res.status(500).json({ error: "Failed to create requirement" });
+  }
+});
 // ============================
 // GET all orders (including completed) - needed for "Completed" filter
 // ============================

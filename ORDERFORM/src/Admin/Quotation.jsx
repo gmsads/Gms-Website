@@ -17,6 +17,9 @@ const Quotation = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [notes, setNotes] = useState('');
   const [additionalCharges, setAdditionalCharges] = useState([]);
+  const [customItemName, setCustomItemName] = useState('');
+  const [customItemPrice, setCustomItemPrice] = useState('');
+  const [customItemUnit, setCustomItemUnit] = useState('PCS');
   const [terms, setTerms] = useState(`1) Payment should be Covered and Made to "GLOBAL MARKETING SOLUTIONS", AND BANK, BRANCH: Champagne, A/C: 9127000007166090, IFSCode:UTIB0001336`);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -240,6 +243,44 @@ const Quotation = () => {
     calculateTotals(updatedItems);
     setShowAddItems(false);
     setSearchTerm('');
+  };
+
+  const handleAddCustomItem = async () => {
+    if (!customItemName.trim()) {
+      alert('Please enter an item name');
+      return;
+    }
+    
+    try {
+      // 1. Save to database
+      const response = await api.post('/requirements', { name: customItemName.trim() });
+      
+      // 2. Fetch requirements again so they are updated in the list
+      fetchRequirements();
+      
+      // 3. Add to quotation items
+      addItemToQuotation({
+        name: customItemName.trim(),
+        price: parseFloat(customItemPrice) || 0,
+        unit: customItemUnit.trim() || 'PCS'
+      });
+      
+      // 4. Reset custom item inputs
+      setCustomItemName('');
+      setCustomItemPrice('');
+      setCustomItemUnit('PCS');
+      
+    } catch (err) {
+      console.error('Error adding custom item:', err);
+      alert('Failed to save item to database, but adding it to quotation.');
+      
+      // Fallback: add to quotation anyway even if DB save fails
+      addItemToQuotation({
+        name: customItemName.trim(),
+        price: parseFloat(customItemPrice) || 0,
+        unit: customItemUnit.trim() || 'PCS'
+      });
+    }
   };
 
   const updateItem = (index, field, value) => {
@@ -1403,6 +1444,62 @@ const Quotation = () => {
                 onFocus={(e) => e.target.style.borderColor = '#3498db'} 
                 onBlur={(e) => e.target.style.borderColor = '#e9ecef'} 
               />
+            </div>
+
+            {/* Custom Item Specify Form */}
+            <div style={{ padding: isMobile ? '12px 16px' : '16px 24px', borderBottom: '1px solid #e9ecef', backgroundColor: '#fdfefe' }}>
+              <h4 style={{ margin: '0 0 10px 0', color: '#2c3e50', fontSize: isMobile ? '12px' : '13px', fontWeight: 'bold' }}>Specify Other (Custom Item)</h4>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'flex-end' }}>
+                <div style={{ flex: 2, minWidth: '150px' }}>
+                  <label style={{ fontSize: '11px', color: '#6c757d', display: 'block', marginBottom: '4px' }}>Item Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="Enter item name..." 
+                    value={customItemName} 
+                    onChange={(e) => setCustomItemName(e.target.value)} 
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: '80px' }}>
+                  <label style={{ fontSize: '11px', color: '#6c757d', display: 'block', marginBottom: '4px' }}>Price (₹)</label>
+                  <input 
+                    type="number" 
+                    placeholder="0.00" 
+                    value={customItemPrice} 
+                    onChange={(e) => setCustomItemPrice(e.target.value)} 
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: '80px' }}>
+                  <label style={{ fontSize: '11px', color: '#6c757d', display: 'block', marginBottom: '4px' }}>Unit</label>
+                  <input 
+                    type="text" 
+                    placeholder="PCS" 
+                    value={customItemUnit} 
+                    onChange={(e) => setCustomItemUnit(e.target.value)} 
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                  />
+                </div>
+                <button 
+                  onClick={handleAddCustomItem}
+                  style={{
+                    backgroundColor: '#3498db',
+                    color: 'white',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    height: '37px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  Save & Add
+                </button>
+              </div>
             </div>
 
             <div style={{ maxHeight: isMobile ? '300px' : '400px', overflowY: 'auto' }}>
