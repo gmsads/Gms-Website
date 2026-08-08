@@ -156,6 +156,8 @@ function App() {
           <Route path="assigned-videos" element={<AssignedVideos />} />
           <Route path="upload-video" element={<UploadVideo />} />
           <Route path="my-work" element={<MyWork />} />
+          <Route path="hour" element={<Hourrecord />} />
+          <Route path="hour-reeport" element={<HourReport />} />
         </Route>
         {/* ====================================================== */}
 
@@ -314,8 +316,10 @@ function App() {
           <Route path="quotation" element={<Quotation />} />
           <Route path="create-prospect" element={<Prospective />} />
           <Route path="price-list" element={<Pricelist />} />
-
-          <Route path="view-prospects" element={<Viewprospective />} />        </Route>
+          <Route path="view-prospects" element={<Viewprospective />} />
+          <Route path="hour" element={<Hourrecord />} />
+          <Route path="hour-reeport" element={<HourReport />} />
+        </Route>
 
         {/* Field Executive Route */}
         <Route
@@ -347,6 +351,8 @@ function App() {
           <Route path="view-prospective" element={<Viewprospective />} />
           <Route path="assign-service" element={<AssignService />} />
           <Route path="price-list" element={<Pricelist />} />
+          <Route path="hour" element={<Hourrecord />} />
+          <Route path="hour-reeport" element={<HourReport />} />
         </Route>
 
         {/* Vendor Dashboard Routes */}
@@ -361,6 +367,8 @@ function App() {
           <Route index element={<VendorDashboard />} />
           <Route path="view-orders" element={<VendorViewOrders />} />
           <Route path="payment" element={<VendorPayment />} />
+          <Route path="hour" element={<Hourrecord />} />
+          <Route path="hour-reeport" element={<HourReport />} />
         </Route>
 
         {/* Sales Manager Dashboard Routes */}
@@ -394,6 +402,8 @@ function App() {
           <Route path="create-anniversary" element={<CreateAnniversary />} />
           <Route path="anniversary-list" element={<AnniversaryList />} />
           <Route path="price-list" element={<Pricelist />} />
+          <Route path="hour" element={<Hourrecord />} />
+          <Route path="hour-reeport" element={<HourReport />} />
         </Route>
 
         {/* Executive Dashboard Route */}
@@ -497,6 +507,7 @@ function App() {
           <Route path="greetingdesignform" element={<GreetingdesignForm />} />
           <Route path="start-design" element={<StartDesign />} />
           <Route path="hour" element={<Hourrecord />} />
+          <Route path="hour-reeport" element={<HourReport />} />
         </Route>
 
         {/* Digital Marketing Dashboard Route */}

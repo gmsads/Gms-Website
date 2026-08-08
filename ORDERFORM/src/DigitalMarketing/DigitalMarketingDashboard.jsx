@@ -3,6 +3,8 @@ import axios from 'axios';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import './Digital.css';
 import AutoLogout from "../mainpage/AutoLogout";
+import Hourrecord from '../ITTeam/Hourrecord';
+import HourReport from '../ITTeam/HourReport';
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
 
 function DigitalMarketingDashboard() {
@@ -141,6 +143,20 @@ function DigitalMarketingDashboard() {
               <span className="nav-icon">👁️</span>
               <span className="nav-text">View Orders</span>
             </div>
+            <div
+              className={`nav-item ${activeTab === 'hour' ? 'active' : ''}`}
+              onClick={() => setActiveTab('hour')}
+            >
+              <span className="nav-icon">➕</span>
+              <span className="nav-text">Create Hour Report</span>
+            </div>
+            <div
+              className={`nav-item ${activeTab === 'hour-reeport' ? 'active' : ''}`}
+              onClick={() => setActiveTab('hour-reeport')}
+            >
+              <span className="nav-icon">📊</span>
+              <span className="nav-text">View Hour Report</span>
+            </div>
             <button className="logout-btn" onClick={handleLogout}>Logout</button>
           </div>
         </div>
@@ -249,6 +265,18 @@ function DigitalMarketingDashboard() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'hour' && (
+          <div className="dashboard-container">
+            <Hourrecord />
+          </div>
+        )}
+
+        {activeTab === 'hour-reeport' && (
+          <div className="dashboard-container">
+            <HourReport />
           </div>
         )}
       </div>

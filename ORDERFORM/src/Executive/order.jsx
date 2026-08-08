@@ -23,6 +23,8 @@ import ViewRequest from './ViewLeaveRequests';
 import Parties from "../Admin/Parties";
 import Quotation from "../Admin/Quotation";
 import GMSLogo from '../assets/GMS_LOGO_.png';
+import Hourrecord from '../ITTeam/Hourrecord';
+import HourReport from '../ITTeam/HourReport';
 
 function Admin() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
@@ -1212,6 +1214,7 @@ function Admin() {
               { key: "viewRecord", icon: "📈", text: "View Records" }, 
               { key: "order", icon: "📝", text: "Create Order ➕" },
               { key: "viewOrders", icon: "📋", text: "View Orders" },
+                { key: "hour", icon: "➕", text: "Create Hour Report ➕" },
               { key: "parties", icon: "👥", text: "Parties" },
               { key: "quotation", icon: "💬", text: "Quotation" },
               { key: "appointment", icon: "📅", text: "Create Appointment ➕" },
@@ -1222,6 +1225,7 @@ function Admin() {
               { key: "view-leave", icon: "📂", text: "View Leave Request" },
               { key: "price-list", icon: "💰", text: "Price List" },
               { key: "pending-payments", icon: "💰", text: "Pending Payments" },
+            
            
             ].map(({ key, icon, text }) => (
               <div
@@ -1282,6 +1286,8 @@ function Admin() {
           
           {activeTab === "parties" && <Parties executiveName={selectedExecutive} />}
           {activeTab === "quotation" && <Quotation executiveName={selectedExecutive} />}
+          {activeTab === "hour" && <Hourrecord />}
+          {activeTab === "hour-reeport" && <HourReport />}
 
           {activeTab === "order" && !showOrderForm && (
             <div className="phone-search-container">

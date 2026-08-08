@@ -162,6 +162,40 @@ router.get('/chart-data', async (req, res) => {
 
     console.log(`Filtered orders: ${filteredOrders.length}`);
 
+    // DEBUG: Log month distribution to check if all months are included
+    if (filteredOrders.length > 0) {
+      const monthDistribution = Array(12).fill(0);
+      filteredOrders.forEach(order => {
+        try {
+          let orderDate;
+          if (order.orderDate) {
+            if (typeof order.orderDate === 'string') {
+              if (order.orderDate.includes('-')) {
+                const parts = order.orderDate.split('-');
+                if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+                  orderDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                } else {
+                  orderDate = new Date(order.orderDate);
+                }
+              } else {
+                orderDate = new Date(order.orderDate);
+              }
+            } else {
+              orderDate = order.orderDate;
+            }
+          } else if (order.createdAt) {
+            orderDate = new Date(order.createdAt);
+          }
+          if (orderDate && !isNaN(orderDate.getTime())) {
+            monthDistribution[orderDate.getMonth()]++;
+          }
+        } catch (e) {}
+      });
+      console.log('📊 MONTH DISTRIBUTION:', monthDistribution.map((count, i) => 
+        `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i]}: ${count}`
+      ).join(', '));
+    }
+
     // Initialize counters for calendar year (12 months from Jan to Dec)
     const result = {
       totalOrdersByMonth: Array(12).fill(0),
@@ -233,6 +267,39 @@ router.get('/chart-data', async (req, res) => {
       result.weeklyOrders = weeks.map(w => ({ count: 0, amount: 0 }));
       result.weeklyAgentOrders = weeks.map(w => ({ count: 0, amount: 0 }));
     }
+
+    // ============================================
+    // HELPER FUNCTION: Categorize Client Type
+    // ============================================
+    const categorizeClientType = (clientType) => {
+      if (!clientType) return { main: 'Retail', sub: null };
+      
+      const type = clientType.toString().toLowerCase().trim();
+      
+      // Check for renewal types (any type containing 'renewal')
+      if (type.includes('renewal')) {
+        // Specific sub-types
+        if (type === 'renewal-agent') {
+          return { main: 'Renewal', sub: 'Renewal-Agent' };
+        } else if (type === 'retail-renewal') {
+          return { main: 'Renewal', sub: 'Retail' };
+        } else if (type === 'corporate-renewal') {
+          return { main: 'Renewal', sub: null };
+        } else {
+          // Generic renewal (just 'Renewal')
+          return { main: 'Renewal', sub: null };
+        }
+      }
+      
+      // Non-renewal types
+      if (type === 'agent') return { main: 'Agent', sub: null };
+      if (type === 'retail') return { main: 'Retail', sub: null };
+      if (type === 'corporate') return { main: 'Retail', sub: null };
+      if (type === 'walk-in') return { main: 'Retail', sub: null };
+      
+      // Default
+      return { main: 'Retail', sub: null };
+    };
 
     // Process filtered orders
     filteredOrders.forEach(order => {
@@ -312,13 +379,21 @@ router.get('/chart-data', async (req, res) => {
           result.pendingPayments[0]++; // Count paid orders
         }
 
-        // Client type
-        if (order.clientType && result.clientTypes.hasOwnProperty(order.clientType)) {
-          result.clientTypes[order.clientType].count++;
-          result.clientTypes[order.clientType].amount += orderTotal;
-        } else {
-          result.clientTypes.Retail.count++;
-          result.clientTypes.Retail.amount += orderTotal;
+        // ============================================
+        // CLIENT TYPE CATEGORIZATION - FIXED
+        // ============================================
+        const { main, sub } = categorizeClientType(order.clientType);
+        
+        // Count main category
+        if (result.clientTypes[main]) {
+          result.clientTypes[main].count++;
+          result.clientTypes[main].amount += orderTotal;
+        }
+        
+        // Count sub-category if exists and is different from main
+        if (sub && sub !== main && result.clientTypes[sub]) {
+          result.clientTypes[sub].count++;
+          result.clientTypes[sub].amount += orderTotal;
         }
 
         // Service status
@@ -362,6 +437,7 @@ router.get('/chart-data', async (req, res) => {
     console.log('=== FINAL RESULTS ===');
     console.log('Total Orders by Month:', result.totalOrdersByMonth);
     console.log('Amount by Month:', result.amountByMonth);
+    console.log('Client Types:', result.clientTypes);
     if (selectedYear && selectedMonth !== null && !rangeStartDate && !rangeEndDate) {
       console.log('Weekly Orders:', result.weeklyOrders);
     }

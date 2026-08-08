@@ -283,8 +283,8 @@ function ViewOrders() {
   // ===== 6. PRINT FUNCTION =====
   const handlePrintOrder = (order) => {
     const orderTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-    const finalAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '') 
-      ? parseFloat(order.discountedTotal) 
+    const finalAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '')
+      ? parseFloat(order.discountedTotal)
       : orderTotal;
     const advancePaid = parseFloat(order.advance) || 0;
     const balanceDue = (order.balance !== undefined && order.balance !== null && order.balance !== '')
@@ -851,7 +851,7 @@ function ViewOrders() {
 
     const allFields = [...mainFields, ...rowFields];
 
-    return allFields.some(field => 
+    return allFields.some(field =>
       String(field).toLowerCase().includes(term)
     );
   };
@@ -888,7 +888,7 @@ function ViewOrders() {
 
         const year = getCalendarYearFromDate(orderDate);
         const month = getCalendarMonthFromDate(orderDate);
-        
+
         if (!useDateRange) {
           if (yearFilter !== 'all' && year !== parseInt(yearFilter)) return;
           if (monthFilter !== null && month !== monthFilter) return;
@@ -913,12 +913,12 @@ function ViewOrders() {
         }
 
         const rowTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-        const orderAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '') 
-          ? parseFloat(order.discountedTotal) 
+        const orderAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '')
+          ? parseFloat(order.discountedTotal)
           : rowTotal;
         const orderReceived = parseFloat(order.advance) || 0;
-        const orderBalance = (order.balance !== undefined && order.balance !== null && order.balance !== '') 
-          ? parseFloat(order.balance) 
+        const orderBalance = (order.balance !== undefined && order.balance !== null && order.balance !== '')
+          ? parseFloat(order.balance)
           : Math.max(0, orderAmount - orderReceived);
 
         grouped[monthYearKey].totals.amount += orderAmount;
@@ -941,16 +941,16 @@ function ViewOrders() {
 
     filteredOrders.forEach(order => {
       const rowTotal = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-      const orderAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '') 
-        ? parseFloat(order.discountedTotal) 
+      const orderAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '')
+        ? parseFloat(order.discountedTotal)
         : rowTotal;
       totalAmount += orderAmount;
 
       const received = parseFloat(order.advance) || 0;
       totalReceived += received;
-      
-      const orderBalance = (order.balance !== undefined && order.balance !== null && order.balance !== '') 
-        ? parseFloat(order.balance) 
+
+      const orderBalance = (order.balance !== undefined && order.balance !== null && order.balance !== '')
+        ? parseFloat(order.balance)
         : Math.max(0, orderAmount - received);
       totalBalance += orderBalance;
     });
@@ -997,7 +997,7 @@ function ViewOrders() {
         queryParams.append('startDate', startDateParam);
         queryParams.append('endDate', endDateParam);
         console.log('📅 Using date range filter');
-      } 
+      }
       // Month and year filter
       else if (month !== null && month !== undefined && year && year !== 'all') {
         queryParams.append('month', month.toString());
@@ -1050,7 +1050,7 @@ function ViewOrders() {
       });
 
       setOrders(sortedOrders);
-      
+
     } catch (err) {
       console.error('❌ Error fetching orders:', err);
       setError('Failed to fetch orders. Please try again.');
@@ -1063,7 +1063,7 @@ function ViewOrders() {
   // ===== 14. Handle URL parameters =====
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    
+
     const yearFromUrl = params.get('year');
     const monthFromUrl = params.get('month');
     const clientTypeFromUrl = params.get('clientType');
@@ -1089,7 +1089,7 @@ function ViewOrders() {
       endDateParam,
       fromDashboard
     });
-    
+
     // Handle executive filter from URL
     if (executiveNameFromUrl && executiveNameFromUrl !== 'undefined' && executiveNameFromUrl !== 'null') {
       const decodedExecutiveName = decodeURIComponent(executiveNameFromUrl);
@@ -1106,7 +1106,7 @@ function ViewOrders() {
         executiveName: ''
       });
     }
-    
+
     // Handle requirement filter
     if (requirement && requirement !== 'undefined' && requirement !== 'null') {
       setRequirementFilter(requirement);
@@ -1114,7 +1114,7 @@ function ViewOrders() {
     } else {
       setRequirementFilter(null);
     }
-    
+
     // Handle date range filter
     if (startDateParam && endDateParam && startDateParam !== 'undefined' && endDateParam !== 'undefined') {
       console.log('📅 Using date range filter');
@@ -1124,15 +1124,15 @@ function ViewOrders() {
       setMonthFilter(null);
       setCurrentViewMonth(null);
       setYearFilter('all');
-    } 
+    }
     // Handle month + year filter
-    else if (monthFromUrl && monthFromUrl !== 'undefined' && monthFromUrl !== 'null' && 
-             yearFromUrl && yearFromUrl !== 'undefined' && yearFromUrl !== 'null' && yearFromUrl !== 'all') {
+    else if (monthFromUrl && monthFromUrl !== 'undefined' && monthFromUrl !== 'null' &&
+      yearFromUrl && yearFromUrl !== 'undefined' && yearFromUrl !== 'null' && yearFromUrl !== 'all') {
       const monthNum = parseInt(monthFromUrl);
       const yearNum = yearFromUrl;
-      
+
       console.log(`📅 Setting SPECIFIC month+year filter: ${monthNum}/${yearNum}`);
-      
+
       setMonthFilter(monthNum);
       setCurrentViewMonth(monthNum);
       setYearFilter(yearNum);
@@ -1175,34 +1175,34 @@ function ViewOrders() {
       setStartDate('');
       setEndDate('');
     }
-    
+
     // Set client type filter
     if (clientTypeFromUrl && clientTypeFromUrl !== 'undefined' && clientTypeFromUrl !== 'null') {
       setClientTypeFilter(clientTypeFromUrl);
     } else {
       setClientTypeFilter(null);
     }
-    
+
     // Set lead source filter
     if (leadSourceFromUrl && leadSourceFromUrl !== 'undefined' && leadSourceFromUrl !== 'null') {
       setLeadSourceFilter(leadSourceFromUrl);
     } else {
       setLeadSourceFilter(null);
     }
-    
+
     // Fetch orders with the filters
     const { role, name } = getUserInfo();
-    
+
     const isDateRange = !!(startDateParam && endDateParam && startDateParam !== 'undefined' && endDateParam !== 'undefined');
-    
+
     let fetchMonth = null;
     let fetchYear = 'all';
-    
+
     if (isDateRange) {
       fetchMonth = null;
       fetchYear = 'all';
-    } else if (monthFromUrl && monthFromUrl !== 'undefined' && monthFromUrl !== 'null' && 
-               yearFromUrl && yearFromUrl !== 'undefined' && yearFromUrl !== 'null' && yearFromUrl !== 'all') {
+    } else if (monthFromUrl && monthFromUrl !== 'undefined' && monthFromUrl !== 'null' &&
+      yearFromUrl && yearFromUrl !== 'undefined' && yearFromUrl !== 'null' && yearFromUrl !== 'all') {
       fetchMonth = parseInt(monthFromUrl);
       fetchYear = yearFromUrl;
     } else if (yearFromUrl && yearFromUrl !== 'undefined' && yearFromUrl !== 'null' && yearFromUrl !== 'all') {
@@ -1212,7 +1212,7 @@ function ViewOrders() {
       fetchMonth = parseInt(monthFromUrl);
       fetchYear = new Date().getFullYear().toString();
     }
-    
+
     console.log('📡 Calling fetchOrders with:', {
       month: fetchMonth,
       year: fetchYear,
@@ -1224,21 +1224,21 @@ function ViewOrders() {
       startDate: startDateParam,
       endDate: endDateParam
     });
-    
+
     fetchOrders(
-      role, 
-      name, 
-      fetchMonth, 
-      fetchYear, 
-      clientTypeFromUrl, 
-      executiveFromUrl, 
-      executiveNameFromUrl, 
+      role,
+      name,
+      fetchMonth,
+      fetchYear,
+      clientTypeFromUrl,
+      executiveFromUrl,
+      executiveNameFromUrl,
       leadSourceFromUrl,
       isDateRange,
       startDateParam,
       endDateParam
     );
-    
+
   }, [location.search]);
 
   // ===== 15. CAPTURE REQUIREMENT FILTER FROM URL =====
@@ -1415,14 +1415,14 @@ function ViewOrders() {
   const handleYearChange = (e) => {
     const newYear = e.target.value;
     console.log('📅 Year changed to:', newYear);
-    
+
     setYearFilter(newYear);
     setUseDateRange(false);
     setStartDate('');
     setEndDate('');
 
     const params = new URLSearchParams(location.search);
-    
+
     if (newYear !== 'all') {
       params.set('year', newYear);
       if (monthFilter) {
@@ -1435,11 +1435,11 @@ function ViewOrders() {
       setMonthFilter(null);
       setCurrentViewMonth(null);
     }
-    
+
     params.delete('startDate');
     params.delete('endDate');
     params.delete('requirement');
-    
+
     console.log('🔄 Navigating to URL:', `/admin-dashboard/view-orders?${params.toString()}`);
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
 
@@ -1450,16 +1450,16 @@ function ViewOrders() {
     const leadSource = params.get('leadSource');
     const yearParam = params.get('year');
     const monthParam = params.get('month');
-    
+
     fetchOrders(role, name, monthParam ? parseInt(monthParam) : null, yearParam, clientType, executive, executiveNameParam, leadSource);
   };
 
   // ===== 19. MONTH CHANGE HANDLER =====
   const handleMonthChange = (e) => {
     const newMonth = e.target.value ? parseInt(e.target.value) : null;
-    
+
     console.log('📅 Month changed to:', newMonth);
-    
+
     setMonthFilter(newMonth);
     setCurrentViewMonth(newMonth);
     setUseDateRange(false);
@@ -1467,7 +1467,7 @@ function ViewOrders() {
     setEndDate('');
 
     const params = new URLSearchParams(location.search);
-    
+
     if (newMonth) {
       params.set('month', newMonth.toString());
       let yearToUse = yearFilter;
@@ -1480,11 +1480,11 @@ function ViewOrders() {
     } else {
       params.delete('month');
     }
-    
+
     params.delete('startDate');
     params.delete('endDate');
     params.delete('requirement');
-    
+
     console.log('🔄 Navigating to URL:', `/admin-dashboard/view-orders?${params.toString()}`);
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
 
@@ -1495,7 +1495,7 @@ function ViewOrders() {
     const leadSource = params.get('leadSource');
     const yearParam = params.get('year');
     const monthParam = newMonth;
-    
+
     console.log('📡 Calling fetchOrders with:', { month: monthParam, year: yearParam });
     fetchOrders(role, name, monthParam, yearParam, clientType, executive, executiveNameParam, leadSource);
   };
@@ -1519,7 +1519,7 @@ function ViewOrders() {
     setStartDate('');
     setEndDate('');
     setUseDateRange(false);
-    
+
     navigate('/admin-dashboard/view-orders');
   };
 
@@ -1584,7 +1584,7 @@ function ViewOrders() {
     params.delete('startDate');
     params.delete('endDate');
     navigate(`/admin-dashboard/view-orders?${params.toString()}`);
-    
+
     const { role, name } = getUserInfo();
     const month = params.get('month');
     const year = params.get('year');
@@ -1603,7 +1603,7 @@ function ViewOrders() {
     }
 
     const totalAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-    
+
     setEditingOrder({
       ...order,
       orderDate: formatDateForInput(order.orderDate),
@@ -1637,11 +1637,11 @@ function ViewOrders() {
       const quantity = parseFloat(updatedRows[index].quantity) || 0;
       const rate = parseFloat(updatedRows[index].rate) || 0;
       updatedRows[index].total = (quantity * rate).toFixed(2);
-      
+
       const newTotalAmount = updatedRows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
       const newDiscountedTotal = newTotalAmount - (parseFloat(editingOrder.discount) || 0);
       const newBalance = newDiscountedTotal - (parseFloat(editingOrder.advance) || 0);
-      
+
       setEditingOrder(prev => ({
         ...prev,
         rows: updatedRows,
@@ -1670,7 +1670,7 @@ function ViewOrders() {
           total: parseFloat(row.total) || 0
         }))
       };
-      
+
       await axios.put(API_ENDPOINTS.UPDATE_ORDER(editingOrder._id), updateData);
       setShowModal(false);
 
@@ -1770,17 +1770,17 @@ function ViewOrders() {
       setCurrentOrder(order);
 
       const totalAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-      const finalAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '') 
-        ? parseFloat(order.discountedTotal) 
+      const finalAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '')
+        ? parseFloat(order.discountedTotal)
         : totalAmount;
       const advancePaid = parseFloat(order.advance) || 0;
-      
+
       let paymentHistoryTotal = 0;
       if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
-        paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) => 
+        paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) =>
           sum + (parseFloat(payment.amount) || 0), 0);
       }
-      
+
       const actualBalance = (order.balance !== undefined && order.balance !== null && order.balance !== '')
         ? parseFloat(order.balance)
         : Math.max(0, finalAmount - advancePaid);
@@ -1836,17 +1836,17 @@ function ViewOrders() {
       setCurrentOrder(order);
 
       const totalAmount = order.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
-      const finalAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '') 
-        ? parseFloat(order.discountedTotal) 
+      const finalAmount = (order.discountedTotal !== undefined && order.discountedTotal !== null && order.discountedTotal !== '')
+        ? parseFloat(order.discountedTotal)
         : totalAmount;
       const advancePaid = parseFloat(order.advance) || 0;
-      
+
       let paymentHistoryTotal = 0;
       if (order.paymentHistory && Array.isArray(order.paymentHistory)) {
-        paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) => 
+        paymentHistoryTotal = order.paymentHistory.reduce((sum, payment) =>
           sum + (parseFloat(payment.amount) || 0), 0);
       }
-      
+
       const actualBalance = (order.balance !== undefined && order.balance !== null && order.balance !== '')
         ? parseFloat(order.balance)
         : Math.max(0, finalAmount - advancePaid);
@@ -1855,7 +1855,7 @@ function ViewOrders() {
         ...order,
         balance: actualBalance
       };
-      
+
       setCurrentOrder(updatedOrder);
 
       const payments = [];
@@ -2044,82 +2044,82 @@ function ViewOrders() {
     setPaymentData(prev => ({ ...prev, [name]: value }));
   };
 
- // ===== 24. EXPORT/IMPORT FUNCTIONS =====
-const handleExportToExcel = () => {
-  let ordersToExport = filteredOrders;
-  if (shouldSeeOnlyOwnOrders()) {
-    ordersToExport = filteredOrders.filter(order => order.executive === executiveName);
-  }
+  // ===== 24. EXPORT/IMPORT FUNCTIONS =====
+  const handleExportToExcel = () => {
+    let ordersToExport = filteredOrders;
+    if (shouldSeeOnlyOwnOrders()) {
+      ordersToExport = filteredOrders.filter(order => order.executive === executiveName);
+    }
 
-  // ✅ CRITICAL FIX: Sort orders from OLDEST to NEWEST for Excel export
-  const sortedOrdersForExport = [...ordersToExport].sort((a, b) => {
-    const dateA = new Date(a.orderDate || 0);
-    const dateB = new Date(b.orderDate || 0);
-    return dateA - dateB; // Ascending order (oldest first)
-  });
+    // ✅ CRITICAL FIX: Sort orders from OLDEST to NEWEST for Excel export
+    const sortedOrdersForExport = [...ordersToExport].sort((a, b) => {
+      const dateA = new Date(a.orderDate || 0);
+      const dateB = new Date(b.orderDate || 0);
+      return dateA - dateB; // Ascending order (oldest first)
+    });
 
-  console.log('📊 Exporting orders:', {
-    displayCount: ordersToExport.length,
-    exportCount: sortedOrdersForExport.length,
-    firstOrder: sortedOrdersForExport[0]?.orderDate,
-    lastOrder: sortedOrdersForExport[sortedOrdersForExport.length - 1]?.orderDate
-  });
+    console.log('📊 Exporting orders:', {
+      displayCount: ordersToExport.length,
+      exportCount: sortedOrdersForExport.length,
+      firstOrder: sortedOrdersForExport[0]?.orderDate,
+      lastOrder: sortedOrdersForExport[sortedOrdersForExport.length - 1]?.orderDate
+    });
 
-  const flattenedOrders = sortedOrdersForExport.flatMap(order =>
-    order.rows.map(row => ({
-      'S.No': sortedOrdersForExport.indexOf(order) + 1,
-      'Executive': order.executive,
-      'Business': order.business,
-      'Customer': order.contactPerson,
-      'Location': order.location,
-      'Lead Source': order.leadSource || '',
-      'Other Lead Source': order.otherLeadSource || '',
-      'Contact': `${order.contactCode} ${order.phone}`,
-      'Order No': order.orderNo,
-      'Order Date': formatDate(order.orderDate),
-      'Client Type': order.clientType,
-      'GST Number': order.gstNumber || '',
-      'Description': row.description,
-      'Requirement': row.requirement,
-      'Custom Requirement': row.customRequirement,
-      'Qty': row.quantity,
-      'Rate': row.rate,
-      'Total': row.total,
-      'Discount': order.discount,
-      'Final Amount': order.discountedTotal,
-      'Delivery Date': formatDate(row.deliveryDate),
-      'Service Assigned': row.assignedExecutive || 'Not Assigned',
-      'Status': row.status,
-      'Remark': row.remark,
-      'Is Completed': row.isCompleted ? 'Yes' : 'No',
-      'Advance': order.advance,
-      'Balance': order.balance,
-      'Advance Date': formatDate(order.advanceDate),
-      'Payment Date': formatDate(order.paymentDate),
-      'Payment Method': order.paymentMethod,
-      'Cheque Number': order.chequeNumber,
-      'Created By': order.createdBy || order.executive,
-      'Payments': order.paymentHistory ?
-        order.paymentHistory.map(p => `${formatDate(p.date)}: ₹${p.amount} (${p.method})`).join('; ') : ''
-    }))
-  );
+    const flattenedOrders = sortedOrdersForExport.flatMap(order =>
+      order.rows.map(row => ({
+        'S.No': sortedOrdersForExport.indexOf(order) + 1,
+        'Executive': order.executive,
+        'Business': order.business,
+        'Customer': order.contactPerson,
+        'Location': order.location,
+        'Lead Source': order.leadSource || '',
+        'Other Lead Source': order.otherLeadSource || '',
+        'Contact': `${order.contactCode} ${order.phone}`,
+        'Order No': order.orderNo,
+        'Order Date': formatDate(order.orderDate),
+        'Client Type': order.clientType,
+        'GST Number': order.gstNumber || '',
+        'Description': row.description,
+        'Requirement': row.requirement,
+        'Custom Requirement': row.customRequirement,
+        'Qty': row.quantity,
+        'Rate': row.rate,
+        'Total': row.total,
+        'Discount': order.discount,
+        'Final Amount': order.discountedTotal,
+        'Delivery Date': formatDate(row.deliveryDate),
+        'Service Assigned': row.assignedExecutive || 'Not Assigned',
+        'Status': row.status,
+        'Remark': row.remark,
+        'Is Completed': row.isCompleted ? 'Yes' : 'No',
+        'Advance': order.advance,
+        'Balance': order.balance,
+        'Advance Date': formatDate(order.advanceDate),
+        'Payment Date': formatDate(order.paymentDate),
+        'Payment Method': order.paymentMethod,
+        'Cheque Number': order.chequeNumber,
+        'Created By': order.createdBy || order.executive,
+        'Payments': order.paymentHistory ?
+          order.paymentHistory.map(p => `${formatDate(p.date)}: ₹${p.amount} (${p.method})`).join('; ') : ''
+      }))
+    );
 
-  const worksheet = XLSX.utils.json_to_sheet(flattenedOrders);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+    const worksheet = XLSX.utils.json_to_sheet(flattenedOrders);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
 
-  let filename;
-  if (shouldSeeOnlyOwnOrders()) {
-    filename = `my_orders_${yearFilter}_${executiveName}_export.xlsx`;
-  } else if (appliedExecutiveFilters.executiveName) {
-    filename = `orders_${appliedExecutiveFilters.executiveName}_${yearFilter}_export.xlsx`;
-  } else {
-    filename = `orders_${yearFilter}_export.xlsx`;
-  }
+    let filename;
+    if (shouldSeeOnlyOwnOrders()) {
+      filename = `my_orders_${yearFilter}_${executiveName}_export.xlsx`;
+    } else if (appliedExecutiveFilters.executiveName) {
+      filename = `orders_${appliedExecutiveFilters.executiveName}_${yearFilter}_export.xlsx`;
+    } else {
+      filename = `orders_${yearFilter}_export.xlsx`;
+    }
 
-  XLSX.writeFile(workbook, filename);
-  toast.success(`Excel file "${filename}" downloaded successfully! (Sorted from oldest to newest)`);
-};
+    XLSX.writeFile(workbook, filename);
+    toast.success(`Excel file "${filename}" downloaded successfully! (Sorted from oldest to newest)`);
+  };
 
   const handleImportFromExcel = async (e) => {
     if (!canImportFromExcel()) {
@@ -2465,7 +2465,7 @@ const handleExportToExcel = () => {
                 setYearFilter('all');
                 setRequirementFilter(null);
                 setSearchTerm('');
-                
+
                 const params = new URLSearchParams(location.search);
                 params.set('startDate', e.target.value);
                 params.set('endDate', endDate);
@@ -2473,7 +2473,7 @@ const handleExportToExcel = () => {
                 params.delete('year');
                 params.delete('requirement');
                 navigate(`/admin-dashboard/view-orders?${params.toString()}`);
-                
+
                 const { role, name } = getUserInfo();
                 fetchOrders(role, name, null, 'all', null, null, null, null, true, e.target.value, endDate);
               }
@@ -2486,7 +2486,7 @@ const handleExportToExcel = () => {
               width: '140px'
             }}
           />
-          
+
           <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#555' }}>To:</span>
           <input
             type="date"
@@ -2503,7 +2503,7 @@ const handleExportToExcel = () => {
                 setYearFilter('all');
                 setRequirementFilter(null);
                 setSearchTerm('');
-                
+
                 const params = new URLSearchParams(location.search);
                 params.set('startDate', startDate);
                 params.set('endDate', e.target.value);
@@ -2511,7 +2511,7 @@ const handleExportToExcel = () => {
                 params.delete('year');
                 params.delete('requirement');
                 navigate(`/admin-dashboard/view-orders?${params.toString()}`);
-                
+
                 const { role, name } = getUserInfo();
                 fetchOrders(role, name, null, 'all', null, null, null, null, true, startDate, e.target.value);
               }
@@ -2538,7 +2538,7 @@ const handleExportToExcel = () => {
             whiteSpace: 'nowrap'
           }}>
             {useDateRange ? (
-              <>📅 {startDate ? new Date(startDate).toLocaleDateString().slice(0,5) : ''} - {endDate ? new Date(endDate).toLocaleDateString().slice(0,5) : ''}</>
+              <>📅 {startDate ? new Date(startDate).toLocaleDateString().slice(0, 5) : ''} - {endDate ? new Date(endDate).toLocaleDateString().slice(0, 5) : ''}</>
             ) : monthFilter ? (
               <>📊 {monthLabels[monthFilter - 1]} {yearFilter !== 'all' ? yearFilter : ''}</>
             ) : (
@@ -2638,7 +2638,7 @@ const handleExportToExcel = () => {
                 params.delete('requirement');
 
                 navigate(`/admin-dashboard/view-orders?${params.toString()}`);
-                
+
                 const { role, name } = getUserInfo();
                 fetchOrders(role, name, newMonth, yearFilter, null, null, null, null);
               }}
@@ -3221,7 +3221,7 @@ const handleExportToExcel = () => {
                   <tbody>
                     {group.orders.map((order, orderIndex) => {
                       const hasMultipleRows = order.rows && order.rows.length > 1;
-                      
+
                       if (hasMultipleRows) {
                         const combinedRequirements = order.rows
                           .map(row => {
@@ -3231,43 +3231,43 @@ const handleExportToExcel = () => {
                           })
                           .filter(req => req)
                           .join(', ');
-                        
+
                         const combinedQuantities = order.rows
                           .map(row => row.quantity || 0)
                           .join(', ');
-                        
+
                         const combinedRates = order.rows
                           .map(row => `₹${parseFloat(row.rate || 0).toFixed(2)}`)
                           .join(', ');
-                        
+
                         const combinedTotal = order.rows
                           .reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0)
                           .toFixed(2);
-                        
+
                         const deliveryDates = order.rows
                           .filter(row => row.deliveryDate)
                           .map(row => new Date(row.deliveryDate))
                           .sort((a, b) => a - b);
-                        
-                        const earliestDeliveryDate = deliveryDates.length > 0 
+
+                        const earliestDeliveryDate = deliveryDates.length > 0
                           ? formatDate(deliveryDates[0].toISOString().split('T')[0])
                           : 'N/A';
-                        
+
                         const assignedExecutives = [...new Set(
                           order.rows
                             .map(row => row.assignedExecutive)
                             .filter(exec => exec)
                         )].join(', ');
-                        
+
                         const statuses = [...new Set(
                           order.rows
                             .map(row => row.status)
                             .filter(status => status)
                         )].join(', ');
-                        
+
                         const isRequirementMatch = requirementFilter && combinedRequirements.toLowerCase().includes(requirementFilter.toLowerCase());
                         const rowBgColor = isRequirementMatch ? '#fff9c4' : (orderIndex % 2 === 0 ? '#fdfdfd' : '#f5f9fa');
-                        
+
                         return (
                           <tr key={order._id} style={{ backgroundColor: rowBgColor, borderBottom: '1px solid #eee' }}>
                             <td className="sticky-column" style={{
@@ -3353,12 +3353,12 @@ const handleExportToExcel = () => {
                                 )}
                               </span>
                             </td>
-                            
+
                             <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactCode} {order.phone}</td>
                             <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.orderNo}</td>
                             <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.orderDate)}</td>
                             <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.clientType}</td>
-                            
+
                             <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
                               <span style={{
                                 backgroundColor: order.gstNumber ? '#e8f5e9' : '#f5f5f5',
@@ -3438,10 +3438,10 @@ const handleExportToExcel = () => {
                               <span style={{
                                 backgroundColor: statuses.includes('Completed') ? '#d4edda' :
                                   statuses.includes('In Progress') ? '#fff3cd' :
-                                  statuses.includes('Pending') ? '#f8d7da' : '#e2e3e5',
+                                    statuses.includes('Pending') ? '#f8d7da' : '#e2e3e5',
                                 color: statuses.includes('Completed') ? '#155724' :
                                   statuses.includes('In Progress') ? '#856404' :
-                                  statuses.includes('Pending') ? '#721c24' : '#383d41',
+                                    statuses.includes('Pending') ? '#721c24' : '#383d41',
                                 padding: '4px 8px',
                                 borderRadius: '4px',
                                 fontWeight: 'bold',
@@ -3687,12 +3687,12 @@ const handleExportToExcel = () => {
                                   )}
                                 </span>
                               </td>
-                              
+
                               <td style={{ padding: '10px 8px', minWidth: '120px' }}>{order.contactCode} {order.phone}</td>
                               <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.orderNo}</td>
                               <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{formatDate(order.orderDate)}</td>
                               <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '100px' }}>{order.clientType}</td>
-                              
+
                               <td style={{ padding: '10px 8px', textAlign: 'center', minWidth: '120px' }}>
                                 <span style={{
                                   backgroundColor: order.gstNumber ? '#e8f5e9' : '#f5f5f5',
@@ -3770,10 +3770,10 @@ const handleExportToExcel = () => {
                                 <span style={{
                                   backgroundColor: row.status === 'Completed' ? '#d4edda' :
                                     row.status === 'In Progress' ? '#fff3cd' :
-                                    row.status === 'Pending' ? '#f8d7da' : '#e2e3e5',
+                                      row.status === 'Pending' ? '#f8d7da' : '#e2e3e5',
                                   color: row.status === 'Completed' ? '#155724' :
                                     row.status === 'In Progress' ? '#856404' :
-                                    row.status === 'Pending' ? '#721c24' : '#383d41',
+                                      row.status === 'Pending' ? '#721c24' : '#383d41',
                                   padding: '4px 8px',
                                   borderRadius: '4px',
                                   fontWeight: 'bold',
@@ -4177,7 +4177,7 @@ const handleExportToExcel = () => {
                     </div>
                   </div>
                 )}
-                
+
                 {paymentData.method === 'Cheque' && (
                   <div style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Cheque Number *</label>
@@ -4454,7 +4454,7 @@ const handleExportToExcel = () => {
                 />
               </div>
 
-     
+
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>GST Number</label>
                 <input
@@ -4465,45 +4465,45 @@ const handleExportToExcel = () => {
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
               </div>
-   <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
-  <div style={{ flex: 1, minWidth: '150px' }}>
-    <label>
-      Order Type:
-      <select
-        value={editingOrder.clientType || ''}
-        onChange={(e) => {
-          const value = e.target.value;
-          setEditingOrder(prev => ({ ...prev, clientType: value }));
-        }}
-        style={{ width: '100%' }}
-      >
-        <option value="">Select</option>
-        <option value="Retail">Retail</option>
-        <option value="Retail-Renewal">Retail-Renewal</option>
-        <option value="Agent">Agent</option>
-        <option value="Renewal-Agent">Renewal-Agent</option>
-        <option value="Corporate">Corporate</option>
-        <option value="Corporate-Renewal">Corporate-Renewal</option>
-        <option value="Walk-In">Walk-In</option>
-      </select>
-    </label>
-  </div>
-  <div style={{ flex: 1, minWidth: '200px' }}>
-    <label>
-      GST Number (Optional):
-      <input
-        type="text"
-        value={editingOrder.gstNumber || ''}
-        onChange={(e) => {
-          const value = e.target.value.toUpperCase();
-          setEditingOrder(prev => ({ ...prev, gstNumber: value }));
-        }}
-        placeholder="Enter GST number"
-        style={{ textTransform: 'uppercase' }}
-      />
-    </label>
-  </div>
-</div>
+              <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '150px' }}>
+                  <label>
+                    Order Type:
+                    <select
+                      value={editingOrder.clientType || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setEditingOrder(prev => ({ ...prev, clientType: value }));
+                      }}
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">Select</option>
+                      <option value="Retail">Retail</option>
+                      <option value="Retail-Renewal">Retail-Renewal</option>
+                      <option value="Agent">Agent</option>
+                      <option value="Renewal-Agent">Renewal-Agent</option>
+                      <option value="Corporate">Corporate</option>
+                      <option value="Corporate-Renewal">Corporate-Renewal</option>
+                      <option value="Walk-In">Walk-In</option>
+                    </select>
+                  </label>
+                </div>
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <label>
+                    GST Number (Optional):
+                    <input
+                      type="text"
+                      value={editingOrder.gstNumber || ''}
+                      onChange={(e) => {
+                        const value = e.target.value.toUpperCase();
+                        setEditingOrder(prev => ({ ...prev, gstNumber: value }));
+                      }}
+                      placeholder="Enter GST number"
+                      style={{ textTransform: 'uppercase' }}
+                    />
+                  </label>
+                </div>
+              </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Created By</label>
@@ -4534,8 +4534,8 @@ const handleExportToExcel = () => {
                     const discount = parseFloat(e.target.value) || 0;
                     const totalAmount = editingOrder.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
                     const discountedTotal = totalAmount - discount;
-                    setEditingOrder(prev => ({ 
-                      ...prev, 
+                    setEditingOrder(prev => ({
+                      ...prev,
                       discount: discount,
                       discountedTotal: discountedTotal < 0 ? 0 : discountedTotal
                     }));
@@ -4557,8 +4557,8 @@ const handleExportToExcel = () => {
                     const newFinalAmount = parseFloat(e.target.value) || 0;
                     const totalAmount = editingOrder.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
                     const newDiscount = totalAmount - newFinalAmount;
-                    setEditingOrder(prev => ({ 
-                      ...prev, 
+                    setEditingOrder(prev => ({
+                      ...prev,
                       discountedTotal: newFinalAmount,
                       discount: newDiscount < 0 ? 0 : newDiscount
                     }));
@@ -4583,8 +4583,8 @@ const handleExportToExcel = () => {
                     const advance = parseFloat(e.target.value) || 0;
                     const finalAmount = parseFloat(editingOrder.discountedTotal) || 0;
                     const newBalance = finalAmount - advance;
-                    setEditingOrder(prev => ({ 
-                      ...prev, 
+                    setEditingOrder(prev => ({
+                      ...prev,
                       advance: advance,
                       balance: newBalance < 0 ? 0 : newBalance
                     }));
@@ -4606,16 +4606,16 @@ const handleExportToExcel = () => {
                     const balance = parseFloat(e.target.value) || 0;
                     const finalAmount = parseFloat(editingOrder.discountedTotal) || 0;
                     const newAdvance = finalAmount - balance;
-                    setEditingOrder(prev => ({ 
-                      ...prev, 
+                    setEditingOrder(prev => ({
+                      ...prev,
                       balance: balance,
                       advance: newAdvance < 0 ? 0 : newAdvance
                     }));
                   }}
-                  style={{ 
-                    width: '100%', 
-                    padding: '8px', 
-                    borderRadius: '4px', 
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '4px',
                     border: '1px solid #ccc',
                     backgroundColor: '#fff3e0',
                     fontWeight: 'bold'

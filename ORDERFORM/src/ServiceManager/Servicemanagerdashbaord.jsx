@@ -436,6 +436,24 @@ const ServiceManagerDashboard = ({ loggedInUser }) => {
         >
           View Prospects
         </NavLink>
+        <NavLink
+          to="/service-manager-dashboard/hour"
+          style={({ isActive }) => ({
+            ...styles.sidebarItem,
+            ...(isActive ? styles.activeSidebarItem : {})
+          })}
+        >
+          Create Hour Report ➕
+        </NavLink>
+        <NavLink
+          to="/service-manager-dashboard/hour-reeport"
+          style={({ isActive }) => ({
+            ...styles.sidebarItem,
+            ...(isActive ? styles.activeSidebarItem : {})
+          })}
+        >
+          View Hour Report
+        </NavLink>
         <button
           style={styles.sidebarLogoutButton}
           onClick={handleLogout}

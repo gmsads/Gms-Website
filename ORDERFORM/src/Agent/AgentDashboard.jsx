@@ -902,6 +902,8 @@ function AgentDashboard() {
     { path: '/agent-dashboard/view-prospects', label: 'View Prospects', icon: '👁️' },
     { path: '/agent-dashboard/quotation', label: 'Quotation', icon: '💬' },
     { path: '/agent-dashboard/price-list', label: 'Price List', icon: '💰' },
+    { path: '/agent-dashboard/hour', label: 'Create Hour Report', icon: '➕' },
+    { path: '/agent-dashboard/hour-reeport', label: 'View Hour Report', icon: '📊' },
   ];
 
   return (

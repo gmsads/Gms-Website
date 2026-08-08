@@ -765,6 +765,22 @@ function VideoEditorDashboard({ loggedInUser }) {
           >
             My Work
           </NavLink>
+          <NavLink
+            to="/video-editor-dashboard/hour"
+            style={linkStyle('hour')}
+            onMouseEnter={() => setHoveredItem('hour')}
+            onMouseLeave={() => setHoveredItem('')}
+          >
+            Create Hour Report ➕
+          </NavLink>
+          <NavLink
+            to="/video-editor-dashboard/hour-reeport"
+            style={linkStyle('hour-reeport')}
+            onMouseEnter={() => setHoveredItem('hour-reeport')}
+            onMouseLeave={() => setHoveredItem('')}
+          >
+            View Hour Report
+          </NavLink>
         </div>
 
         {/* Main Content */}

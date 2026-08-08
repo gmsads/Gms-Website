@@ -684,6 +684,14 @@ const renderYearSelector = () => {
           >
            Create Hour Report 
           </NavLink>
+          <NavLink
+            to="/designer-dashboard/hour-reeport"
+            style={linkStyle('hour-reeport')}
+            onMouseEnter={() => setHoveredItem('hour-reeport')}
+            onMouseLeave={() => setHoveredItem('')}
+          >
+            View Hour Report
+          </NavLink>
         </div>
 
         {/* Main Content */}

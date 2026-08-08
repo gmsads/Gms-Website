@@ -416,6 +416,22 @@ function VendorDashboard() {
           >
             Payment
           </NavLink>
+          <NavLink
+            to="hour"
+            style={linkStyle('hour')}
+            onMouseEnter={() => setHoveredItem('hour')}
+            onMouseLeave={() => setHoveredItem('')}
+          >
+            Create Hour Report ➕
+          </NavLink>
+          <NavLink
+            to="hour-reeport"
+            style={linkStyle('hour-reeport')}
+            onMouseEnter={() => setHoveredItem('hour-reeport')}
+            onMouseLeave={() => setHoveredItem('')}
+          >
+            View Hour Report
+          </NavLink>
         </div>
 
         {/* Main Content Area */}
