@@ -1,0 +1,161 @@
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const path = require("path"); // ADDED
+require("dotenv").config();
+
+// Route imports
+const orderRoutes = require("./routes/orderRoutes");
+const checkClientRoutes = require("./routes/checkClient");
+const upiRoutes = require("./routes/upiRoutes");
+const authRoutes = require("./routes/authRoutes"); // Contains add-field-executive
+const appointmentRoutes = require("./routes/appointmentRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
+const target = require("./routes/target");
+const prospectiveClientsRouter = require("./routes/prospectiveClients");
+const pendingServiceRoutes = require("./routes/pendingService");
+const DigitalOrder = require("./routes/DigitalOrder");
+const executiveRoutes = require("./routes/executiveRoutes");
+const serviceExecutiveRoutes = require("./routes/serviceExecutives");
+const executiveLogRoutes = require("./routes/executiveLogins")
+const runReminderCron = require('./cron/sendAnniversaryReminders');
+const anniversaryRoutes = require('./routes/anniversaryRoutes');
+const performance = require('./routes/performance');
+const employeeUploadRoutes = require('./routes/employeeUpload');
+const employeeRoutes = require('./routes/employeeUpload');
+const vendors = require('./routes/vendors');
+const Appointment = require("./models/appointmentModel");
+const router = require("./routes");
+const inventoryRoutes = require('./routes/inventoryRoutes');
+const logoutHistoryRoutes = require('./routes/logoutHistory');
+const interactionRoutes = require('./routes/interactions');
+const priceItemsRouter = require('./routes/priceItems');
+const designRoutes = require("./routes/designRequests");
+const expensesRoute = require('./routes/expenses');
+const fieldExecutiveRoutes = require('./routes/fieldExecutive');
+const designersRoutes = require('./routes/designers');
+const uploadRoute = require('./routes/uploadRoute.js');
+const unitAttendanceRoutes = require('./routes/unitAttendance');
+const trashOrdersRoutes = require("./routes/trashOrders");
+const parties = require("./routes/parties");
+const attendanceRoutes = require('./routes/attendance');// Cron Jobs
+const quotationRoutes = require('./routes/quotations');
+// Initialize Express
+const leadsRoutes = require('./routes/Lead.js');
+const callLogsRoutes = require('./routes/Calllog.js'); 
+const serviceRequirementsRoutes = require('./routes/serviceRequirements');
+const purchase = require('./routes/purchase'); // ADD THIS LINE
+const whatsapp =require("./routes/whatsapp")
+const salaryRoutes = require('./routes/salaryRoutes');
+const greetingsRoutes = require('./routes/greetings');
+const leaveRoutes = require('./routes/leaveRoutes');
+const hrReportsRouter = require('./routes/hrReports');
+const bannerRoutes = require('./routes/bannerRoutes'); // ADDED BANNER ROUTES
+const locationTrackingRoutes = require('./routes/LocationTracking');
+
+const app = express();
+runReminderCron();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use('/api', leaveRoutes);
+app.use('/api/salaries', salaryRoutes);
+app.use('/api/purchases', purchase); // ADD THIS LINE
+app.use('/', hrReportsRouter);
+app.use("/api/followup",whatsapp);
+app.use('/api/banners', bannerRoutes); // ADDED BANNER ROUTES - Mount banner routes
+app.use('/api/tracking', locationTrackingRoutes);
+
+// Upload endpoint
+app.use("/api/upload", uploadRoute);
+app.use("/api/trash-orders",trashOrdersRoutes);
+app.use('/api/leads',leadsRoutes);
+app.use('/api/call-logs', callLogsRoutes);
+// Routes - SPECIFIC ROUTES FIRST
+app.use('/api/quotations', quotationRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/anniversaries', anniversaryRoutes);
+app.use('/api/expenses', expensesRoute);
+app.use('/api/price-items', priceItemsRouter);
+app.use('/api/interactions', interactionRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/vendors', vendors);
+app.use('/api/executiveLogins', executiveLogRoutes);
+app.use('/api/performance', performance);
+app.use("/api/reports", executiveRoutes);
+app.use("/api/prospective-clients", prospectiveClientsRouter);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/Digital", DigitalOrder);
+app.use("/api/upi-numbers", upiRoutes);
+app.use("/api/targets", target);
+app.use("/api/appointments", appointmentRoutes);
+app.use("/api/pending-services", pendingServiceRoutes);
+app.use("/api/employee-uploads", employeeUploadRoutes);
+app.use("/api/logout-history", logoutHistoryRoutes);
+app.use("/api/design-requests", designRoutes);
+app.use('/api/field-executive', fieldExecutiveRoutes);
+app.use('/api/designers', designersRoutes);
+app.use('/api/service-requirements', serviceRequirementsRoutes);
+app.use('/api/greetings', greetingsRoutes);
+// AUTH ROUTES (contains add-field-executive)
+app.use("/api", authRoutes);
+
+// GENERIC ROUTES LAST
+app.use("/api/parties",parties);
+app.use("/api", orderRoutes);
+app.use("/api", checkClientRoutes);
+app.use("/api", serviceExecutiveRoutes);
+app.use("/api", employeeRoutes);
+app.use('/api/employees', require('./routes/employees'));
+app.use('/api/attendance', unitAttendanceRoutes);
+// Be careful with this catch-all route - it might conflict
+// app.use("/api", router);
+// MongoDB Connection
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.log("MongoDB connection error:", err));
+
+// Appointment Status Update Endpoint
+app.put("/api/appointments/:id/status", async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  try {
+    if (!["pending", "assigned", "completed"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status value" });
+    }
+
+    const updatedAppointment = await Appointment.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedAppointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    res.json(updatedAppointment);
+  } catch (error) {
+    console.error("Status update error:", error);
+    res.status(500).json({
+      error: "Failed to update status",
+      details: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+
+// Error Handling Middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send("Server Error");
+});
+
+// Start Server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});

@@ -1,0 +1,2866 @@
+import { useState, useEffect, useRef } from "react";
+import axios from "axios";
+import { useLocation } from "react-router-dom";
+import Invoice from "./Invoice";
+import Select from 'react-select';
+
+function OrderForm({
+  orderNumber,
+  existingData,
+  onNewOrder,
+  onBack,
+  onSuccess,
+  isAdmin,
+  executives,
+}) {
+  const routerLocation = useLocation();
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showAdvanceApprovalModal, setShowAdvanceApprovalModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingTarget, setLoadingTarget] = useState(true);
+  const [targetChanged, setTargetChanged] = useState(false);
+  const [requirements, setRequirements] = useState([]);
+  const [sortedExecutives, setSortedExecutives] = useState([]);
+  const [selectedExecutive, setSelectedExecutive] = useState(
+    existingData?.executive ||
+    (isAdmin ? "" : localStorage.getItem("userName") || "")
+  );
+  const [business, setBusiness] = useState(routerLocation.state?.businessName || "");
+  const [contactPerson, setContactPerson] = useState(routerLocation.state?.customerName || "");
+  const [clientLocation, setClientLocation] = useState("");
+  const [isNewFromExisting, setIsNewFromExisting] = useState(false);
+  const [expandedRows, setExpandedRows] = useState({});
+  const [gstNumber, setGstNumber] = useState("");
+
+  // Customer special dates (optional)
+  const [birthDate, setBirthDate] = useState("");
+  const [anniversaryDate, setAnniversaryDate] = useState("");
+
+  // Lead Source states
+  const [leadSources] = useState([
+    'India Mart',
+    'Just Dial',
+    'Meta (Facebook/Instagram)',
+    'Google Ads',
+    'Website',
+    'Referral',
+    'Walk-in',
+    'Newspaper',
+    'Other Specify'
+  ]);
+  const [leadSource, setLeadSource] = useState('');
+  const [otherLeadSource, setOtherLeadSource] = useState('');
+
+  const [contactNumber, setContactNumber] = useState(
+    routerLocation.state?.phoneNumber ? `+91 ${routerLocation.state.phoneNumber}` : `+91 ${orderNumber || ""}`
+  );
+  const [orderDate, setOrderDate] = useState(new Date().toISOString().split("T")[0]);
+  const [advanceDate, setAdvanceDate] = useState(new Date().toISOString().split("T")[0]);
+  const [clientType, setClientType] = useState("");
+  const [target, setTarget] = useState("");
+  const [rows, setRows] = useState([getEmptyRow()]);
+  const [total, setTotal] = useState(0);
+  const [paymentDate, setPaymentDate] = useState("");
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [advance, setAdvance] = useState("");
+  const [balance, setBalance] = useState(0);
+  const [discount, setDiscount] = useState(0);
+  const [discountedTotal, setDiscountedTotal] = useState(0);
+  const [upiOptions, setUpiOptions] = useState([]);
+  const [selectedUpi, setSelectedUpi] = useState("");
+  const [chequeNumber, setChequeNumber] = useState("");
+  const [chequeImage, setChequeImage] = useState(null);
+  const [design, setDesign] = useState("");
+  const [loadingExecutives, setLoadingExecutives] = useState(false);
+  const [bankName, setBankName] = useState("");
+  const [transactionRef, setTransactionRef] = useState("");
+  const [otherMethod, setOtherMethod] = useState("");
+  const [, setIsSubmittingDesign] = useState(false);
+  const [poNumber, setPoNumber] = useState("");
+  const [, setPoDocument] = useState(null);
+  const [showInvoice, setShowInvoice] = useState(false);
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [advanceError, setAdvanceError] = useState("");
+  const [createdBy, setCreatedBy] = useState("");
+  const [whatsappSent, setWhatsappSent] = useState(false);
+  const [approvalReason, setApprovalReason] = useState("");
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const [hasAdvanceApproval, setHasAdvanceApproval] = useState(false);
+  const [approvalRequested, setApprovalRequested] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [dataLoaded, setDataLoaded] = useState(false);
+
+  const printRef = useRef();
+  const invoiceRef = useRef();
+  const approvalPollingRef = useRef(null);
+
+  // Check screen size for mobile view
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  function getEmptyRow() {
+    const delivery = new Date(orderDate);
+    delivery.setDate(delivery.getDate() + 3);
+    return {
+      requirement: "",
+      customRequirement: "",
+      description: "",
+      quantity: "",
+      rate: "",
+      days: "",
+      startDate: orderDate,
+      endDate: delivery.toISOString().split("T")[0],
+      total: "0.00",
+      deliveryDate: delivery.toISOString().split("T")[0],
+      gstIncluded: true,
+    };
+  }
+
+  // Validate date is not in the future (optional)
+  const isValidDate = (dateString) => {
+    if (!dateString) return true;
+    const selectedDate = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return selectedDate <= today;
+  };
+
+  // Handle lead source change
+  const handleLeadSourceChange = (value) => {
+    setLeadSource(value);
+    if (value !== 'Other Specify') {
+      setOtherLeadSource('');
+    }
+  };
+
+  const sendWhatsAppMessage = (phoneNumber, orderData) => {
+    try {
+      const cleanNumber = phoneNumber.replace(/\D/g, '');
+      const finalNumber = cleanNumber.slice(-10);
+
+      if (finalNumber.length !== 10) {
+        throw new Error('Invalid phone number');
+      }
+
+      let paymentMethodDisplay = "Not specified";
+      if (orderData.paymentMethods && orderData.paymentMethods.length > 0) {
+        if (typeof orderData.paymentMethods === 'string') {
+          paymentMethodDisplay = orderData.paymentMethods;
+        } else if (Array.isArray(orderData.paymentMethods)) {
+          paymentMethodDisplay = orderData.paymentMethods.join(', ');
+        }
+      }
+
+      let specialDatesMessage = "";
+      if (orderData.birthDate) {
+        specialDatesMessage += `\nBirth Date: ${new Date(orderData.birthDate).toLocaleDateString()}`;
+      }
+      if (orderData.anniversaryDate) {
+        specialDatesMessage += `\nAnniversary: ${new Date(orderData.anniversaryDate).toLocaleDateString()}`;
+      }
+
+      let reqDisplay = orderData.requirements || "";
+      if (orderData.requirementDetails && Array.isArray(orderData.requirementDetails) && orderData.requirementDetails.length > 0) {
+        reqDisplay = orderData.requirementDetails.map(req => {
+          let str = `▪️ *${req.quantity || 1} x ${req.name}*`;
+          if (req.description && req.description.trim() !== "") {
+            str += `\n   📝 _Description:_ ${req.description.trim()}`;
+          }
+          return str;
+        }).join('\n');
+      }
+
+      const message = `🎉 *Order Confirmation* 🎉
+
+Dear ${orderData.contactPerson},
+
+Your order has been successfully placed with *Global Marketing Solutions*!
+
+*Order Details:*
+🏢 *Business:* ${orderData.business}
+📋 *Order Number:* ${orderData.orderNumber}
+👤 *Contact Person:* ${orderData.contactPerson}
+📅 *Order Date:* ${new Date(orderData.orderDate).toLocaleDateString()}
+📍 *Location:* ${orderData.location || 'Not specified'}
+
+*Requirements:*
+${reqDisplay}
+
+*Payment Summary:*
+💰 *Total Amount:* ₹${orderData.total}
+💳 *Advance Paid:* ₹${orderData.advance}
+⚖️ *Balance:* ₹${orderData.balance}
+💳 *Payment Method:* ${paymentMethodDisplay}
+${orderData.advanceDate ? `📅 *Advance Date:* ${new Date(orderData.advanceDate).toLocaleDateString()}` : ''}
+${orderData.paymentDate ? `📅 *Payment Date:* ${new Date(orderData.paymentDate).toLocaleDateString()}` : ''}
+
+*Additional Details:*
+${orderData.chequeNumber ? `🏦 *Cheque Number:* ${orderData.chequeNumber}` : ''}
+${orderData.upiId ? `📱 *UPI ID:* ${orderData.upiId}` : ''}
+${orderData.bankName ? `🏛️ *Bank Name:* ${orderData.bankName}` : ''}
+${orderData.transactionRef ? `🔗 *Transaction Ref:* ${orderData.transactionRef}` : ''}
+${orderData.poNumber ? `📄 *PO Number:* ${orderData.poNumber}` : ''}
+${orderData.gstNumber ? `🔢 *GST Number:* ${orderData.gstNumber}` : ''}
+${specialDatesMessage}
+
+Thank you for your business! We'll keep you updated on your order status.
+
+For any queries, please contact us.
+
+Best regards,
+Global Marketing Solutions Team`;
+
+      const encodedMessage = encodeURIComponent(message);
+      const whatsappUrl = `https://wa.me/91${finalNumber}?text=${encodedMessage}`;
+
+      window.open(whatsappUrl, '_blank');
+
+      setWhatsappSent(true);
+      return { success: true, message: 'WhatsApp opened successfully' };
+    } catch (error) {
+      console.error('WhatsApp error:', error);
+      return { success: false, message: error.message };
+    }
+  };
+
+  useEffect(() => {
+    const currentUser = localStorage.getItem("userName") || "Admin";
+    setCreatedBy(currentUser);
+  }, []);
+
+  const handleBusinessChange = (value) => {
+    const uppercaseValue = value.toUpperCase();
+    if (validateBusinessName(uppercaseValue) || uppercaseValue === "") {
+      setBusiness(uppercaseValue);
+    }
+  };
+
+  const checkAdvanceApproval = async () => {
+    try {
+      const response = await axios.get(
+        `/api/advance-approval-requests/check/${selectedExecutive}`,
+        { params: { business, contactPerson } }
+      );
+
+      const previousApprovalStatus = hasAdvanceApproval;
+      const newApprovalStatus = response.data.hasApproval;
+
+      setHasAdvanceApproval(newApprovalStatus);
+
+      if (!previousApprovalStatus && newApprovalStatus && approvalRequested) {
+        alert("🎉 Your advance approval request has been approved! You can now submit the order.");
+
+        if (approvalPollingRef.current) {
+          clearInterval(approvalPollingRef.current);
+          approvalPollingRef.current = null;
+        }
+      }
+    } catch (error) {
+      console.error("Error checking advance approval:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (!isAdmin && business && contactPerson) {
+      checkAdvanceApproval();
+    }
+  }, [business, contactPerson, isAdmin]);
+
+  useEffect(() => {
+    if (approvalRequested && !hasAdvanceApproval && !isAdmin && business && contactPerson) {
+      approvalPollingRef.current = setInterval(async () => {
+        await checkAdvanceApproval();
+      }, 5000);
+
+      return () => {
+        if (approvalPollingRef.current) {
+          clearInterval(approvalPollingRef.current);
+          approvalPollingRef.current = null;
+        }
+      };
+    } else {
+      if (approvalPollingRef.current) {
+        clearInterval(approvalPollingRef.current);
+        approvalPollingRef.current = null;
+      }
+    }
+  }, [approvalRequested, hasAdvanceApproval, isAdmin, business, contactPerson]);
+
+  const isTimeBasedRequirement = (requirementName) => {
+    return requirementName === "Mobile Vans" || requirementName === "Try Cycles";
+  };
+
+  const calculateDeliveryDate = (baseDate, days = 3) => {
+    const delivery = new Date(baseDate);
+    delivery.setDate(delivery.getDate() + days);
+    return delivery.toISOString().split("T")[0];
+  };
+
+  const calculateRowTotal = (row) => {
+    const qty = parseFloat(row.quantity) || 0;
+    const rate = parseFloat(row.rate) || 0;
+    const days = isTimeBasedRequirement(row.requirement) ? parseInt(row.days) || 1 : 1;
+
+    let baseAmount = isTimeBasedRequirement(row.requirement) ? qty * rate * days : qty * rate;
+    return row.gstIncluded ? (baseAmount * 1.18).toFixed(2) : baseAmount.toFixed(2);
+  };
+
+  const handlePrint = () => {
+    const printContent = printRef.current;
+    if (!printContent) {
+      alert("No content available for printing");
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    const printStyles = `
+      <style>
+        body { 
+          font-family: Arial, sans-serif;
+          margin: 0;
+          padding: 20px;
+          color: #333;
+          background: white;
+        }
+        .no-print { display: none !important; }
+        .print-actions { display: none !important; }
+        .form-actions { display: none !important; }
+        .existing-order-notice { display: none !important; }
+        .success-modal-overlay { display: none !important; }
+        .created-by-info { 
+          background-color: #f0f8ff; 
+          padding: 8px; 
+          border-radius: 4px; 
+          margin-bottom: 10px;
+          border-left: 4px solid #2196F3;
+        }
+        @media print {
+          body { margin: 0; padding: 10mm; }
+        }
+      </style>
+    `;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Order Form - ${business || "New Order"}</title>
+          ${printStyles}
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+
+    setTimeout(() => {
+      printWindow.print();
+      setTimeout(() => printWindow.close(), 500);
+    }, 500);
+  };
+
+  const handleInvoicePrint = () => {
+    const invoiceContent = invoiceRef.current;
+    if (!invoiceContent) {
+      alert("No invoice content available for printing");
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    const printStyles = `
+      <style>
+        body { 
+          font-family: Arial, sans-serif;
+          margin: 0;
+          padding: 20mm;
+          color: #333;
+          background: white;
+        }
+        .no-print { display: none !important; }
+        @media print {
+          body { margin: 0; padding: 0; }
+        }
+      </style>
+    `;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Invoice</title>
+          ${printStyles}
+        </head>
+        <body>
+          ${invoiceContent.innerHTML}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+
+    setTimeout(() => {
+      printWindow.print();
+      setTimeout(() => printWindow.close(), 500);
+    }, 500);
+  };
+
+  const generateInvoice = () => {
+    setShowInvoice(true);
+  };
+
+  // Remove a row
+  const handleRemoveRow = (index) => {
+    if (rows.length === 1) {
+      alert("At least one requirement item is required");
+      return;
+    }
+
+    const updatedRows = [...rows];
+    updatedRows.splice(index, 1);
+    setRows(updatedRows);
+
+    // Recalculate total
+    const orderTotal = updatedRows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+    setTotal(orderTotal.toFixed(2));
+    setDiscountedTotal((orderTotal - parseFloat(discount) || 0).toFixed(2));
+    updateBalance(orderTotal, advance);
+  };
+
+  // Toggle expand/collapse for mobile cards
+  const toggleRowExpand = (index) => {
+    setExpandedRows(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
+
+  // CRITICAL FUNCTION: Create a fresh new order from existing client data
+  const createNewOrderFromExisting = () => {
+    // Determine the new order type based on existing 
+ // In createNewOrderFromExisting function, update the client type mapping:
+
+// Determine the new order type based on existing order type
+let newClientType = "";
+if (existingData?.clientType) {
+  switch (existingData.clientType) {
+    case "Retail":
+      newClientType = "Retail-Renewal";
+      break;
+    case "Agent":
+      newClientType = "Renewal-Agent";
+      break;
+    case "Retail-Renewal":
+    case "Renewal-Agent":
+    case "Corporate":
+    case "Corporate-Renewal":
+    case "Walk-In":
+      newClientType = existingData.clientType;
+      break;
+    default:
+      newClientType = "";
+  }
+}
+    // Set mode to "new from existing"
+    setIsNewFromExisting(true);
+    
+    // CRITICAL: Set isCreatingNew to true to prevent loading existing data
+    setIsCreatingNew(true);
+    
+    // Reset dataLoaded flag
+    setDataLoaded(false);
+
+    // Keep ONLY customer info fields from existing order (these will be read-only)
+    setBusiness((existingData?.business || "").toUpperCase());
+    setContactPerson(existingData?.contactPerson || "");
+    setContactNumber(`${existingData?.contactCode || "+91"} ${existingData?.phone || ""}`);
+    setClientType(newClientType);
+    
+    // Keep special dates if they exist
+    setBirthDate(existingData?.birthDate || "");
+    setAnniversaryDate(existingData?.anniversaryDate || "");
+    
+    // Keep GST number if exists
+    setGstNumber(existingData?.gstNumber || "");
+
+    // Reset ALL order-specific fields for new order
+    setSelectedExecutive(isAdmin ? "" : localStorage.getItem("userName") || "");
+    setClientLocation("");
+    setLeadSource("");
+    setOtherLeadSource("");
+    setOrderDate(new Date().toISOString().split("T")[0]);
+    setAdvanceDate(new Date().toISOString().split("T")[0]);
+    setTarget("");
+    setDiscount(0);
+    setPaymentDate("");
+    setPaymentMethods([]);
+    setAdvance("");
+    setBalance(0);
+    setSelectedUpi("");
+    setChequeNumber("");
+    setChequeImage(null);
+    setDesign("");
+    setBankName("");
+    setTransactionRef("");
+    setOtherMethod("");
+    setPoNumber("");
+    setPoDocument(null);
+    setAdvanceError("");
+    setWhatsappSent(false);
+    setHasAdvanceApproval(false);
+    setApprovalRequested(false);
+    setApprovalReason("");
+    
+    // Reset PO document if any
+    setPoDocument(null);
+
+    // CRITICAL: Reset rows to a single empty row (fresh requirements)
+    setRows([{
+      requirement: "",
+      customRequirement: "",
+      description: "",
+      quantity: "",
+      rate: "",
+      days: "",
+      startDate: new Date().toISOString().split("T")[0],
+      endDate: calculateDeliveryDate(new Date().toISOString().split("T")[0], 3),
+      total: "0.00",
+      deliveryDate: calculateDeliveryDate(new Date().toISOString().split("T")[0], 3),
+      gstIncluded: true,
+    }]);
+
+    setTotal(0);
+    setDiscountedTotal(0);
+
+    if (approvalPollingRef.current) {
+      clearInterval(approvalPollingRef.current);
+      approvalPollingRef.current = null;
+    }
+
+    // Call onNewOrder callback if provided
+    if (onNewOrder) onNewOrder();
+  };
+const submitAdvanceApprovalRequest = async () => {
+  if (!approvalReason.trim()) {
+    alert("Please provide a reason for low advance payment");
+    return;
+  }
+
+  setIsSubmittingApproval(true);
+  try {
+    const advanceNum = parseFloat(advance) || 0;
+    const totalNum = parseFloat(total) || 0;
+    const advancePercentage = totalNum > 0 ? (advanceNum / totalNum) * 100 : 0;
+
+    const requestData = {
+      executive: selectedExecutive,
+      business,
+      contactPerson,
+      contactNumber,
+      totalAmount: totalNum,
+      advanceAmount: advanceNum,
+      advancePercentage: advancePercentage.toFixed(1),
+      reason: approvalReason,
+      orderData: {
+        clientLocation,
+        orderDate,
+        clientType,
+        target,
+        rows: rows.map(row => ({
+          requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
+          description: row.description,
+          quantity: row.quantity,
+          rate: row.rate,
+          total: row.total,
+          gstIncluded: row.gstIncluded
+        })),
+        discount,
+        paymentMethods
+      }
+    };
+
+    console.log('Submitting approval request:', requestData); // Debug log
+
+    const response = await axios.post("/api/advance-approval-requests", requestData);
+    
+    console.log('Approval response:', response.data); // Debug log
+
+    setShowAdvanceApprovalModal(false);
+    setApprovalRequested(true);
+    setApprovalReason("");
+
+    alert("Advance approval request submitted! The system will automatically check for approval every 5 seconds. You'll be notified when approved.");
+  } catch (error) {
+    console.error("Error submitting approval request:", error);
+    
+    // More detailed error message
+    if (error.response) {
+      // Server responded with error
+      console.error('Response data:', error.response.data);
+      console.error('Response status:', error.response.status);
+      alert(`Failed to submit approval request: ${error.response.data.error || error.response.data.message || 'Server error'}`);
+    } else if (error.request) {
+      // Request was made but no response
+      console.error('No response received:', error.request);
+      alert("Network error: Could not connect to server. Please check your connection.");
+    } else {
+      // Something else
+      alert(`Error: ${error.message}`);
+    }
+  } finally {
+    setIsSubmittingApproval(false);
+  }
+};
+
+  useEffect(() => {
+    const fetchAllExecutives = async () => {
+      try {
+        setLoadingExecutives(true);
+
+        // Fetch regular executives
+        console.log("Fetching executives from /api/executives...");
+        const execsRes = await axios.get("/api/executives");
+        console.log("Executives received:", execsRes.data);
+
+        const regularExecs = [...execsRes.data].sort((a, b) => a.name.localeCompare(b.name));
+
+        // Fetch field executives
+        let fieldExecutives = [];
+        try {
+          const fieldExecsRes = await axios.get("/api/field-executive/admin/executives");
+          fieldExecutives = fieldExecsRes.data.map(name => ({ name, _id: name, type: 'field' }));
+        } catch (err) {
+          console.log("Field executives endpoint not available");
+        }
+
+        // Fetch service executives
+        let serviceExecutives = [];
+        try {
+          const serviceExecsRes = await axios.get("/api/service-executives");
+          serviceExecutives = serviceExecsRes.data.map(exec => ({
+            name: exec.name,
+            _id: exec._id,
+            type: 'service'
+          }));
+        } catch (err) {
+          console.log("Service executives endpoint not available");
+        }
+
+        // Combine all executives and remove duplicates
+        const allExecutives = [
+          ...regularExecs,
+          ...fieldExecutives,
+          ...serviceExecutives
+        ].filter((exec, index, self) =>
+          index === self.findIndex(e => e.name === exec.name)
+        ).sort((a, b) => a.name.localeCompare(b.name));
+
+        console.log("All executives combined:", allExecutives);
+        setSortedExecutives(allExecutives);
+
+        // If there's an existing executive and NOT creating new, select it
+        if (existingData?.executive && !isCreatingNew) {
+          setSelectedExecutive(existingData.executive);
+        }
+
+      } catch (error) {
+        console.error("Error fetching executives:", error);
+        // Try fallback to just regular executives
+        try {
+          const fallbackRes = await axios.get("/api/executives");
+          setSortedExecutives(fallbackRes.data);
+        } catch (fallbackErr) {
+          console.error("Fallback also failed:", fallbackErr);
+        }
+      } finally {
+        setLoadingExecutives(false);
+      }
+    };
+
+    fetchAllExecutives();
+  }, [existingData, isAdmin, isCreatingNew]);
+
+  // Separate useEffect for loading requirements only
+  useEffect(() => {
+    const fetchRequirements = async () => {
+      try {
+        const requirementsRes = await axios.get("/api/requirements");
+        setRequirements([...requirementsRes.data].sort((a, b) => a.name.localeCompare(b.name)));
+      } catch (error) {
+        console.error("Error fetching requirements:", error);
+      }
+    };
+    fetchRequirements();
+  }, []);
+
+  // Main data loading effect - ONLY runs when NOT creating a new order
+  useEffect(() => {
+    // CRITICAL: Skip loading existing data if we're creating a new order
+    if (isCreatingNew) {
+      console.log("Skipping existing data load - creating new order");
+      return;
+    }
+
+    const loadExistingData = async () => {
+      if (existingData) {
+        console.log("Loading existing order data for editing");
+        setDataLoaded(true);
+        
+        setSelectedExecutive(existingData.executive || (isAdmin ? "" : localStorage.getItem("userName") || ""));
+        setBusiness((existingData.business || "").toUpperCase());
+        setContactPerson(existingData.contactPerson || "");
+        setClientLocation(existingData.location || "");
+        setLeadSource(existingData.leadSource || '');
+        setOtherLeadSource(existingData.otherLeadSource || '');
+        setContactNumber(`${existingData.contactCode || "+91"} ${existingData.phone || ""}`);
+        setOrderDate(existingData.orderDate || new Date().toISOString().split("T")[0]);
+        setClientType(existingData.clientType || "");
+        setTarget(existingData.target || "");
+        setDiscount(existingData.discount || 0);
+        setCreatedBy(existingData.createdBy || "Admin");
+        setBirthDate(existingData.birthDate || "");
+        setAnniversaryDate(existingData.anniversaryDate || "");
+        setGstNumber(existingData.gstNumber || ""); // Load GST number
+
+        if (existingData.rows && existingData.rows.length > 0) {
+          setRows(existingData.rows.map((row) => ({
+            requirement: row.customRequirement ? "other" : row.requirement,
+            customRequirement: row.customRequirement || "",
+            description: row.description,
+            quantity: row.quantity?.toString() || "",
+            rate: row.rate?.toString() || "",
+            days: row.days?.toString() || "",
+            startDate: row.startDate || row.deliveryDate,
+            endDate: row.endDate || calculateDeliveryDate(row.deliveryDate),
+            total: row.total?.toString() || "0",
+            deliveryDate: row.deliveryDate,
+            gstIncluded: row.gstIncluded !== undefined ? row.gstIncluded : true,
+          })));
+          
+          const totalAmount = existingData.rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+          setTotal(totalAmount.toFixed(2));
+          setDiscountedTotal((totalAmount - (existingData.discount || 0)).toFixed(2));
+        }
+
+        setAdvanceDate(existingData.advanceDate || new Date().toISOString().split("T")[0]);
+        setPaymentDate(existingData.paymentDate || "");
+        setAdvance(existingData.advance?.toString() || "");
+        setBalance(existingData.balance?.toString() || "");
+
+        if (existingData.paymentMethods) {
+          const methods = typeof existingData.paymentMethods === 'string'
+            ? existingData.paymentMethods.split(' + ')
+            : existingData.paymentMethods;
+          setPaymentMethods(methods);
+        }
+
+        setDesign(existingData.designStatus === "provided" ? "yes" : "no");
+      }
+      
+      // Fetch target for the date
+      await fetchTargetForDate(orderDate);
+
+      // Check if existing client from location state
+      if (routerLocation.state?.phoneNumber) {
+        checkIfExistingClient(routerLocation.state.phoneNumber);
+      }
+    };
+
+    loadExistingData();
+  }, [existingData, orderNumber, isAdmin, routerLocation.state, isCreatingNew]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!business || !contactPerson || !contactNumber) {
+      alert("Please fill all required fields");
+      return;
+    }
+    if (isAdmin && !selectedExecutive) {
+      alert("Please select an executive");
+      return;
+    }
+  
+    // Validate lead source if selected
+    if (leadSource === 'Other Specify' && !otherLeadSource.trim()) {
+      alert("Please specify the lead source");
+      return;
+    }
+  
+    const advanceNum = parseFloat(advance) || 0;
+    const totalNum = parseFloat(total) || 0;
+    const advancePercentage = (advanceNum / totalNum) * 100;
+  
+    if (totalNum > 0 && !isAdmin && advancePercentage < 50 && !hasAdvanceApproval) {
+      setShowAdvanceApprovalModal(true);
+      return;
+    }
+  
+    await submitOrder();
+  };
+
+  const submitOrder = async () => {
+    setIsSubmitting(true);
+    try {
+      const phone = contactNumber.replace(/\D/g, "").slice(-10);
+      if (phone.length !== 10) throw new Error("Please enter a valid 10-digit phone number");
+  
+      const totalNum = parseFloat(total) || 0;
+      const advanceNum = parseFloat(advance) || 0;
+  
+      // Determine final lead source value
+      const finalLeadSource = leadSource === 'Other Specify'
+        ? otherLeadSource
+        : leadSource;
+  
+      const designRequestData = {
+        executive: selectedExecutive,
+        businessName: business,
+        contactPerson: contactPerson,
+        phoneNumber: phone,
+        requirements: rows
+          .filter((row) => row.requirement)
+          .map((row) => row.requirement === "other" ? row.customRequirement : row.requirement)
+          .join(", "),
+        status: "pending",
+        requestDate: new Date().toISOString(),
+      };
+  
+      let paymentMethodStr = paymentMethods.includes("UPI") && selectedUpi
+        ? paymentMethods.map((m) => m === "UPI" ? `UPI - ${selectedUpi}` : m).join(" + ")
+        : paymentMethods.join(" + ");
+  
+      const finalCreatedBy = isAdmin ? createdBy : (existingData?.createdBy || selectedExecutive);
+  
+      // Create requirement details array for each row
+      const requirementDetails = rows
+        .filter((row) => row.requirement)
+        .map((row) => {
+          const requirementName = row.requirement === "other" ? row.customRequirement : row.requirement;
+          const quantity = row.quantity ? parseFloat(row.quantity) : 0;
+          const rate = row.rate ? parseFloat(row.rate) : 0;
+          const rowTotal = row.total ? parseFloat(row.total) : 0;
+  
+          return {
+            name: requirementName,
+            quantity: quantity,
+            rate: rate,
+            total: rowTotal,
+            description: row.description || "",
+            days: row.days || "",
+            deliveryDate: row.deliveryDate || "",
+            gstIncluded: row.gstIncluded,
+            assignedExecutive: row.assignedExecutive || null,
+            status: row.status || "Pending",
+            remark: row.remark || ""
+          };
+        });
+  
+      // Create a summary string for backward compatibility
+      const allRequirements = requirementDetails
+        .map(req => `${req.quantity} x ${req.name}`)
+        .join(", ");
+  
+      const mainOrderData = {
+        executive: selectedExecutive,
+        business,
+        contactPerson,
+        location: clientLocation,
+        leadSource: finalLeadSource,
+        otherLeadSource: otherLeadSource,
+        contactCode: "+91",
+        phone,
+        orderDate,
+        target,
+        clientType: clientType || "New",
+        gstNumber: gstNumber || "", // Add GST number to order data
+  
+        // Add the new date fields
+        birthDate: birthDate || null,
+        anniversaryDate: anniversaryDate || null,
+  
+        rows: rows
+          .filter((row) => row.requirement) // Only include rows with requirements
+          .map((row) => ({
+            requirement: row.requirement === "other" ? row.customRequirement : row.requirement,
+            customRequirement: row.customRequirement || "",
+            description: row.description || "",
+            quantity: parseFloat(row.quantity) || 0,
+            rate: parseFloat(row.rate) || 0,
+            days: row.days ? parseInt(row.days) : 0,
+            startDate: row.startDate || null,
+            endDate: row.endDate || null,
+            total: parseFloat(row.total) || 0,
+            deliveryDate: row.deliveryDate || null,
+            gstIncluded: row.gstIncluded !== undefined ? row.gstIncluded : true,
+            assignedExecutive: row.assignedExecutive || null,
+            remark: row.remark || "",
+            isCompleted: row.isCompleted || false,
+            status: row.status || "Pending"
+          })),
+  
+        requirementDetails: requirementDetails,
+  
+        advanceDate,
+        paymentDate,
+        paymentMethods: paymentMethodStr,
+        advance: advanceNum.toFixed(2),
+        balance: (totalNum - advanceNum - (parseFloat(discount) || 0)).toFixed(2),
+        total: totalNum.toFixed(2),
+        discount: (parseFloat(discount) || 0).toFixed(2),
+        discountedTotal: (totalNum - (parseFloat(discount) || 0)).toFixed(2),
+        chequeNumber,
+        chequeImage,
+        designStatus: design === "no" ? "pending" : "provided",
+        createdBy: finalCreatedBy,
+      };
+  
+      console.log('Final order data being submitted:', mainOrderData);
+      console.log('isCreatingNew flag:', isCreatingNew);
+      console.log('existingData exists:', !!existingData);
+  
+      setIsSubmittingDesign(true);
+      await axios.post("/api/design-requests", designRequestData);
+      setIsSubmittingDesign(false);
+  
+      // CRITICAL: Always create a NEW order when isCreatingNew is true
+      // Only update existing order when editing (existingData exists AND isCreatingNew is false)
+      const orderResponse = (existingData && !isCreatingNew)
+        ? await axios.put(`/api/orders/${existingData._id}`, mainOrderData)
+        : await axios.post("/api/submit", mainOrderData);
+  
+      const orderDataForWhatsApp = {
+        business: business,
+        contactPerson: contactPerson,
+        orderNumber: orderResponse.data.orderNumber || `ORD-${Date.now()}`,
+        requirements: allRequirements,
+        requirementDetails: requirementDetails,
+        total: discountedTotal,
+        advance: advance,
+        balance: balance,
+        orderDate: orderDate,
+        location: clientLocation,
+        paymentMethods: paymentMethodStr,
+        advanceDate: advanceDate,
+        paymentDate: paymentDate,
+        chequeNumber: chequeNumber,
+        upiId: selectedUpi,
+        bankName: bankName,
+        transactionRef: transactionRef,
+        poNumber: poNumber,
+        gstNumber: gstNumber,
+        birthDate: birthDate,
+        anniversaryDate: anniversaryDate
+      };
+  
+      sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
+  
+      setShowSuccessModal(true);
+      setTimeout(() => {
+        setShowSuccessModal(false);
+        setIsSubmitting(false);
+        setIsCreatingNew(false);
+        setIsNewFromExisting(false); // Reset this flag as well
+        setDataLoaded(false);
+        if (onSuccess) onSuccess(orderResponse.data);
+      }, 2000);
+    } catch (err) {
+      console.error("Submission error:", err);
+      alert(`Submission failed: ${err.response?.data?.message || err.message}`);
+      setIsSubmitting(false);
+    }
+  };
+
+  const fetchTargetForDate = async (dateString) => {
+    if (!dateString || !selectedExecutive) return;
+    setLoadingTarget(true);
+    try {
+      const date = new Date(dateString);
+      const response = await axios.get(`/api/targets/${selectedExecutive}/${date.getFullYear()}/${date.getMonth() + 1}`);
+      setTarget(response.data?.targetAmount || "0");
+      setTargetChanged(true);
+    } catch (error) {
+      console.error("Target fetch error:", error);
+      setTarget("0");
+    } finally {
+      setLoadingTarget(false);
+      setTimeout(() => setTargetChanged(false), 1500);
+    }
+  };
+
+  const handleOrderDateChange = (e) => {
+    const newDate = e.target.value;
+    setOrderDate(newDate);
+    fetchTargetForDate(newDate);
+    setRows((prevRows) => prevRows.map((row) => ({
+      ...row,
+      startDate: newDate,
+      endDate: calculateDeliveryDate(newDate, row.days || 3),
+      deliveryDate: calculateDeliveryDate(newDate, row.days || 3),
+    })));
+  };
+
+  const checkIfExistingClient = async (number) => {
+    try {
+      const res = await axios.get(`/api/check-client?phone=${number}`);
+      if (res.data.exists && !clientType) setClientType("Renewal");
+    } catch (error) {
+      console.error("Client check error:", error);
+    }
+  };
+
+  const handleAddRow = () => setRows((prev) => [...prev, {
+    ...getEmptyRow(),
+    gstIncluded: true
+  }]);
+
+  const handleRowChange = (index, field, value) => {
+    const updatedRows = [...rows];
+    const isTimeBased = isTimeBasedRequirement(updatedRows[index].requirement);
+
+    if (field === "quantity") updatedRows[index][field] = value.replace(/\D/g, "");
+    else if (field === "rate") updatedRows[index][field] = value.replace(/[^\d.]/g, "").replace(/^(\d*\.?)|(\..*)/g, "$1$2");
+    else if (field === "days") {
+      updatedRows[index][field] = value.replace(/\D/g, "");
+      if (isTimeBased) updatedRows[index].endDate = calculateDeliveryDate(updatedRows[index].startDate, parseInt(value) || 1);
+    }
+    else if (field === "startDate") {
+      updatedRows[index][field] = value;
+      if (isTimeBased) updatedRows[index].endDate = calculateDeliveryDate(value, parseInt(updatedRows[index].days) || 1);
+    }
+    else if (field === "gstIncluded") updatedRows[index][field] = value;
+    else updatedRows[index][field] = value;
+
+    updatedRows[index].total = calculateRowTotal(updatedRows[index]);
+    setRows(updatedRows);
+
+    const orderTotal = updatedRows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+    setTotal(orderTotal.toFixed(2));
+    setDiscountedTotal((orderTotal - parseFloat(discount) || 0).toFixed(2));
+    updateBalance(orderTotal, advance);
+  };
+
+  const updateBalance = (orderTotal, advanceAmount) => {
+    const adv = parseFloat(advanceAmount) || 0;
+    const tot = parseFloat(orderTotal) - (parseFloat(discount) || 0);
+    setBalance((tot - adv).toFixed(2));
+  };
+
+  const handleAdvanceChange = (value) => {
+    const cleanedValue = value.replace(/[^\d.]/g, "").replace(/^(\d*\.?)|(\..*)/g, "$1$2");
+    setAdvance(cleanedValue);
+    updateBalance(total, cleanedValue);
+
+    const advanceNum = parseFloat(cleanedValue) || 0;
+    const totalNum = parseFloat(total) || 0;
+
+    if (totalNum > 0 && !isAdmin) {
+      const advancePercentage = (advanceNum / totalNum) * 100;
+
+      if (advancePercentage < 50) {
+        setAdvanceError("Advance payment must be at least 50% of the total amount");
+      } else {
+        setAdvanceError("");
+      }
+    } else {
+      setAdvanceError("");
+    }
+  };
+
+  const handleDiscountChange = (value) => {
+    const cleanedValue = value.replace(/[^\d.]/g, "").replace(/^(\d*\.?)|(\..*)/g, "$1$2");
+    setDiscount(cleanedValue);
+    const discounted = parseFloat(total) - (parseFloat(cleanedValue)) || 0;
+    setDiscountedTotal(discounted.toFixed(2));
+    updateBalance(total, advance);
+  };
+
+  const handlePaymentMethodChange = async (method) => {
+    if (paymentMethods.includes(method)) {
+      setPaymentMethods(paymentMethods.filter((m) => m !== method));
+      if (method === "UPI") setSelectedUpi("");
+    } else {
+      setPaymentMethods([...paymentMethods, method]);
+      if (method === "UPI") {
+        try {
+          const res = await axios.get("/api/upi-numbers");
+          setUpiOptions(res.data);
+        } catch (err) {
+          console.error("UPI fetch error:", err);
+        }
+      }
+    }
+  };
+
+  const handleContactNumberChange = (e) => {
+    const value = e.target.value;
+    if (/^[+\d\s]*$/.test(value)) {
+      setContactNumber(value);
+      const phoneDigits = value.replace(/\D/g, "").substring(value.startsWith("+") ? 1 : 0);
+      if (phoneDigits.length === 10) checkIfExistingClient(phoneDigits);
+    }
+  };
+
+  const capitalizeFirst = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+  const validateLocation = (value) => {
+    return /^[a-zA-Z\s\-.,()]*$/.test(value);
+  };
+
+  const validateContactPerson = (value) => {
+    return /^[a-zA-Z\s]*$/.test(value);
+  };
+
+  const validateBusinessName = (value) => {
+    return /^[A-Z0-9\s\-.,&()]*$/.test(value);
+  };
+
+  const validateContactNumber = (value) => {
+    const digits = value.replace(/\D/g, "");
+    return digits.length <= 10;
+  };
+
+  const renderAdvanceValidation = () => {
+    const advanceNum = parseFloat(advance) || 0;
+    const totalNum = parseFloat(total) || 0;
+    const advancePercentage = totalNum > 0 ? (advanceNum / totalNum) * 100 : 0;
+
+    if (totalNum > 0 && !isAdmin) {
+      return (
+        <div style={{
+          marginTop: "10px",
+          padding: "10px",
+          backgroundColor: advancePercentage < 50 ? "#fff3cd" : "#d4edda",
+          borderRadius: "4px",
+          border: `1px solid ${advancePercentage < 50 ? "#ffeaa7" : "#c3e6cb"}`
+        }}>
+          <strong>Advance Payment:</strong> {advancePercentage.toFixed(1)}% of total
+
+          {advancePercentage < 50 ? (
+            <div>
+              <span style={{ color: "#856404", marginLeft: "10px" }}>
+                ❌ Minimum 50% required
+              </span>
+              {!hasAdvanceApproval && !approvalRequested && (
+                <div style={{ marginTop: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanceApprovalModal(true)}
+                    style={{
+                      padding: "6px 12px",
+                      backgroundColor: "#007bff",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontSize: "12px"
+                    }}
+                  >
+                    📨 Request Approval for Low Advance
+                  </button>
+                </div>
+              )}
+              {approvalRequested && !hasAdvanceApproval && (
+                <div style={{ marginTop: "8px", color: "#856404" }}>
+                  <div>⏳ Approval request submitted - Waiting for admin approval</div>
+                  <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+                    🔄 Auto-checking every 5 seconds...
+                  </div>
+                </div>
+              )}
+              {hasAdvanceApproval && (
+                <div style={{ marginTop: "8px", color: "#155724" }}>
+                  ✅ Approved by admin - You can now submit this order
+                </div>
+              )}
+            </div>
+          ) : (
+            <span style={{ color: "#155724", marginLeft: "10px" }}>
+              ✅ Minimum requirement met
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    if (totalNum > 0 && isAdmin) {
+      return (
+        <div style={{ marginTop: "10px", padding: "10px", backgroundColor: "#d1ecf1", borderRadius: "4px" }}>
+          <strong>Advance Payment:</strong> {advancePercentage.toFixed(1)}% of total
+          <span style={{ color: "#0c5460", marginLeft: "10px" }}>ℹ️ Admin override enabled</span>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  // Determine if the form should be read-only (when viewing an existing order and not creating a new one)
+  const isReadOnly = existingData && !isCreatingNew && !isNewFromExisting;
+
+  // Render requirement row as card for mobile, or table row for desktop
+  const renderRequirementRow = (row, index) => {
+    const isTimeBased = isTimeBasedRequirement(row.requirement);
+    const isExpanded = expandedRows[index];
+
+    if (isMobile) {
+      return (
+        <div key={index} className="requirement-card" style={{
+          border: '1px solid #ddd',
+          borderRadius: '8px',
+          marginBottom: '12px',
+          padding: '12px',
+          backgroundColor: '#fff',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          position: 'relative'
+        }}>
+          {/* Remove Button - Top Right Corner (only show if not read-only) */}
+          {!isReadOnly && (
+            <button
+              type="button"
+              onClick={() => handleRemoveRow(index)}
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                background: '#f44336',
+                color: 'white',
+                border: 'none',
+                borderRadius: '50%',
+                width: '28px',
+                height: '28px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 10
+              }}
+              title="Remove item"
+            >
+              ×
+            </button>
+          )}
+
+          {/* Card Header - Always visible */}
+          <div className="card-header" style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            cursor: 'pointer',
+            gap: '10px',
+            flexWrap: 'wrap',
+            paddingRight: '30px'
+          }} onClick={() => toggleRowExpand(index)}>
+            <div style={{ flex: 1, minWidth: '150px' }}>
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Requirement</div>
+              <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                {row.requirement === "other" ? row.customRequirement || "Select requirement" : row.requirement || "Select requirement"}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Total</div>
+              <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#4CAF50' }}>₹{row.total}</div>
+            </div>
+            <button 
+              type="button"
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '20px',
+                cursor: 'pointer',
+                padding: '0 8px'
+              }}
+            >
+              {isExpanded ? '−' : '+'}
+            </button>
+          </div>
+
+          {/* Expanded Content */}
+          {isExpanded && (
+            <div className="card-details" style={{ marginTop: '15px', borderTop: '1px solid #eee', paddingTop: '12px' }}>
+              {/* Requirement Select (if not selected or needs change) */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Requirement *</label>
+                {isReadOnly ? (
+                  <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                    {row.requirement === "other" ? row.customRequirement : row.requirement}
+                  </div>
+                ) : (
+                  <>
+                    <Select
+                      options={[
+                        { value: '', label: 'Select Requirement' },
+                        ...requirements.map(req => ({ value: req.name, label: req.name })),
+                        { value: 'other', label: 'Other (Specify)' }
+                      ]}
+                      value={row.requirement ? { value: row.requirement, label: row.requirement } : null}
+                      onChange={(selectedOption) => {
+                        const value = selectedOption ? selectedOption.value : '';
+                        handleRowChange(index, "requirement", value);
+                        if (value !== "other") handleRowChange(index, "customRequirement", "");
+                      }}
+                      isSearchable={true}
+                      placeholder="Search requirement..."
+                      className="requirement-select"
+                      classNamePrefix="react-select"
+                      styles={{
+                        control: (base) => ({ ...base, minHeight: '38px', fontSize: '14px' }),
+                        menu: (base) => ({ ...base, fontSize: '14px', zIndex: 999 }),
+                        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                      }}
+                      menuPortalTarget={document.body}
+                    />
+                    {row.requirement === "other" && (
+                      <input
+                        type="text"
+                        value={row.customRequirement || ""}
+                        onChange={(e) => handleRowChange(index, "customRequirement", e.target.value)}
+                        placeholder="Enter custom requirement"
+                        style={{ marginTop: '8px', width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Description */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Description</label>
+                {isReadOnly ? (
+                  <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                    {row.description || '-'}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={row.description}
+                    onChange={(e) => handleRowChange(index, "description", capitalizeFirst(e.target.value))}
+                    placeholder="Enter description"
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                  />
+                )}
+              </div>
+
+              {/* Quantity and Rate in row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Quantity</label>
+                  {isReadOnly ? (
+                    <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                      {row.quantity || '-'}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={row.quantity}
+                      onChange={(e) => handleRowChange(index, "quantity", e.target.value)}
+                      placeholder="0"
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                    />
+                  )}
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Rate (₹)</label>
+                  {isReadOnly ? (
+                    <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                      {row.rate || '-'}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={row.rate}
+                      onChange={(e) => handleRowChange(index, "rate", e.target.value)}
+                      placeholder="0.00"
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Days (if time-based) */}
+              {isTimeBased && (
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Days</label>
+                  {isReadOnly ? (
+                    <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                      {row.days || '-'}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={row.days}
+                      onChange={(e) => handleRowChange(index, "days", e.target.value)}
+                      placeholder="Number of days"
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* GST Checkbox */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: isReadOnly ? 'default' : 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={row.gstIncluded}
+                    onChange={(e) => !isReadOnly && handleRowChange(index, "gstIncluded", e.target.checked)}
+                    disabled={isReadOnly}
+                  />
+                  <span style={{ fontSize: '14px' }}>Include GST (18%)</span>
+                </label>
+              </div>
+
+              {/* Delivery Date */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>
+                  {isTimeBased ? 'Start Date' : 'Delivery Date'}
+                </label>
+                {isTimeBased ? (
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {isReadOnly ? (
+                      <>
+                        <div style={{ flex: 1, padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                          {row.startDate || '-'}
+                        </div>
+                        <span style={{ color: '#666' }}>→</span>
+                        <div style={{ flex: 1, padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                          {row.endDate || '-'}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          type="date"
+                          value={row.startDate}
+                          onChange={(e) => handleRowChange(index, "startDate", e.target.value)}
+                          style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                        />
+                        <span style={{ color: '#666' }}>→</span>
+                        <input
+                          type="date"
+                          value={row.endDate}
+                          readOnly
+                          style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: '#f5f5f5' }}
+                        />
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  isReadOnly ? (
+                    <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                      {row.deliveryDate || '-'}
+                    </div>
+                  ) : (
+                    <input
+                      type="date"
+                      value={row.deliveryDate}
+                      onChange={(e) => handleRowChange(index, "deliveryDate", e.target.value)}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                    />
+                  )
+                )}
+              </div>
+
+              {/* Total Display */}
+              <div style={{ 
+                backgroundColor: '#e8f5e9', 
+                padding: '10px', 
+                borderRadius: '4px',
+                textAlign: 'right'
+              }}>
+                <span style={{ fontSize: '12px', color: '#666' }}>Subtotal: </span>
+                <span style={{ fontWeight: 'bold', fontSize: '16px', color: '#4CAF50' }}>₹{row.total}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Desktop table view
+    return (
+      <tr key={index}>
+        <td data-label="Requirement">
+          <div className="requirement-select-container">
+            {isReadOnly ? (
+              <div className="readonly-cell">{row.requirement === "other" ? row.customRequirement : row.requirement}</div>
+            ) : (
+              <>
+                <Select
+                  options={[
+                    { value: '', label: 'Select Requirement' },
+                    ...requirements.map(req => ({ value: req.name, label: req.name })),
+                    { value: 'other', label: 'Other (Specify)' }
+                  ]}
+                  value={row.requirement ? { value: row.requirement, label: row.requirement } : null}
+                  onChange={(selectedOption) => {
+                    const value = selectedOption ? selectedOption.value : '';
+                    handleRowChange(index, "requirement", value);
+                    if (value !== "other") handleRowChange(index, "customRequirement", "");
+                  }}
+                  isSearchable={true}
+                  placeholder="Search requirement..."
+                  className="requirement-select"
+                  classNamePrefix="react-select"
+                  styles={{
+                    control: (base) => ({ ...base, minHeight: '38px', fontSize: '14px' }),
+                    menu: (base) => ({ ...base, fontSize: '14px', zIndex: 999 }),
+                    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                  }}
+                  menuPortalTarget={document.body}
+                />
+                {row.requirement === "other" && (
+                  <input
+                    type="text"
+                    value={row.customRequirement || ""}
+                    onChange={(e) => handleRowChange(index, "customRequirement", e.target.value)}
+                    placeholder="Enter custom requirement"
+                    className="custom-requirement-input"
+                  />
+                )}
+              </>
+            )}
+          </div>
+        </td>
+        <td data-label="Description">
+          {isReadOnly ? (
+            <div className="readonly-cell">{row.description || '-'}</div>
+          ) : (
+            <input
+              type="text"
+              value={row.description}
+              onChange={(e) => handleRowChange(index, "description", capitalizeFirst(e.target.value))}
+            />
+          )}
+        </td>
+        <td data-label="Quantity">
+          {isReadOnly ? (
+            <div className="readonly-cell">{row.quantity || '-'}</div>
+          ) : (
+            <input
+              type="text"
+              value={row.quantity}
+              onChange={(e) => handleRowChange(index, "quantity", e.target.value)}
+              placeholder="0"
+            />
+          )}
+        </td>
+        <td data-label="Rate (₹)">
+          {isReadOnly ? (
+            <div className="readonly-cell">{row.rate || '-'}</div>
+          ) : (
+            <input
+              type="text"
+              value={row.rate}
+              onChange={(e) => handleRowChange(index, "rate", e.target.value)}
+              placeholder="0.00"
+            />
+          )}
+        </td>
+        <td data-label="Days">
+          {isTimeBased ? (
+            isReadOnly ? (
+              <div className="readonly-cell">{row.days || '-'}</div>
+            ) : (
+              <input
+                type="text"
+                value={row.days}
+                onChange={(e) => handleRowChange(index, "days", e.target.value)}
+                placeholder="1"
+              />
+            )
+          ) : (
+            <span>-</span>
+          )}
+        </td>
+        <td data-label="GST 18%">
+          <input
+            type="checkbox"
+            checked={row.gstIncluded}
+            onChange={(e) => !isReadOnly && handleRowChange(index, "gstIncluded", e.target.checked)}
+            disabled={isReadOnly}
+          />
+        </td>
+        <td data-label="Total (₹)">₹{row.total}</td>
+        <td data-label="Delivery Date">
+          {isTimeBased ? (
+            <div className="date-range">
+              <div>Start:</div>
+              {isReadOnly ? (
+                <div className="readonly-cell">{row.startDate || '-'}</div>
+              ) : (
+                <input
+                  type="date"
+                  value={row.startDate}
+                  onChange={(e) => handleRowChange(index, "startDate", e.target.value)}
+                />
+              )}
+              <div>End:</div>
+              {isReadOnly ? (
+                <div className="readonly-cell">{row.endDate || '-'}</div>
+              ) : (
+                <input type="date" value={row.endDate} readOnly />
+              )}
+            </div>
+          ) : (
+            isReadOnly ? (
+              <div className="readonly-cell">{row.deliveryDate || '-'}</div>
+            ) : (
+              <input
+                type="date"
+                value={row.deliveryDate}
+                onChange={(e) => handleRowChange(index, "deliveryDate", e.target.value)}
+              />
+            )
+          )}
+        </td>
+        <td data-label="Remove" style={{ textAlign: 'center' }}>
+          {!isReadOnly && (
+            <button
+              type="button"
+              onClick={() => handleRemoveRow(index)}
+              style={{
+                background: '#f44336',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '6px 12px',
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+              title="Remove item"
+            >
+              ✕ Remove
+            </button>
+          )}
+        </td>
+      </tr>
+    );
+  };
+
+  if (showInvoice) {
+    return (
+      <div ref={invoiceRef}>
+        <Invoice
+          orderNumber={orderNumber}
+          business={business}
+          contactPerson={contactPerson}
+          clientLocation={clientLocation}
+          contactNumber={contactNumber}
+          selectedExecutive={selectedExecutive}
+          orderDate={orderDate}
+          rows={rows}
+          total={total}
+          discount={discount}
+          discountedTotal={discountedTotal}
+          advance={advance}
+          balance={balance}
+          onClose={() => setShowInvoice(false)}
+          onPrint={handleInvoicePrint}
+        />
+      </div>
+    );
+  }
+
+  const handleSendExistingWhatsApp = () => {
+    if (!contactNumber) {
+      alert("Customer phone number not available.");
+      return;
+    }
+
+    const requirementDetails = rows
+      .filter((row) => row.requirement)
+      .map((row) => ({
+        name: row.requirement === "other" ? row.customRequirement : row.requirement,
+        quantity: parseFloat(row.quantity) || 1,
+        rate: parseFloat(row.rate) || 0,
+        total: parseFloat(row.total) || 0,
+        description: row.description || ""
+      }));
+
+    const allRequirements = requirementDetails
+      .map(req => `${req.quantity} x ${req.name}`)
+      .join(", ");
+
+    let paymentMethodStr = paymentMethods.includes("UPI") && selectedUpi
+      ? paymentMethods.map((m) => m === "UPI" ? `UPI - ${selectedUpi}` : m).join(" + ")
+      : paymentMethods.join(" + ");
+
+    const totalNum = rows.reduce((sum, row) => sum + (parseFloat(row.total) || 0), 0);
+    const advanceNum = parseFloat(advance) || 0;
+    const balanceNum = (totalNum - advanceNum - (parseFloat(discount) || 0)).toFixed(2);
+
+    const orderDataForWhatsApp = {
+      business: business,
+      contactPerson: contactPerson || "Customer",
+      orderNumber: existingData?.orderNumber || `ORD-${Date.now()}`,
+      requirements: allRequirements,
+      requirementDetails: requirementDetails,
+      total: totalNum.toFixed(2),
+      advance: advanceNum.toFixed(2),
+      balance: balanceNum,
+      orderDate: orderDate || new Date(),
+      location: clientLocation || "",
+      paymentMethods: paymentMethodStr || "Not specified",
+      advanceDate: advanceDate,
+      paymentDate: paymentDate,
+      chequeNumber: chequeNumber,
+      upiId: selectedUpi,
+      bankName: bankName,
+      transactionRef: transactionRef,
+      poNumber: poNumber,
+      gstNumber: gstNumber,
+      birthDate: birthDate,
+      anniversaryDate: anniversaryDate
+    };
+
+    sendWhatsAppMessage(contactNumber, orderDataForWhatsApp);
+  };
+
+  // Check if we are editing an existing order (not a new order from existing)
+  const isEditingExisting = existingData && !isCreatingNew && !isNewFromExisting;
+
+  return (
+    <div id="print-area" ref={printRef}>
+      {showSuccessModal && (
+        <div className="success-modal-overlay">
+          <div className="success-modal">
+            <div className="success-checkmark">✓</div>
+            <h2>Order {existingData && !isCreatingNew ? "Updated" : "Submitted"} Successfully!</h2>
+            {whatsappSent && (
+              <div style={{
+                marginTop: '15px',
+                padding: '10px',
+                backgroundColor: '#e8f5e8',
+                borderRadius: '4px',
+                border: '1px solid #4caf50'
+              }}>
+                <p style={{ margin: 0, color: '#2e7d32' }}>
+                  WhatsApp message has been sent to the customer!
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Advance Approval Modal */}
+      {showAdvanceApprovalModal && (
+        <div className="modal-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div className="modal-content" style={{
+            background: 'white',
+            padding: '30px',
+            borderRadius: '8px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
+          }}>
+            <h3>Request Advance Payment Approval</h3>
+            <p>
+              Your advance payment is less than 50% of the total amount.
+              Please provide a reason for the low advance payment to request admin approval.
+            </p>
+
+            <div style={{ margin: "15px 0", padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+              <strong>Order Details:</strong>
+              <div>Business: {business}</div>
+              <div>Contact: {contactPerson}</div>
+              <div>Total Amount: ₹{total}</div>
+              <div>Advance Paid: ₹{advance} ({((parseFloat(advance) || 0) / parseFloat(total) * 100).toFixed(1)}%)</div>
+            </div>
+
+            <label style={{ display: 'block', marginBottom: '15px' }}>
+              Reason for Low Advance:
+              <textarea
+                value={approvalReason}
+                onChange={(e) => setApprovalReason(e.target.value)}
+                placeholder="Please explain why the advance payment is less than 50%..."
+                rows="4"
+                style={{ width: "100%", marginTop: "8px", padding: "8px", border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+            </label>
+
+            <div className="modal-actions" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowAdvanceApprovalModal(false);
+                  setApprovalReason("");
+                }}
+                className="btn btn-secondary"
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitAdvanceApprovalRequest}
+                disabled={isSubmittingApproval || !approvalReason.trim()}
+                className="btn btn-primary"
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: isSubmittingApproval ? 'not-allowed' : 'pointer',
+                  opacity: isSubmittingApproval || !approvalReason.trim() ? 0.6 : 1
+                }}
+              >
+                {isSubmittingApproval ? "Submitting..." : "Submit Request"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header with Order Already Exists message and Create New Order button (moved to top) */}
+      {existingData && !isCreatingNew && !isNewFromExisting && (
+        <div style={{
+          backgroundColor: '#fff3cd',
+          padding: '15px 20px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          borderLeft: '4px solid #ffc107',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '15px'
+        }}>
+          <div>
+            <strong style={{ fontSize: '16px', color: '#856404' }}>📋 ORDER ALREADY EXISTS</strong>
+            <div style={{ marginTop: '5px', color: '#856404' }}>
+              Previous Order Date: {new Date(existingData.orderDate).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+              })}
+            </div>
+          </div>
+          <button
+            onClick={createNewOrderFromExisting}
+            style={{
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '10px 20px',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            ➕ Create New Order
+          </button>
+        </div>
+      )}
+
+      {/* Read-Only Mode Notice */}
+      {isReadOnly && (
+        <div style={{
+          backgroundColor: '#e3f2fd',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          borderLeft: '4px solid #2196f3',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap'
+        }}>
+          <span style={{ fontSize: '20px' }}>🔒</span>
+          <div>
+            <strong style={{ color: '#1565c0' }}>Read-Only Mode</strong>
+            <div style={{ fontSize: '13px', color: '#1565c0' }}>
+              You are viewing an existing order. Use the "Create New Order" button above to place a new order for this customer.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Show "New Order from Existing" header when in new-from-existing mode */}
+      {isNewFromExisting && (
+        <div style={{
+          backgroundColor: '#d4edda',
+          padding: '10px 15px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          borderLeft: '4px solid #28a745'
+        }}>
+          <strong style={{ color: '#155724' }}>🔄 Creating New Order for {business}</strong>
+          <div style={{ fontSize: '12px', color: '#155724', marginTop: '4px' }}>
+            Customer details are pre-filled. Please add new requirements and payment details below.
+          </div>
+        </div>
+      )}
+
+      {/* Show full form when NOT in read-only mode (includes new orders and new from existing) */}
+      {!isReadOnly && (
+        <>
+          <div className="form-header">
+            <h2 className="subtitle">ORDER FORM</h2>
+            <div className="print-actions no-print">
+              <button onClick={handlePrint} className="btn btn-print">
+                Print Order
+              </button>
+              <button onClick={generateInvoice} className="btn btn-invoice">
+                Generate Invoice
+              </button>
+            </div>
+          </div>
+
+          <div className="form-top">
+            <div className="left">
+              <label>
+                Executive Name:
+                {isAdmin ? (
+                  loadingExecutives ? (
+                    <input type="text" value="Loading executives..." readOnly />
+                  ) : (
+                    <select
+                      value={selectedExecutive}
+                      onChange={(e) => {
+                        setSelectedExecutive(e.target.value);
+                        fetchTargetForDate(orderDate);
+                      }}
+                      required
+                    >
+                      <option value="">Select Executive</option>
+                      {sortedExecutives.map((exec) => (
+                        <option key={exec._id} value={exec.name}>{exec.name}</option>
+                      ))}
+                    </select>
+                  )
+                ) : (
+                  <input type="text" value={selectedExecutive} readOnly />
+                )}
+              </label>
+
+            
+<div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
+  <div style={{ flex: 1, minWidth: '150px' }}>
+    <label>
+      Order Type:
+      <select
+        value={clientType}
+        onChange={(e) => setClientType(e.target.value)}
+        disabled={isNewFromExisting}
+        style={{ 
+          backgroundColor: isNewFromExisting ? '#f5f5f5' : 'white',
+          width: '100%'
+        }}
+      >
+        <option value="">Select</option>
+        <option value="Retail">Retail</option>
+        <option value="Retail-Renewal">Retail-Renewal</option>
+        <option value="Agent">Agent</option>
+        <option value="Renewal-Agent">Renewal-Agent</option>
+        <option value="Corporate">Corporate</option>
+        <option value="Corporate-Renewal">Corporate-Renewal</option>
+        <option value="Walk-In">Walk-In</option>
+      </select>
+    </label>
+  </div>
+  <div style={{ flex: 1, minWidth: '200px' }}>
+    <label>
+      GST Number (Optional):
+      <input
+        type="text"
+        value={gstNumber}
+        onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
+        placeholder="Enter GST number"
+        style={{ textTransform: 'uppercase' }}
+      />
+    </label>
+  </div>
+</div>
+
+              {/* Business Name and Contact Person side by side */}
+              <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <label>
+                    Business Name:
+                    <input
+                      type="text"
+                      value={business}
+                      onChange={(e) => handleBusinessChange(e.target.value)}
+                      placeholder="ENTER BUSINESS NAME"
+                      style={{ textTransform: 'uppercase' }}
+                      readOnly={isNewFromExisting}
+                      className={isNewFromExisting ? "readonly-field" : ""}
+                    />
+                  </label>
+                </div>
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <label>
+                    Contact Person:
+                    <input
+                      type="text"
+                      value={contactPerson}
+                      onChange={(e) => {
+                        if (validateContactPerson(e.target.value) || e.target.value === "") {
+                          setContactPerson(capitalizeFirst(e.target.value));
+                        }
+                      }}
+                      placeholder="Contact person name"
+                      readOnly={isNewFromExisting}
+                      className={isNewFromExisting ? "readonly-field" : ""}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <label>
+                    Contact Number:
+                    <input
+                      type="text"
+                      value={contactNumber}
+                      onChange={(e) => {
+                        if (validateContactNumber(e.target.value) || e.target.value === "") {
+                          handleContactNumberChange(e);
+                        }
+                      }}
+                      placeholder="+91 9876543210"
+                      maxLength="14"
+                      readOnly={isNewFromExisting}
+                      className={isNewFromExisting ? "readonly-field" : ""}
+                    />
+                  </label>
+                </div>
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <label>
+                    Location:
+                    <input
+                      type="text"
+                      value={clientLocation}
+                      onChange={(e) => {
+                        if (validateLocation(e.target.value) || e.target.value === "") {
+                          setClientLocation(e.target.value);
+                        }
+                      }}
+                      placeholder="Enter location"
+                    />
+                  </label>
+                </div>
+                {/* Lead Source Field */}
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <label>
+                    Lead Source:
+                    <select
+                      value={leadSource}
+                      onChange={(e) => handleLeadSourceChange(e.target.value)}
+                    >
+                      <option value="">Select Lead Source</option>
+                      {leadSources.map((source, index) => (
+                        <option key={index} value={source}>{source}</option>
+                      ))}
+                    </select>
+                    {leadSource === 'Other Specify' && (
+                      <input
+                        type="text"
+                        value={otherLeadSource}
+                        onChange={(e) => setOtherLeadSource(e.target.value)}
+                        placeholder="Please specify lead source"
+                        style={{ marginTop: '8px', width: '100%' }}
+                        required
+                      />
+                    )}
+                  </label>
+                </div>
+              </div>
+
+              {/* Birth Date and Anniversary Date Fields */}
+              <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <label>
+                    Birth Date (Optional):
+                    <input
+                      type="date"
+                      value={birthDate}
+                      onChange={(e) => {
+                        const newDate = e.target.value;
+                        if (isValidDate(newDate) || !newDate) {
+                          setBirthDate(newDate);
+                        } else {
+                          alert("Birth date cannot be in the future");
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <label>
+                    Anniversary Date (Optional):
+                    <input
+                      type="date"
+                      value={anniversaryDate}
+                      onChange={(e) => {
+                        const newDate = e.target.value;
+                        if (isValidDate(newDate) || !newDate) {
+                          setAnniversaryDate(newDate);
+                        } else {
+                          alert("Anniversary date cannot be in the future");
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="design-status-container" style={{ marginBottom: "16px" }}>
+                <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
+                  <legend style={{ display: "block", fontSize: "16px", fontWeight: "500", color: "#333", marginBottom: "8px" }}>
+                    Design Status:
+                  </legend>
+                  <div style={{ display: "flex", gap: "24px", fontSize: "15px", alignItems: "center", flexWrap: "wrap" }}>
+                    <label htmlFor="design-provided" style={{ display: "flex", alignItems: "center", gap: "8px", cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        id="design-provided"
+                        name="designStatus"
+                        value="yes"
+                        checked={design === "yes"}
+                        onChange={(e) => setDesign(e.target.value)}
+                        style={{ width: "16px", height: "16px", accentColor: "#4CAF50", cursor: 'pointer' }}
+                      />
+                      <span style={{ color: design === "yes" ? "#4CAF50" : "#555", fontWeight: design === "yes" ? "600" : "400" }}>
+                        Design Provided
+                      </span>
+                    </label>
+                    <label htmlFor="design-needed" style={{ display: "flex", alignItems: "center", gap: "8px", cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        id="design-needed"
+                        name="designStatus"
+                        value="no"
+                        checked={design === "no"}
+                        onChange={(e) => setDesign(e.target.value)}
+                        style={{ width: "16px", height: "16px", accentColor: "#FF5722", cursor: 'pointer' }}
+                      />
+                      <span style={{ color: design === "no" ? "#FF5722" : "#555", fontWeight: design === "no" ? "600" : "400" }}>
+                        Need Design
+                      </span>
+                    </label>
+                  </div>
+                </fieldset>
+                {design === "no" && (
+                  <div style={{ marginTop: "12px", padding: "12px", backgroundColor: "#FFF8E1", borderRadius: "6px", borderLeft: "4px solid #FFC107", fontSize: "14px" }}>
+                    <p style={{ margin: 0, color: "#E65100" }}>This request will be sent to the design team for processing.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="right">
+              <label>
+                Order Date:
+                <input
+                  type="date"
+                  value={orderDate}
+                  onChange={handleOrderDateChange}
+                />
+              </label>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Show read-only view for existing orders */}
+      {isReadOnly && (
+        <div className="readonly-order-view">
+          <div style={{ 
+            backgroundColor: '#f8f9fa', 
+            padding: '20px', 
+            borderRadius: '8px',
+            marginBottom: '20px'
+          }}>
+            <h3 style={{ marginBottom: '15px', color: '#333' }}>Order Details</h3>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+              <div><strong>Executive:</strong> {selectedExecutive}</div>
+              <div><strong>Order Type:</strong> {clientType || '-'}</div>
+              <div><strong>GST Number:</strong> {gstNumber || '-'}</div>
+              <div><strong>Business Name:</strong> {business}</div>
+              <div><strong>Contact Person:</strong> {contactPerson}</div>
+              <div><strong>Contact Number:</strong> {contactNumber}</div>
+              <div><strong>Location:</strong> {clientLocation || '-'}</div>
+              <div><strong>Lead Source:</strong> {leadSource === 'Other Specify' ? otherLeadSource : leadSource || '-'}</div>
+              <div><strong>Order Date:</strong> {new Date(orderDate).toLocaleDateString()}</div>
+              {birthDate && <div><strong>Birth Date:</strong> {new Date(birthDate).toLocaleDateString()}</div>}
+              {anniversaryDate && <div><strong>Anniversary Date:</strong> {new Date(anniversaryDate).toLocaleDateString()}</div>}
+              <div><strong>Design Status:</strong> {design === "yes" ? "Design Provided" : "Need Design"}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Requirements Section - Always visible */}
+      <div className="rows-section">
+        <h3 style={{ marginBottom: '15px', color: '#333' }}>
+          {isNewFromExisting ? 'New Order Requirements' : (isReadOnly ? 'Order Requirements' : (isEditingExisting ? 'Edit Requirements' : 'Order Requirements'))}
+        </h3>
+        
+        {isMobile ? (
+          <div>
+            {rows.map((row, index) => renderRequirementRow(row, index))}
+            {!isReadOnly && (
+              <button 
+                onClick={handleAddRow} 
+                className="add-item-btn"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  marginTop: '12px'
+                }}
+              >
+                + ADD ITEM
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="table-responsive">
+              <table className="requirements-table">
+                <thead>
+                  <tr>
+                    <th>Requirement</th>
+                    <th>Description</th>
+                    <th>Quantity</th>
+                    <th>Rate (₹)</th>
+                    <th>Days</th>
+                    <th>GST 18%</th>
+                    <th>Total (₹)</th>
+                    <th>Delivery Date</th>
+                    <th>Remove</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, index) => renderRequirementRow(row, index))}
+                </tbody>
+              </table>
+            </div>
+            {!isReadOnly && (
+              <button onClick={handleAddRow} className="add-item-btn">+ ADD ITEM</button>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Payment Section - Show for all but read-only is slightly different */}
+      <div className="payment-section">
+        <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '150px' }}>
+            <label>
+              Advance Date:
+              {isReadOnly ? (
+                <div className="readonly-field" style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px', marginTop: '5px' }}>
+                  {advanceDate ? new Date(advanceDate).toLocaleDateString() : '-'}
+                </div>
+              ) : (
+                <input
+                  type="date"
+                  value={advanceDate}
+                  onChange={(e) => setAdvanceDate(e.target.value)}
+                />
+              )}
+            </label>
+          </div>
+          <div style={{ flex: 1, minWidth: '150px' }}>
+            <label>
+              Payment Date:
+              {isReadOnly ? (
+                <div className="readonly-field" style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px', marginTop: '5px' }}>
+                  {paymentDate ? new Date(paymentDate).toLocaleDateString() : '-'}
+                </div>
+              ) : (
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                />
+              )}
+            </label>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '120px' }}>
+            <label>
+              Advance (₹):
+              {isReadOnly ? (
+                <div className="readonly-field" style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px', marginTop: '5px' }}>
+                  ₹{advance || '0'}
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={advance}
+                  onChange={(e) => handleAdvanceChange(e.target.value)}
+                  placeholder="0.00"
+                  className={advanceError ? "error-input" : ""}
+                />
+              )}
+              {!isReadOnly && advanceError && (
+                <div className="error-message" style={{ color: "red", fontSize: "12px", marginTop: "5px" }}>
+                  {advanceError}
+                </div>
+              )}
+            </label>
+          </div>
+          <div style={{ flex: 1, minWidth: '120px' }}>
+            <label>
+              Balance (₹):
+              <input type="text" value={balance} readOnly />
+            </label>
+          </div>
+          <div style={{ flex: 1, minWidth: '120px' }}>
+            <label>
+              Total (₹):
+              <input type="text" value={total} readOnly />
+            </label>
+          </div>
+          <div style={{ flex: 1, minWidth: '120px' }}>
+            <label>
+              Discount (₹):
+              {isReadOnly ? (
+                <div className="readonly-field" style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px', marginTop: '5px' }}>
+                  ₹{discount || '0'}
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={discount}
+                  onChange={(e) => handleDiscountChange(e.target.value)}
+                  placeholder="0.00"
+                />
+              )}
+            </label>
+          </div>
+          <div style={{ flex: 1, minWidth: '120px' }}>
+            <label>
+              Final Amount (₹):
+              <input type="text" value={discountedTotal} readOnly />
+            </label>
+          </div>
+        </div>
+
+        {!isReadOnly && renderAdvanceValidation()}
+      </div>
+
+      {/* Payment Method Section - Only show if not read-only */}
+      {!isReadOnly && (
+        <div className="payment-method-section">
+          <label>Payment Method:</label>
+          <div className="payment-options">
+            {["Cash", "UPI", "Cheque", "Bank Transfer", "Others", "PO"].map((method) => (
+              <label key={method} style={{ marginRight: "15px", cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={paymentMethods.includes(method)}
+                  onChange={() => handlePaymentMethodChange(method)}
+                  style={{ marginRight: "5px", cursor: 'pointer' }}
+                />
+                {method}
+              </label>
+            ))}
+          </div>
+
+          {paymentMethods.includes("UPI") && (
+            <div className="upi-section" style={{ marginTop: "10px" }}>
+              <label>
+                UPI ID:
+                <select
+                  value={selectedUpi}
+                  onChange={(e) => setSelectedUpi(e.target.value)}
+                  style={{ marginLeft: "10px" }}
+                >
+                  <option value="">Select UPI</option>
+                  {upiOptions.map((upi) => (
+                    <option key={upi} value={upi}>{upi}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+
+          {paymentMethods.includes("Cheque") && (
+            <div className="cheque-section" style={{ marginTop: "10px" }}>
+              <div style={{ marginBottom: "10px" }}>
+                <label>
+                  Cheque Number:
+                  <input
+                    type="text"
+                    value={chequeNumber}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (/^\d{0,6}$/.test(value)) setChequeNumber(value);
+                    }}
+                    maxLength="6"
+                    style={{ marginLeft: "10px" }}
+                  />
+                </label>
+              </div>
+              <div>
+                <label>
+                  Cheque Image:
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setChequeImage(e.target.files[0])}
+                    style={{ marginLeft: "10px" }}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
+          {paymentMethods.includes("PO") && (
+            <div className="po-section" style={{ marginTop: "10px" }}>
+              <div style={{ marginBottom: "10px" }}>
+                <label>
+                  PO Number:
+                  <input
+                    type="text"
+                    value={poNumber}
+                    onChange={(e) => setPoNumber(e.target.value)}
+                    style={{ marginLeft: "10px" }}
+                  />
+                </label>
+              </div>
+              <div>
+                <label>
+                  PO Document:
+                  <input
+                    type="file"
+                    accept=".pdf,image/*"
+                    onChange={(e) => setPoDocument(e.target.files[0])}
+                    style={{ marginLeft: "10px" }}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
+          {paymentMethods.includes("Bank Transfer") && (
+            <div className="bank-transfer-section" style={{ marginTop: "10px" }}>
+              <div style={{ marginBottom: "10px" }}>
+                <label>
+                  Bank Name:
+                  <input
+                    type="text"
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    style={{ marginLeft: "10px" }}
+                  />
+                </label>
+              </div>
+              <div>
+                <label>
+                  Transaction Reference:
+                  <input
+                    type="text"
+                    value={transactionRef}
+                    onChange={(e) => setTransactionRef(e.target.value)}
+                    style={{ marginLeft: "10px" }}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
+          {paymentMethods.includes("Others") && (
+            <div className="other-method-section" style={{ marginTop: "10px" }}>
+              <label>
+                Specify Method:
+                <input
+                  type="text"
+                  value={otherMethod}
+                  onChange={(e) => setOtherMethod(e.target.value)}
+                  style={{ marginLeft: "10px" }}
+                />
+              </label>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Form Actions - Only show if not read-only */}
+      {!isReadOnly && (
+        <div className="form-actions no-print" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button type="button" onClick={onBack} className="btn btn-secondary">
+            Back to Search
+          </button>
+          {existingData && (
+            <button
+              type="button"
+              onClick={handleSendExistingWhatsApp}
+              style={{
+                backgroundColor: '#25D366',
+                color: 'white',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '6px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              💬 Send WhatsApp
+            </button>
+          )}
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting || (!isAdmin && advanceError && !hasAdvanceApproval)}
+            className="btn btn-primary"
+          >
+            {isSubmitting ? "Submitting..." : "Submit Order"}
+          </button>
+        </div>
+      )}
+
+      {/* Back button for read-only mode */}
+      {isReadOnly && (
+        <div className="form-actions no-print" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button type="button" onClick={onBack} className="btn btn-secondary">
+            Back to Search
+          </button>
+          {existingData && (
+            <button
+              type="button"
+              onClick={handleSendExistingWhatsApp}
+              style={{
+                backgroundColor: '#25D366',
+                color: 'white',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '6px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              💬 Send WhatsApp
+            </button>
+          )}
+        </div>
+      )}
+
+      <style>{`
+        .form-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 20px;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .print-actions {
+          display: flex;
+          gap: 10px;
+        }
+        .btn-print, .btn-invoice {
+          padding: 8px 16px;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-weight: 500;
+        }
+        .btn-print {
+          background-color: #4CAF50;
+          color: white;
+        }
+        .btn-invoice {
+          background-color: #2196F3;
+          color: white;
+        }
+        .success-modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: rgba(0, 0, 0, 0.5);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+        }
+        .success-modal {
+          background: white;
+          padding: 30px;
+          border-radius: 8px;
+          text-align: center;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+        .success-checkmark {
+          font-size: 48px;
+          color: #4CAF50;
+          margin-bottom: 15px;
+        }
+        .form-top {
+          display: flex;
+          gap: 20px;
+          margin-bottom: 20px;
+        }
+        .left, .right {
+          flex: 1;
+          min-width: 300px;
+        }
+        label {
+          display: block;
+          margin-bottom: 15px;
+        }
+        input, select {
+          width: 100%;
+          padding: 8px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          margin-top: 5px;
+          box-sizing: border-box;
+        }
+        .error-input {
+          border-color: red;
+          background-color: #fff0f0;
+        }
+        .rows-section {
+          overflow-x: auto;
+          margin-bottom: 20px;
+        }
+        .table-responsive {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        .requirements-table {
+          width: 100%;
+          border-collapse: collapse;
+          min-width: 900px;
+        }
+        .requirements-table th, .requirements-table td {
+          border: 1px solid #ddd;
+          padding: 8px;
+          text-align: left;
+          vertical-align: top;
+        }
+        .requirements-table th {
+          background-color: #1a237e;
+          color: white;
+        }
+        .readonly-cell {
+          padding: 8px;
+          background-color: #f5f5f5;
+          border-radius: 4px;
+          min-height: 38px;
+        }
+        .add-item-btn {
+          padding: 8px 16px;
+          background-color: #4CAF50;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          margin-top: 10px;
+        }
+        .payment-section, .payment-method-section {
+          margin-bottom: 20px;
+        }
+        .payment-options {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 15px;
+          margin-top: 10px;
+        }
+        .form-actions {
+          display: flex;
+          gap: 10px;
+          justify-content: flex-end;
+          margin-top: 30px;
+          margin-bottom: 50px;
+          padding: 15px 0;
+          background: white;
+        }
+        .btn-secondary {
+          background-color: #f44336;
+          color: white;
+          padding: 10px 20px;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+        .btn-primary {
+          background-color: #4CAF50;
+          color: white;
+          padding: 10px 20px;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+        .btn-primary:disabled {
+          background-color: #cccccc;
+          cursor: not-allowed;
+        }
+        .target-change-animation {
+          animation: targetChange 1.5s ease;
+        }
+        .readonly-field {
+          background-color: #f5f5f5;
+          color: #666;
+          cursor: not-allowed;
+          border-color: #ddd;
+        }
+        select:disabled {
+          background-color: #f5f5f5;
+          color: #666;
+          cursor: not-allowed;
+        }
+        .requirement-select-container {
+          min-width: 180px;
+        }
+        .custom-requirement-input {
+          margin-top: 5px;
+          width: 100%;
+        }
+        .date-range {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+        }
+        .date-range input {
+          width: 100%;
+          padding: 6px;
+        }
+        @keyframes targetChange {
+          0% { background-color: #ffffcc; }
+          100% { background-color: transparent; }
+        }
+
+        /* Responsive Styles */
+        @media (max-width: 768px) {
+          .form-top {
+            flex-direction: column;
+          }
+          .left, .right {
+            min-width: auto;
+          }
+          .payment-section > div {
+            flex-direction: column;
+          }
+          .payment-section > div > div {
+            min-width: auto;
+          }
+          .form-header {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+          .print-actions {
+            width: 100%;
+            justify-content: flex-start;
+          }
+          .requirement-card {
+            transition: all 0.3s ease;
+          }
+          .card-header:hover {
+            background-color: #f5f5f5;
+          }
+          .form-actions {
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+          }
+          .form-actions button {
+            flex: 1;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .requirements-table th, .requirements-table td {
+            padding: 4px;
+            font-size: 11px;
+          }
+          .requirements-table input, .requirements-table select {
+            font-size: 11px;
+            padding: 3px;
+          }
+          .requirement-select-container {
+            min-width: 120px;
+          }
+          .btn-primary, .btn-secondary, .btn-print, .btn-invoice {
+            padding: 6px 12px;
+            font-size: 12px;
+          }
+          .payment-options {
+            gap: 10px;
+          }
+          .payment-options label {
+            font-size: 12px;
+          }
+          .form-actions {
+            margin-bottom: 20px;
+          }
+        }
+
+        /* Desktop side-by-side fix */
+        @media (min-width: 769px) {
+          .form-top {
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+          }
+          .left {
+            flex: 2;
+          }
+          .right {
+            flex: 1;
+          }
+        }
+
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          .form-actions {
+            display: none !important;
+          }
+          .print-actions {
+            display: none !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+export default OrderForm;
