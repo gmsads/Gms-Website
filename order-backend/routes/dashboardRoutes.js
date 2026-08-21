@@ -710,7 +710,7 @@ router.get('/comparison-data', async (req, res) => {
     }
 
     // Determine the date range for comparison
-    // We want to show the last 3 months based on the filter
+    // We want to show the last 3 COMPLETE months (excluding current month)
     let comparisonMonths = [];
     
     if (rangeStartDate && rangeEndDate) {
@@ -754,29 +754,38 @@ router.get('/comparison-data', async (req, res) => {
         comparisonMonths.push({ year, month: monthIndex });
       }
     } else if (selectedYear) {
-      // If year is selected, show last 3 months that have data (or Oct, Nov, Dec if no data)
+      // If year is selected, show last 3 COMPLETE months of that year (excluding current month)
       const currentDate = new Date();
       const currentYear = currentDate.getFullYear();
       const currentMonth = currentDate.getMonth();
       
       if (selectedYear === currentYear) {
-        // Current year - show last 3 months including current month
-        for (let i = 2; i >= 0; i--) {
-          let monthIndex = currentMonth - i;
-          let year = selectedYear;
+        // Current year - show last 3 COMPLETE months (excluding current month)
+        // Start from (currentMonth - 1) to get the previous month, then go back 3 months
+        let startMonth = currentMonth - 1; // Previous month (exclude current)
+        let startYear = selectedYear;
+        
+        // If startMonth goes negative, wrap to previous year
+        if (startMonth < 0) {
+          startMonth = 11;
+          startYear -= 1;
+        }
+        
+        // Get the last 3 months from startMonth going backwards
+        for (let i = 0; i < 3; i++) {
+          let monthIndex = startMonth - i;
+          let year = startYear;
           
-          if (monthIndex < 0) {
+          while (monthIndex < 0) {
             monthIndex += 12;
             year -= 1;
           }
           
-          // Don't add future months
-          if (year < currentYear || (year === currentYear && monthIndex <= currentMonth)) {
-            comparisonMonths.push({ year, month: monthIndex });
-          }
+          comparisonMonths.push({ year, month: monthIndex });
         }
       } else if (selectedYear < currentYear) {
-        // Past year - show last 3 months of that year (Oct, Nov, Dec)
+        // Past year - show last 3 months of that year that are COMPLETE
+        // If the year is fully past, show Oct, Nov, Dec of that year
         comparisonMonths.push({ year: selectedYear, month: 9 }); // Oct
         comparisonMonths.push({ year: selectedYear, month: 10 }); // Nov
         comparisonMonths.push({ year: selectedYear, month: 11 }); // Dec
@@ -787,16 +796,27 @@ router.get('/comparison-data', async (req, res) => {
         comparisonMonths.push({ year: selectedYear, month: 2 }); // Mar
       }
     } else {
-      // Default - show last 3 months including current (that have actual data)
+      // Default - show last 3 COMPLETE months (excluding current month)
       const currentDate = new Date();
       const currentYear = currentDate.getFullYear();
       const currentMonth = currentDate.getMonth();
       
-      for (let i = 2; i >= 0; i--) {
-        let monthIndex = currentMonth - i;
-        let year = currentYear;
+      // Start from previous month (exclude current)
+      let startMonth = currentMonth - 1;
+      let startYear = currentYear;
+      
+      // If startMonth goes negative, wrap to previous year
+      if (startMonth < 0) {
+        startMonth = 11;
+        startYear -= 1;
+      }
+      
+      // Get the last 3 months from startMonth going backwards
+      for (let i = 0; i < 3; i++) {
+        let monthIndex = startMonth - i;
+        let year = startYear;
         
-        if (monthIndex < 0) {
+        while (monthIndex < 0) {
           monthIndex += 12;
           year -= 1;
         }
@@ -815,7 +835,13 @@ router.get('/comparison-data', async (req, res) => {
     }
     comparisonMonths = Array.from(uniqueMonths.values());
 
-    console.log('Comparison months:', comparisonMonths);
+    // Sort chronologically (oldest to newest)
+    comparisonMonths.sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      return a.month - b.month;
+    });
+
+    console.log('Comparison months (excluding current):', comparisonMonths);
 
     // Fetch all orders
     const orders = await Order.find({}).lean();
