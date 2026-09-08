@@ -628,50 +628,57 @@ const ExecutiveDashboard = ({
     }
   };
 
-  const fetchExecutiveData = useCallback(async (executiveName) => {
-    try {
-      const month = selectedDate.getMonth() + 1;
-      const year = selectedDate.getFullYear();
+const fetchExecutiveData = useCallback(async (executiveName) => {
+  try {
+    const month = selectedDate.getMonth() + 1;
+    const year = selectedDate.getFullYear();
 
-      const res = await axios.get(`/api/executive/${executiveName}`, {
-        params: { month, year }
+    const res = await axios.get(`/api/executive/${executiveName}`, {
+      params: { month, year }
+    });
+    const orders = res.data;
+
+    let totalAchieved = 0;
+    let executiveTarget = 100;
+    let completed = 0;
+    let pending = 0;
+    let retailTotal = 0; // For debugging
+
+    orders.forEach(order => {
+      if (order.target) executiveTarget = parseFloat(order.target) || 100;
+      
+      const clientType = (order.clientType || '').toString().toLowerCase().trim();
+      
+      let orderTotal = 0;
+      order.rows?.forEach(row => {
+        const rowTotal = parseFloat(row.total || 0);
+        orderTotal += rowTotal;
+        
+        const deliveryDate = row.deliveryDate ? parseISO(row.deliveryDate) : null;
+        const isExpired = deliveryDate && isBefore(deliveryDate, new Date());
+        if (row.isCompleted || isExpired) completed++;
+        else pending++;
       });
-      const orders = res.data;
+      
+      // ============================================
+      // FIXED: Count Retail and Retail-Renewal for Target
+      // ============================================
+      // Target should count: Retail, Retail-Renewal, New
+      if (clientType === 'retail' || clientType === 'retail-renewal' || clientType === 'new') {
+        totalAchieved += orderTotal;
+        retailTotal += orderTotal; // For debugging
+      }
+    });
 
-      let totalAchieved = 0;
-      let executiveTarget = 100;
-      let completed = 0;
-      let pending = 0;
-
-      orders.forEach(order => {
-        if (order.target) executiveTarget = parseFloat(order.target) || 100;
-        
-        const clientType = (order.clientType || '').toString().toLowerCase().trim();
-        
-        let orderTotal = 0;
-        order.rows?.forEach(row => {
-          const rowTotal = parseFloat(row.total || 0);
-          orderTotal += rowTotal;
-          
-          const deliveryDate = row.deliveryDate ? parseISO(row.deliveryDate) : null;
-          const isExpired = deliveryDate && isBefore(deliveryDate, new Date());
-          if (row.isCompleted || isExpired) completed++;
-          else pending++;
-        });
-        
-        if (clientType === 'retail' || clientType === 'new') {
-          totalAchieved += orderTotal;
-        }
-      });
-
-      setTarget(executiveTarget);
-      setAchieved(totalAchieved);
-      setServiceData([{ name: 'Services', pending, completed, total: pending + completed }]);
-    } catch (err) {
-      console.error('Error fetching executive data:', err);
-    }
-  }, [selectedDate]);
-
+    console.log(`📊 Target Achievement - Retail: ${retailTotal}, Total Achieved: ${totalAchieved}`);
+    
+    setTarget(executiveTarget);
+    setAchieved(totalAchieved);
+    setServiceData([{ name: 'Services', pending, completed, total: pending + completed }]);
+  } catch (err) {
+    console.error('Error fetching executive data:', err);
+  }
+}, [selectedDate]);
   const fetchPendingPayments = useCallback(async () => {
     try {
       const month = selectedDate.getMonth() + 1;
