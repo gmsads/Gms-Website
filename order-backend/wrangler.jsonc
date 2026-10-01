@@ -3,6 +3,10 @@
   "name": "gms-api",
   "main": "worker/index.js",
   "compatibility_date": "2026-09-30",
+  "vars": {
+    "WORKER_URL": "https://gms-api.gms-website.workers.dev",
+    "PRODUCTION_DOMAIN": "https://gms.globalmarketingsolutions.in"
+  },
   "observability": { "enabled": true },
   "containers": [
     {

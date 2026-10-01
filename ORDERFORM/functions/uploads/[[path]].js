@@ -1,4 +1,4 @@
-const BACKEND = "https://gms.globalmarketingsolutions.in";
+const BACKEND = "https://gms-api.gms-website.workers.dev";
 
 export function onRequest({ request }) {
   const url = new URL(request.url);
