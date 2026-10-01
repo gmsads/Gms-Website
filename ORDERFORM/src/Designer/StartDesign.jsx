@@ -73,7 +73,7 @@ const StartDesign = () => {
   const fetchDesignDetails = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`http://localhost:5000/api/design-requests/${designIdFromUrl}`);
+      const response = await axios.get(`/api/design-requests/${designIdFromUrl}`);
       setDesignDetails(response.data);
       setLoading(false);
       setIsRunning(true);
@@ -86,7 +86,7 @@ const StartDesign = () => {
   const fetchDesignerTasks = async () => {
     try {
       const loggedInUserId = JSON.parse(localStorage.getItem('userData'))?._id;
-      const response = await axios.get(`http://localhost:5000/api/design-requests`, {
+      const response = await axios.get(`/api/design-requests`, {
         params: {
           assignedDesigner: loggedInUserId,
           status: ['in-progress', 'assigned', 'completed'] // Include completed status
@@ -142,7 +142,7 @@ const StartDesign = () => {
         
         // Update design with pause reason
         const response = await axios.patch(
-          `http://localhost:5000/api/design-requests/${designDetails._id}`,
+          `/api/design-requests/${designDetails._id}`,
           {
             pauseReason: pauseReason,
             timeUsedBeforePause: formatTime(timeUsedBeforePause)
@@ -184,7 +184,7 @@ const StartDesign = () => {
   // Add this function to handle resume
   const handleResumeTimer = async () => {
     try {
-      await axios.patch(`http://localhost:5000/api/design-requests/${designDetails._id}`, {
+      await axios.patch(`/api/design-requests/${designDetails._id}`, {
         resumeTimer: true
       });
       
@@ -214,7 +214,7 @@ const StartDesign = () => {
   const handleSubmitDesign = async (status) => {
     try {
       // Update design status in backend
-      await axios.patch(`http://localhost:5000/api/design-requests/${designDetails._id}`, {
+      await axios.patch(`/api/design-requests/${designDetails._id}`, {
         status: status === 'completed' ? 'completed' : 'in-progress',
         completedAt: status === 'completed' ? new Date() : null
       });

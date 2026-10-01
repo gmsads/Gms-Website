@@ -19,7 +19,7 @@ const DesignPauseReports = () => {
   const fetchDesignsWithPauses = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5000/api/design-requests');
+      const response = await axios.get('/api/design-requests');
       
       // Extract available years from designs
       const years = extractAvailableYears(response.data);
@@ -137,7 +137,7 @@ const DesignPauseReports = () => {
   const fetchPauseDetails = async (designId) => {
     try {
       setLoading(true);
-      const response = await axios.get(`http://localhost:5000/api/design-requests/${designId}/pauses`);
+      const response = await axios.get(`/api/design-requests/${designId}/pauses`);
       setPauseDetails(response.data);
       setSelectedDesign(designId);
       setLoading(false);

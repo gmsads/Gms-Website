@@ -113,7 +113,7 @@ const recordEmployeeLogin = (empName) => {
   const fetchAttendanceRecords = async () => {
     try {
       setRecordsLoading(true);
-      let url = 'http://localhost:5000/api/attendance/employee';
+      let url = '/api/attendance/employee';
   
       // Build query parameters - FIXED LOGIC
       const params = new URLSearchParams();
@@ -349,7 +349,7 @@ const markAttendanceWithPhoto = async () => {
 
     console.log("Sending attendance request for:", trimmedName);
 
-    const response = await fetch('http://localhost:5000/api/attendance/mark-employee', {
+    const response = await fetch('/api/attendance/mark-employee', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -46,7 +46,7 @@ const EmployeeLogin = () => {
 
   const loadEmployeesWithFaces = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/employees/with-faces');
+      const response = await fetch('/api/employees/with-faces');
       const data = await response.json();
       
       if (data.success) {
@@ -154,7 +154,7 @@ const EmployeeLogin = () => {
       // Convert descriptor to array for API call
       const descriptorArray = faceRecognition.descriptorToArray(detection.descriptor);
 
-      const response = await fetch('http://localhost:5000/api/auth/employee-login', {
+      const response = await fetch('/api/auth/employee-login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

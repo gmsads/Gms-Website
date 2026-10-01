@@ -292,7 +292,7 @@ const DesignUpdates = () => {
                                     {selectedDesign.designFiles.map((file, index) => (
                                         <div key={index} className="file-item">
                                             <a
-                                                href={`http://localhost:5000/${file.path}`}
+                                                href={`/${file.path}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                             >

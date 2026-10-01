@@ -337,7 +337,7 @@ function DesignerDashboard({ loggedInUser }) {
     const fetchDesignData = async () => {
       try {
         const loggedInUserId = JSON.parse(localStorage.getItem('userData'))?._id;
-        const res = await axios.get(`http://localhost:5000/api/design-requests`, {
+        const res = await axios.get(`/api/design-requests`, {
           params: {
             assignedDesigner: loggedInUserId,
             status: ['in-progress', 'completed', 'assigned-to-service', 'pending']

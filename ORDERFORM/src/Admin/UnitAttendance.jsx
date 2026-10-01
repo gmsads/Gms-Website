@@ -45,7 +45,7 @@ const UnitAttendance = () => {
   const fetchAttendanceRecords = async () => {
     try {
       setLoading(true);
-      let url = 'http://localhost:5000/api/attendance/employee';
+      let url = '/api/attendance/employee';
 
       // Build query parameters
       const params = new URLSearchParams();
@@ -128,7 +128,7 @@ const UnitAttendance = () => {
       setLoading(true);
       
       // First, fetch all records without name filter
-      let url = 'http://localhost:5000/api/attendance/employee';
+      let url = '/api/attendance/employee';
       const params = new URLSearchParams();
       
       if (yearFilter && yearFilter !== 'all') {

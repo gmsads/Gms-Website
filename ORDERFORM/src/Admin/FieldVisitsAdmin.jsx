@@ -75,7 +75,7 @@ const FieldVisitsAdmin = () => {
     if (photoUrl.startsWith('http') || photoUrl.startsWith('data:')) return photoUrl;
     if (photoUrl.startsWith('/uploads') || photoUrl.startsWith('uploads')) {
       const prefix = photoUrl.startsWith('/') ? '' : '/';
-      return `http://localhost:5000${prefix}${photoUrl}`;
+      return `${prefix}${photoUrl}`;
     }
     return photoUrl;
   };

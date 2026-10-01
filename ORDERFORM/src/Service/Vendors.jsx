@@ -144,7 +144,7 @@ _Registered on: ${new Date().toLocaleDateString()}_
 
         try {
             setIsLoading(true);
-            const response = await axios.post('http://localhost:5000/api/vendors', {
+            const response = await axios.post('/api/vendors', {
                 ...newVendor,
                 contact: String(newVendor.contact),
                 amount: parseFloat(newVendor.amount)

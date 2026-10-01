@@ -36,7 +36,7 @@ function VendorDashboard() {
         }
 
         // Search vendors by phone number
-        const response = await axios.get('http://localhost:5000/api/vendors');
+        const response = await axios.get('/api/vendors');
         const vendor = response.data.find(v => 
           v.contact === vendorPhone || 
           v.name === vendorPhone ||
