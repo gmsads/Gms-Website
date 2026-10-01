@@ -3,7 +3,9 @@ name: Deploy backend to Cloudflare
 on:
   push:
     branches: [main]
-    paths: ["order-backend/**"]
+    paths:
+      - "order-backend/**"
+      - ".github/workflows/deploy-backend.yml"
   workflow_dispatch:
 
 jobs:
@@ -18,7 +20,16 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
-      - run: npx wrangler deploy
+      - name: Deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set +e
+          npx wrangler deploy 2>&1 | tee deploy.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" != "0" ]; then
+            # surface the tail of the log as annotations so it is easy to read
+            tail -n 40 deploy.log | sed 's/\x1b\[[0-9;]*m//g' | grep -v '^\s*$' | while IFS= read -r l; do echo "::error::$l"; done
+          fi
+          exit $code
