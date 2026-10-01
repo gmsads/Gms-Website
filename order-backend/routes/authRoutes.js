@@ -5,13 +5,9 @@ const multer = require('multer');
 const path = require('path');
 
 // Configure multer for file uploads - ADDED
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname));
-  }
+const { r2Storage } = require('../utils/r2Storage');
+const storage = r2Storage({
+  namer: (req, file) => Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname)
 });
 
 const upload = multer({ 

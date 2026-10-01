@@ -25,12 +25,9 @@ const router = express.Router();
 router.use(cors());
 
 /* ---------------- Multer config ---------------- */
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => {
-    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, unique + path.extname(file.originalname));
-  },
+const { r2Storage } = require('../utils/r2Storage');
+const storage = r2Storage({
+  namer: (req, file) => Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname)
 });
 const upload = multer({ storage });
 

@@ -2,6 +2,12 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const path = require("path"); // ADDED
+const dns = require("dns");
+try {
+  dns.setServers(["8.8.8.8", "8.8.4.4"]);
+} catch (e) {
+  // Ignore if custom DNS cannot be configured
+}
 require("dotenv").config();
 
 // Route imports
@@ -54,12 +60,20 @@ const bannerRoutes = require('./routes/bannerRoutes'); // ADDED BANNER ROUTES
 const locationTrackingRoutes = require('./routes/LocationTracking');
 
 const app = express();
-runReminderCron();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+// Uploads are stored in Cloudflare R2 and served by the Worker at /uploads/*
+
+// Called by the Worker's Cron Trigger (daily 9 AM IST)
+app.post('/internal/run-reminders', (req, res) => {
+  if (!process.env.INTERNAL_SECRET || req.get('x-internal-secret') !== process.env.INTERNAL_SECRET) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  runReminderCron().catch((e) => console.error('Reminder cron error:', e));
+  res.json({ started: true });
+});
 app.use('/api', leaveRoutes);
 app.use('/api/salaries', salaryRoutes);
 app.use('/api/purchases', purchase); // ADD THIS LINE

@@ -5,21 +5,11 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Ensure uploads directory exists
-const uploadsDir = 'uploads/visits';
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-}
+const { r2Storage } = require('../utils/r2Storage');
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, uploadsDir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'visit-' + uniqueSuffix + path.extname(file.originalname));
-    }
+const storage = r2Storage({
+    dir: 'visits',
+    namer: (req, file) => 'visit-' + Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname)
 });
 
 const upload = multer({ 
@@ -158,7 +148,7 @@ router.post('/visit', upload.single('photo'), async (req, res) => {
         if (!contactNumber || !/^\d{10}$/.test(contactNumber)) {
             // Delete uploaded file if validation fails
             if (req.file) {
-                fs.unlinkSync(req.file.path);
+                // uploaded file lives in R2; nothing to clean up locally
             }
             return res.status(400).json({ error: 'Phone number must be exactly 10 digits' });
         }
@@ -186,7 +176,7 @@ router.post('/visit', upload.single('photo'), async (req, res) => {
         
         // Delete uploaded file if error occurs
         if (req.file) {
-            fs.unlinkSync(req.file.path);
+            // uploaded file lives in R2; nothing to clean up locally
         }
         
         if (err.name === 'ValidationError') {

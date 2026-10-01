@@ -1,10 +1,9 @@
-const cron = require('node-cron');
 const Anniversary = require('../models/Anniversary');
 const sendWhatsApp = require('../utils/sendWhatsApp');
 
 const runReminderCron = () => {
-  // Run every day at 9 AM
-  cron.schedule('0 9 * * *', async () => {
+  // Triggered daily at 9 AM IST by a Cloudflare Cron Trigger
+  return (async () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Normalize to start of day
 
@@ -48,7 +47,7 @@ const runReminderCron = () => {
           `Time to celebrate this partnership!`
       });
     }
-  });
+  })();
 };
 
 async function checkAndSendReminder({ date, today, anniversary, type, getMessage }) {

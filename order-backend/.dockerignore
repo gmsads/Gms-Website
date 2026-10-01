@@ -1,0 +1,8 @@
+node_modules
+uploads
+exports
+env
+.env
+worker
+wrangler.jsonc
+.wrangler
