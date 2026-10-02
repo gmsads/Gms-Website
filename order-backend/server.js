@@ -149,8 +149,8 @@ app.use('/api/attendance', unitAttendanceRoutes);
 // MongoDB Connection
 mongoose
   .connect(process.env.MONGODB_URI, {
-    maxPoolSize: 20,
-    minPoolSize: 5,
+    maxPoolSize: 30,
+    minPoolSize: 20, // keep connections open: a new TLS connection costs several ~250ms round trips
     serverSelectionTimeoutMS: 10000,
   })
   .then(() => console.log("MongoDB connected"))
