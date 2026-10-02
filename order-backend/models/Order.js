@@ -99,4 +99,8 @@ const orderSchema = new mongoose.Schema({
   timestamps: true 
 });
 
+// Speeds up the main list/sort queries (isTrashed filter + newest-first sort, executive filter)
+orderSchema.index({ isTrashed: 1, orderDate: -1, createdAt: -1 });
+orderSchema.index({ executive: 1, orderDate: -1 });
+
 module.exports = mongoose.model('Order', orderSchema);

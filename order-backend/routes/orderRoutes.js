@@ -576,7 +576,6 @@ router.get("/orders", async (req, res) => {
   try {
     let query = {};
 
-    console.log('Query parameters:', req.query);
 
     // Exclude trashed orders by default
     query.isTrashed = { $ne: true };
@@ -682,15 +681,8 @@ router.get("/orders", async (req, res) => {
       console.log('🔢 Order No filter:', req.query.orderNo);
     }
 
-    console.log('Final MongoDB query:', JSON.stringify(query, null, 2));
 
-    const orders = await Order.find(query).sort({ orderDate: -1, createdAt: -1 });
-    console.log('✅ Found orders:', orders.length);
-    
-    // Log sample dates for debugging
-    if (orders.length > 0) {
-      console.log('Sample order dates:', orders.slice(0, 3).map(o => o.orderDate));
-    }
+    const orders = await Order.find(query).sort({ orderDate: -1, createdAt: -1 }).lean();
     
     res.json(orders);
   } catch (err) {

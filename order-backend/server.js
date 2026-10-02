@@ -65,11 +65,21 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(compression());
+// Report in-app processing time so edge/proxy latency can be told apart from app latency
+app.use((req, res, next) => {
+  const t = Date.now();
+  const wh = res.writeHead;
+  res.writeHead = function (...a) {
+    if (!res.headersSent) res.setHeader('x-app-ms', String(Date.now() - t));
+    return wh.apply(this, a);
+  };
+  next();
+});
 app.use(express.json());
 // Uploads are stored in Cloudflare R2 and served by the Worker at /uploads/*
 
 // TEMP diagnostic: container location + real MongoDB round-trip time
-app.get('/api/_diag', async (req, res) => {
+app.get('/internal/diag', async (req, res) => {
   const t0 = Date.now();
   let ping = null;
   try { await mongoose.connection.db.admin().ping(); ping = Date.now() - t0; } catch (e) { ping = String(e.message); }
