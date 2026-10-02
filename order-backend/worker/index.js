@@ -22,7 +22,7 @@ export class Backend extends Container {
 }
 
 // Atlas cluster is in Mumbai: pin the container to Asia-Pacific (hint applies when the object is first created)
-const backend = (env) => env.BACKEND.get(env.BACKEND.idFromName("main-apac"), { locationHint: "apac" });
+const backend = (env) => env.BACKEND.get(env.BACKEND.idFromName("main-apac-2"), { locationHint: "apac" });
 
 export default {
   async fetch(request, env) {
