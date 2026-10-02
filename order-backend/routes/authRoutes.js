@@ -43,14 +43,140 @@ router.post("/login", async (req, res) => {
   try {
     console.log(`Login attempt for: ${name}`);
 
-    // Check Service Manager
-    const serviceManager = await ServiceManager.findOne({
+    // Start all role lookups in parallel (one DB round trip instead of ~15 sequential ones);
+    // results are still checked in the original priority order below.
+    const serviceManager_p = ServiceManager.findOne({
       $or: [
         { name: new RegExp(`^${name.trim()}$`, "i") },
         { username: new RegExp(`^${name.trim()}$`, "i") }
       ],
       password: password.trim()
-    }).lean();
+    }).lean().exec();
+    serviceManager_p.catch(() => {});
+    const account_p = Account.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    account_p.catch(() => {});
+    const serviceExecutive_p = ServiceExecutive.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    serviceExecutive_p.catch(() => {});
+    const itStaff_p = ItTeam.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    itStaff_p.catch(() => {});
+    const salesManager_p = SalesManager.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    salesManager_p.catch(() => {});
+    const digitalMarketing_p = DigitalMarketing.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    digitalMarketing_p.catch(() => {});
+    const agent_p = Agent.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    agent_p.catch(() => {});
+    const hr_p = HR.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    hr_p.catch(() => {});
+    const videoEditor_p = VideoEditor.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    videoEditor_p.catch(() => {});
+    const clientService_p = ClientService.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    clientService_p.catch(() => {});
+    const executive_p = Executive.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    executive_p.catch(() => {});
+    const admin_p = Admin.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    admin_p.catch(() => {});
+    const designer_p = Designer.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    designer_p.catch(() => {});
+    const vendor_p = Vendor.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    vendor_p.catch(() => {});
+    const fieldExecutive_p = FieldExecutive.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    fieldExecutive_p.catch(() => {});
+    const unitEmployee_p = Unit.findOne({
+      $or: [
+        { name: new RegExp(`^${name.trim()}$`, "i") },
+        { username: new RegExp(`^${name.trim()}$`, "i") }
+      ],
+      password: password.trim()
+    }).lean().exec();
+    unitEmployee_p.catch(() => {});
+
+
+    // Check Service Manager
+    const serviceManager = await serviceManager_p;
     
     if (serviceManager) {
       console.log('Service Manager found:', {
@@ -75,13 +201,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Check Account
-    const account = await Account.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean();
+    const account = await account_p;
     
     if (account) {
       console.log('Account found:', {
@@ -102,13 +222,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Check Service Executive
-    const serviceExecutive = await ServiceExecutive.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean();
+    const serviceExecutive = await serviceExecutive_p;
     
     if (serviceExecutive) {
       if (serviceExecutive.active === false) {
@@ -125,13 +239,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Check IT Team
-    const itStaff = await ItTeam.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean();
+    const itStaff = await itStaff_p;
     
     if (itStaff) {
       if (itStaff.active === false) {
@@ -148,13 +256,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Check Sales Manager
-    const salesManager = await SalesManager.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean();
+    const salesManager = await salesManager_p;
     
     if (salesManager) {
       if (salesManager.active === false) {
@@ -171,13 +273,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Check Digital Marketing
-    const digitalMarketing = await DigitalMarketing.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean();
+    const digitalMarketing = await digitalMarketing_p;
     
     if (digitalMarketing) {
       if (digitalMarketing.active === false) {
@@ -194,13 +290,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Check Agent
-    const agent = await Agent.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean();
+    const agent = await agent_p;
     
     if (agent) {
       if (agent.active === false) {
@@ -217,13 +307,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Check HR
-    const hr = await HR.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean();
+    const hr = await hr_p;
     
     if (hr) {
       if (hr.active === false) {
@@ -238,13 +322,7 @@ router.post("/login", async (req, res) => {
         name: hr.name,
       });
     }
- const videoEditor = await VideoEditor.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean();
+ const videoEditor = await videoEditor_p;
     
     if (videoEditor) {
       if (videoEditor.active === false) {
@@ -261,13 +339,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Check Client service
-    const clientService = await ClientService.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean();
+    const clientService = await clientService_p;
     
     if (clientService) {
       if (clientService.active === false) {
@@ -284,13 +356,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Check Executive - THIS IS THE FIXED PART WITH .lean()
-    const executive = await Executive.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean(); // ← ADD .lean() HERE
+    const executive = await executive_p; // ← ADD .lean() HERE
     
     if (executive) {
       if (executive.active === false) {
@@ -307,13 +373,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Check Admin
-    const admin = await Admin.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean();
+    const admin = await admin_p;
     
     if (admin) {
       if (admin.active === false) {
@@ -326,13 +386,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Check Designer
-    const designer = await Designer.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean();
+    const designer = await designer_p;
     
     if (designer) {
       if (designer.active === false) {
@@ -345,13 +399,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Check Vendor
-    const vendor = await Vendor.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean();
+    const vendor = await vendor_p;
     
     if (vendor) {
       if (vendor.active === false) {
@@ -368,13 +416,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Check Field Executive
-    const fieldExecutive = await FieldExecutive.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean();
+    const fieldExecutive = await fieldExecutive_p;
     
     if (fieldExecutive) {
       if (fieldExecutive.active === false) {
@@ -391,13 +433,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Check Unit
-    const unitEmployee = await Unit.findOne({
-      $or: [
-        { name: new RegExp(`^${name.trim()}$`, "i") },
-        { username: new RegExp(`^${name.trim()}$`, "i") }
-      ],
-      password: password.trim()
-    }).lean();
+    const unitEmployee = await unitEmployee_p;
     
     if (unitEmployee) {
       if (unitEmployee.active === false) {

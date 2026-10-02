@@ -68,6 +68,19 @@ app.use(compression());
 app.use(express.json());
 // Uploads are stored in Cloudflare R2 and served by the Worker at /uploads/*
 
+// TEMP diagnostic: container location + real MongoDB round-trip time
+app.get('/api/_diag', async (req, res) => {
+  const t0 = Date.now();
+  let ping = null;
+  try { await mongoose.connection.db.admin().ping(); ping = Date.now() - t0; } catch (e) { ping = String(e.message); }
+  const t1 = Date.now();
+  let ping2 = null;
+  try { await mongoose.connection.db.admin().ping(); ping2 = Date.now() - t1; } catch (e) { ping2 = String(e.message); }
+  let loc = null;
+  try { const r = await fetch('https://ipinfo.io/json'); const j = await r.json(); loc = { ip: j.ip, city: j.city, region: j.region, country: j.country, org: j.org }; } catch (e) { loc = String(e.message); }
+  res.json({ mongoPingMs: ping, mongoPingWarmMs: ping2, container: loc });
+});
+
 // Called by the Worker's Cron Trigger (daily 9 AM IST)
 app.post('/internal/run-reminders', (req, res) => {
   if (!process.env.INTERNAL_SECRET || req.get('x-internal-secret') !== process.env.INTERNAL_SECRET) {
