@@ -103,4 +103,12 @@ const orderSchema = new mongoose.Schema({
 orderSchema.index({ isTrashed: 1, orderDate: -1, createdAt: -1 });
 orderSchema.index({ executive: 1, orderDate: -1 });
 
+// Any write invalidates the cached /api/orders lists
+const orderCache = require('../utils/orderCache');
+const clearCache = () => orderCache.clear();
+['save', 'updateOne', 'updateMany', 'findOneAndUpdate', 'findOneAndReplace', 'replaceOne',
+ 'deleteOne', 'deleteMany', 'findOneAndDelete', 'insertMany'].forEach((op) => orderSchema.post(op, clearCache));
+orderSchema.pre('bulkWrite', clearCache);
+orderSchema.post('bulkWrite', clearCache);
+
 module.exports = mongoose.model('Order', orderSchema);

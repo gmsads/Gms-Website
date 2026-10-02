@@ -1,4 +1,5 @@
 const express = require("express");
+const orderCache = require("../utils/orderCache");
 const router = express.Router();
 const Executive = require("../models/Executive");
 const Requirement = require("../models/Requirement");
@@ -574,6 +575,13 @@ router.put("/orders/:id", async (req, res) => {
 // ============================
 router.get("/orders", async (req, res) => {
   try {
+    const cacheKey = req.originalUrl;
+    const cached = orderCache.get(cacheKey);
+    if (cached) {
+      res.set('x-cache', 'HIT');
+      return res.type('application/json').send(cached);
+    }
+
     let query = {};
 
 
@@ -684,7 +692,10 @@ router.get("/orders", async (req, res) => {
 
     const orders = await Order.find(query).sort({ orderDate: -1, createdAt: -1 }).lean();
     
-    res.json(orders);
+    const body = JSON.stringify(orders);
+    orderCache.set(cacheKey, body);
+    res.set('x-cache', 'MISS');
+    res.type('application/json').send(body);
   } catch (err) {
     console.error("Error fetching orders:", err);
     res.status(500).json({ error: "Failed to fetch orders: " + err.message });
