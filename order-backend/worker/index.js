@@ -2,7 +2,7 @@ import { Container } from "@cloudflare/containers";
 
 export class Backend extends Container {
   defaultPort = 5000;
-  sleepAfter = "30m";
+  sleepAfter = "24h"; // keep warm: avoids cold starts
 
   constructor(ctx, env) {
     super(ctx, env);
@@ -21,7 +21,8 @@ export class Backend extends Container {
   }
 }
 
-const backend = (env) => env.BACKEND.getByName("main");
+// Atlas cluster is in Mumbai: pin the container to Asia-Pacific (hint applies when the object is first created)
+const backend = (env) => env.BACKEND.get(env.BACKEND.idFromName("main-apac"), { locationHint: "apac" });
 
 export default {
   async fetch(request, env) {

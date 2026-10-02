@@ -1,6 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const compression = require("compression");
 const path = require("path"); // ADDED
 const dns = require("dns");
 try {
@@ -63,6 +64,7 @@ const app = express();
 
 // Middleware
 app.use(cors());
+app.use(compression());
 app.use(express.json());
 // Uploads are stored in Cloudflare R2 and served by the Worker at /uploads/*
 
@@ -128,7 +130,11 @@ app.use('/api/attendance', unitAttendanceRoutes);
 // app.use("/api", router);
 // MongoDB Connection
 mongoose
-  .connect(process.env.MONGODB_URI)
+  .connect(process.env.MONGODB_URI, {
+    maxPoolSize: 20,
+    minPoolSize: 5,
+    serverSelectionTimeoutMS: 10000,
+  })
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.log("MongoDB connection error:", err));
 

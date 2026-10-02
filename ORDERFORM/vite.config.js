@@ -56,5 +56,19 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        // split heavy vendor libs so they cache separately and load in parallel
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (id.includes('face-api') || id.includes('tfjs')) return 'vendor-face';
+          if (id.includes('@mui') || id.includes('@emotion')) return 'vendor-mui';
+          if (id.includes('antd') || id.includes('@ant-design') || id.includes('rc-')) return 'vendor-antd';
+          if (id.includes('chart.js') || id.includes('react-chartjs')) return 'vendor-charts';
+          if (id.includes('docx') || id.includes('exceljs') || id.includes('xlsx') || id.includes('file-saver')) return 'vendor-docs';
+          if (id.includes('react') || id.includes('scheduler')) return 'vendor-react';
+        },
+      },
+    },
   }
 })
