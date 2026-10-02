@@ -60,6 +60,14 @@ const hrReportsRouter = require('./routes/hrReports');
 const bannerRoutes = require('./routes/bannerRoutes'); // ADDED BANNER ROUTES
 const locationTrackingRoutes = require('./routes/LocationTracking');
 
+// Each extra result batch from Atlas costs a full network round trip (~250ms from Cloudflare).
+// Fetch find() results in one batch instead of the default 101-document first batch.
+const origExec = mongoose.Query.prototype.exec;
+mongoose.Query.prototype.exec = function (...args) {
+  if (this.op === 'find' && this.options.batchSize === undefined) this.batchSize(20000);
+  return origExec.apply(this, args);
+};
+
 const app = express();
 
 // Middleware
@@ -77,19 +85,6 @@ app.use((req, res, next) => {
 });
 app.use(express.json());
 // Uploads are stored in Cloudflare R2 and served by the Worker at /uploads/*
-
-// TEMP diagnostic: container location + real MongoDB round-trip time
-app.get('/internal/diag', async (req, res) => {
-  const t0 = Date.now();
-  let ping = null;
-  try { await mongoose.connection.db.admin().ping(); ping = Date.now() - t0; } catch (e) { ping = String(e.message); }
-  const t1 = Date.now();
-  let ping2 = null;
-  try { await mongoose.connection.db.admin().ping(); ping2 = Date.now() - t1; } catch (e) { ping2 = String(e.message); }
-  let loc = null;
-  try { const r = await fetch('https://ipinfo.io/json'); const j = await r.json(); loc = { ip: j.ip, city: j.city, region: j.region, country: j.country, org: j.org }; } catch (e) { loc = String(e.message); }
-  res.json({ mongoPingMs: ping, mongoPingWarmMs: ping2, container: loc });
-});
 
 // Called by the Worker's Cron Trigger (daily 9 AM IST)
 app.post('/internal/run-reminders', (req, res) => {
