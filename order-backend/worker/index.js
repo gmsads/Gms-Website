@@ -2,7 +2,7 @@ import { Container } from "@cloudflare/containers";
 
 export class Backend extends Container {
   defaultPort = 5000;
-  sleepAfter = "24h"; // keep warm: avoids cold starts
+  sleepAfter = "20m"; // scale to zero when idle (billing is per provisioned second while running)
 
   constructor(ctx, env) {
     super(ctx, env);
