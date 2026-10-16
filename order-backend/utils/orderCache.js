@@ -1,6 +1,6 @@
 // In-memory cache for the big GET /api/orders list.
 // Cleared on any write to the Order collection (see hooks in models/Order.js); TTL is a safety net.
-const TTL_MS = 60 * 1000;
+const TTL_MS = 5 * 60 * 1000;
 const MAX_KEYS = 50;
 const store = new Map();
 

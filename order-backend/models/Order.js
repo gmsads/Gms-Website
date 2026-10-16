@@ -107,7 +107,9 @@ orderSchema.index({ executive: 1, orderDate: -1 });
 const orderCache = require('../utils/orderCache');
 const clearCache = () => orderCache.clear();
 ['save', 'updateOne', 'updateMany', 'findOneAndUpdate', 'findOneAndReplace', 'replaceOne',
- 'deleteOne', 'deleteMany', 'findOneAndDelete', 'insertMany'].forEach((op) => orderSchema.post(op, clearCache));
+ 'deleteMany', 'findOneAndDelete', 'insertMany'].forEach((op) => orderSchema.post(op, clearCache));
+// doc.deleteOne() (document middleware) and Order.deleteOne() (query middleware)
+orderSchema.post('deleteOne', { document: true, query: true }, clearCache);
 orderSchema.pre('bulkWrite', clearCache);
 orderSchema.post('bulkWrite', clearCache);
 
