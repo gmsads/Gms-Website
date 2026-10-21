@@ -3,6 +3,8 @@
 
 ### dotenv ###
 .env
+private_uploads/
+*service-account*.json
 
 ### Node ###
 # Logs

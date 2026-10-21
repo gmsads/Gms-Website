@@ -468,6 +468,13 @@ const NAV = [
     ],
   },
   {
+    key: 'payment-management', label: 'Payment Management', icon: '🧾',
+    items: [
+      { to: 'payment-extractor', label: 'Payment Screenshot Extractor', emoji: '📸', badge: 'NEW' },
+      { to: 'pending-payment', label: 'Pending Payment', emoji: '💳' },
+    ],
+  },
+  {
     key: 'accounts', label: 'Accounts', icon: '💰',
     items: [
       { to: 'pending-payment', label: 'Pending Payment', emoji: '💳' },

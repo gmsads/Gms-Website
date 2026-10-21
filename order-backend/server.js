@@ -52,6 +52,7 @@ const leaveRoutes = require('./routes/leaveRoutes');
 const hrReportsRouter = require('./routes/hrReports');
 const bannerRoutes = require('./routes/bannerRoutes'); // ADDED BANNER ROUTES
 const locationTrackingRoutes = require('./routes/LocationTracking');
+const paymentExtractorRoutes = require('./modules/payment-extractor/payment-extractor.routes');
 
 const app = express();
 runReminderCron();
@@ -60,6 +61,7 @@ runReminderCron();
 app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use('/api/payment-extractor', paymentExtractorRoutes);
 app.use('/api', leaveRoutes);
 app.use('/api/salaries', salaryRoutes);
 app.use('/api/purchases', purchase); // ADD THIS LINE
