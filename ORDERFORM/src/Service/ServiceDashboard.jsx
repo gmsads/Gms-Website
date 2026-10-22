@@ -1,5 +1,6 @@
 // Import the logo
 import GMSLogo from '../assets/GMS_LOGO_.png';
+import { visibleInterval } from '../utils/visibleInterval';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Bar } from 'react-chartjs-2';
@@ -577,7 +578,7 @@ const ServiceDashboard = () => {
       fetchData();
       
       // Set up interval to refresh target data every 30 seconds
-      const interval = setInterval(fetchTargetData, 30000);
+      const interval = visibleInterval(fetchTargetData, 120000);
       return () => clearInterval(interval);
     }
 

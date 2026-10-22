@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { visibleInterval } from '../utils/visibleInterval';
 import axios from 'axios';
 import { parseISO, isBefore } from 'date-fns';
 import {
@@ -939,13 +940,13 @@ const fetchExecutiveData = useCallback(async (executiveName) => {
   ]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const interval = visibleInterval(() => {
       if (selectedExecutive) {
         fetchAppointmentCount();
         fetchFollowUpCount();
         fetchProspects();
       }
-    }, 5000);
+    }, 60000);
 
     return () => clearInterval(interval);
   }, [

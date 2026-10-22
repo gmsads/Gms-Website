@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { visibleInterval } from '../utils/visibleInterval';
 import axios from "axios";
 import { useLocation } from "react-router-dom";
 import Invoice from "./Invoice";
@@ -273,9 +274,9 @@ Global Marketing Solutions Team`;
 
   useEffect(() => {
     if (approvalRequested && !hasAdvanceApproval && !isAdmin && business && contactPerson) {
-      approvalPollingRef.current = setInterval(async () => {
+      approvalPollingRef.current = visibleInterval(async () => {
         await checkAdvanceApproval();
-      }, 5000);
+      }, 15000);
 
       return () => {
         if (approvalPollingRef.current) {

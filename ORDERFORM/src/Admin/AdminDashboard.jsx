@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { visibleInterval } from '../utils/visibleInterval';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import OrderForm from '../Executive/OrderForm';
@@ -832,7 +833,7 @@ function AdminDashboard() {
       }
     };
     fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
+    const interval = visibleInterval(fetchUnreadCount, 120000);
     return () => clearInterval(interval);
   }, []);
 

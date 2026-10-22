@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { visibleInterval } from '../utils/visibleInterval';
 import axios from "axios";
 import ExecutiveDashboard from "../Executive/ExecutiveDashboard";
 import ViewOrders from "../Admin/ViewOrders";
@@ -139,7 +140,7 @@ function Admin() {
     };
 
     fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
+    const interval = visibleInterval(fetchUnreadCount, 120000);
     return () => clearInterval(interval);
   }, [selectedExecutive]);
 
@@ -411,7 +412,7 @@ function Admin() {
   useEffect(() => {
     if (selectedExecutive) {
       fetchPendingPayments();
-      const interval = setInterval(fetchPendingPayments, 30000);
+      const interval = visibleInterval(fetchPendingPayments, 120000);
       return () => clearInterval(interval);
     }
   }, [selectedExecutive]);
@@ -633,7 +634,7 @@ function Admin() {
 
     if (selectedExecutive) {
       fetchTargetData();
-      const interval = setInterval(fetchTargetData, 30000);
+      const interval = visibleInterval(fetchTargetData, 120000);
       return () => clearInterval(interval);
     }
   }, [selectedExecutive]);
