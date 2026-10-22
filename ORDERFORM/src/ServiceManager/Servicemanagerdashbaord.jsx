@@ -392,6 +392,24 @@ const ServiceManagerDashboard = ({ loggedInUser }) => {
           Create Order ➕
         </NavLink>
         <NavLink
+          to="/service-manager-dashboard/view-orders"
+          style={({ isActive }) => ({
+            ...styles.sidebarItem,
+            ...(isActive ? styles.activeSidebarItem : {})
+          })}
+        >
+          View All Orders
+        </NavLink>
+        <NavLink
+          to="/service-manager-dashboard/pending-services"
+          style={({ isActive }) => ({
+            ...styles.sidebarItem,
+            ...(isActive ? styles.activeSidebarItem : {})
+          })}
+        >
+          Pending Services
+        </NavLink>
+        <NavLink
           to="/service-manager-dashboard/appointments"
           style={({ isActive }) => ({
             ...styles.sidebarItem,

@@ -59,6 +59,7 @@ const leaveRoutes = require('./routes/leaveRoutes');
 const hrReportsRouter = require('./routes/hrReports');
 const bannerRoutes = require('./routes/bannerRoutes'); // ADDED BANNER ROUTES
 const locationTrackingRoutes = require('./routes/LocationTracking');
+const paymentExtractorRoutes = require('./modules/payment-extractor/payment-extractor.routes');
 
 // Each extra result batch from Atlas costs a full network round trip (~250ms from Cloudflare).
 // Fetch find() results in one batch instead of the default 101-document first batch.
@@ -94,6 +95,7 @@ app.post('/internal/run-reminders', (req, res) => {
   runReminderCron().catch((e) => console.error('Reminder cron error:', e));
   res.json({ started: true });
 });
+app.use('/api/payment-extractor', paymentExtractorRoutes);
 app.use('/api', leaveRoutes);
 app.use('/api/salaries', salaryRoutes);
 app.use('/api/purchases', purchase); // ADD THIS LINE

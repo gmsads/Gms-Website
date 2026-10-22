@@ -989,6 +989,17 @@ function AccountDashboard({ loggedInUser }) {
             Assign Service
           </NavLink>
           
+          {/* Payment Screenshot Extractor link */}
+          <NavLink
+            to="payment-extractor"
+            style={linkStyle('payment-extractor')}
+            onMouseEnter={() => setHoveredItem('payment-extractor')}
+            onMouseLeave={() => setHoveredItem('')}
+            onClick={handleSidebarClick}
+          >
+            Payment Screenshot Extractor 📸
+          </NavLink>
+
           {/* Pending Payment link */}
           <NavLink
             to="pending-payment"

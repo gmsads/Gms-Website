@@ -586,6 +586,14 @@ function SalesDashboard() {
             Assign Service
           </NavLink>
           <NavLink
+            to="payment-extractor"
+            style={linkStyle('payment-extractor')}
+            onMouseEnter={() => setHoveredItem('payment-extractor')}
+            onMouseLeave={() => setHoveredItem('')}
+          >
+            Payment Screenshot Extractor 📸
+          </NavLink>
+          <NavLink
             to="pending-payment"
             style={linkStyle('pending-payment')}
             onMouseEnter={() => setHoveredItem('pending-payment')}

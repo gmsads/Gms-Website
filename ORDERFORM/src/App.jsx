@@ -86,6 +86,7 @@ import AssignedVideos from './VideoEditors/AssignedVideos.jsx';
 import UploadVideo from './VideoEditors/UploadVideo.jsx';
 import MyWork from './VideoEditors/MyWork.jsx';
 import BannerManagement from './Admin/BannerManagement';
+import PaymentScreenshotExtractor from './PaymentExtractor/PaymentScreenshotExtractor.jsx';
 // ============ WRAPPER COMPONENT FOR HR ATTENDANCE ============
 const AttendanceWithEmployees = () => {
   const [employees, setEmployees] = useState([]);
@@ -299,6 +300,7 @@ function App() {
           <Route path="advance-approvals" element={<AdvanceApprovalPage />} />
           <Route path="fieldvisitsadmin" element={<FieldVisitsAdmin />} />
           <Route path="create-banner" element={<BannerManagement />} />
+          <Route path="payment-extractor" element={<PaymentScreenshotExtractor />} />
         </Route>
 
         {/* Agent Dashboard Routes */}
@@ -404,6 +406,7 @@ function App() {
           <Route path="price-list" element={<Pricelist />} />
           <Route path="hour" element={<Hourrecord />} />
           <Route path="hour-reeport" element={<HourReport />} />
+          <Route path="payment-extractor" element={<PaymentScreenshotExtractor />} />
         </Route>
 
         {/* Executive Dashboard Route */}
@@ -543,6 +546,7 @@ function App() {
           <Route path="daily-record" element={<Record />} />
           <Route path="daily-report" element={<DailyReport />} />
           <Route path="inventory" element={<Inventory />} />
+          <Route path="payment-extractor" element={<PaymentScreenshotExtractor />} />
         </Route>
 
       </Routes>
