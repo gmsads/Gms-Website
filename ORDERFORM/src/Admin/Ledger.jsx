@@ -524,7 +524,7 @@ const Ledger = () => {
         </div>
         <h3>TRANSACTION HISTORY</h3>
          <table>
-          <thead><tr><th>Date</th><th>Order No</th><th>Description</th><th>Amount</th><th>Method</th><th>Balance</th></tr></thead>
+          <thead><tr><th>Date</th><th>Order No</th><th>Requirements</th><th>Description</th><th>Amount</th><th>Method</th><th>Balance</th></tr></thead>
           <tbody>
     `;
 
@@ -532,15 +532,22 @@ const Ledger = () => {
     let runningBalance = 0;
     
     clientData.timeline.forEach((entry) => {
-      let description = '';
+      let requirementsHtml = '';
+      let descriptionHtml = '';
       let methodDisplay = '';
       
       if (entry.type === 'order') {
-        description = entry.requirements.map(req => `${req.requirement} - ${req.quantity}×₹${req.rate}`).join(', ');
+        requirementsHtml = entry.requirements
+          .map(req => `<div>${req.requirement || '-'} - ${req.quantity} × ₹${req.rate} = ₹${req.total}</div>`)
+          .join('');
+        descriptionHtml = entry.requirements
+          .map(req => `<div>${req.description || '-'}</div>`)
+          .join('');
         runningBalance = entry.balance;
         methodDisplay = '-';
       } else {
-        description = 'Payment Received';
+        requirementsHtml = 'Payment Received';
+        descriptionHtml = '-';
         methodDisplay = entry.method || '-';
         if (entry.chequeNumber) {
           methodDisplay = `Cheque (${entry.chequeNumber})`;
@@ -556,7 +563,8 @@ const Ledger = () => {
         <tr class="${entry.type === 'order' ? 'order-row' : 'payment-row'}">
           <td>${formatDateSafe(entry.date)}</td>
           <td><strong>${entry.orderNo}</strong></td>
-          <td>${description}</td>
+          <td>${requirementsHtml}</td>
+          <td>${descriptionHtml}</td>
           <td>${formatCurrency(entry.totalAmount || entry.amount || 0)}</td>
           <td>${methodDisplay}</td>
           <td>${formatCurrency(runningBalance)}</td>
@@ -608,15 +616,21 @@ const Ledger = () => {
       doc.text('TRANSACTION HISTORY', 14, yPos);
       
       const tableData = clientData.timeline.map(entry => {
-        let description = '';
+        let requirementsText = '';
+        let descriptionText = '';
         let methodDisplay = '';
         
         if (entry.type === 'order') {
-          description = entry.requirements.map(req => `${req.quantity}×${req.requirement}`).join(', ');
-          if (description.length > 50) description = description.substring(0, 47) + '...';
+          requirementsText = entry.requirements
+            .map(req => `${req.requirement || '-'} - ${req.quantity} x Rs. ${req.rate} = Rs. ${req.total}`)
+            .join('\n');
+          descriptionText = entry.requirements
+            .map(req => req.description || '-')
+            .join('\n');
           methodDisplay = '-';
         } else {
-          description = 'PAYMENT RECEIVED';
+          requirementsText = 'PAYMENT RECEIVED';
+          descriptionText = '-';
           methodDisplay = entry.method || '-';
           if (entry.chequeNumber) {
             methodDisplay = `Cheque (${entry.chequeNumber})`;
@@ -630,7 +644,8 @@ const Ledger = () => {
         return [
           formatDateSafe(entry.date),
           entry.orderNo,
-          description,
+          requirementsText,
+          descriptionText,
           formatCurrency(entry.totalAmount || entry.amount || 0),
           methodDisplay,
           formatCurrency(entry.type === 'order' ? entry.balance : 0)
@@ -639,18 +654,19 @@ const Ledger = () => {
 
       autoTable(doc, {
         startY: yPos + 4,
-        head: [['DATE', 'ORDER NO', 'DESCRIPTION', 'AMOUNT', 'METHOD', 'BALANCE']],
+        head: [['DATE', 'ORDER NO', 'REQUIREMENTS', 'DESCRIPTION', 'AMOUNT', 'METHOD', 'BALANCE']],
         body: tableData,
         theme: 'grid',
-        styles: { fontSize: 7, cellPadding: 2 },
+        styles: { fontSize: 7.5, cellPadding: 2.5, overflow: 'linebreak' },
         headStyles: { fillColor: [0, 51, 102], textColor: 255, fontSize: 8, fontStyle: 'bold' },
         columnStyles: {
-          0: { cellWidth: 30 },
-          1: { cellWidth: 28 },
-          2: { cellWidth: 95 },
-          3: { cellWidth: 35, halign: 'right' },
-          4: { cellWidth: 40 },
-          5: { cellWidth: 35, halign: 'right' }
+          0: { cellWidth: 22 },
+          1: { cellWidth: 24 },
+          2: { cellWidth: 78 },
+          3: { cellWidth: 55 },
+          4: { cellWidth: 30, halign: 'right' },
+          5: { cellWidth: 30 },
+          6: { cellWidth: 30, halign: 'right' }
         }
       });
 
