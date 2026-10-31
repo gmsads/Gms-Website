@@ -719,7 +719,7 @@ const Ledger = () => {
 
             <div style={styles.timelineContainer}>
               <table style={styles.timelineTable}>
-                <thead><tr><th>Date</th><th>Order No</th><th>Requirements</th><th>Amount</th><th>Payment Method</th><th>Balance</th><th>Action</th></tr></thead>
+                <thead><tr><th>Date</th><th>Order No</th><th>Requirements</th><th>Description</th><th>Amount</th><th>Payment Method</th><th>Balance</th><th>Action</th></tr></thead>
                 <tbody>
                   {clientData.timeline.map((entry, index) => {
                     const order = clientData.orders.find(o => o._id === entry.orderId);
@@ -741,6 +741,17 @@ const Ledger = () => {
                               </div>
                             ) : (
                               <div>Payment Received</div>
+                            )}
+                          </td>
+                          <td style={styles.tableCell}>
+                            {entry.type === 'order' ? (
+                              <div>
+                                {entry.requirements.map((req, idx) => (
+                                  <div key={idx}>{req.description || '-'}</div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div>-</div>
                             )}
                           </td>
                           <td style={styles.tableCell}>₹{(entry.totalAmount || entry.amount || 0).toFixed(2)}</td>
@@ -768,7 +779,7 @@ const Ledger = () => {
 
                         {isPaymentRowActive && (
                           <tr>
-                            <td colSpan="7" style={styles.paymentFormCell}>
+                            <td colSpan="8" style={styles.paymentFormCell}>
                               <div style={styles.paymentForm}>
                                 <div style={styles.paymentFormHeader}>
                                   <span>Record Payment for Order {entry.orderNo}</span>
