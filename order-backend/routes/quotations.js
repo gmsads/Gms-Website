@@ -118,9 +118,14 @@ router.post('/', async (req, res) => {
 // UPDATE quotation
 router.put('/:id', async (req, res) => {
   try {
+    const updateData = { ...req.body };
+    delete updateData._id;
+    delete updateData.createdAt;
+    delete updateData.updatedAt;
+
     const quotation = await Quotation.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       { new: true, runValidators: true }
     );
     
