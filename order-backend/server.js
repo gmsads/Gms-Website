@@ -115,6 +115,7 @@ app.use('/api/attendance', unitAttendanceRoutes);
 // Be careful with this catch-all route - it might conflict
 // app.use("/api", router);
 // MongoDB Connection
+console.log("MongoDB URI available:", !!process.env.MONGODB_URI);
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => console.log("MongoDB connected"))
