@@ -38,9 +38,8 @@ const orderSchema = new mongoose.Schema({
 });
 
 // Update the updatedAt field before saving
-orderSchema.pre('save', function(next) {
+orderSchema.pre('save', function() {
   this.updatedAt = Date.now();
-  next();
 });
 
 module.exports = mongoose.model('DigitalOrder', orderSchema);

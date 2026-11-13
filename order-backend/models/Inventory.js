@@ -50,9 +50,8 @@ const inventorySchema = new mongoose.Schema({
 });
 
 // Update lastUpdated timestamp before saving
-inventorySchema.pre('save', function(next) {
+inventorySchema.pre('save', function() {
   this.lastUpdated = Date.now();
-  next();
 });
 
 module.exports = mongoose.model('Inventory', inventorySchema);

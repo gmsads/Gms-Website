@@ -55,7 +55,7 @@ const serviceRequirementSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Auto-generate payment schedules before saving
-serviceRequirementSchema.pre('save', function(next) {
+serviceRequirementSchema.pre('save', function() {
   if (this.isNew || this.isModified('startDate') || this.isModified('numberOfDays') || this.isModified('dieselPaymentDays') || this.isModified('rentAmount') || this.isModified('dieselAmount')) {
     
     // Calculate end date
@@ -67,7 +67,6 @@ serviceRequirementSchema.pre('save', function(next) {
     // Generate payment schedules
     this.paymentSchedules = this.generatePaymentSchedules();
   }
-  next();
 });
 
 // Method to generate payment schedules

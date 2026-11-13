@@ -101,9 +101,8 @@ const ServiceExecutiveSchema = new mongoose.Schema({
 });
 
 // Update the updatedAt timestamp on save
-ServiceExecutiveSchema.pre('save', function(next) {
+ServiceExecutiveSchema.pre('save', function() {
   this.updatedAt = new Date();
-  next();
 });
 
 module.exports = mongoose.model('ServiceExecutive', ServiceExecutiveSchema);

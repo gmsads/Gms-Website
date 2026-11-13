@@ -66,11 +66,10 @@ unitAttendanceSchema.virtual('calculatedWorkHours').get(function() {
 });
 
 // Pre-save middleware to calculate work hours
-unitAttendanceSchema.pre('save', function(next) {
+unitAttendanceSchema.pre('save', function() {
   if (this.logoutTime && this.loginTime) {
     this.workHours = this.calculatedWorkHours;
   }
-  next();
 });
 
 unitAttendanceSchema.set('toJSON', { virtuals: true });

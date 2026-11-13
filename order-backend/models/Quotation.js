@@ -165,7 +165,7 @@ const quotationSchema = new mongoose.Schema({
 });
 
 // Auto-generate quotation number if not provided
-quotationSchema.pre('save', async function(next) {
+quotationSchema.pre('save', async function() {
   if (!this.quotationNo) {
     const lastQuotation = await mongoose.model('Quotation').findOne().sort({ createdAt: -1 });
     let nextNumber = 1;
@@ -177,7 +177,6 @@ quotationSchema.pre('save', async function(next) {
     
     this.quotationNo = `GMS${String(nextNumber).padStart(3, '0')}`;
   }
-  next();
 });
 
 module.exports = mongoose.model('Quotation', quotationSchema);

@@ -96,9 +96,8 @@ const prospectiveClientSchema = new mongoose.Schema({
 });
 
 // Update the updatedAt field before saving
-prospectiveClientSchema.pre('save', function(next) {
+prospectiveClientSchema.pre('save', function() {
     this.updatedAt = Date.now();
-    next();
 });
 
 // Add a text index for search functionality

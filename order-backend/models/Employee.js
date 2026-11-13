@@ -149,9 +149,8 @@ const baseEmployeeSchema = new mongoose.Schema({
 });
 
 // Update timestamp middleware
-baseEmployeeSchema.pre('save', function(next) {
+baseEmployeeSchema.pre('save', function() {
   this.updatedAt = new Date();
-  next();
 });
 
 module.exports = baseEmployeeSchema;
