@@ -21,6 +21,12 @@
       }
     ]
   },
+  "exports": {
+    "Backend": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
   "triggers": {
     "crons": ["30 3 * * *"]
   },
