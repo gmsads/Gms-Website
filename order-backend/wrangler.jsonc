@@ -12,5 +12,20 @@
       "binding": "UPLOADS",
       "bucket_name": "gms-uploads"
     }
-  ]
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "BACKEND",
+        "class_name": "Backend"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": ["30 3 * * *"]
+  },
+  "vars": {
+    "PRODUCTION_DOMAIN": "https://gms.globalmarketingsolutions.in",
+    "WORKER_URL": "https://gms-api.gms-website.workers.dev"
+  }
 }
