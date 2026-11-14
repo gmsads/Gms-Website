@@ -75,14 +75,13 @@ AnniversarySchema.index({ clientName: 1, businessName: 1 });
 AnniversarySchema.index({ anniversaryDate: 1, isActive: 1 });
 
 // Middleware to validate dates
-AnniversarySchema.pre('save', function(next) {
+AnniversarySchema.pre('save', function() {
   if (this.anniversaryDate && this.startingYear) {
     const anniversaryYear = new Date(this.anniversaryDate).getFullYear();
     if (anniversaryYear < this.startingYear) {
       throw new Error('Anniversary date must be in or after starting year');
     }
   }
-  next();
 });
 
 module.exports = mongoose.model('Anniversary', AnniversarySchema);

@@ -125,9 +125,8 @@ const partySchema = new mongoose.Schema({
 });
 
 // Update the updatedAt field before saving
-partySchema.pre('save', function(next) {
+partySchema.pre('save', function() {
   this.updatedAt = Date.now();
-  next();
 });
 
 module.exports = mongoose.model('Party', partySchema);
