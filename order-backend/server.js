@@ -16,7 +16,18 @@ app.use(
   express.static(path.join(process.cwd(), "uploads"))
 );
 
-// Connect to MongoDB
+// GENERIC ROUTES LAST
+app.use("/api/parties",parties);
+app.use("/api", orderRoutes);
+app.use("/api", checkClientRoutes);
+app.use("/api", serviceExecutiveRoutes);
+app.use("/api", employeeRoutes);
+app.use('/api/employees', require('./routes/employees'));
+app.use('/api/attendance', unitAttendanceRoutes);
+// Be careful with this catch-all route - it might conflict
+// app.use("/api", router);
+// MongoDB Connection
+console.log("MongoDB URI available:", !!process.env.MONGODB_URI);
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
@@ -29,8 +40,17 @@ mongoose
     app.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
-  })
-  .catch((error) => {
-    console.error("MongoDB connection error:", error);
-    process.exit(1);
-  });
+  }
+});
+
+// Error Handling Middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send("Server Error");
+});
+
+// Start Server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
