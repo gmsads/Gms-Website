@@ -33,6 +33,8 @@ const Quotation = () => {
   const [, setSignatureLoaded] = useState(false);
   const [logoUrl, setLogoUrl] = useState(null);
   const [signatureUrl, setSignatureUrl] = useState(null);
+  const [editingQuotationId, setEditingQuotationId] = useState(null);
+  const [wasEditing, setWasEditing] = useState(false);
 
   // Party details state - Manual entry
   const [partyDetails, setPartyDetails] = useState({
@@ -398,12 +400,20 @@ const Quotation = () => {
 
     try {
       console.log('Sending quotation payload:', quotationPayload);
-      const response = await api.post('/quotations', quotationPayload);
+      const isUpdating = Boolean(editingQuotationId);
+      let response;
+      if (isUpdating) {
+        response = await api.put(`/quotations/${editingQuotationId}`, quotationPayload);
+      } else {
+        response = await api.post('/quotations', quotationPayload);
+      }
       setSavedQuotation(response.data);
+      setWasEditing(isUpdating);
       setShowSuccessModal(true);
       console.log('Quotation saved:', response.data);
       
       // Reset form
+      setEditingQuotationId(null);
       setQuotationData({
         items: [],
         subtotal: 0,
@@ -424,6 +434,7 @@ const Quotation = () => {
       });
       setNotes('');
       fetchNextQuotationNumber();
+      fetchAllQuotations();
     } catch (error) {
       console.error('Error saving quotation:', error);
       console.error('Error response:', error.response?.data);
@@ -570,6 +581,134 @@ const Quotation = () => {
   const viewQuotation = (quotation) => {
     setSelectedQuotation(quotation);
     setShowQuotationDetails(true);
+  };
+
+  const handleEditQuotation = (quotation) => {
+    if (!quotation) return;
+
+    setEditingQuotationId(quotation._id);
+
+    // Format dates safely for HTML date inputs (YYYY-MM-DD)
+    const rawDate = quotation.quotationDate || '';
+    const formattedDate = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+    const rawValDate = quotation.validityDate || '';
+    const formattedValDate = rawValDate.includes('T') ? rawValDate.split('T')[0] : rawValDate;
+
+    setQuotationHeader({
+      quotationNo: quotation.quotationNo || '',
+      validFor: quotation.validFor ? String(quotation.validFor) : '10',
+      poNo: quotation.poNo || '',
+      quotationDate: formattedDate || new Date().toISOString().split('T')[0],
+      validityDate: formattedValDate || ''
+    });
+
+    const party = quotation.partyDetails || quotation.partyId || {};
+    setPartyDetails({
+      partyName: party.partyName || '',
+      mobileNumber: party.mobileNumber || '',
+      email: party.email || '',
+      billingAddress: party.billingAddress || '',
+      gstin: party.gstin || ''
+    });
+
+    const loadedItems = (quotation.items || []).map((item, index) => {
+      const formattedItem = {
+        id: item._id || (Date.now() + index),
+        name: item.name || '',
+        description: item.description || '',
+        quantity: typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity) || 1),
+        price: typeof item.price === 'number' ? item.price : (parseFloat(item.price) || 0),
+        unit: item.unit || 'PCS',
+        discount: typeof item.discount === 'number' ? item.discount : (parseFloat(item.discount) || 0),
+        discountType: item.discountType || 'percentage',
+        tax: item.tax !== undefined ? (typeof item.tax === 'number' ? item.tax : parseFloat(item.tax) || 18) : 18,
+        taxType: item.taxType || 'percentage',
+        discountAmount: typeof item.discountAmount === 'number' ? item.discountAmount : (parseFloat(item.discountAmount) || 0),
+        taxAmount: typeof item.taxAmount === 'number' ? item.taxAmount : (parseFloat(item.taxAmount) || 0),
+        amount: typeof item.amount === 'number' ? item.amount : (parseFloat(item.amount) || 0)
+      };
+      return updateItemCalculations(formattedItem);
+    });
+
+    const charges = (quotation.additionalCharges || []).map((charge, index) => ({
+      id: charge._id || (Date.now() + index),
+      description: charge.description || '',
+      amount: typeof charge.amount === 'number' ? charge.amount : (parseFloat(charge.amount) || 0)
+    }));
+    setAdditionalCharges(charges);
+
+    const totalCharges = charges.reduce((sum, charge) => sum + parseFloat(charge.amount || 0), 0);
+    const subtotal = loadedItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+    const totalDiscount = loadedItems.reduce((sum, item) => sum + (item.discountAmount || 0), 0);
+    const totalTax = loadedItems.reduce((sum, item) => sum + (item.taxAmount || 0), 0);
+    const taxableAmount = subtotal - totalDiscount;
+    const totalAmount = taxableAmount + totalTax + totalCharges;
+
+    setQuotationData({
+      items: loadedItems,
+      subtotal,
+      discount: totalDiscount,
+      tax: totalTax,
+      taxableAmount,
+      totalAmount,
+      additionalCharges: totalCharges,
+      autoRoundOff: quotation.summary?.autoRoundOff || 0
+    });
+
+    setNotes(quotation.notes || '');
+    setTerms(quotation.terms || `1) Payment should be Covered and Made to "GLOBAL MARKETING SOLUTIONS", AND BANK, BRANCH: Champagne, A/C: 9127000007166090, IFSCode:UTIB0001336`);
+
+    setShowViewQuotations(false);
+    setShowQuotationDetails(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingQuotationId(null);
+    setQuotationData({
+      items: [],
+      subtotal: 0,
+      discount: 0,
+      tax: 0,
+      taxableAmount: 0,
+      totalAmount: 0,
+      additionalCharges: 0,
+      autoRoundOff: 0
+    });
+    setAdditionalCharges([]);
+    setPartyDetails({
+      partyName: '',
+      mobileNumber: '',
+      email: '',
+      billingAddress: '',
+      gstin: ''
+    });
+    setNotes('');
+    setTerms(`1) Payment should be Covered and Made to "GLOBAL MARKETING SOLUTIONS", AND BANK, BRANCH: Champagne, A/C: 9127000007166090, IFSCode:UTIB0001336`);
+    fetchNextQuotationNumber();
+  };
+
+  const handleDeleteQuotation = async (id, quotationNo) => {
+    if (!id) return;
+    const confirmDelete = window.confirm(`Are you sure you want to delete quotation ${quotationNo || ''}?`);
+    if (!confirmDelete) return;
+
+    try {
+      await api.delete(`/quotations/${id}`);
+      setAllQuotations(prev => prev.filter(q => q._id !== id));
+      if (selectedQuotation && selectedQuotation._id === id) {
+        setShowQuotationDetails(false);
+        setSelectedQuotation(null);
+      }
+      if (editingQuotationId === id) {
+        handleCancelEdit();
+      }
+      alert(`Quotation ${quotationNo || ''} deleted successfully`);
+      fetchAllQuotations();
+    } catch (error) {
+      console.error('Error deleting quotation:', error);
+      alert(`Failed to delete quotation: ${error.response?.data?.message || error.message}`);
+    }
   };
 
   const printQuotation = () => {
@@ -900,7 +1039,47 @@ const Quotation = () => {
         </button>
       </div>
 
-      {/* Rest of the component remains the same... */}
+      {/* Edit Mode Notice Banner */}
+      {editingQuotationId && (
+        <div style={{
+          backgroundColor: '#fff3cd',
+          border: '1px solid #ffeeba',
+          color: '#856404',
+          padding: isMobile ? '12px 14px' : '14px 20px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '10px'
+        }}>
+          <div>
+            <strong style={{ fontSize: isMobile ? '14px' : '15px' }}>Editing Quotation:</strong> {quotationHeader.quotationNo}
+            {partyDetails.partyName && (
+              <span style={{ marginLeft: '8px', fontSize: isMobile ? '12px' : '13px', color: '#66512c' }}>
+                (Party: {partyDetails.partyName})
+              </span>
+            )}
+          </div>
+          <button
+            onClick={handleCancelEdit}
+            style={{
+              backgroundColor: '#6c757d',
+              color: 'white',
+              border: 'none',
+              padding: '6px 14px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: '600'
+            }}
+          >
+            Cancel Edit
+          </button>
+        </div>
+      )}
+
       {/* Main form - Two column layout */}
       <div style={{ ...cardStyle, padding: isMobile ? '16px' : '24px' }}>
         <div style={{
@@ -1405,12 +1584,18 @@ const Quotation = () => {
                 onClick={submitQuotation} 
                 disabled={isSubmitting} 
                 style={{ 
-                  ...buttonStyle(isSubmitting ? '#95a5a6' : '#27ae60'), 
+                  ...buttonStyle(isSubmitting ? '#95a5a6' : (editingQuotationId ? '#f39c12' : '#27ae60')), 
                   opacity: isSubmitting ? 0.7 : 1 
                 }}
               >
-                {isSubmitting ? 'Saving...' : 'Save Quotation'}
+                {isSubmitting ? 'Saving...' : (editingQuotationId ? 'Update Quotation' : 'Save Quotation')}
               </button>
+
+              {editingQuotationId && (
+                <button onClick={handleCancelEdit} style={buttonStyle('#6c757d')}>
+                  Cancel Edit
+                </button>
+              )}
              
               <button onClick={printQuotation} style={buttonStyle('#9b59b6')}>Print</button>
             </div>
@@ -1573,11 +1758,15 @@ const Quotation = () => {
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: isMobile ? '10px' : '20px' }}>
           <div style={{ background: 'white', padding: isMobile ? '20px' : '30px', borderRadius: '12px', width: '90%', maxWidth: isMobile ? '100%' : '500px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', textAlign: 'center' }}>
             <div style={{ width: isMobile ? '50px' : '60px', height: isMobile ? '50px' : '60px', backgroundColor: '#27ae60', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: isMobile ? '24px' : '30px', color: 'white' }}>✓</div>
-            <h2 style={{ margin: '0 0 15px 0', color: '#2c3e50', fontSize: isMobile ? '20px' : '24px', fontWeight: '600' }}>Quotation Saved Successfully!</h2>
-            <p style={{ margin: '0 0 25px 0', color: '#7f8c8d', fontSize: isMobile ? '14px' : '16px', lineHeight: '1.5' }}>Your quotation <strong>{savedQuotation?.quotationNo}</strong> has been saved successfully.</p>
+            <h2 style={{ margin: '0 0 15px 0', color: '#2c3e50', fontSize: isMobile ? '20px' : '24px', fontWeight: '600' }}>
+              {wasEditing ? 'Quotation Updated Successfully!' : 'Quotation Saved Successfully!'}
+            </h2>
+            <p style={{ margin: '0 0 25px 0', color: '#7f8c8d', fontSize: isMobile ? '14px' : '16px', lineHeight: '1.5' }}>
+              Your quotation <strong>{savedQuotation?.quotationNo}</strong> has been {wasEditing ? 'updated' : 'saved'} successfully.
+            </p>
             <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button onClick={() => setShowSuccessModal(false)} style={buttonStyle('#3498db')}>Continue</button>
-              <button onClick={() => { setShowSuccessModal(false); downloadPDF(); }} style={buttonStyle('#27ae60')}>Download PDF</button>
+              <button onClick={() => { setShowSuccessModal(false); setWasEditing(false); }} style={buttonStyle('#3498db')}>Continue</button>
+              <button onClick={() => { setShowSuccessModal(false); setWasEditing(false); downloadPDF(); }} style={buttonStyle('#27ae60')}>Download PDF</button>
             </div>
           </div>
         </div>
@@ -1607,9 +1796,11 @@ const Quotation = () => {
                           <div>Total: ₹{quotation.summary?.totalAmount?.toFixed(2) || '0.00'}</div>
                           <div>Status: <span style={{ padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: '500', backgroundColor: quotation.status === 'draft' ? '#f39c12' : quotation.status === 'sent' ? '#3498db' : quotation.status === 'accepted' ? '#27ae60' : quotation.status === 'rejected' ? '#e74c3c' : '#95a5a6', color: 'white' }}>{quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1)}</span></div>
                         </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                           <button onClick={() => viewQuotation(quotation)} style={{ backgroundColor: '#3498db', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', flex: 1 }}>View</button>
+                          <button onClick={() => handleEditQuotation(quotation)} style={{ backgroundColor: '#f39c12', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', flex: 1 }}>Edit</button>
                           <button onClick={() => downloadQuotationPDF(quotation)} style={{ backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', flex: 1 }}>Download</button>
+                          <button onClick={() => handleDeleteQuotation(quotation._id, quotation.quotationNo)} style={{ backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', flex: 1 }}>🗑️ Delete</button>
                         </div>
                       </div>
                     ))}
@@ -1636,9 +1827,11 @@ const Quotation = () => {
                           <td style={{ border: '1px solid #dee2e6', padding: '10px', textAlign: 'center', fontSize: '13px' }}>
                             <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '500', backgroundColor: quotation.status === 'draft' ? '#f39c12' : quotation.status === 'sent' ? '#3498db' : quotation.status === 'accepted' ? '#27ae60' : quotation.status === 'rejected' ? '#e74c3c' : '#95a5a6', color: 'white' }}>{quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1)}</span>
                           </td>
-                          <td style={{ border: '1px solid #dee2e6', padding: '10px', textAlign: 'center', fontSize: '13px' }}>
+                          <td style={{ border: '1px solid #dee2e6', padding: '10px', textAlign: 'center', fontSize: '13px', whiteSpace: 'nowrap' }}>
                             <button onClick={() => viewQuotation(quotation)} style={{ backgroundColor: '#3498db', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', marginRight: '6px' }}>View</button>
-                            <button onClick={() => downloadQuotationPDF(quotation)} style={{ backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Download</button>
+                            <button onClick={() => handleEditQuotation(quotation)} style={{ backgroundColor: '#f39c12', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', marginRight: '6px' }}>Edit</button>
+                            <button onClick={() => downloadQuotationPDF(quotation)} style={{ backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', marginRight: '6px' }}>Download</button>
+                            <button onClick={() => handleDeleteQuotation(quotation._id, quotation.quotationNo)} style={{ backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>🗑️ Delete</button>
                           </td>
                         </tr>
                       ))}
@@ -1817,9 +2010,11 @@ const Quotation = () => {
               })()}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', padding: isMobile ? '16px' : '20px 24px', borderTop: '1px solid #e9ecef', backgroundColor: '#f8f9fa' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', padding: isMobile ? '16px' : '20px 24px', borderTop: '1px solid #e9ecef', backgroundColor: '#f8f9fa', flexWrap: 'wrap' }}>
               <button onClick={() => setShowQuotationDetails(false)} style={buttonStyle('#6c757d')}>Close</button>
+              <button onClick={() => handleEditQuotation(selectedQuotation)} style={buttonStyle('#f39c12')}>Edit</button>
               <button onClick={() => downloadQuotationPDF(selectedQuotation)} style={buttonStyle('#27ae60')}>Download PDF</button>
+              <button onClick={() => handleDeleteQuotation(selectedQuotation._id, selectedQuotation.quotationNo)} style={buttonStyle('#e74c3c')}>🗑️ Delete</button>
             </div>
           </div>
         </div>
