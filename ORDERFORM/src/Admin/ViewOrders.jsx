@@ -1047,14 +1047,12 @@ function ViewOrders() {
       // Executive filter for non-admin users
       else {
         const rolesThatCanSeeAll = ['Admin', 'Account'];
-        const isService = isServiceManagementDashboard();
-        const shouldFilter = isService || (role && !rolesThatCanSeeAll.includes(role) && name);
-        if (shouldFilter && name) {
+        const isService = isServiceManagementDashboard() || role === 'Service Executive' || role === 'Service Manager';
+        // For Service Management Dashboard / Service roles, filter client-side via isOwnOrder()
+        // so orders assigned via rows[].assignedExecutive are also included even on older backend deployments.
+        const shouldFilterOnServer = !isService && role && !rolesThatCanSeeAll.includes(role) && name;
+        if (shouldFilterOnServer) {
           queryParams.append('executive', name);
-          if (isService || role === 'Service Executive' || role === 'Service Manager') {
-            queryParams.append('role', role || 'Service Executive');
-            queryParams.append('isService', 'true');
-          }
           console.log('👤 Filtering by executive (self):', name);
         }
       }
