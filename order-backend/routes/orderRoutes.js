@@ -635,8 +635,20 @@ router.get("/orders", async (req, res) => {
 
     // Filter by executive
     if (req.query.executive && req.query.executive !== 'undefined' && req.query.executive !== 'null') {
-      query.executive = req.query.executive;
-      console.log('👤 Executive filter:', req.query.executive);
+      const execName = req.query.executive;
+      if (req.query.role === 'Service Executive' || req.query.role === 'Service Manager' || req.query.isService === 'true') {
+        const escaped = execName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`^${escaped}$`, 'i');
+        query.$or = [
+          { executive: regex },
+          { createdBy: regex },
+          { 'rows.assignedExecutive': regex }
+        ];
+        console.log('👤 Service Executive filter (own orders):', execName);
+      } else {
+        query.executive = execName;
+        console.log('👤 Executive filter:', execName);
+      }
     }
 
     // Filter by client type

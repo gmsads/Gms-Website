@@ -178,9 +178,38 @@ function ViewOrders() {
     return rolesThatCanSeeCards.includes(userRole);
   };
 
+  const isServiceManagementDashboard = () => {
+    return (
+      location.pathname.includes('/service-manager-dashboard') ||
+      location.pathname.includes('/service-dashboard') ||
+      userRole === 'Service Executive' ||
+      userRole === 'Service Manager'
+    );
+  };
+
   const shouldSeeOnlyOwnOrders = () => {
-    const rolesThatCanSeeAll = ['Admin', 'Account', 'Service Executive'];
+    if (isServiceManagementDashboard()) {
+      return true;
+    }
+    const rolesThatCanSeeAll = ['Admin', 'Account'];
     return !rolesThatCanSeeAll.includes(userRole);
+  };
+
+  const isOwnOrder = (order) => {
+    if (!order) return false;
+    const name = (executiveName || '').trim().toLowerCase();
+    if (!name) return false;
+    const matches = (val) => (val || '').trim().toLowerCase() === name;
+
+    if (matches(order.executive) || matches(order.createdBy)) {
+      return true;
+    }
+
+    if (Array.isArray(order.rows)) {
+      return order.rows.some(r => matches(r.assignedExecutive));
+    }
+
+    return false;
   };
 
   const canDeleteOrders = () => {
@@ -1017,10 +1046,15 @@ function ViewOrders() {
       }
       // Executive filter for non-admin users
       else {
-        const rolesThatCanSeeAll = ['Admin', 'Account', 'Service Executive'];
-        const shouldFilter = role && !rolesThatCanSeeAll.includes(role) && name;
-        if (shouldFilter) {
+        const rolesThatCanSeeAll = ['Admin', 'Account'];
+        const isService = isServiceManagementDashboard();
+        const shouldFilter = isService || (role && !rolesThatCanSeeAll.includes(role) && name);
+        if (shouldFilter && name) {
           queryParams.append('executive', name);
+          if (isService || role === 'Service Executive' || role === 'Service Manager') {
+            queryParams.append('role', role || 'Service Executive');
+            queryParams.append('isService', 'true');
+          }
           console.log('👤 Filtering by executive (self):', name);
         }
       }
@@ -1264,7 +1298,7 @@ function ViewOrders() {
 
     let visibilityFiltered = orders;
     if (shouldSeeOnlyOwnOrders()) {
-      visibilityFiltered = orders.filter(order => order.executive === executiveName);
+      visibilityFiltered = orders.filter(order => isOwnOrder(order));
     }
 
     let filtered = visibilityFiltered;
@@ -1597,7 +1631,7 @@ function ViewOrders() {
 
   // ===== 21. EDIT FUNCTIONS =====
   const handleEdit = (order) => {
-    if (shouldSeeOnlyOwnOrders() && order.executive !== executiveName) {
+    if (shouldSeeOnlyOwnOrders() && !isOwnOrder(order)) {
       toast.error('You can only edit your own orders');
       return;
     }
@@ -1694,7 +1728,7 @@ function ViewOrders() {
   // ===== 22. DELETE FUNCTIONS =====
   const confirmDelete = (orderId) => {
     const orderToDeleteObj = orders.find(order => order._id === orderId);
-    if (shouldSeeOnlyOwnOrders() && orderToDeleteObj && orderToDeleteObj.executive !== executiveName) {
+    if (shouldSeeOnlyOwnOrders() && orderToDeleteObj && !isOwnOrder(orderToDeleteObj)) {
       toast.error('You can only delete your own orders');
       return;
     }
@@ -1760,7 +1794,7 @@ function ViewOrders() {
 
   // ===== 23. PAYMENT FUNCTIONS =====
   const handleRecordPayment = async (order) => {
-    if (shouldSeeOnlyOwnOrders() && order.executive !== executiveName) {
+    if (shouldSeeOnlyOwnOrders() && !isOwnOrder(order)) {
       toast.error('You can only record payments for your own orders');
       return;
     }
@@ -2048,7 +2082,7 @@ function ViewOrders() {
   const handleExportToExcel = () => {
     let ordersToExport = filteredOrders;
     if (shouldSeeOnlyOwnOrders()) {
-      ordersToExport = filteredOrders.filter(order => order.executive === executiveName);
+      ordersToExport = filteredOrders.filter(order => isOwnOrder(order));
     }
 
     // ✅ CRITICAL FIX: Sort orders from OLDEST to NEWEST for Excel export
